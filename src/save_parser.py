@@ -3,7 +3,9 @@ import logging
 import zipfile
 from collections import namedtuple
 
-logging.basicConfig(level=logging.DEBUG)
+import time
+
+logging.basicConfig(level=logging.INFO)
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -97,37 +99,39 @@ class Tokenizer:
     def stream(self):
         next_value = []
         currently_in_quoted_string = False
-        for self._line_num, line in enumerate(iter(self._lines_iter()), 1):
-            for char in iter(line):
-                if char == '"':
-                    next_value.append(char)
-                    if currently_in_quoted_string:
-                        yield self._make_token_from_value_string_and_pos(next_value)
-                        next_value = []
-                    currently_in_quoted_string = not currently_in_quoted_string
-                    continue
+        for char in self.gamestate:
+            if char == "\n":
+                if next_value and not currently_in_quoted_string:
+                    yield self._make_token_from_value_string_and_pos(next_value)
+                    next_value = []
+                self.line_number += 1
+                continue
+            if char == '"':
+                next_value.append(char)
+                if currently_in_quoted_string:
+                    yield self._make_token_from_value_string_and_pos(next_value)
+                    next_value = []
+                currently_in_quoted_string = not currently_in_quoted_string
+                continue
 
-                elif currently_in_quoted_string:
-                    next_value.append(char)
-                    continue
+            elif currently_in_quoted_string:
+                next_value.append(char)
+                continue
 
-                if char in [" ", "\t", "\n"]:
-                    # make a token from the current value if one exists:
-                    if next_value:
-                        yield self._make_token_from_value_string_and_pos(next_value)
-                        next_value = []
-                    else:
-                        continue
-                elif char in ["{", "}", "="]:
-                    if next_value:
-                        yield self._make_token_from_value_string_and_pos(next_value)
-                    yield self._make_token_from_value_string_and_pos([char])
+            if char in [" ", "\t", "\n"]:
+                # make a token from the current value if one exists:
+                if next_value:
+                    yield self._make_token_from_value_string_and_pos(next_value)
                     next_value = []
                 else:
-                    next_value.append(char)
-            if next_value and not currently_in_quoted_string:
-                yield self._make_token_from_value_string_and_pos(next_value)
+                    continue
+            elif char in ["{", "}", "="]:
+                if next_value:
+                    yield self._make_token_from_value_string_and_pos(next_value)
+                yield self._make_token_from_value_string_and_pos([char])
                 next_value = []
+            else:
+                next_value.append(char)
 
         yield Token(TokenType.EOF, None, -1)
 
@@ -169,10 +173,6 @@ class Tokenizer:
             return Token(token_type, value, self.line_number)
         return Token(token_type, value, self.line_number)
 
-    def _lines_iter(self):
-        for self.line_number, line in enumerate(self.gamestate.split("\n")):
-            yield line
-
 
 class SaveFileParser:
     """
@@ -195,21 +195,27 @@ class SaveFileParser:
 
     def __init__(self, filename):
         self._nesting_level = 0
-        self.gamestate_dict = {}
+        self.gamestate_dict = None
         self.save_filename = filename
         self.tokenizer = None
         self._token_stream = None
         self._lookahead_token = None
 
     def parse_save(self):
+        logging.info(f"Parsing Save File {self.save_filename}...")
+        start_time = time.time()
         with zipfile.ZipFile(self.save_filename) as save_zip:
             gamestate = save_zip.read("gamestate").decode()
         self.tokenizer = Tokenizer(gamestate)
         self._token_stream = self.tokenizer.stream()
+        self.gamestate_dict = {}
         while self._lookahead().token_type != TokenType.EOF:
             key, value = self._parse_key_value_pair()
             logging.debug(f"Adding {key}  ->  {str(value)[:100]}")
             self._add_key_value_pair_or_convert_to_list(self.gamestate_dict, key, value)
+        end_time = time.time()
+        logging.info(f"Parsed save file in {end_time - start_time} seconds.")
+        return self.gamestate_dict
 
     def _parse_key_value_pair(self):
         logging.debug("Key-Value Pair")
