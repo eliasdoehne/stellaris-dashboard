@@ -4,6 +4,11 @@ import time
 import zipfile
 from collections import namedtuple
 
+import pyximport
+
+pyximport.install()
+import token_value_stream
+
 FilePosition = namedtuple("FilePosition", "line col")
 
 
@@ -28,72 +33,33 @@ Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
 def token_stream(gamestate):
-    next_token_start = 0
-    in_word = False
-    currently_in_quoted_string = False
-    line_number = 1
-    for current_position, char in enumerate(gamestate):
-        if char == '"':
-            if currently_in_quoted_string:  # Closing quote
-                yield _make_literal_token(gamestate, next_token_start, current_position + 1, line_number)
-                in_word = False
-            else:  # Opening quote
-                if in_word:
-                    yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
-                in_word = True
-                next_token_start = current_position
-            currently_in_quoted_string = not currently_in_quoted_string
-        elif currently_in_quoted_string:
-            pass
-        elif char == " " or char == "\t" or char == "\n":
-            # make a token from the preceding value if one exists:
-            if in_word:
-                yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
-                in_word = False
-            line_number += (char == "\n")
-        elif char == "{":
-            yield Token(TokenType.BRACE_OPEN, "{", line_number)
-        elif char == "}":
-            if in_word:
-                yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
-                in_word = False
-            yield Token(TokenType.BRACE_CLOSE, "}", line_number)
-        elif char == "=":
-            if in_word:
-                yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
-                in_word = False
+    line_number = 0
+    for value, line_number in token_value_stream.token_value_stream(gamestate):
+        # print(f"VALUE [{value}] LN [{line_number}]")
+        if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)
+        elif value == "}":
+            yield Token(TokenType.BRACE_CLOSE, "}", line_number)
+        elif value == "{":
+            yield Token(TokenType.BRACE_OPEN, "{", line_number)
         else:
-            if not in_word:
-                in_word = True
-                next_token_start = current_position
-    yield Token(TokenType.EOF, None, -1)
+            token_type = None
+            if value[0].isdigit():
+                try:
+                    value = int(value)
+                    token_type = TokenType.INTEGER
+                except ValueError:
+                    try:
+                        value = float(value)
+                        token_type = TokenType.FLOAT
+                    except ValueError:
+                        pass
 
-
-def _make_literal_token(gamestate, start, end, line_number):
-    value = gamestate[start:end]
-    if not value:
-        raise ValueError(f"Received empty token value {value}")
-
-    token_type = None
-
-    if value[0].isdigit():
-        try:
-            value = int(value)
-            token_type = TokenType.INTEGER
-        except ValueError:
-            try:
-                value = float(value)
-                token_type = TokenType.FLOAT
-            except ValueError:
-                pass
-
-    if token_type is None:
-        value = value.strip('"')
-        token_type = TokenType.STRING
-    token = Token(token_type, value, line_number)
-    # print(f"L {line_number}  {start} - {end}  {token}")
-    return token
+            if token_type is None:
+                value = value.strip('"')
+                token_type = TokenType.STRING
+            yield Token(token_type, value, line_number)
+    yield Token(TokenType.EOF, None, line_number)
 
 
 class SaveFileParser:
@@ -191,7 +157,7 @@ class SaveFileParser:
         return res
 
     def _parse_key_value_pair_list(self, first_key_token):
-        # logging.debug("Key-Value pair list")
+        #         # logging.debug("Key-Value pair list")
         eq_token = self._next_token()
         if eq_token.token_type != TokenType.EQUAL:
             raise StellarisFileFormatError(
@@ -227,7 +193,7 @@ class SaveFileParser:
         return res
 
     def _parse_literal(self):
-        # logging.debug("Literal")
+        #         # logging.debug("Literal")
         token = self._next_token()
         if not TokenType.is_literal(token.token_type):
             raise StellarisFileFormatError(

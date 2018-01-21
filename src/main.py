@@ -11,6 +11,9 @@ logging.basicConfig(level=logging.INFO)
 BASE_SAVE_DIR = pathlib.Path("saves/lokkenmechanists_1256936305/")
 
 
+# BASE_SAVE_DIR = pathlib.Path("/home/elias/.local/share/Paradox Interactive/Stellaris/save games/")
+
+
 class SaveReader:
     def __init__(self, game_dir):
         self.processed_saves = set()
@@ -34,12 +37,12 @@ def main():
     sr = SaveReader(BASE_SAVE_DIR)
     tl = timeline.Timeline()
 
+    print(f"Looking for new save files in {BASE_SAVE_DIR}.")
     while True:
         for gamestate in sr.check_for_new_saves():
             tl.add_data(gamestate)
-        time.sleep(3)
-
         break
+        time.sleep(1)
 
     with open("output/test_timeline.pickle", "wb") as f:
         pickle.dump(tl, f)
@@ -59,4 +62,4 @@ def main2():
 
 if __name__ == "__main__":
     main()
-    main2()
+    # main2()
