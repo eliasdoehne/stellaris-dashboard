@@ -1,9 +1,8 @@
 import enum
 import logging
+import time
 import zipfile
 from collections import namedtuple
-
-import time
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -12,14 +11,14 @@ class StellarisFileFormatError(Exception): pass
 
 
 class TokenType(enum.Enum):
-    BRACE_OPEN = "BR_OPEN"
-    BRACE_CLOSE = "BR_CLOSE"
-    EQUAL = "EQ"
-    INTEGER = "INT"
-    FLOAT = "FLOAT"
-    STRING = "STR"
-    QUOT_STRING = "Q_STR"
-    EOF = "EOF"
+    BRACE_OPEN = enum.auto()
+    BRACE_CLOSE = enum.auto()
+    EQUAL = enum.auto()
+    INTEGER = enum.auto()
+    FLOAT = enum.auto()
+    STRING = enum.auto()
+    QUOT_STRING = enum.auto()
+    EOF = enum.auto()
 
 
 LITERAL_TOKENS = {
@@ -42,41 +41,48 @@ class Tokenizer:
     def __init__(self, gamestate):
         self.gamestate = gamestate
         self.line_number = 0
+        self._token_start_pos = 0
 
     def stream(self):
-        next_value = []
+        self._token_start_pos = 0
         currently_in_quoted_string = False
-        for char in self.gamestate:
+        for current_position, char in enumerate(self.gamestate):
             if char == '"':
-                next_value.append(char)
                 if currently_in_quoted_string:
-                    yield self._make_token_from_value_string_and_pos(next_value)
-                    next_value = []
+                    # Closing quote
+                    yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position + 1)
+                else:
+                    # Opening quote
+                    if self._token_start_pos < current_position:
+                        yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position)
+
                 currently_in_quoted_string = not currently_in_quoted_string
             elif currently_in_quoted_string:
-                next_value.append(char)
-            elif char in [" ", "\t", "\n"]:
+                pass
+            elif char == " " or char == "\t" or char == "\n":
+                # make a token from the preceding value if one exists:
+                if self._token_start_pos < current_position:
+                    yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position)
                 if char == "\n":
                     self.line_number += 1
-
-                # make a token from the current value if one exists:
-                if next_value:
-                    yield self._make_token_from_value_string_and_pos(next_value)
-                    next_value = []
+                self._token_start_pos += 1  # ignore the whitespace
             elif char in ["{", "}", "="]:
-                if next_value:
-                    yield self._make_token_from_value_string_and_pos(next_value)
-                yield self._make_token_from_value_string_and_pos([char])
-                next_value = []
+                # first make a token from the preceding value if one exists:
+                if self._token_start_pos < current_position:
+                    yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position)
+                yield self._make_token_from_start_and_end_pos(current_position, current_position + 1)
             else:
-                next_value.append(char)
+                pass
 
         yield Token(TokenType.EOF, None, -1)
 
-    def _make_token_from_value_string_and_pos(self, value):
-        value = "".join(value)
+    def _make_token_from_start_and_end_pos(self, start, end):
+        value = self.gamestate[start:end]
+        self._token_start_pos = end
+        if not value:
+            raise ValueError(f"Received empty token value {value}")
         if not isinstance(value, str):
-            raise ValueError("Invalid token value {}".format(value))
+            raise ValueError(f"Invalid token value {value}")
 
         token_type = None
         if value == "{":
