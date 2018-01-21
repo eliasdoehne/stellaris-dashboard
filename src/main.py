@@ -37,7 +37,6 @@ def main():
     while True:
         for gamestate in sr.check_for_new_saves():
             tl.add_data(gamestate)
-            break
         time.sleep(3)
 
         break
@@ -49,11 +48,15 @@ def main():
 def main2():
     with open("output/test_timeline.pickle", "rb") as f:
         tl = pickle.load(f)
-    plotter = visualization.StaticGalaxyInformationPlot(tl.galaxy_data)
-    plotter.make_plot()
-    plotter.save_plot()
+    static_plotter = visualization.StaticGalaxyInformationPlot(tl.galaxy_data)
+    static_plotter.make_plot()
+    static_plotter.save_plot()
+
+    timeline_plot = visualization.EmpireDemographicsPlot(tl.empire_data)
+    timeline_plot.make_plot()
+    timeline_plot.save_plot()
 
 
 if __name__ == "__main__":
-    # main()
+    main()
     main2()
