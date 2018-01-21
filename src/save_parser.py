@@ -17,22 +17,12 @@ class TokenType(enum.Enum):
     INTEGER = enum.auto()
     FLOAT = enum.auto()
     STRING = enum.auto()
-    QUOT_STRING = enum.auto()
     EOF = enum.auto()
 
+    @staticmethod
+    def is_literal(token_type):
+        return token_type == TokenType.STRING or token_type == TokenType.INTEGER or token_type == TokenType.FLOAT
 
-LITERAL_TOKENS = {
-    TokenType.FLOAT,
-    TokenType.INTEGER,
-    TokenType.STRING,
-    TokenType.QUOT_STRING
-}
-expected_value_type = {
-    TokenType.FLOAT: float,
-    TokenType.INTEGER: int,
-    TokenType.STRING: str,
-    TokenType.QUOT_STRING: str
-}
 
 Token = namedtuple("Token", ["token_type", "value", "pos"])
 
@@ -41,81 +31,75 @@ class Tokenizer:
     def __init__(self, gamestate):
         self.gamestate = gamestate
         self.line_number = 0
-        self._token_start_pos = 0
 
     def stream(self):
-        self._token_start_pos = 0
+        next_token_start = 0
+        in_word = False
         currently_in_quoted_string = False
+        token_maker = self._make_token_from_start_and_end_pos
         for current_position, char in enumerate(self.gamestate):
             if char == '"':
-                if currently_in_quoted_string:
-                    # Closing quote
-                    yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position + 1)
-                else:
-                    # Opening quote
-                    if self._token_start_pos < current_position:
-                        yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position)
-
+                if currently_in_quoted_string:  # Closing quote
+                    yield token_maker(next_token_start, current_position + 1)
+                    in_word = False
+                else:  # Opening quote
+                    if in_word:
+                        yield token_maker(next_token_start, current_position)
+                    in_word = True
+                    next_token_start = current_position
                 currently_in_quoted_string = not currently_in_quoted_string
             elif currently_in_quoted_string:
                 pass
             elif char == " " or char == "\t" or char == "\n":
                 # make a token from the preceding value if one exists:
-                if self._token_start_pos < current_position:
-                    yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position)
-                if char == "\n":
-                    self.line_number += 1
-                self._token_start_pos += 1  # ignore the whitespace
-            elif char in ["{", "}", "="]:
+                if in_word:
+                    yield token_maker(next_token_start, current_position)
+                    in_word = False
+                self.line_number += (char == "\n")
+            elif char == "{" or char == "}" or char == "=":
                 # first make a token from the preceding value if one exists:
-                if self._token_start_pos < current_position:
-                    yield self._make_token_from_start_and_end_pos(self._token_start_pos, current_position)
-                yield self._make_token_from_start_and_end_pos(current_position, current_position + 1)
+                if in_word:
+                    yield token_maker(next_token_start, current_position)
+                    in_word = False
+                yield token_maker(current_position, current_position + 1)
             else:
-                pass
-
+                if not in_word:
+                    in_word = True
+                    next_token_start = current_position
         yield Token(TokenType.EOF, None, -1)
+
+    # def get_next_token(self, start_index):
 
     def _make_token_from_start_and_end_pos(self, start, end):
         value = self.gamestate[start:end]
-        self._token_start_pos = end
         if not value:
             raise ValueError(f"Received empty token value {value}")
-        if not isinstance(value, str):
-            raise ValueError(f"Invalid token value {value}")
 
         token_type = None
         if value == "{":
             token_type = TokenType.BRACE_OPEN
-            value = None
         elif value == "}":
             token_type = TokenType.BRACE_CLOSE
-            value = None
         elif value == "=":
             token_type = TokenType.EQUAL
-            value = None
         else:
-            try:
-                value = int(value)
-                token_type = TokenType.INTEGER
-                return Token(token_type, value, self.line_number)
-            except ValueError:
-                pass
-
-            try:
-                value = float(value)
-                token_type = TokenType.FLOAT
-                return Token(token_type, value, self.line_number)
-            except ValueError:
-                pass
+            if value[0].isdigit():
+                try:
+                    value = int(value)
+                    token_type = TokenType.INTEGER
+                except ValueError:
+                    try:
+                        value = float(value)
+                        token_type = TokenType.FLOAT
+                    except ValueError:
+                        pass
 
             if token_type is None:
-                if value.startswith("\""):
-                    token_type = TokenType.QUOT_STRING
-                else:
-                    token_type = TokenType.STRING
-            return Token(token_type, value, self.line_number)
-        return Token(token_type, value, self.line_number)
+                value = value.strip('"')
+                token_type = TokenType.STRING
+        token = Token(token_type, value, self.line_number)
+        # print(f"L {self.line_number}  {start} - {end}  {token}")
+        return token
 
 
 class SaveFileParser:
@@ -161,13 +145,13 @@ class SaveFileParser:
         self.gamestate_dict = {}
         while self._lookahead().token_type != TokenType.EOF:
             key, value = self._parse_key_value_pair()
-            logging.debug(f"Adding {key}  ->  {str(value)[:100]}")
+            # logging.debug(f"Adding {key}  ->  {str(value)[:100]}")
             self._add_key_value_pair_or_convert_to_list(self.gamestate_dict, key, value)
 
     def _parse_key_value_pair(self):
-        logging.debug("Key-Value Pair")
+        # logging.debug("Key-Value Pair")
         key_token = self._lookahead()
-        if key_token.token_type not in {TokenType.STRING, TokenType.QUOT_STRING, TokenType.INTEGER}:
+        if key_token.token_type != TokenType.STRING and key_token.token_type != TokenType.INTEGER:
             raise StellarisFileFormatError(
                 f"Line {key_token.pos}: Expected a string or Integer as key, found {key_token}"
             )
@@ -182,9 +166,9 @@ class SaveFileParser:
             )
 
     def _parse_value(self):
-        logging.debug("Value")
+        # logging.debug("Value")
         next_token = self._lookahead()
-        if next_token.token_type in LITERAL_TOKENS:
+        if TokenType.is_literal(next_token.token_type):
             value = self._parse_literal()
         elif next_token.token_type == TokenType.BRACE_OPEN:
             value = self._parse_composite_game_object_or_list()
@@ -195,7 +179,7 @@ class SaveFileParser:
         return value
 
     def _parse_composite_game_object_or_list(self):
-        logging.debug("Composite object or list")
+        # logging.debug("Composite object or list")
         brace = self._next_token()
         if brace.token_type != TokenType.BRACE_OPEN:
             raise StellarisFileFormatError(
@@ -208,14 +192,14 @@ class SaveFileParser:
             next_token = self._lookahead()
             if next_token.token_type == TokenType.EQUAL:
                 res = self._parse_key_value_pair_list(token)
-            elif next_token.token_type in LITERAL_TOKENS or next_token.token_type == TokenType.BRACE_CLOSE:
+            elif TokenType.is_literal(next_token.token_type) or next_token.token_type == TokenType.BRACE_CLOSE:
                 res = self._parse_object_list(token.value)
             else:
                 res = None
         return res
 
     def _parse_key_value_pair_list(self, first_key_token):
-        logging.debug("Key-Value pair list")
+        # logging.debug("Key-Value pair list")
         eq_token = self._next_token()
         if eq_token.token_type != TokenType.EQUAL:
             raise StellarisFileFormatError(
@@ -223,7 +207,7 @@ class SaveFileParser:
             )
 
         next_token = self._lookahead()
-        if next_token.token_type in LITERAL_TOKENS:
+        if TokenType.is_literal(next_token.token_type):
             first_value = self._parse_literal()
         elif next_token.token_type == TokenType.BRACE_OPEN:
             first_value = self._parse_composite_game_object_or_list()
@@ -235,7 +219,6 @@ class SaveFileParser:
         next_token = self._lookahead()
         while next_token.token_type != TokenType.BRACE_CLOSE:
             key, value = self._parse_key_value_pair()
-            logging.debug(f"    {key} -> {value}")
             self._add_key_value_pair_or_convert_to_list(res, key, value)
             next_token = self._lookahead()
         self._next_token()
@@ -247,22 +230,18 @@ class SaveFileParser:
             res.append(first_value)
         while self._lookahead().token_type != TokenType.BRACE_CLOSE:
             val = self._parse_value()
-            logging.debug(f"   - {str(val)[:100]}")
             res.append(val)
         self._next_token()
         return res
 
     def _parse_literal(self):
-        logging.debug("Literal")
+        # logging.debug("Literal")
         token = self._next_token()
-        if token.token_type not in LITERAL_TOKENS:
+        if not TokenType.is_literal(token.token_type):
             raise StellarisFileFormatError(
                 "Line {}: Expected literal, found {}".format(token.pos, token)
             )
-        val = token.value
-        if token.token_type == TokenType.QUOT_STRING:
-            val = val.strip('"')
-        return val
+        return token.value
 
     @staticmethod
     def _add_key_value_pair_or_convert_to_list(obj, key, value):
