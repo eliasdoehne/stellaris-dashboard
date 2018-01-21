@@ -5,8 +5,6 @@ from collections import namedtuple
 
 import time
 
-logging.basicConfig(level=logging.INFO)
-
 FilePosition = namedtuple("FilePosition", "line col")
 
 
@@ -208,14 +206,17 @@ class SaveFileParser:
             gamestate = save_zip.read("gamestate").decode()
         self.tokenizer = Tokenizer(gamestate)
         self._token_stream = self.tokenizer.stream()
+        self._parse_save()
+        end_time = time.time()
+        logging.info(f"Parsed save file in {end_time - start_time} seconds.")
+        return self.gamestate_dict
+
+    def _parse_save(self):
         self.gamestate_dict = {}
         while self._lookahead().token_type != TokenType.EOF:
             key, value = self._parse_key_value_pair()
             logging.debug(f"Adding {key}  ->  {str(value)[:100]}")
             self._add_key_value_pair_or_convert_to_list(self.gamestate_dict, key, value)
-        end_time = time.time()
-        logging.info(f"Parsed save file in {end_time - start_time} seconds.")
-        return self.gamestate_dict
 
     def _parse_key_value_pair(self):
         logging.debug("Key-Value Pair")
@@ -298,18 +299,10 @@ class SaveFileParser:
         res = []
         if first_value is not None:
             res.append(first_value)
-        next_token = self._lookahead()
-        while next_token.token_type != TokenType.BRACE_CLOSE:
-            logging.debug(f"   - {next_token}")
-            if next_token.token_type in Token.LITERAL_TOKENS:
-                res.append(self._parse_literal())
-            elif next_token.token_type == TokenType.BRACE_OPEN:
-                res = self._parse_composite_game_object_or_list()
-            else:
-                raise StellarisFileFormatError(
-                    f"Expected  literal or composite object, got {next_token} token!"
-                )
-            next_token = self._lookahead()
+        while self._lookahead().token_type != TokenType.BRACE_CLOSE:
+            val = self._parse_value()
+            logging.debug(f"   - {str(val)[:100]}")
+            res.append(val)
         self._next_token()
         return res
 
@@ -348,3 +341,14 @@ class SaveFileParser:
             res = self._lookahead_token
             self._lookahead_token = None
         return res
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    with open("data/test_dummy_save.sav", "r") as f:
+        dummy_gamestate = f.read()
+    parser = SaveFileParser(None)
+    parser.tokenizer = Tokenizer(dummy_gamestate)
+    parser._token_stream = parser.tokenizer.stream()
+    parser._parse_save()
+    print(parser.gamestate_dict)
