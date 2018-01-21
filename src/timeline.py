@@ -1,16 +1,61 @@
 from collections import namedtuple
 
+COLONIZABLE_PLANET_CLASSES = {
+    "pc_arid", "pc_continental", "pc_alpine",
+    "pc_desert", "pc_ocean", "pc_arctic",
+    "pc_savannah", "pc_tropical", "pc_tundra",
+    "pc_gaia", "pc_nuked", "pc_machine",
+    "pc_ringworld_habitable", "pc_habitat",
+}
+
+COLD_CLIMATE = "cold"
+TEMPERATE_CLIMATE = "temperate"
+DRY_CLIMATE = "dry"
+OTHER_CLIMATE = "other"
+GAIA_CLIMATE = "gaia"
+CLIMATE_CLASSIFICATION = {
+    "pc_alpine": COLD_CLIMATE,
+    "pc_tundra": COLD_CLIMATE,
+    "pc_arctic": COLD_CLIMATE,
+
+    "pc_continental": TEMPERATE_CLIMATE,
+    "pc_ocean": TEMPERATE_CLIMATE,
+    "pc_tropical": TEMPERATE_CLIMATE,
+
+    "pc_arid": DRY_CLIMATE,
+    "pc_desert": DRY_CLIMATE,
+    "pc_savannah": DRY_CLIMATE,
+
+    "pc_nuked": OTHER_CLIMATE,
+    "pc_machine": OTHER_CLIMATE,
+
+    "pc_gaia": GAIA_CLIMATE,
+    "pc_ringworld_habitable": GAIA_CLIMATE,
+    "pc_habitat": GAIA_CLIMATE,
+}
+
+PLANET_CLIMATES = [COLD_CLIMATE, TEMPERATE_CLIMATE, DRY_CLIMATE, GAIA_CLIMATE, OTHER_CLIMATE]
+
 
 class StellarisDate(namedtuple("Date", ["year", "month", "day"])):
 
     def __sub__(self, other):
+        """
+        Get the difference between two dates in days.
+
+        :param other:
+        :return:
+        """
         assert isinstance(other, StellarisDate)
+        return self.in_days() - other.in_days()
+
+    def in_days(self):
         return self.day + 30 * (self.month + 12 * self.year)
 
     @classmethod
     def from_string(cls, datestring):
         y, m, d = datestring.split(".")
-        return cls(y, m, d)
+        return cls(int(y), int(m), int(d))
 
 
 class Timeline:
@@ -76,21 +121,13 @@ class Timeline:
             "planet_tiles_distribution": {},
         }
 
-        colonizable_planet_classes = {
-            "pc_arid", "pc_continental", "pc_alpine",
-            "pc_desert", "pc_ocean", "pc_arctic",
-            "pc_savannah", "pc_tropical", "pc_tundra",
-            "pc_gaia", "pc_nuked", "pc_machine",
-            "pc_ringworld_habitable", "pc_habitat",
-        }
-
         for planet_id, planet_data in self._gamestate["planet"].items():
             planet_class = planet_data["planet_class"]
             if planet_class not in galaxy_data["planet_type_distribution"]:
                 galaxy_data["planet_type_distribution"][planet_class] = 0
             galaxy_data["planet_type_distribution"][planet_class] += 1
 
-            if planet_class in colonizable_planet_classes:
+            if planet_class in COLONIZABLE_PLANET_CLASSES:
                 if planet_class not in galaxy_data["planet_tiles_distribution"]:
                     galaxy_data["planet_tiles_distribution"][planet_class] = 0
                 for tile in planet_data["tiles"].values():
