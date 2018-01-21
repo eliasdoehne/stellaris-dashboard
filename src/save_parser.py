@@ -27,79 +27,73 @@ class TokenType(enum.Enum):
 Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
-class Tokenizer:
-    def __init__(self, gamestate):
-        self.gamestate = gamestate
-        self.line_number = 0
-
-    def stream(self):
-        next_token_start = 0
-        in_word = False
-        currently_in_quoted_string = False
-        token_maker = self._make_token_from_start_and_end_pos
-        for current_position, char in enumerate(self.gamestate):
-            if char == '"':
-                if currently_in_quoted_string:  # Closing quote
-                    yield token_maker(next_token_start, current_position + 1)
-                    in_word = False
-                else:  # Opening quote
-                    if in_word:
-                        yield token_maker(next_token_start, current_position)
-                    in_word = True
-                    next_token_start = current_position
-                currently_in_quoted_string = not currently_in_quoted_string
-            elif currently_in_quoted_string:
-                pass
-            elif char == " " or char == "\t" or char == "\n":
-                # make a token from the preceding value if one exists:
+def token_stream(gamestate):
+    next_token_start = 0
+    in_word = False
+    currently_in_quoted_string = False
+    line_number = 1
+    for current_position, char in enumerate(gamestate):
+        if char == '"':
+            if currently_in_quoted_string:  # Closing quote
+                yield _make_literal_token(gamestate, next_token_start, current_position + 1, line_number)
+                in_word = False
+            else:  # Opening quote
                 if in_word:
-                    yield token_maker(next_token_start, current_position)
-                    in_word = False
-                self.line_number += (char == "\n")
-            elif char == "{" or char == "}" or char == "=":
-                # first make a token from the preceding value if one exists:
-                if in_word:
-                    yield token_maker(next_token_start, current_position)
-                    in_word = False
-                yield token_maker(current_position, current_position + 1)
-            else:
-                if not in_word:
-                    in_word = True
-                    next_token_start = current_position
-        yield Token(TokenType.EOF, None, -1)
-
-    # def get_next_token(self, start_index):
-
-    def _make_token_from_start_and_end_pos(self, start, end):
-        value = self.gamestate[start:end]
-        if not value:
-            raise ValueError(f"Received empty token value {value}")
-
-        token_type = None
-        if value == "{":
-            token_type = TokenType.BRACE_OPEN
-        elif value == "}":
-            token_type = TokenType.BRACE_CLOSE
-        elif value == "=":
-            token_type = TokenType.EQUAL
+                    yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
+                in_word = True
+                next_token_start = current_position
+            currently_in_quoted_string = not currently_in_quoted_string
+        elif currently_in_quoted_string:
+            pass
+        elif char == " " or char == "\t" or char == "\n":
+            # make a token from the preceding value if one exists:
+            if in_word:
+                yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
+                in_word = False
+            line_number += (char == "\n")
+        elif char == "{":
+            yield Token(TokenType.BRACE_OPEN, "{", line_number)
+        elif char == "}":
+            if in_word:
+                yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
+                in_word = False
+            yield Token(TokenType.BRACE_CLOSE, "}", line_number)
+        elif char == "=":
+            if in_word:
+                yield _make_literal_token(gamestate, next_token_start, current_position, line_number)
+                in_word = False
+            yield Token(TokenType.EQUAL, "=", line_number)
         else:
-            if value[0].isdigit():
-                try:
-                    value = int(value)
-                    token_type = TokenType.INTEGER
-                except ValueError:
-                    try:
-                        value = float(value)
-                        token_type = TokenType.FLOAT
-                    except ValueError:
-                        pass
+            if not in_word:
+                in_word = True
+                next_token_start = current_position
+    yield Token(TokenType.EOF, None, -1)
 
-            if token_type is None:
-                value = value.strip('"')
-                token_type = TokenType.STRING
-        token = Token(token_type, value, self.line_number)
-        # print(f"L {self.line_number}  {start} - {end}  {token}")
-        return token
+
+def _make_literal_token(gamestate, start, end, line_number):
+    value = gamestate[start:end]
+    if not value:
+        raise ValueError(f"Received empty token value {value}")
+
+    token_type = None
+
+    if value[0].isdigit():
+        try:
+            value = int(value)
+            token_type = TokenType.INTEGER
+        except ValueError:
+            try:
+                value = float(value)
+                token_type = TokenType.FLOAT
+            except ValueError:
+                pass
+
+    if token_type is None:
+        value = value.strip('"')
+        token_type = TokenType.STRING
+    token = Token(token_type, value, line_number)
+    # print(f"L {line_number}  {start} - {end}  {token}")
+    return token
 
 
 class SaveFileParser:
@@ -122,10 +116,8 @@ class SaveFileParser:
     """
 
     def __init__(self, filename):
-        self._nesting_level = 0
         self.gamestate_dict = None
         self.save_filename = filename
-        self.tokenizer = None
         self._token_stream = None
         self._lookahead_token = None
 
@@ -134,8 +126,7 @@ class SaveFileParser:
         start_time = time.time()
         with zipfile.ZipFile(self.save_filename) as save_zip:
             gamestate = save_zip.read("gamestate").decode()
-        self.tokenizer = Tokenizer(gamestate)
-        self._token_stream = self.tokenizer.stream()
+        self._token_stream = token_stream(gamestate)
         self._parse_save()
         end_time = time.time()
         logging.info(f"Parsed save file in {end_time - start_time} seconds.")
@@ -185,7 +176,8 @@ class SaveFileParser:
             raise StellarisFileFormatError(
                 "Line {}: Expected {{ token, found {}".format(brace.pos, brace)
             )
-        if self._lookahead().token_type in [TokenType.BRACE_OPEN, TokenType.BRACE_CLOSE]:
+        tt = self._lookahead().token_type
+        if tt == TokenType.BRACE_OPEN or tt == TokenType.BRACE_CLOSE:  # the first indicates a list of objects (which cannot be keys), the second an empty list
             res = self._parse_object_list()
         else:
             token = self._next_token()
@@ -277,7 +269,6 @@ if __name__ == "__main__":
     with open("data/test_dummy_save.sav", "r") as f:
         dummy_gamestate = f.read()
     parser = SaveFileParser(None)
-    parser.tokenizer = Tokenizer(dummy_gamestate)
-    parser._token_stream = parser.tokenizer.stream()
+    parser._token_stream = token_stream(dummy_gamestate)
     parser._parse_save()
     print(parser.gamestate_dict)
