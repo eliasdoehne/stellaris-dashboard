@@ -22,71 +22,20 @@ class TokenType(enum.Enum):
     EOF = "EOF"
 
 
-class Token:
-    TYPES = (TokenType.BRACE_OPEN,
-             TokenType.BRACE_CLOSE,
-             TokenType.EQUAL,
-             TokenType.INTEGER,
-             TokenType.FLOAT,
-             TokenType.STRING,
-             TokenType.QUOT_STRING,
-             TokenType.EOF)
-    LITERAL_TOKENS = {
-        TokenType.FLOAT,
-        TokenType.INTEGER,
-        TokenType.STRING,
-        TokenType.QUOT_STRING
-    }
-    expected_value_type = {
-        TokenType.FLOAT: float,
-        TokenType.INTEGER: int,
-        TokenType.STRING: str,
-        TokenType.QUOT_STRING: str
-    }
+LITERAL_TOKENS = {
+    TokenType.FLOAT,
+    TokenType.INTEGER,
+    TokenType.STRING,
+    TokenType.QUOT_STRING
+}
+expected_value_type = {
+    TokenType.FLOAT: float,
+    TokenType.INTEGER: int,
+    TokenType.STRING: str,
+    TokenType.QUOT_STRING: str
+}
 
-    def __init__(self, token_type, value, pos):
-        super(Token, self).__init__()
-        self.token_type = token_type
-        self.value = value
-        self._validate()
-        self.pos = pos
-        logging.debug(f"        New Token: {self}")
-
-    def _validate(self):
-        if self.token_type not in Token.TYPES:
-            raise StellarisFileFormatError(
-                "Expected one of {} as type, received {}".format(Token.TYPES, self.token_type)
-            )
-
-        if self.token_type not in Token.LITERAL_TOKENS:
-            if self.value is not None:
-                raise StellarisFileFormatError(
-                    "Unexpectedly received non-null value {} for token of type {}".format(
-                        self.value, self.token_type
-                    )
-                )
-        else:
-            expected_type = Token.expected_value_type[self.token_type]
-            if not isinstance(self.value, expected_type):
-                raise StellarisFileFormatError(
-                    "Unexpectedly received non-integer value {} for INT token".format(
-                        self.value, self.token_type
-                    )
-                )
-            if self.token_type == TokenType.QUOT_STRING:
-                if self.value[0] != "\"" or self.value[-1] != "\"":
-                    raise StellarisFileFormatError(
-                        "Token of type {} received string value that does not start with \": {}".format(
-                            self.token_type, self.value
-                        )
-                    )
-
-    def __str__(self):
-        return "[{}: {} {}]".format(
-            self.pos,
-            self.token_type,
-            str(self.value) + " " if self.token_type in Token.LITERAL_TOKENS else ""
-        )
+Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
 class Tokenizer:
@@ -98,31 +47,22 @@ class Tokenizer:
         next_value = []
         currently_in_quoted_string = False
         for char in self.gamestate:
-            if char == "\n":
-                if next_value and not currently_in_quoted_string:
-                    yield self._make_token_from_value_string_and_pos(next_value)
-                    next_value = []
-                self.line_number += 1
-                continue
             if char == '"':
                 next_value.append(char)
                 if currently_in_quoted_string:
                     yield self._make_token_from_value_string_and_pos(next_value)
                     next_value = []
                 currently_in_quoted_string = not currently_in_quoted_string
-                continue
-
             elif currently_in_quoted_string:
                 next_value.append(char)
-                continue
+            elif char in [" ", "\t", "\n"]:
+                if char == "\n":
+                    self.line_number += 1
 
-            if char in [" ", "\t", "\n"]:
                 # make a token from the current value if one exists:
                 if next_value:
                     yield self._make_token_from_value_string_and_pos(next_value)
                     next_value = []
-                else:
-                    continue
             elif char in ["{", "}", "="]:
                 if next_value:
                     yield self._make_token_from_value_string_and_pos(next_value)
@@ -220,12 +160,12 @@ class SaveFileParser:
 
     def _parse_key_value_pair(self):
         logging.debug("Key-Value Pair")
-        key_token = self._next_token()
+        key_token = self._lookahead()
         if key_token.token_type not in {TokenType.STRING, TokenType.QUOT_STRING, TokenType.INTEGER}:
             raise StellarisFileFormatError(
                 f"Line {key_token.pos}: Expected a string or Integer as key, found {key_token}"
             )
-        key = key_token.value
+        key = self._parse_literal()
         eq_token = self._next_token()
         if eq_token.token_type == TokenType.EQUAL:
             value = self._parse_value()
@@ -238,7 +178,7 @@ class SaveFileParser:
     def _parse_value(self):
         logging.debug("Value")
         next_token = self._lookahead()
-        if next_token.token_type in Token.LITERAL_TOKENS:
+        if next_token.token_type in LITERAL_TOKENS:
             value = self._parse_literal()
         elif next_token.token_type == TokenType.BRACE_OPEN:
             value = self._parse_composite_game_object_or_list()
@@ -262,7 +202,7 @@ class SaveFileParser:
             next_token = self._lookahead()
             if next_token.token_type == TokenType.EQUAL:
                 res = self._parse_key_value_pair_list(token)
-            elif next_token.token_type in Token.LITERAL_TOKENS or next_token.token_type == TokenType.BRACE_CLOSE:
+            elif next_token.token_type in LITERAL_TOKENS or next_token.token_type == TokenType.BRACE_CLOSE:
                 res = self._parse_object_list(token.value)
             else:
                 res = None
@@ -277,7 +217,7 @@ class SaveFileParser:
             )
 
         next_token = self._lookahead()
-        if next_token.token_type in Token.LITERAL_TOKENS:
+        if next_token.token_type in LITERAL_TOKENS:
             first_value = self._parse_literal()
         elif next_token.token_type == TokenType.BRACE_OPEN:
             first_value = self._parse_composite_game_object_or_list()
@@ -309,13 +249,17 @@ class SaveFileParser:
     def _parse_literal(self):
         logging.debug("Literal")
         token = self._next_token()
-        if token.token_type not in Token.LITERAL_TOKENS:
+        if token.token_type not in LITERAL_TOKENS:
             raise StellarisFileFormatError(
                 "Line {}: Expected literal, found {}".format(token.pos, token)
             )
-        return token.value
+        val = token.value
+        if token.token_type == TokenType.QUOT_STRING:
+            val = val.strip('"')
+        return val
 
-    def _add_key_value_pair_or_convert_to_list(self, obj, key, value):
+    @staticmethod
+    def _add_key_value_pair_or_convert_to_list(obj, key, value):
         if key not in obj:
             obj[key] = value
         else:
