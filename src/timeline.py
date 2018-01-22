@@ -1,4 +1,5 @@
-from collections import namedtuple
+import logging
+from collections import namedtuple, defaultdict
 
 COLONIZABLE_PLANET_CLASSES = {
     "pc_arid", "pc_continental", "pc_alpine",
@@ -38,7 +39,6 @@ PLANET_CLIMATES = [COLD_CLIMATE, TEMPERATE_CLIMATE, DRY_CLIMATE, GAIA_CLIMATE, O
 
 
 class StellarisDate(namedtuple("Date", ["year", "month", "day"])):
-
     def __sub__(self, other):
         """
         Get the difference between two dates in days.
@@ -57,57 +57,31 @@ class StellarisDate(namedtuple("Date", ["year", "month", "day"])):
         y, m, d = datestring.split(".")
         return cls(int(y), int(m), int(d))
 
+    def __repr__(self):
+        return f"{self.year}.{self.month}.{self.day}"
 
-class Timeline:
+
+class GameStateInfo:
     def __init__(self):
-        self.save_times = []
-        self.empire_data = {}
-        self.galaxy_data = {}
-        self._gamestate = None
+        self.date = None
+        self.game_name = None
         self.player_country = None
         self.species_list = None
+        self.galaxy_data = None
+        self.country_data = None
+        self.owned_planets = None
+        self.tech_progress = None
+        self.demographics_data = None
+        self._game_state = None
 
-    def add_data(self, gamestate):
-        self._gamestate = gamestate
-        save_date = StellarisDate.from_string(gamestate["date"])
-        self.save_times.append(
-            save_date
-        )
+    def initialize(self, gamestate):
+        self._game_state = gamestate
+        self.date = StellarisDate.from_string(gamestate["date"])
+        self.game_name = gamestate["name"]
         self.player_country = gamestate["player"][0]["country"]
-
-        self.species_list = []
-        self.empire_data[save_date] = {
-            "empire_demographics": self._extract_empire_demographics(),
-        }
-
-        if not self.galaxy_data:
-            self.galaxy_data = self._extract_galaxy_data()
-        self._gamestate = None
-
-    def _extract_empire_demographics(self):
-        """
-        Extract information about the player empire's demographics
-
-        :return:
-        """
-        empire_demographics = {
-            "owned_planets": 0,
-            "pops_per_species": {},
-        }
-        self.species_list = self._gamestate["species"]
-        pop_data = self._gamestate["pop"]
-        for planet_id in self._gamestate["country"][self.player_country]["owned_planets"]:
-            empire_demographics["owned_planets"] += 1
-            planet_data = self._gamestate["planet"][planet_id]
-
-            for tile_id, tile_data in planet_data["tiles"].items():
-                pop_id = tile_data.get("pop")
-                if pop_id:
-                    pop_species_index = pop_data[pop_id]["species_index"]
-                    if pop_species_index not in empire_demographics["pops_per_species"]:
-                        empire_demographics["pops_per_species"][pop_species_index] = 0
-                    empire_demographics["pops_per_species"][pop_species_index] += 1
-        return empire_demographics
+        self._extract_galaxy_data()
+        self._extract_empire_info()
+        self._game_state = None
 
     def _extract_galaxy_data(self):
         """
@@ -116,21 +90,76 @@ class Timeline:
 
         :return:
         """
-        galaxy_data = {
-            "planet_type_distribution": {},
+        self.galaxy_data = {
+            "planet_class_distribution": {},
             "planet_tiles_distribution": {},
         }
 
-        for planet_id, planet_data in self._gamestate["planet"].items():
+        for planet_id, planet_data in self._game_state["planet"].items():
             planet_class = planet_data["planet_class"]
-            if planet_class not in galaxy_data["planet_type_distribution"]:
-                galaxy_data["planet_type_distribution"][planet_class] = 0
-            galaxy_data["planet_type_distribution"][planet_class] += 1
+            if planet_class not in self.galaxy_data["planet_class_distribution"]:
+                self.galaxy_data["planet_class_distribution"][planet_class] = 0
+            self.galaxy_data["planet_class_distribution"][planet_class] += 1
 
             if planet_class in COLONIZABLE_PLANET_CLASSES:
-                if planet_class not in galaxy_data["planet_tiles_distribution"]:
-                    galaxy_data["planet_tiles_distribution"][planet_class] = 0
+                if planet_class not in self.galaxy_data["planet_tiles_distribution"]:
+                    self.galaxy_data["planet_tiles_distribution"][planet_class] = 0
                 for tile in planet_data["tiles"].values():
                     if tile.get("active") == "yes":
-                        galaxy_data["planet_tiles_distribution"][planet_class] += 1
-        return galaxy_data
+                        self.galaxy_data["planet_tiles_distribution"][planet_class] += 1
+
+    def _extract_empire_info(self):
+        """
+        Extract information about the player empire's demographics
+
+        :return:
+        """
+        self.country_data = {}
+        self.demographics_data = {}
+        self.tech_progress = {}
+        self.owned_planets = {}
+        self.species_list = self._game_state["species"]
+        pop_data = self._game_state["pop"]
+        for country_id, country_data in self._game_state["country"].items():
+            if country_data["type"] != "default":
+                continue  # Enclaves, Leviathans, etc ....
+
+            self.country_data[country_id] = {
+                "name": country_data["name"],
+                "military_power": country_data["military_power"],
+                "fleet_size": country_data["fleet_size"],
+                "tech_progress": country_data["tech_status"]["technology"],
+            }
+            if not country_data["budget"]:
+                self.country_data[country_id]["budget"] = defaultdict(None)
+            else:
+                self.country_data[country_id]["budget"] = country_data["budget"]["last_month"]
+            self.demographics_data[country_id] = {}
+            self.owned_planets[country_id] = 0
+            for planet_id in country_data["owned_planets"]:
+                self.owned_planets[country_id] += 1
+                planet_data = self._game_state["planet"][planet_id]
+                for tile_id, tile_data in planet_data["tiles"].items():
+                    pop_id = tile_data.get("pop")
+                    if pop_id:
+                        pop_species_index = pop_data[pop_id]["species_index"]
+                        if pop_species_index not in self.demographics_data[country_id]:
+                            self.demographics_data[country_id][pop_species_index] = 0
+                        self.demographics_data[country_id][pop_species_index] += 1
+
+
+class Timeline:
+    def __init__(self):
+        self.game_name = None
+        self.time_line = {}
+
+    def add_data(self, gamestateinfo):
+        if self.game_name is None:
+            self.game_name = gamestateinfo.game_name
+        else:
+            if self.game_name != gamestateinfo.game_name:
+                logging.error(f"Ignoring game state for {gamestateinfo.game_name}, expected {self.game_name}")
+
+        if gamestateinfo.date in self.time_line:
+            logging.error(f"Ignoring duplicate entry for {gamestateinfo.date}")
+        self.time_line[gamestateinfo.date] = gamestateinfo
