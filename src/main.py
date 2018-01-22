@@ -84,7 +84,7 @@ def main2(pickle_file_name="output/timeline_lokken_mechanists.pickle"):
     static_plotter.make_plot()
     static_plotter.save_plot()
 
-    timeline_plot = visualization.EmpireDemographicsPlot(gametimeline)
+    timeline_plot = visualization.EmpireProgressionPlot(gametimeline)
     timeline_plot.make_plot()
     timeline_plot.save_plot()
 
