@@ -141,15 +141,17 @@ class GameStateInfo:
             for planet_id in country_data["owned_planets"]:
                 self.owned_planets[country_id] += 1
                 planet_data = self._game_state["planet"][planet_id]
-                for tile_id, tile_data in planet_data["tiles"].items():
-                    pop_id = tile_data.get("pop")
-                    if pop_id:
-                        pop_species_index = pop_data[pop_id]["species_index"]
-                        if pop_species_index not in self.demographics_data[country_id]:
-                            self.demographics_data[country_id][pop_species_index] = 0
-                        self.demographics_data[country_id][pop_species_index] += 1
+                for pop_id in planet_data.get("pop", []):
+                    if pop_id not in pop_data:
+                        logging.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
+                    pop_species_index = pop_data[pop_id]["species_index"]
+                    if pop_species_index not in self.demographics_data[country_id]:
+                        self.demographics_data[country_id][pop_species_index] = 0
+                    self.demographics_data[country_id][pop_species_index] += 1
+
     def __str__(self):
         return f"{self.game_name} - {self.date}"
+
 
 class Timeline:
     def __init__(self):
