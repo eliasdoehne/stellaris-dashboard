@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-import timeline
+from stellaristimeline import timeline
 
 COLOR_MAP = plt.get_cmap("viridis")
 
@@ -205,7 +205,6 @@ class EmpireProgressionPlot:
             plot_kwargs = self._get_country_plot_kwargs(country, i, len(fleet_size))
             ax.plot(self.t_axis, techs, **plot_kwargs)
         ax.legend()
-
 
     def _iterate_countries_in_order(self, data_dict):
         if self.gametimeline.game_name in data_dict:

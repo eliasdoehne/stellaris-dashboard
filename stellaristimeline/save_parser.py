@@ -7,7 +7,7 @@ from collections import namedtuple
 import pyximport
 
 pyximport.install()
-import token_value_stream
+from stellaristimeline import token_value_stream
 
 FilePosition = namedtuple("FilePosition", "line col")
 

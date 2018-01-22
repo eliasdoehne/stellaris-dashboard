@@ -148,7 +148,8 @@ class GameStateInfo:
                         if pop_species_index not in self.demographics_data[country_id]:
                             self.demographics_data[country_id][pop_species_index] = 0
                         self.demographics_data[country_id][pop_species_index] += 1
-
+    def __str__(self):
+        return f"{self.game_name} - {self.date}"
 
 class Timeline:
     def __init__(self):
