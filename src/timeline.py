@@ -121,6 +121,8 @@ class GameStateInfo:
         self.species_list = self._game_state["species"]
         pop_data = self._game_state["pop"]
         for country_id, country_data in self._game_state["country"].items():
+            if not isinstance(country_data, dict):
+                continue  # can be "none", apparently
             if country_data["type"] != "default":
                 continue  # Enclaves, Leviathans, etc ....
 

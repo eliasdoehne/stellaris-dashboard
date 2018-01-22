@@ -11,8 +11,7 @@ import visualization
 logging.basicConfig(level=logging.INFO)
 BASE_SAVE_DIR = pathlib.Path("saves/lokkenmechanists_1256936305/")
 
-
-# BASE_SAVE_DIR = pathlib.Path("/home/elias/.local/share/Paradox Interactive/Stellaris/save games/")
+BASE_SAVE_DIR = pathlib.Path("/home/elias/.local/share/Paradox Interactive/Stellaris/save games/neboritethrong_-145199095")
 
 
 def get_gamestateinfo_from_file(filename):
@@ -54,8 +53,8 @@ def visualize_results(tl):
     static_plot.make_plot()
 
 
-def main(pickle_file_name=None):
-    sr = SaveReader(BASE_SAVE_DIR)
+def main(pickle_file_name=None, threads=None):
+    sr = SaveReader(BASE_SAVE_DIR, threads=threads)
     if pickle_file_name is not None:
         logging.info(f"Loading existing timeline {pickle_file_name}")
         with open(pickle_file_name, "rb") as f:
@@ -75,12 +74,11 @@ def main(pickle_file_name=None):
             with open(pickle_file_name, "wb") as f:
                 logging.info(f"Saving timeline to {pickle_file_name}")
                 pickle.dump(gametimeline, f)
-        break
-        time.sleep(5)
+        time.sleep(10)
 
 
-def main2():
-    with open("output/timeline_lokken_mechanists.pickle", "rb") as f:
+def main2(pickle_file_name="output/timeline_lokken_mechanists.pickle"):
+    with open(pickle_file_name, "rb") as f:
         gametimeline = pickle.load(f)
     static_plotter = visualization.StaticGalaxyInformationPlot(next(iter(gametimeline.time_line.values())).galaxy_data)
     static_plotter.make_plot()
@@ -93,5 +91,7 @@ def main2():
 
 if __name__ == "__main__":
     # main(pickle_file_name="output/timeline_lokken_mechanists.pickle")
-    main()
-    main2()
+    # main(pickle_file_name="output/timeline_neborite_throng.pickle", threads=1)
+
+    # main(pickle_file_name="output/timeline_neborite_throng.pickle")
+    main2(pickle_file_name="output/timeline_neborite_throng.pickle")

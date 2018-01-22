@@ -30,7 +30,6 @@ class StaticGalaxyInformationPlot:
         keys = [key for key in timeline.COLONIZABLE_PLANET_CLASSES if key in self.galaxy_data["planet_class_distribution"]]
         keys = sorted(keys, key=self._sort_planets_by_climate_and_frequency)
 
-        print(keys)
         values = [self.galaxy_data["planet_class_distribution"].get(key, 0) for key in keys]
         colors = [color_dict[timeline.CLIMATE_CLASSIFICATION[key]] for key in keys]
         ax.bar(range(len(values)), values, tick_label=keys, color=colors)
@@ -67,16 +66,19 @@ class EmpireDemographicsPlot:
     def make_plot(self):
         self.fig, self.axes = plt.subplots(2, 1, figsize=(16, 18))
 
-        ax = self.axes[0]
         start_date = timeline.StellarisDate(2200, 1, 1)
         t_axis = np.zeros(len(self.gametimeline.time_line))
         pop_count_per_species = {}
+        total_pop_count = np.zeros(t_axis.shape)
         planet_count = np.zeros(t_axis.shape)
         tech_count = np.zeros(t_axis.shape)
         t_axis = np.zeros(t_axis.shape)
-        t_axis = np.zeros(t_axis.shape)
-        for i, (date, gamestateinfo) in enumerate(self.gametimeline.time_line.items()):
+        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
             t_axis[i] = date - start_date
+            total_pop_count[i] = sum(gamestateinfo.demographics_data[gamestateinfo.player_country].values())
+            planet_count[i] = gamestateinfo.owned_planets[gamestateinfo.player_country]
+        self.axes[0].plot(t_axis, total_pop_count)
+        self.axes[1].plot(t_axis, planet_count)
 
     def save_plot(self):
         plt.savefig(self.plot_filename, dpi=300)
