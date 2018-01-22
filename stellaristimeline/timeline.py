@@ -69,6 +69,7 @@ class GameStateInfo:
         self.species_list = None
         self.galaxy_data = None
         self.country_data = None
+        self.exploration_data = None
         self.owned_planets = None
         self.tech_progress = None
         self.demographics_data = None
@@ -118,6 +119,7 @@ class GameStateInfo:
         self.demographics_data = {}
         self.tech_progress = {}
         self.owned_planets = {}
+        self.exploration_data = {}
         self.species_list = self._game_state["species"]
         pop_data = self._game_state["pop"]
         for country_id, country_data in self._game_state["country"].items():
@@ -132,6 +134,7 @@ class GameStateInfo:
                 "fleet_size": country_data["fleet_size"],
                 "tech_progress": country_data["tech_status"]["technology"],
             }
+            self.exploration_data = len(country_data["surveyed"])
             if not country_data["budget"]:
                 self.country_data[country_id]["budget"] = defaultdict(None)
             else:
