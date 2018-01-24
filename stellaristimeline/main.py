@@ -62,11 +62,11 @@ def cli():
 
 @cli.command()
 @click.option('--pickle', type=click.Path(exists=True, file_okay=True, dir_okay=False))
-def visualize_results(pickle):
-    f_visualize_results(pickle)
+def visualize(pickle):
+    f_visualize(pickle)
 
 
-def f_visualize_results(pickle_file_name):
+def f_visualize(pickle_file_name):
     if pickle_file_name is not None:
         pickles = [pathlib.Path(pickle_file_name)]
     else:
@@ -91,9 +91,9 @@ def f_visualize_results(pickle_file_name):
 @click.option('--threads', type=click.INT)
 @click.option('--polling_interval', type=click.INT, default=5)
 @click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def monitor_for_new_saves(save_path, threads, polling_interval):
+def monitor_saves(save_path, threads, polling_interval):
     save_reader = SaveReader(save_path, threads=threads)
-    t = threading.Thread(target=f_monitor_for_new_saves, daemon=True, args=(save_reader, polling_interval))
+    t = threading.Thread(target=f_monitor_saves, daemon=True, args=(save_reader, polling_interval))
     t.start()
     while True:
         exit_prompt = click.prompt("Press x and confirm with enter to exit the program")
@@ -103,7 +103,7 @@ def monitor_for_new_saves(save_path, threads, polling_interval):
     t.join()
 
 
-def f_monitor_for_new_saves(save_reader, polling_interval):
+def f_monitor_saves(save_reader, polling_interval):
     output_pickle = get_pickle_path(save_reader.game_dir)
     gametimeline = initialize_timeline(output_pickle)
     while True:
@@ -128,11 +128,11 @@ def f_monitor_for_new_saves(save_reader, polling_interval):
 @cli.command()
 @click.option('--threads', type=click.INT)
 @click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def parse_existing_saves(save_path, threads):
-    f_parse_existing_saves(save_path, threads)
+def parse_saves(save_path, threads):
+    f_parse_saves(save_path, threads)
 
 
-def f_parse_existing_saves(save_path, threads=None):
+def f_parse_saves(save_path, threads=None):
     output_pickle = get_pickle_path(save_path)
     print(output_pickle)
     sr = SaveReader(save_path, threads=threads)

@@ -83,7 +83,9 @@ class EmpireProgressionPlot:
         self.axes_iter = iter(self.axes.flat)
         self.t_axis = np.zeros(len(self.gametimeline.time_line))
         for i, date in enumerate(sorted(self.gametimeline.time_line)):
-            self.t_axis[i] = date - self.start_date
+            self.t_axis[i] = 2200 + (date - self.start_date) / 360.0
+        for ax in self.axes.flat:
+            ax.set_xlim((self.t_axis[0], self.t_axis[-1]))
 
     def pop_count_plot(self):
         ax = next(self.axes_iter)
