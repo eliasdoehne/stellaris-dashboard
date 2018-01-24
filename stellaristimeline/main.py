@@ -3,6 +3,7 @@ import multiprocessing as mp
 import os.path
 import pathlib
 import pickle
+import re
 import threading
 import time
 
@@ -54,6 +55,114 @@ class SaveReader:
         self.work_pool.join()
 
 
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.option('--pickle', type=click.Path(exists=True, file_okay=True, dir_okay=False))
+def visualize_results(pickle):
+    f_visualize_results(pickle)
+
+
+def f_visualize_results(pickle_file_name):
+    if pickle_file_name is not None:
+        pickles = [pathlib.Path(pickle_file_name)]
+    else:
+        pickles = pathlib.Path("output/pickles/").glob("*.pickle")
+    for pickle_file in pickles:
+        gametimeline = load_timeline_from_pickle(pickle_file)
+        galaxy_data = next(iter(gametimeline.time_line.values())).galaxy_data
+
+        out_dir = pathlib.Path(f"output/{pickle_file.stem}/")
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        static_plot = visualization.StaticGalaxyInformationPlot(galaxy_data, plot_filename=f"{out_dir}/galaxy.png")
+        static_plot.make_plot()
+        static_plot.save_plot()
+
+        timeline_plot = visualization.EmpireProgressionPlot(gametimeline, plot_filename=f"{out_dir}/empires.png")
+        timeline_plot.make_plot()
+        timeline_plot.save_plot()
+
+
+@cli.command()
+@click.option('--threads', type=click.INT)
+@click.option('--polling_interval', type=click.INT, default=5)
+@click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
+def monitor_for_new_saves(save_path, threads, polling_interval):
+    save_reader = SaveReader(save_path, threads=threads)
+    t = threading.Thread(target=f_monitor_for_new_saves, daemon=True, args=(save_reader, polling_interval))
+    t.start()
+    while True:
+        exit_prompt = click.prompt("Press x and confirm with enter to exit the program")
+        if exit_prompt == "x" or exit_prompt == "X":
+            save_reader.running = False
+            break
+    t.join()
+
+
+def f_monitor_for_new_saves(save_reader, polling_interval):
+    output_pickle = get_pickle_path(save_reader.game_dir)
+    gametimeline = initialize_timeline(output_pickle)
+    while True:
+        try:
+            for gamestateinfo in save_reader.check_for_new_saves():
+                print(f"Processing gamestate {gamestateinfo}")
+                if gamestateinfo.date not in gametimeline.time_line:
+                    gametimeline.add_data(gamestateinfo)
+                    append_gamestateinfo_to_pickle(gamestateinfo, output_pickle)
+
+                if not save_reader.running:
+                    break
+        except Exception as e:
+            logging.error(e)
+            break
+        if not save_reader.running:
+            break
+        time.sleep(polling_interval)
+    save_reader.teardown()
+
+
+@cli.command()
+@click.option('--threads', type=click.INT)
+@click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
+def parse_existing_saves(save_path, threads):
+    f_parse_existing_saves(save_path, threads)
+
+
+def f_parse_existing_saves(save_path, threads=None):
+    output_pickle = get_pickle_path(save_path)
+    print(output_pickle)
+    sr = SaveReader(save_path, threads=threads)
+    gametimeline = initialize_timeline(output_pickle)
+
+    print(f"Looking for new save files in {save_path}.")
+    for gamestateinfo in sr.check_for_new_saves():
+        if gamestateinfo.date not in gametimeline.time_line:
+            gametimeline.add_data(gamestateinfo)
+            append_gamestateinfo_to_pickle(gamestateinfo, output_pickle)
+
+
+def initialize_timeline(output_pickle):
+    if os.path.exists(output_pickle):
+        gametimeline = load_timeline_from_pickle(output_pickle)
+    else:
+        gametimeline = timeline.Timeline()
+    return gametimeline
+
+
+def get_pickle_path(save_path):
+    game_id = pathlib.Path(save_path).stem
+    assert re.fullmatch(r'[a-z]+[0-9]*_-?[0-9]+', game_id) is not None
+    pickle_dir = "output/pickles/"
+    pickle_file = pathlib.Path(f"{pickle_dir}/{game_id}.pickle")
+    if not os.path.exists(pickle_dir):
+        os.makedirs(pickle_dir)
+    return pickle_file
+
+
 def load_timeline_from_pickle(pickle_file):
     gametimeline = timeline.Timeline()
     with open(pickle_file, "rb") as f:
@@ -69,99 +178,3 @@ def load_timeline_from_pickle(pickle_file):
 def append_gamestateinfo_to_pickle(gamestateinfo, pickle_file):
     with open(pickle_file, "ab") as f:
         pickle.dump(gamestateinfo, f)
-
-
-@click.group()
-def cli():
-    pass
-
-
-@cli.command()
-@click.argument('pickle_file_name', type=click.Path(exists=True, file_okay=True, dir_okay=False))
-def visualize_results(pickle_file_name):
-    f_visualize_results(pickle_file_name)
-
-
-def f_visualize_results(pickle_file_name):
-    gametimeline = load_timeline_from_pickle(pickle_file_name)
-    static_plot = visualization.StaticGalaxyInformationPlot(next(iter(gametimeline.time_line.values())).galaxy_data)
-    static_plot.make_plot()
-
-    timeline_plot = visualization.EmpireProgressionPlot(gametimeline)
-    timeline_plot.make_plot()
-    timeline_plot.save_plot()
-
-    static_plotter = visualization.StaticGalaxyInformationPlot(next(iter(gametimeline.time_line.values())).galaxy_data)
-    static_plotter.make_plot()
-    static_plotter.save_plot()
-
-
-@cli.command()
-@click.option('--threads', type=click.INT)
-@click.option('--polling_interval', type=click.INT, default=5)
-@click.argument('output_file', type=click.Path(exists=False, file_okay=True, dir_okay=False))
-@click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def monitor_for_new_saves(threads, polling_interval, output_file, save_path):
-    save_reader = SaveReader(save_path, threads=threads)
-    t = threading.Thread(target=f_monitor_for_new_saves, daemon=True, args=(save_reader, polling_interval, output_file))
-    t.start()
-    while True:
-        exit = click.prompt("Press x and confirm with enter to exit the program")
-        if exit == "x" or exit == "X":
-            save_reader.running = False
-            break
-    t.join()
-
-
-def f_monitor_for_new_saves(save_reader, polling_interval, output_file):
-    if os.path.exists(output_file):
-        gametimeline = load_timeline_from_pickle(output_file)
-    else:
-        gametimeline = timeline.Timeline()
-
-    while True:
-        try:
-            for gamestateinfo in save_reader.check_for_new_saves():
-                print(f"Processing gamestate {gamestateinfo}")
-                if output_file is None:
-                    filename_base = "_".join(gamestateinfo.game_name.lower().split())
-                    output_file = pathlib.Path(f"output/timeline_{filename_base}.pickle")
-
-                if gamestateinfo.date not in gametimeline.time_line:
-                    gametimeline.add_data(gamestateinfo)
-                    append_gamestateinfo_to_pickle(gamestateinfo, output_file)
-
-                if not save_reader.running:
-                    break
-        except Exception as e:
-            logging.error(e)
-            break
-        if not save_reader.running:
-            break
-        time.sleep(polling_interval)
-    save_reader.teardown()
-
-
-@cli.command()
-@click.option('--threads', type=click.INT)
-@click.argument('output_pickle', type=click.Path(file_okay=True, dir_okay=False))
-@click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def parse_existing_saves(output_pickle, threads, save_path):
-    f_parse_existing_saves(output_pickle, threads, save_path)
-
-
-def f_parse_existing_saves(output_pickle, threads, save_path):
-    sr = SaveReader(save_path, threads=threads)
-    if os.path.exists(output_pickle):
-        gametimeline = load_timeline_from_pickle(output_pickle)
-    else:
-        gametimeline = timeline.Timeline()
-
-    print(f"Looking for new save files in {save_path}.")
-    for gamestateinfo in sr.check_for_new_saves():
-        if output_pickle is None:
-            filename_base = "_".join(gamestateinfo.game_name.lower().split())
-            output_pickle = pathlib.Path(f"output/timeline_{filename_base}.pickle")
-        if gamestateinfo.date not in gametimeline.time_line:
-            gametimeline.add_data(gamestateinfo)
-            append_gamestateinfo_to_pickle(gamestateinfo, output_pickle)

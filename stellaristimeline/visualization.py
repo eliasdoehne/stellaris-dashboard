@@ -72,12 +72,13 @@ class EmpireProgressionPlot:
         self.pop_count_plot()
         self.planet_count_plot()
         self.tech_count_plot()
+        self.exploration_progress_plot()
         self.empire_demographics_plot()
         self.military_strength_plot()
         self.fleet_size_plot()
 
     def initialize_axes(self):
-        self.fig, self.axes = plt.subplots(3, 2, figsize=(25, 25))
+        self.fig, self.axes = plt.subplots(3, 3, figsize=(40, 25))
         self.fig.suptitle(f"{self.gametimeline.game_name}\n{self.start_date} - {max(self.gametimeline.time_line.keys())}")
         self.axes_iter = iter(self.axes.flat)
         self.t_axis = np.zeros(len(self.gametimeline.time_line))
@@ -137,6 +138,24 @@ class EmpireProgressionPlot:
         for i, country in enumerate(self._iterate_countries_in_order(tech_count)):
             techs = tech_count[country]
             plot_kwargs = self._get_country_plot_kwargs(country, i, len(tech_count))
+            ax.plot(self.t_axis, techs, **plot_kwargs)
+        ax.legend()
+
+    def exploration_progress_plot(self):
+        ax = next(self.axes_iter)
+        ax.set_title("Exploration Progress")
+        ax.set_ylabel("Number of Surveyed Objects/Systems (?)")
+        survey_count = {}
+        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
+            for country_id, country_data in gamestateinfo.country_data.items():
+                country = country_data["name"]
+                if country not in survey_count:
+                    survey_count[country] = np.zeros(self.t_axis.shape)
+                survey_count[country][i] = country_data["exploration_progress"]
+
+        for i, country in enumerate(self._iterate_countries_in_order(survey_count)):
+            techs = survey_count[country]
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(survey_count))
             ax.plot(self.t_axis, techs, **plot_kwargs)
         ax.legend()
 

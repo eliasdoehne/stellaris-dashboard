@@ -133,8 +133,8 @@ class GameStateInfo:
                 "military_power": country_data["military_power"],
                 "fleet_size": country_data["fleet_size"],
                 "tech_progress": country_data["tech_status"]["technology"],
+                "exploration_progress": len(country_data["surveyed"]),
             }
-            self.exploration_data = len(country_data["surveyed"])
             if not country_data["budget"]:
                 self.country_data[country_id]["budget"] = defaultdict(None)
             else:
