@@ -4,7 +4,7 @@ from Cython.Build import cythonize
 setup(
     name="stellaristimeline",
     ext_modules=cythonize("stellaristimeline/token_value_stream.pyx"),
-    requires=['Cython'],
+    requires=['Cython', 'sqlalchemy'],
     install_requires=[
         "matplotlib",
         "click",

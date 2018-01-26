@@ -9,9 +9,12 @@ import time
 
 import click
 
-from stellaristimeline import save_parser, timeline, visualization
+from stellaristimeline import save_parser, timeline, visualization, models
 
 logging.basicConfig(level=logging.INFO)
+
+BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
+STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
 
 
 def get_gamestateinfo_from_file(filename):
@@ -75,7 +78,8 @@ def f_visualize(pickle_file_name):
         gametimeline = load_timeline_from_pickle(pickle_file)
         galaxy_data = next(iter(gametimeline.time_line.values())).galaxy_data
 
-        out_dir = pathlib.Path(f"output/{pickle_file.stem}/")
+        out_dir = BASE_DIR / pathlib.Path(f"output/{pickle_file.stem}/")
+        print(out_dir.resolve())
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         static_plot = visualization.StaticGalaxyInformationPlot(galaxy_data, plot_filename=f"{out_dir}/galaxy.png")
