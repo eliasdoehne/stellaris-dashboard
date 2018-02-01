@@ -1,22 +1,26 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from stellaristimeline import timeline, models
+from stellaristimeline import models
 
 COLOR_MAP = plt.get_cmap("viridis")
 
 
 class EmpireProgressionPlot:
-    def __init__(self, gametimeline: timeline.Timeline, plot_filename="./output/empire_demographics_plot.png"):
-        self.gametimeline = gametimeline
+    def __init__(self, plot_filename="./output/empire_demographics_plot.png"):
+        self.game = None
+        self.player_country_name = None
         self.fig = None
         self.axes = None
         self.axes_iter = None
         self.plot_filename = plot_filename
         self.t_axis = None
-        self.start_date = timeline.StellarisDate(2200, 1, 1)
+        self._session = None
 
-    def make_plot(self):
+    def make_plot(self, game: models.Game, player_country_name: str):
+        self.game = game
+        self.player_country_name = player_country_name
+
         self.initialize_axes()
         self.pop_count_plot()
         self.planet_count_plot()
@@ -26,13 +30,15 @@ class EmpireProgressionPlot:
         self.military_strength_plot()
         self.fleet_size_plot()
 
+        self.game = None
+
     def initialize_axes(self):
         self.fig, self.axes = plt.subplots(3, 3, figsize=(40, 25))
-        self.fig.suptitle(f"{self.gametimeline.game_name}\n{self.start_date} - {max(self.gametimeline.time_line.keys())}")
         self.axes_iter = iter(self.axes.flat)
-        self.t_axis = np.zeros(len(self.gametimeline.time_line))
-        for i, date in enumerate(sorted(self.gametimeline.time_line)):
-            self.t_axis[i] = 2200 + (date - self.start_date) / 360.0
+        self.t_axis = np.zeros(len(self.game.game_states))
+        for i, gs in enumerate(self.game.game_states):
+            self.t_axis[i] = 2200 + gs.date / 360
+        self.fig.suptitle(f"{self.player_country_name}\n{self.t_axis[0]} - {self.t_axis[-1]}")
         for ax in self.axes.flat:
             ax.set_xlim((self.t_axis[0], self.t_axis[-1]))
 
@@ -42,13 +48,13 @@ class EmpireProgressionPlot:
         ax.set_ylabel("Number of Empire Pops")
         total_pop_count = {}
 
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            for country_id, demographics_data in gamestateinfo.demographics_data.items():
-                country = gamestateinfo.country_data[country_id]["name"]
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                country = country_state.country_name
                 if country not in total_pop_count:
                     total_pop_count[country] = np.zeros(self.t_axis.shape)
-                total_pop_count[country][i] = sum(demographics_data.values())
 
+                total_pop_count[country][i] = sum(pc.pop_count for pc in country_state.pop_counts)
         for i, country in enumerate(self._iterate_countries_in_order(total_pop_count)):
             pop_count = total_pop_count[country]
             plot_kwargs = self._get_country_plot_kwargs(country, i, len(total_pop_count))
@@ -61,12 +67,12 @@ class EmpireProgressionPlot:
         ax.set_ylabel("Number of Owned Planets")
         owned_planets_dict = {}
 
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            for country_id, owned_planets in gamestateinfo.owned_planets.items():
-                country = gamestateinfo.country_data[country_id]["name"]
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                country = country_state.country_name
                 if country not in owned_planets_dict:
                     owned_planets_dict[country] = np.zeros(self.t_axis.shape)
-                owned_planets_dict[country][i] = owned_planets
+                owned_planets_dict[country][i] = country_state.owned_planets
 
         for i, country in enumerate(self._iterate_countries_in_order(owned_planets_dict)):
             pop_count = owned_planets_dict[country]
@@ -79,12 +85,12 @@ class EmpireProgressionPlot:
         ax.set_title("Technology Progress")
         ax.set_ylabel("Number of Researched Technologies")
         tech_count = {}
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            for country_id, country_data in gamestateinfo.country_data.items():
-                country = country_data["name"]
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                country = country_state.country_name
                 if country not in tech_count:
                     tech_count[country] = np.zeros(self.t_axis.shape)
-                tech_count[country][i] = len(country_data["tech_progress"])
+                tech_count[country][i] = country_state.tech_progress
 
         for i, country in enumerate(self._iterate_countries_in_order(tech_count)):
             techs = tech_count[country]
@@ -97,12 +103,12 @@ class EmpireProgressionPlot:
         ax.set_title("Exploration Progress")
         ax.set_ylabel("Number of Surveyed Objects/Systems (?)")
         survey_count = {}
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            for country_id, country_data in gamestateinfo.country_data.items():
-                country = country_data["name"]
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                country = country_state.country_name
                 if country not in survey_count:
                     survey_count[country] = np.zeros(self.t_axis.shape)
-                survey_count[country][i] = country_data["exploration_progress"]
+                survey_count[country][i] = country_state.exploration_progress
 
         for i, country in enumerate(self._iterate_countries_in_order(survey_count)):
             techs = survey_count[country]
@@ -112,20 +118,21 @@ class EmpireProgressionPlot:
 
     def empire_demographics_plot(self):
         ax = next(self.axes_iter)
-        ax.set_title(f"Empire Demographics")
-        ax.set_ylabel(f"Distribution of Species within {self.gametimeline.game_name}")
+        ax.set_title(f"Empire Demographics ({self.player_country_name})")
+        ax.set_ylabel(f"Distribution of Species")
         species_distribution = {}
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            total_pop_count = 0
-            demo_data = gamestateinfo.demographics_data[gamestateinfo.player_country]
-            for species_id, species_count in demo_data.items():
-                species = gamestateinfo.species_list[species_id]["name"]
-                if species not in species_distribution:
-                    species_distribution[species] = np.zeros(self.t_axis.shape)
-                species_distribution[species][i] = species_count
-                total_pop_count += species_count
-            for species in species_distribution:
-                species_distribution[species][i] /= total_pop_count
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                if country_state.is_player:
+                    total_pop_count = 0
+                    for pc in country_state.pop_counts:
+                        species = pc.species_name
+                        if species not in species_distribution:
+                            species_distribution[species] = np.zeros(self.t_axis.shape)
+                        species_distribution[species][i] = pc.pop_count
+                        total_pop_count += pc.pop_count
+                    for species in species_distribution:
+                        species_distribution[species][i] /= total_pop_count
 
         y = []
         labels = []
@@ -145,12 +152,12 @@ class EmpireProgressionPlot:
         ax.set_title("Military Power")
         ax.set_ylabel("Total Fleet Strength")
         military_power = {}
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            for country_id, country_data in gamestateinfo.country_data.items():
-                country = country_data["name"]
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                country = country_state.country_name
                 if country not in military_power:
                     military_power[country] = np.zeros(self.t_axis.shape)
-                military_power[country][i] = country_data["military_power"]
+                military_power[country][i] = country_state.military_power
 
         for i, country in enumerate(self._iterate_countries_in_order(military_power)):
             techs = military_power[country]
@@ -163,12 +170,12 @@ class EmpireProgressionPlot:
         ax.set_title("Fleet Size")
         ax.set_ylabel("Number of Ships (?)")
         fleet_size = {}
-        for i, (date, gamestateinfo) in enumerate(sorted(self.gametimeline.time_line.items())):
-            for country_id, country_data in gamestateinfo.country_data.items():
-                country = country_data["name"]
+        for i, gs in enumerate(self.game.game_states):
+            for country_state in gs.country_states:
+                country = country_state.country_name
                 if country not in fleet_size:
                     fleet_size[country] = np.zeros(self.t_axis.shape)
-                fleet_size[country][i] = country_data["fleet_size"]
+                fleet_size[country][i] = country_state.fleet_size
 
         for i, country in enumerate(self._iterate_countries_in_order(fleet_size)):
             techs = fleet_size[country]
@@ -177,18 +184,14 @@ class EmpireProgressionPlot:
         ax.legend()
 
     def _iterate_countries_in_order(self, data_dict):
-        if self.gametimeline.game_name in data_dict:
-            yield self.gametimeline.game_name
         for country, data in sorted(data_dict.items(), key=lambda x: (x[1][-1], x[0])):
-            if country == self.gametimeline.game_name:
-                continue
             yield country
 
-    def _get_country_plot_kwargs(self, country: str, idx: int, num_lines: int):
+    def _get_country_plot_kwargs(self, country_name: str, idx: int, num_lines: int):
         linewidth = 1
         c = COLOR_MAP(idx / num_lines)
-        label = f"{country}"
-        if country == self.gametimeline.game_name:
+        label = f"{country_name}"
+        if country_name == self.player_country_name:
             linewidth = 2
             c = "r"
             label += " (player)"

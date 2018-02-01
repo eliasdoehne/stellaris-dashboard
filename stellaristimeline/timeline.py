@@ -1,173 +1,107 @@
 import logging
-from collections import namedtuple, defaultdict
 
-COLONIZABLE_PLANET_CLASSES = {
-    "pc_arid", "pc_continental", "pc_alpine",
-    "pc_desert", "pc_ocean", "pc_arctic",
-    "pc_savannah", "pc_tropical", "pc_tundra",
-    "pc_gaia", "pc_nuked", "pc_machine",
-    "pc_ringworld_habitable", "pc_habitat",
-}
-
-COLD_CLIMATE = "cold"
-TEMPERATE_CLIMATE = "temperate"
-DRY_CLIMATE = "dry"
-OTHER_CLIMATE = "other"
-GAIA_CLIMATE = "gaia"
-CLIMATE_CLASSIFICATION = {
-    "pc_alpine": COLD_CLIMATE,
-    "pc_tundra": COLD_CLIMATE,
-    "pc_arctic": COLD_CLIMATE,
-
-    "pc_continental": TEMPERATE_CLIMATE,
-    "pc_ocean": TEMPERATE_CLIMATE,
-    "pc_tropical": TEMPERATE_CLIMATE,
-
-    "pc_arid": DRY_CLIMATE,
-    "pc_desert": DRY_CLIMATE,
-    "pc_savannah": DRY_CLIMATE,
-
-    "pc_nuked": OTHER_CLIMATE,
-    "pc_machine": OTHER_CLIMATE,
-
-    "pc_gaia": GAIA_CLIMATE,
-    "pc_ringworld_habitable": GAIA_CLIMATE,
-    "pc_habitat": GAIA_CLIMATE,
-}
-
-PLANET_CLIMATES = [COLD_CLIMATE, TEMPERATE_CLIMATE, DRY_CLIMATE, GAIA_CLIMATE, OTHER_CLIMATE]
+from stellaristimeline import models
 
 
-class StellarisDate(namedtuple("Date", ["year", "month", "day"])):
-    def __sub__(self, other):
-        """
-        Get the difference between two dates in days.
-
-        :param other:
-        :return:
-        """
-        assert isinstance(other, StellarisDate)
-        return self.in_days() - other.in_days()
-
-    def in_days(self):
-        return self.day + 30 * (self.month + 12 * self.year)
-
-    @classmethod
-    def from_string(cls, datestring):
-        y, m, d = datestring.split(".")
-        return cls(int(y), int(m), int(d))
-
-    def __repr__(self):
-        return f"{self.year}.{self.month}.{self.day}"
-
-
-class GameStateInfo:
+class TimelineExtractor:
     def __init__(self):
-        self.date = None
-        self.game_name = None
-        self.player_country = None
-        self.species_list = None
-        self.galaxy_data = None
-        self.country_data = None
-        self.exploration_data = None
-        self.owned_planets = None
-        self.tech_progress = None
-        self.demographics_data = None
-        self._game_state = None
+        self.gamestate_dict = None
+        self.game = None
+        self._session = None
 
-    def initialize(self, gamestate):
-        self._game_state = gamestate
-        self.date = StellarisDate.from_string(gamestate["date"])
-        self.game_name = gamestate["name"]
-        self.player_country = gamestate["player"][0]["country"]
-        self._extract_galaxy_data()
-        self._extract_empire_info()
-        self._game_state = None
+    def process_gamestate(self, game_name, gamestate_dict):
+        self.gamestate_dict = gamestate_dict
+        self._session = models.SessionFactory()
+        try:
+            self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
+            if self.game is None:
+                logging.info(f"Adding new game {game_name} to database.")
+                self.game = models.Game(game_name=game_name)
+                self._session.add(self.game)
+            for gs in self.game.game_states:
+                if gs.date == gamestate_dict["date"]:
+                    break
+            else:
+                logging.info(f"Extracting country data to database.")
+                self._extract_country_data()
+                self._session.commit()
+        except Exception as e:
+            self._session.rollback()
+            raise e
+        finally:
+            self._session.close()
 
-    def _extract_galaxy_data(self):
-        """
-        Extract some static information about the galaxy that should not change (too much) during
-        the playthrough.
+        self.gamestate_dict = None
 
-        :return:
-        """
-        self.galaxy_data = {
-            "planet_class_distribution": {},
-            "planet_tiles_distribution": {},
-        }
+    def _extract_country_data(self):
+        date = self.gamestate_dict["date"]
+        y, m, d = map(int, date.split("."))
+        days = (y - 2200) * 360 + (m - 1) * 30 + d - 1
+        gs = models.GameState(game=self.game, date=days)
+        self._session.add(gs)
 
-        for planet_id, planet_data in self._game_state["planet"].items():
-            planet_class = planet_data["planet_class"]
-            if planet_class not in self.galaxy_data["planet_class_distribution"]:
-                self.galaxy_data["planet_class_distribution"][planet_class] = 0
-            self.galaxy_data["planet_class_distribution"][planet_class] += 1
-
-            if planet_class in COLONIZABLE_PLANET_CLASSES:
-                if planet_class not in self.galaxy_data["planet_tiles_distribution"]:
-                    self.galaxy_data["planet_tiles_distribution"][planet_class] = 0
-                for tile in planet_data["tiles"].values():
-                    if tile.get("active") == "yes":
-                        self.galaxy_data["planet_tiles_distribution"][planet_class] += 1
-
-    def _extract_empire_info(self):
-        """
-        Extract information about the player empire's demographics
-
-        :return:
-        """
-        self.country_data = {}
-        self.demographics_data = {}
-        self.tech_progress = {}
-        self.owned_planets = {}
-        self.exploration_data = {}
-        self.species_list = self._game_state["species"]
-        pop_data = self._game_state["pop"]
-        for country_id, country_data in self._game_state["country"].items():
+        player_country = self.gamestate_dict["player"][0]["country"]
+        for country_id, country_data in self.gamestate_dict["country"].items():
             if not isinstance(country_data, dict):
                 continue  # can be "none", apparently
             if country_data["type"] != "default":
                 continue  # Enclaves, Leviathans, etc ....
 
-            self.country_data[country_id] = {
-                "name": country_data["name"],
-                "military_power": country_data["military_power"],
-                "fleet_size": country_data["fleet_size"],
-                "tech_progress": country_data["tech_status"]["technology"],
-                "exploration_progress": len(country_data["surveyed"]),
-            }
-            if not country_data["budget"]:
-                self.country_data[country_id]["budget"] = defaultdict(None)
-            else:
-                self.country_data[country_id]["budget"] = country_data["budget"]["last_month"]
-            self.demographics_data[country_id] = {}
-            self.owned_planets[country_id] = 0
+            country_state = models.CountryState(
+                country_name=country_data["name"],
+                game_state=gs,
+                military_power=country_data["military_power"],
+                fleet_size=country_data["fleet_size"],
+                tech_progress=len(country_data["tech_status"]["technology"]),
+                exploration_progress=len(country_data["surveyed"]),
+                owned_planets=len(country_data["owned_planets"]),
+                is_player=(country_id == player_country),
+            )
+            self._session.add(country_state)
+
+            demographics = {}
+            pop_data = self.gamestate_dict["pop"]
             for planet_id in country_data["owned_planets"]:
-                self.owned_planets[country_id] += 1
-                planet_data = self._game_state["planet"][planet_id]
+                planet_data = self.gamestate_dict["planet"][planet_id]
                 for pop_id in planet_data.get("pop", []):
                     if pop_id not in pop_data:
                         logging.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     pop_species_index = pop_data[pop_id]["species_index"]
-                    if pop_species_index not in self.demographics_data[country_id]:
-                        self.demographics_data[country_id][pop_species_index] = 0
-                    self.demographics_data[country_id][pop_species_index] += 1
+                    if pop_species_index not in demographics:
+                        demographics[pop_species_index] = 0
+                    if pop_data[pop_id]["growth_state"] == 1:
+                        demographics[pop_species_index] += 1
 
-    def __str__(self):
-        return f"{self.game_name} - {self.date}"
+            for pop_species_index, pop_count in demographics.items():
+                species_name = self.gamestate_dict["species"][pop_species_index]["name"]
+                pop_count = models.PopCount(
+                    country_state=country_state,
+                    species_name=species_name,
+                    pop_count=pop_count,
+                )
+                self._session.add(pop_count)
 
 
-class Timeline:
-    def __init__(self):
-        self.game_name = None
-        self.time_line = {}
+if __name__ == '__main__':
+    from stellaristimeline.save_parser import SaveFileParser
 
-    def add_data(self, gamestateinfo):
-        if self.game_name is None:
-            self.game_name = gamestateinfo.game_name
-        else:
-            if self.game_name != gamestateinfo.game_name:
-                logging.error(f"Ignoring game state for {gamestateinfo.game_name}, expected {self.game_name}")
+    te = TimelineExtractor()
 
-        if gamestateinfo.date in self.time_line:
-            logging.error(f"Ignoring duplicate entry for {gamestateinfo.date}")
-        self.time_line[gamestateinfo.date] = gamestateinfo
+    p = SaveFileParser("/home/elias/Documents/projects/stellaris-timeline/saves/lokkenmechanists_1256936305/autosave_2200.11.01.sav")
+    te.process_gamestate("lokkenmechanists_1256936305", p.parse_save())
+
+    p = SaveFileParser("/home/elias/Documents/projects/stellaris-timeline/saves/lokkenmechanists_1256936305/autosave_2200.08.01.sav")
+    te.process_gamestate("lokkenmechanists_1256936305", p.parse_save())
+
+    p = SaveFileParser("/home/elias/Documents/projects/stellaris-timeline/saves/lokkenmechanists_1256936305/2200.01.01.sav")
+    te.process_gamestate("lokkenmechanists_1256936305", p.parse_save())
+
+    session = models.SessionFactory()
+    print("OUTPUT")
+    for g in session.query(models.Game).all():
+        for gs in g.game_states:
+            print(f"{gs}")
+            for cs in sorted(gs.country_states, key=lambda x: x.country_name):
+                print(f"  {cs}")
+                for pc in sorted(cs.pop_counts, key=lambda x: x.species_name):
+                    print(f"    {pc.species_name}  {pc.pop_count}")

@@ -229,6 +229,9 @@ class SaveFileParser:
             self._lookahead_token = None
         return res
 
+def parse_save(filename):
+    return SaveFileParser(filename).parse_save()
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)

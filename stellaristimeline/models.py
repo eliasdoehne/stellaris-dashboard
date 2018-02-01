@@ -1,11 +1,12 @@
 import pathlib
 import sqlalchemy
-from sqlalchemy import Column, Integer, String, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
 BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
-engine = sqlalchemy.create_engine(f'sqlite:///:memory:', echo=False)
+# engine = sqlalchemy.create_engine(f'sqlite:///:memory:', echo=False)
+engine = sqlalchemy.create_engine(f'sqlite:///foo.db', echo=False)
 SessionFactory = sessionmaker(bind=engine)
 
 Base = declarative_base()
@@ -16,23 +17,10 @@ class Game(Base):
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
 
-    game_states = relationship("GameState", back_populates="game")
-    save_files = relationship("SaveFile", back_populates="game")
+    game_states = relationship("GameState", back_populates="game", order_by=lambda: GameState.date)
 
     def __repr__(self):
         return f"Game(game_id={self.game_id}, game_name=\"{self.game_name}\")"
-
-
-class SaveFile(Base):
-    __tablename__ = 'savefiletable'
-    save_id = Column(Integer, primary_key=True)
-    game_id = Column(ForeignKey(Game.game_id))
-    save_file = Column(String(80))
-
-    game = relationship("Game", back_populates="save_files")
-
-    def __repr__(self):
-        return f"SaveFile(save_id={self.save_id}, game_id={self.game_id}, save_file={self.save_file})"
 
 
 class GameState(Base):
@@ -49,15 +37,16 @@ class GameState(Base):
 
 
 class CountryState(Base):
-    __tablename__ = 'countryinfotable'
+    __tablename__ = 'countrystatetable'
     country_state_id = Column(Integer, primary_key=True)
     gamestate_id = Column(ForeignKey(GameState.gamestate_id))
-    country_name = Column(String(20))
+    country_name = Column(String(20), index=True)
     military_power = Column(Float)
     fleet_size = Column(Float)
     tech_progress = Column(Integer)
     exploration_progress = Column(Integer)
     owned_planets = Column(Integer)
+    is_player = Column(Boolean)
 
     game_state = relationship("GameState", back_populates="country_states")
     pop_counts = relationship("PopCount", back_populates="country_state")
@@ -80,41 +69,3 @@ class PopCount(Base):
 
 
 Base.metadata.create_all(engine)
-
-if __name__ == '__main__':
-    print(repr(GameState.__table__))
-    g = Game(game_name="TEst Game")
-    print(g)
-    gs = GameState(game=g, date=1337)
-    print(gs)
-    cs = CountryState(
-        country_name="foo",
-        game_state=gs,
-        military_power=1,
-        fleet_size=1,
-        tech_progress=1,
-        exploration_progress=1,
-        owned_planets=1,
-    )
-
-    sf = SaveFile(game=g, save_file="/foo/bar/")
-
-    session = SessionFactory()
-    session.add(g)
-    session.add(sf)
-    session.add(gs)
-    session.add(cs)
-    session.commit()
-    print("\n\n\n")
-    for g in session.query(Game).all():
-        print(g)
-        print(g.save_files)
-
-    for gs in session.query(GameState).all():
-        print(gs)
-
-    for cs in session.query(CountryState).all():
-        print(cs)
-    print("\n\n\n")
-
-    session.close()
