@@ -2,6 +2,8 @@ import logging
 import multiprocessing as mp
 import pathlib
 import threading
+import time
+import traceback
 
 import click
 
@@ -25,7 +27,6 @@ class SaveReader:
         self.work_pool = None
         if self.threads > 1:
             self.work_pool = mp.Pool(threads)
-        self.tle = timeline.TimelineExtractor()
 
     def check_for_new_saves(self):
         new_files = [save_file for save_file in self.game_dir.glob("*.sav")
@@ -33,18 +34,31 @@ class SaveReader:
                      and "ironman" not in str(save_file)]
         self.processed_saves.update(new_files)
         if self.threads > 1:
-            results = self.work_pool.map(save_parser.parse_save, new_files)
+            results = [self.work_pool.apply_async(save_parser.parse_save, (f,)) for f in new_files]
+            while results:
+                for r in results:
+                    if r.ready():
+                        if r.successful():
+                            gamestate_dict = r.get()
+                            yield gamestate_dict
+                        else:
+                            try:
+                                r.get()
+                            except Exception as e:
+                                print(e)
+                results = [r for r in results if not r.ready()]
+                time.sleep(0.1)
         else:
-            results = [save_parser.parse_save(save_file) for save_file in new_files]
-        for gamestate_dict in results:
-            self.tle.process_gamestate(self.game_name, gamestate_dict)
+            for save_file in new_files:
+                yield save_parser.parse_save(save_file)
 
     def mark_all_existing_saves_processed(self):
         self.processed_saves |= set(self.game_dir.glob("*.sav"))
 
     def teardown(self):
-        self.work_pool.close()
-        self.work_pool.join()
+        if self.threads > 1:
+            self.work_pool.close()
+            self.work_pool.join()
 
 
 @click.group()
@@ -95,13 +109,21 @@ def monitor_saves(save_path, threads, polling_interval):
 
 
 def _monitor_saves(stop_event: threading.Event, save_reader: SaveReader, polling_interval: float):
-    # save_reader.mark_all_existing_saves_processed()
+    save_reader.mark_all_existing_saves_processed()
     wait_time = 0.01
+    tle = timeline.TimelineExtractor()
+    show_waiting_message = True
     while not stop_event.wait(wait_time):
         wait_time = polling_interval
         try:
-            save_reader.check_for_new_saves()
+            for gamestate in save_reader.check_for_new_saves():
+                show_waiting_message = True
+                tle.process_gamestate(save_reader.game_name, gamestate)
+            if show_waiting_message:
+                show_waiting_message = False
+                print("Waiting for new saves...")
         except Exception as e:
+            traceback.print_exc()
             logging.error(e)
             break
     save_reader.teardown()
@@ -115,5 +137,7 @@ def parse_saves(save_path, threads):
 
 
 def f_parse_saves(save_path, threads=None):
-    sr = SaveReader(save_path, threads=threads)
-    sr.check_for_new_saves()
+    save_reader = SaveReader(save_path, threads=threads)
+    tle = timeline.TimelineExtractor()
+    for gamestate in save_reader.check_for_new_saves():
+        tle.process_gamestate(save_reader.game_name, gamestate)
