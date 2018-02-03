@@ -4,10 +4,14 @@ import time
 import zipfile
 from collections import namedtuple
 
-import pyximport
+try:
+    import pyximport
 
-pyximport.install()
-from stellaristimeline import token_value_stream
+    pyximport.install()
+    from stellaristimeline import token_value_stream
+
+except ImportError:
+    from stellaristimeline import token_value_stream_re as token_value_stream
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -32,9 +36,9 @@ class TokenType(enum.Enum):
 Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
-def token_stream(gamestate):
+def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
     line_number = 0
-    for value, line_number in token_value_stream.token_value_stream(gamestate):
+    for value, line_number in tokenizer(gamestate):
         # print(f"VALUE [{value}] LN [{line_number}]")
         if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)
@@ -229,15 +233,33 @@ class SaveFileParser:
             self._lookahead_token = None
         return res
 
+
 def parse_save(filename):
     return SaveFileParser(filename).parse_save()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    with open("data/test_dummy_save.sav", "r") as f:
-        dummy_gamestate = f.read()
-    parser = SaveFileParser(None)
-    parser._token_stream = token_stream(dummy_gamestate)
-    parser._parse_save()
-    print(parser.gamestate_dict)
+    from stellaristimeline import token_value_stream_re
+
+    with zipfile.ZipFile("saves/blargel/autosave_2232.04.01.sav") as save_zip:
+        gamestate = save_zip.read("gamestate").decode()
+        start = time.time()
+        print("Parsing with RE")
+        tc = 0
+        token_set_re = set()
+        for t in token_stream(gamestate, token_value_stream_re.token_value_stream):
+            tc += 1
+            token_set_re.add(t)
+        end1 = time.time()
+        print(f"Parsed {tc} tokens in {end1 - start} s")
+        print("Parsing with Cython")
+        tc = 0
+        token_set_cython = set()
+        for t in token_stream(gamestate):
+            tc += 1
+            token_set_cython.add(t)
+        end2 = time.time()
+        print(f"Parsed {tc} tokens in {end2 - end1} s")
+
+        print(f"{sorted(token_set_cython - token_set_re, key=lambda t: t.pos)}")
+        print(f"{sorted(token_set_re - token_set_cython, key=lambda t: t.pos)}")
