@@ -3,6 +3,11 @@ import logging
 from stellaristimeline import models
 
 
+def date_to_days(date_str):
+    y, m, d = map(int, date_str.split("."))
+    return (y - 2200) * 360 + (m - 1) * 30 + d - 1
+
+
 class TimelineExtractor:
     def __init__(self):
         self.gamestate_dict = None
@@ -26,9 +31,12 @@ class TimelineExtractor:
                 logging.info(f"Adding new game {game_name} to database.")
                 self.game = models.Game(game_name=game_name)
                 self._session.add(self.game)
-            for gs in self.game.game_states:
-                if gs.date == gamestate_dict["date"]:
-                    break
+            date_str = gamestate_dict["date"]
+            days = date_to_days(self.gamestate_dict["date"])
+            for gs in reversed(self.game.game_states):
+                if days == gs.date:
+                    print(f"Gamestate for {self.game.game_name}, date {date_str} exists!")
+                    return
             else:
                 logging.info(f"Extracting country data to database.")
                 self._process_gamestate()
@@ -42,9 +50,7 @@ class TimelineExtractor:
         self.gamestate_dict = None
 
     def _process_gamestate(self):
-        date = self.gamestate_dict["date"]
-        y, m, d = map(int, date.split("."))
-        days = (y - 2200) * 360 + (m - 1) * 30 + d - 1
+        days = date_to_days(self.gamestate_dict["date"])
         self._current_gamestate = models.GameState(game=self.game, date=days)
         self._session.add(self._current_gamestate)
 
@@ -63,14 +69,16 @@ class TimelineExtractor:
             attitude_towards_player = models.Attitude.friendly
         else:
             attitude_towards_player = "unknown"
-            attitudes = country_data.get("ai", {}).get("attitude", [])
-            for attitude in attitudes:
-                if not isinstance(attitude, dict):
-                    continue
-                if attitude["country"] == self._player_country:
-                    attitude_towards_player = attitude["attitude"]
-                    break
-            attitude_towards_player = models.Attitude.__members__.get(attitude_towards_player, models.Attitude.unknown)
+            ai = country_data.get("ai", {})
+            if isinstance(ai, dict):
+                attitudes = ai.get("attitude", [])
+                for attitude in attitudes:
+                    if not isinstance(attitude, dict):
+                        continue
+                    if attitude["country"] == self._player_country:
+                        attitude_towards_player = attitude["attitude"]
+                        break
+                attitude_towards_player = models.Attitude.__members__.get(attitude_towards_player, models.Attitude.unknown)
         has_research_agreement_with_player = is_player or (country_id in self._player_research_agreements)
         has_sensor_link_with_player = is_player or (country_id in self._player_sensor_links)
 
@@ -97,6 +105,8 @@ class TimelineExtractor:
         if not trades:
             return
         for trade_id, trade_deal in trades.items():
+            if not isinstance(trade_deal, dict):
+                continue
             first = trade_deal.get("first", {})
             second = trade_deal.get("second", {})
             if first.get("country", -1) != self._player_country:
