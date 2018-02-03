@@ -39,7 +39,6 @@ Token = namedtuple("Token", ["token_type", "value", "pos"])
 def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
     line_number = 0
     for value, line_number in tokenizer(gamestate):
-        # print(f"VALUE [{value}] LN [{line_number}]")
         if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)
         elif value == "}":
@@ -215,10 +214,6 @@ class SaveFileParser:
                 existing_value.append(value)
             else:
                 obj[key] = [obj[key], value]
-
-    def print_token_stream(self):
-        for t in self._token_stream:
-            print(t)
 
     def _lookahead(self):
         if self._lookahead_token is None:

@@ -3,7 +3,27 @@ from matplotlib import pyplot as plt
 
 from stellaristimeline import models
 
-COLOR_MAP = plt.get_cmap("viridis")
+COLOR_MAP = plt.get_cmap("plasma")
+
+
+def show_tech_info(countrystate: models.CountryState):
+    return countrystate.has_research_agreement_with_player or countrystate.attitude_towards_player.reveals_technology_info()
+
+
+def show_economic_info(countrystate: models.CountryState):
+    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_economy_info()
+
+
+def show_demographic_info(countrystate: models.CountryState):
+    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_demographic_info()
+
+
+def show_geography_info(countrystate: models.CountryState):
+    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_demographic_info()
+
+
+def show_military_info(countrystate: models.CountryState):
+    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_military_info()
 
 
 class EmpireProgressionPlot:
@@ -51,6 +71,9 @@ class EmpireProgressionPlot:
         for i, gs in enumerate(self.game.game_states):
             for country_state in gs.country_states:
                 country = country_state.country_name
+                if country != self.player_country_name:
+                    if not show_demographic_info(country_state):
+                        continue
                 if country not in total_pop_count:
                     total_pop_count[country] = np.zeros(self.t_axis.shape)
 
@@ -70,6 +93,9 @@ class EmpireProgressionPlot:
         for i, gs in enumerate(self.game.game_states):
             for country_state in gs.country_states:
                 country = country_state.country_name
+                if country != self.player_country_name:
+                    if not show_geography_info(country_state):
+                        continue
                 if country not in owned_planets_dict:
                     owned_planets_dict[country] = np.zeros(self.t_axis.shape)
                 owned_planets_dict[country][i] = country_state.owned_planets
@@ -88,6 +114,9 @@ class EmpireProgressionPlot:
         for i, gs in enumerate(self.game.game_states):
             for country_state in gs.country_states:
                 country = country_state.country_name
+                if country != self.player_country_name:
+                    if not show_tech_info(country_state):
+                        continue
                 if country not in tech_count:
                     tech_count[country] = np.zeros(self.t_axis.shape)
                 tech_count[country][i] = country_state.tech_progress
@@ -106,6 +135,9 @@ class EmpireProgressionPlot:
         for i, gs in enumerate(self.game.game_states):
             for country_state in gs.country_states:
                 country = country_state.country_name
+                if country != self.player_country_name:
+                    if not show_tech_info(country_state):
+                        continue
                 if country not in survey_count:
                     survey_count[country] = np.zeros(self.t_axis.shape)
                 survey_count[country][i] = country_state.exploration_progress
@@ -155,6 +187,9 @@ class EmpireProgressionPlot:
         for i, gs in enumerate(self.game.game_states):
             for country_state in gs.country_states:
                 country = country_state.country_name
+                if country != self.player_country_name:
+                    if not show_military_info(country_state):
+                        continue
                 if country not in military_power:
                     military_power[country] = np.zeros(self.t_axis.shape)
                 military_power[country][i] = country_state.military_power
@@ -173,6 +208,9 @@ class EmpireProgressionPlot:
         for i, gs in enumerate(self.game.game_states):
             for country_state in gs.country_states:
                 country = country_state.country_name
+                if country != self.player_country_name:
+                    if not show_military_info(country_state):
+                        continue
                 if country not in fleet_size:
                     fleet_size[country] = np.zeros(self.t_axis.shape)
                 fleet_size[country][i] = country_state.fleet_size

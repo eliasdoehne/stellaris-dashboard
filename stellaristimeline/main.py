@@ -28,7 +28,9 @@ class SaveReader:
         self.tle = timeline.TimelineExtractor()
 
     def check_for_new_saves(self):
-        new_files = [save_file for save_file in self.game_dir.glob("*.sav") if save_file not in self.processed_saves]
+        new_files = [save_file for save_file in self.game_dir.glob("*.sav")
+                     if save_file not in self.processed_saves
+                     and "ironman" not in str(save_file)]
         self.processed_saves.update(new_files)
         if self.threads > 1:
             results = self.work_pool.map(save_parser.parse_save, new_files)
