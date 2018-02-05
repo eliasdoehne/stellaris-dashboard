@@ -52,7 +52,7 @@ class Attitude(enum.Enum):
         return self.reveals_economy_info() or (self in {Attitude.neutral})
 
     def reveals_geographic_info(self):
-        return self.reveals_demographic_info() or (self in {Attitude.wary})
+        return self != Attitude.unknown
 
 
 class Game(Base):
