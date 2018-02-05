@@ -35,12 +35,14 @@ class TimelineExtractor:
             days = date_to_days(self.gamestate_dict["date"])
             for gs in reversed(self.game.game_states):
                 if days == gs.date:
-                    print(f"Gamestate for {self.game.game_name}, date {date_str} exists!")
-                    return
-            else:
-                logging.info(f"Extracting country data to database.")
-                self._process_gamestate()
-                self._session.commit()
+                    print(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
+                    self._session.delete(gs)
+                    break
+                if days > gs.date:
+                    break
+            logging.info(f"Extracting country data to database.")
+            self._process_gamestate()
+            self._session.commit()
         except Exception as e:
             self._session.rollback()
             raise e
@@ -121,11 +123,14 @@ class TimelineExtractor:
     def _extract_country_pop_info(self, country_data, country_state):
         demographics = {}
         pop_data = self.gamestate_dict["pop"]
+        if country_state.is_player:
+            pass
         for planet_id in country_data["owned_planets"]:
             planet_data = self.gamestate_dict["planet"][planet_id]
             for pop_id in planet_data.get("pop", []):
                 if pop_id not in pop_data:
                     logging.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
+                    continue
                 pop_species_index = pop_data[pop_id]["species_index"]
                 if pop_species_index not in demographics:
                     demographics[pop_species_index] = 0
