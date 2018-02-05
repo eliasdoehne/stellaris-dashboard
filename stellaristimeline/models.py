@@ -73,7 +73,7 @@ class GameState(Base):
     date = Column(Integer, index=True)  # Days since 2200.1.1
 
     game = relationship("Game", back_populates="game_states")
-    country_states = relationship("CountryState", back_populates="game_state")
+    country_states = relationship("CountryState", back_populates="game_state", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
         return f"GameState(gamestate_id={self.gamestate_id}, date={self.date}, game_id={self.game_id})"
@@ -97,7 +97,7 @@ class CountryState(Base):
     attitude_towards_player = Column(Enum(Attitude))
 
     game_state = relationship("GameState", back_populates="country_states")
-    pop_counts = relationship("PopCount", back_populates="country_state")
+    pop_counts = relationship("PopCount", back_populates="country_state", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
         return f"CountryState(country_state_id={self.country_state_id}, country_name=\"{self.country_name}\", game_state={self.gamestate_id}, military_power={self.military_power}, fleet_size={self.fleet_size}, tech_progress={self.tech_progress}, exploration_progress={self.exploration_progress}, owned_planets={self.owned_planets})"
