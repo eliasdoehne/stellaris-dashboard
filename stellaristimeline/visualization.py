@@ -237,3 +237,4 @@ class EmpireProgressionPlot:
 
     def save_plot(self):
         plt.savefig(self.plot_filename, dpi=150)
+        plt.close("all")

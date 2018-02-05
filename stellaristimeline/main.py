@@ -69,6 +69,10 @@ def cli():
 @cli.command()
 @click.argument('game_name', type=click.STRING)
 def visualize(game_name):
+    f_visualize(game_name)
+
+
+def f_visualize(game_name):
     session = models.SessionFactory()
     plot = visualization.EmpireProgressionPlot()
     try:
@@ -141,3 +145,13 @@ def f_parse_saves(save_path, threads=None):
     tle = timeline.TimelineExtractor()
     for gamestate in save_reader.check_for_new_saves():
         tle.process_gamestate(save_reader.game_name, gamestate)
+        pass
+
+
+if __name__ == '__main__':
+    # f_parse_saves("saves/blargel/", threads=1)
+    # f_visualize("blargel")
+
+    while True:
+        f_visualize("saathidmandate2_-896351359")
+        time.sleep(30)
