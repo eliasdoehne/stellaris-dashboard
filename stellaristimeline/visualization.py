@@ -19,7 +19,7 @@ def show_demographic_info(countrystate: models.CountryState):
 
 
 def show_geography_info(countrystate: models.CountryState):
-    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_demographic_info()
+    return countrystate.attitude_towards_player.reveals_geographic_info()
 
 
 def show_military_info(countrystate: models.CountryState):
@@ -75,7 +75,7 @@ class EmpireProgressionPlot:
                     if not show_demographic_info(country_state):
                         continue
                 if country not in total_pop_count:
-                    total_pop_count[country] = np.zeros(self.t_axis.shape)
+                    total_pop_count[country] = float("nan") * np.ones(self.t_axis.shape)
 
                 total_pop_count[country][i] = sum(pc.pop_count for pc in country_state.pop_counts)
         for i, country in enumerate(self._iterate_countries_in_order(total_pop_count)):
@@ -97,7 +97,7 @@ class EmpireProgressionPlot:
                     if not show_geography_info(country_state):
                         continue
                 if country not in owned_planets_dict:
-                    owned_planets_dict[country] = np.zeros(self.t_axis.shape)
+                    owned_planets_dict[country] = float("nan") * np.ones(self.t_axis.shape)
                 owned_planets_dict[country][i] = country_state.owned_planets
 
         for i, country in enumerate(self._iterate_countries_in_order(owned_planets_dict)):
@@ -118,7 +118,7 @@ class EmpireProgressionPlot:
                     if not show_tech_info(country_state):
                         continue
                 if country not in tech_count:
-                    tech_count[country] = np.zeros(self.t_axis.shape)
+                    tech_count[country] = float("nan") * np.ones(self.t_axis.shape)
                 tech_count[country][i] = country_state.tech_progress
 
         for i, country in enumerate(self._iterate_countries_in_order(tech_count)):
@@ -139,7 +139,7 @@ class EmpireProgressionPlot:
                     if not show_tech_info(country_state):
                         continue
                 if country not in survey_count:
-                    survey_count[country] = np.zeros(self.t_axis.shape)
+                    survey_count[country] = float("nan") * np.ones(self.t_axis.shape)
                 survey_count[country][i] = country_state.exploration_progress
 
         for i, country in enumerate(self._iterate_countries_in_order(survey_count)):
@@ -161,7 +161,7 @@ class EmpireProgressionPlot:
                         species = pc.species_name
                         if species not in species_distribution:
                             species_distribution[species] = np.zeros(self.t_axis.shape)
-                        species_distribution[species][i] = pc.pop_count
+                        species_distribution[species][i] += pc.pop_count
                         total_pop_count += pc.pop_count
                     for species in species_distribution:
                         species_distribution[species][i] /= total_pop_count
@@ -191,7 +191,7 @@ class EmpireProgressionPlot:
                     if not show_military_info(country_state):
                         continue
                 if country not in military_power:
-                    military_power[country] = np.zeros(self.t_axis.shape)
+                    military_power[country] = float("nan") * np.ones(self.t_axis.shape)
                 military_power[country][i] = country_state.military_power
 
         for i, country in enumerate(self._iterate_countries_in_order(military_power)):
@@ -212,7 +212,7 @@ class EmpireProgressionPlot:
                     if not show_military_info(country_state):
                         continue
                 if country not in fleet_size:
-                    fleet_size[country] = np.zeros(self.t_axis.shape)
+                    fleet_size[country] = float("nan") * np.ones(self.t_axis.shape)
                 fleet_size[country][i] = country_state.fleet_size
 
         for i, country in enumerate(self._iterate_countries_in_order(fleet_size)):
