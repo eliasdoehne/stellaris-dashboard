@@ -74,23 +74,16 @@ def visualize(game_name):
 
 def f_visualize(game_name):
     session = models.SessionFactory()
-    plot = visualization.EmpireProgressionPlot()
+    plot_data = visualization.EmpireProgressionPlotData()
     try:
-        player_country = None
         game: models.Game = session.query(models.Game).filter_by(game_name=game_name).first()
-        for gs in game.game_states:
-            for cs in gs.country_states:
-                if cs.is_player:
-                    player_country = cs.country_name
-                    break
-            if player_country:
-                break
-        plot.make_plot(game, player_country)
-
+        plot_data.initialize(game)
     except Exception as e:
         raise e
     finally:
         session.close()
+    plot = visualization.MatplotLibVisualization(plot_data)
+    plot.make_plots()
     plot.save_plot()
 
 
@@ -150,8 +143,8 @@ def f_parse_saves(save_path, threads=None):
 
 if __name__ == '__main__':
     # f_parse_saves("saves/blargel/", threads=1)
-    # f_visualize("blargel")
+    f_visualize("saathidmandate2_-896351359")
 
-    while True:
-        f_visualize("saathidmandate2_-896351359")
-        time.sleep(30)
+    # while True:
+    #     f_visualize("alariunion2_361012875")
+    #     time.sleep(30)

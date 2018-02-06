@@ -1,3 +1,5 @@
+from typing import List, Dict
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -6,230 +8,131 @@ from stellaristimeline import models
 COLOR_MAP = plt.get_cmap("plasma")
 
 
-def show_tech_info(countrystate: models.CountryState):
-    return countrystate.has_research_agreement_with_player or countrystate.attitude_towards_player.reveals_technology_info()
+def show_tech_info(country: models.CountryState):
+    return country.is_player or country.has_research_agreement_with_player or country.attitude_towards_player.reveals_technology_info()
 
 
-def show_economic_info(countrystate: models.CountryState):
-    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_economy_info()
+def show_economic_info(country: models.CountryState):
+    return country.is_player or country.has_sensor_link_with_player or country.attitude_towards_player.reveals_economy_info()
 
 
-def show_demographic_info(countrystate: models.CountryState):
-    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_demographic_info()
+def show_demographic_info(country: models.CountryState):
+    return country.is_player or country.has_sensor_link_with_player or country.attitude_towards_player.reveals_demographic_info()
 
 
-def show_geography_info(countrystate: models.CountryState):
-    return countrystate.attitude_towards_player.reveals_geographic_info()
+def show_geography_info(country: models.CountryState):
+    return country.is_player or country.attitude_towards_player.reveals_geographic_info()
 
 
-def show_military_info(countrystate: models.CountryState):
-    return countrystate.has_sensor_link_with_player or countrystate.attitude_towards_player.reveals_military_info()
+def show_military_info(country: models.CountryState):
+    return country.is_player or country.has_sensor_link_with_player or country.attitude_towards_player.reveals_military_info()
 
 
-class EmpireProgressionPlot:
-    def __init__(self, plot_filename="./output/empire_demographics_plot.png"):
-        self.game = None
-        self.player_country_name = None
+class MatplotLibVisualization:
+    def __init__(self, plot_data, plot_filename="./output/empire_demographics_plot.png"):
         self.fig = None
         self.axes = None
         self.axes_iter = None
+        self.plot_data: EmpireProgressionPlotData = plot_data
         self.plot_filename = plot_filename
-        self.t_axis = None
-        self._session = None
 
-    def make_plot(self, game: models.Game, player_country_name: str):
-        self.game = game
-        self.player_country_name = player_country_name
-
-        self.initialize_axes()
+    def make_plots(self):
+        self._initialize_axes()
         self.pop_count_plot()
-        self.planet_count_plot()
+        self.owned_planets_plot()
         self.tech_count_plot()
-        self.exploration_progress_plot()
-        self.empire_demographics_plot()
-        self.military_strength_plot()
+        self.survey_count_plot()
+        self.military_power_plot()
         self.fleet_size_plot()
-
-        self.game = None
-
-    def initialize_axes(self):
-        self.fig, self.axes = plt.subplots(3, 3, figsize=(40, 25))
-        self.axes_iter = iter(self.axes.flat)
-        self.t_axis = np.zeros(len(self.game.game_states))
-        for i, gs in enumerate(self.game.game_states):
-            self.t_axis[i] = 2200 + gs.date / 360
-        self.fig.suptitle(f"{self.player_country_name}\n{self.t_axis[0]} - {self.t_axis[-1]}")
-        for ax in self.axes.flat:
-            ax.set_xlim((self.t_axis[0], self.t_axis[-1]))
+        self.empire_demographics_plot()
 
     def pop_count_plot(self):
         ax = next(self.axes_iter)
         ax.set_title("Population Size")
-        ax.set_ylabel("Number of Empire Pops")
-        total_pop_count = {}
-
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                country = country_state.country_name
-                if country != self.player_country_name:
-                    if not show_demographic_info(country_state):
-                        continue
-                if country not in total_pop_count:
-                    total_pop_count[country] = float("nan") * np.ones(self.t_axis.shape)
-
-                total_pop_count[country][i] = sum(pc.pop_count for pc in country_state.pop_counts)
-        for i, country in enumerate(self._iterate_countries_in_order(total_pop_count)):
-            pop_count = total_pop_count[country]
-            plot_kwargs = self._get_country_plot_kwargs(country, i, len(total_pop_count))
-            ax.plot(self.t_axis, pop_count, **plot_kwargs)
+        for i, (country, pop_count) in enumerate(self.plot_data.iterate_data_sorted(self.plot_data.pop_count)):
+            if set(pop_count) == {EmpireProgressionPlotData.DEFAULT_VAL}:
+                continue
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.pop_count))
+            ax.plot(self.plot_data.dates, pop_count, **plot_kwargs)
         ax.legend()
 
-    def planet_count_plot(self):
+    def owned_planets_plot(self):
         ax = next(self.axes_iter)
-        ax.set_title("Empire Size")
-        ax.set_ylabel("Number of Owned Planets")
-        owned_planets_dict = {}
-
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                country = country_state.country_name
-                if country != self.player_country_name:
-                    if not show_geography_info(country_state):
-                        continue
-                if country not in owned_planets_dict:
-                    owned_planets_dict[country] = float("nan") * np.ones(self.t_axis.shape)
-                owned_planets_dict[country][i] = country_state.owned_planets
-
-        for i, country in enumerate(self._iterate_countries_in_order(owned_planets_dict)):
-            pop_count = owned_planets_dict[country]
-            plot_kwargs = self._get_country_plot_kwargs(country, i, len(owned_planets_dict))
-            ax.plot(self.t_axis, pop_count, **plot_kwargs)
+        ax.set_title("Owned Planets")
+        for i, (country, pop_count) in enumerate(self.plot_data.iterate_data_sorted(self.plot_data.owned_planets)):
+            if set(pop_count) == {EmpireProgressionPlotData.DEFAULT_VAL}:
+                continue
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.owned_planets))
+            ax.plot(self.plot_data.dates, pop_count, **plot_kwargs)
         ax.legend()
 
     def tech_count_plot(self):
         ax = next(self.axes_iter)
-        ax.set_title("Technology Progress")
-        ax.set_ylabel("Number of Researched Technologies")
-        tech_count = {}
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                country = country_state.country_name
-                if country != self.player_country_name:
-                    if not show_tech_info(country_state):
-                        continue
-                if country not in tech_count:
-                    tech_count[country] = float("nan") * np.ones(self.t_axis.shape)
-                tech_count[country][i] = country_state.tech_progress
-
-        for i, country in enumerate(self._iterate_countries_in_order(tech_count)):
-            techs = tech_count[country]
-            plot_kwargs = self._get_country_plot_kwargs(country, i, len(tech_count))
-            ax.plot(self.t_axis, techs, **plot_kwargs)
+        ax.set_title("Researched Technologies")
+        for i, (country, tech_count) in enumerate(self.plot_data.iterate_data_sorted(self.plot_data.tech_count)):
+            if set(tech_count) == {EmpireProgressionPlotData.DEFAULT_VAL}:
+                continue
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.tech_count))
+            ax.plot(self.plot_data.dates, tech_count, **plot_kwargs)
         ax.legend()
 
-    def exploration_progress_plot(self):
+    def survey_count_plot(self):
         ax = next(self.axes_iter)
-        ax.set_title("Exploration Progress")
-        ax.set_ylabel("Number of Surveyed Objects/Systems (?)")
-        survey_count = {}
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                country = country_state.country_name
-                if country != self.player_country_name:
-                    if not show_tech_info(country_state):
-                        continue
-                if country not in survey_count:
-                    survey_count[country] = float("nan") * np.ones(self.t_axis.shape)
-                survey_count[country][i] = country_state.exploration_progress
-
-        for i, country in enumerate(self._iterate_countries_in_order(survey_count)):
-            techs = survey_count[country]
-            plot_kwargs = self._get_country_plot_kwargs(country, i, len(survey_count))
-            ax.plot(self.t_axis, techs, **plot_kwargs)
+        ax.set_title("Surveyed Bodies")
+        for i, (country, surveyed_count) in enumerate(self.plot_data.iterate_data_sorted(self.plot_data.survey_count)):
+            if set(surveyed_count) == {EmpireProgressionPlotData.DEFAULT_VAL}:
+                continue
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.survey_count))
+            ax.plot(self.plot_data.dates, surveyed_count, **plot_kwargs)
         ax.legend()
 
-    def empire_demographics_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title(f"Empire Demographics ({self.player_country_name})")
-        ax.set_ylabel(f"Distribution of Species")
-        species_distribution = {}
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                if country_state.is_player:
-                    total_pop_count = 0
-                    for pc in country_state.pop_counts:
-                        species = pc.species_name
-                        if species not in species_distribution:
-                            species_distribution[species] = np.zeros(self.t_axis.shape)
-                        species_distribution[species][i] += pc.pop_count
-                        total_pop_count += pc.pop_count
-                    for species in species_distribution:
-                        species_distribution[species][i] /= total_pop_count
-
-        y = []
-        labels = []
-        colors = []
-        for i, species in enumerate(self._iterate_countries_in_order(species_distribution)):
-            count = species_distribution[species]
-            y.append(count)
-            labels.append(species)
-            colors.append(COLOR_MAP(i / len(species_distribution)))
-
-        ax.stackplot(self.t_axis, y, labels=labels, colors=colors)
-        ax.set_ylim((0, 1.0))
-        ax.legend()
-
-    def military_strength_plot(self):
+    def military_power_plot(self):
         ax = next(self.axes_iter)
         ax.set_title("Military Power")
-        ax.set_ylabel("Total Fleet Strength")
-        military_power = {}
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                country = country_state.country_name
-                if country != self.player_country_name:
-                    if not show_military_info(country_state):
-                        continue
-                if country not in military_power:
-                    military_power[country] = float("nan") * np.ones(self.t_axis.shape)
-                military_power[country][i] = country_state.military_power
-
-        for i, country in enumerate(self._iterate_countries_in_order(military_power)):
-            techs = military_power[country]
-            plot_kwargs = self._get_country_plot_kwargs(country, i, len(military_power))
-            ax.plot(self.t_axis, techs, **plot_kwargs)
+        for i, (country, military_power) in enumerate(self.plot_data.iterate_data_sorted(self.plot_data.military_power)):
+            if set(military_power) == {EmpireProgressionPlotData.DEFAULT_VAL}:
+                continue
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.military_power))
+            ax.plot(self.plot_data.dates, military_power, **plot_kwargs)
         ax.legend()
 
     def fleet_size_plot(self):
         ax = next(self.axes_iter)
         ax.set_title("Fleet Size")
-        ax.set_ylabel("Number of Ships (?)")
-        fleet_size = {}
-        for i, gs in enumerate(self.game.game_states):
-            for country_state in gs.country_states:
-                country = country_state.country_name
-                if country != self.player_country_name:
-                    if not show_military_info(country_state):
-                        continue
-                if country not in fleet_size:
-                    fleet_size[country] = float("nan") * np.ones(self.t_axis.shape)
-                fleet_size[country][i] = country_state.fleet_size
-
-        for i, country in enumerate(self._iterate_countries_in_order(fleet_size)):
-            techs = fleet_size[country]
-            plot_kwargs = self._get_country_plot_kwargs(country, i, len(fleet_size))
-            ax.plot(self.t_axis, techs, **plot_kwargs)
+        for i, (country, fleet_size) in enumerate(self.plot_data.iterate_data_sorted(self.plot_data.fleet_size)):
+            if set(fleet_size) == {EmpireProgressionPlotData.DEFAULT_VAL}:
+                continue
+            plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.fleet_size))
+            ax.plot(self.plot_data.dates, fleet_size, **plot_kwargs)
         ax.legend()
 
-    def _iterate_countries_in_order(self, data_dict):
-        for country, data in sorted(data_dict.items(), key=lambda x: (x[1][-1], x[0])):
-            yield country
+    def empire_demographics_plot(self):
+        ax = next(self.axes_iter)
+        ax.set_title("Species Distribution")
+        y = []
+        labels = []
+        colors = []
+        data_iter = reversed(list(self.plot_data.iterate_data_sorted(self.plot_data.species_distribution)))
+        for i, (species, species_count) in enumerate(data_iter):
+            y.append(species_count)
+            labels.append(species)
+            colors.append(COLOR_MAP(i / len(self.plot_data.species_distribution)))
+        ax.stackplot(self.plot_data.dates, y, labels=labels, colors=colors)
+        ax.set_ylim((0, 1.0))
+        ax.legend()
 
-    def _get_country_plot_kwargs(self, country_name: str, idx: int, num_lines: int):
+    def _initialize_axes(self):
+        self.fig, self.axes = plt.subplots(3, 3, figsize=(40, 25))
+        self.axes_iter = iter(self.axes.flat)
+        self.fig.suptitle(f"{self.plot_data.player_country[-1]}\n{self.plot_data.dates[0]} - {self.plot_data.dates[-1]}")
+        for ax in self.axes.flat:
+            ax.set_xlim((self.plot_data.dates[0], self.plot_data.dates[-1]))
+
+    def _get_country_plot_kwargs(self, country_name: str, i: int, num_lines: int):
         linewidth = 1
-        c = COLOR_MAP(idx / num_lines)
+        c = COLOR_MAP(i / num_lines)
         label = f"{country_name}"
-        if country_name == self.player_country_name:
+        if country_name == self.plot_data.player_country[i]:
             linewidth = 2
             c = "r"
             label += " (player)"
@@ -238,3 +141,120 @@ class EmpireProgressionPlot:
     def save_plot(self):
         plt.savefig(self.plot_filename, dpi=150)
         plt.close("all")
+
+
+class EmpireProgressionPlotData:
+    DEFAULT_VAL = float("nan")
+
+    def __init__(self):
+        self.player_country = None
+        self.dates = None
+        self.pop_count = None
+        self.owned_planets = None
+        self.tech_count = None
+        self.survey_count = None
+        self.military_power = None
+        self.fleet_size = None
+        self.species_distribution = None
+
+    def initialize(self, game: models.Game = None):
+        self.dates: List[float] = []
+        self.player_country: List[str] = []
+        self.pop_count: Dict[str, List[int]] = {}
+        self.owned_planets: Dict[str, List[int]] = {}
+        self.tech_count: Dict[str, List[int]] = {}
+        self.survey_count: Dict[str, List[int]] = {}
+        self.military_power: Dict[str, List[float]] = {}
+        self.fleet_size: Dict[str, List[float]] = {}
+        self.species_distribution: Dict[str, List[float]] = {}
+        if game:
+            for gs in game.game_states:
+                self.process_gamestate(gs)
+
+    def process_gamestate(self, gs: models.GameState):
+        self.dates.append(gs.date / 360.0)
+        for country in gs.country_states:
+            if country.is_player:
+                self.player_country.append(country.country_name)
+            self._extract_pop_count(country)
+            self._extract_planet_count(country)
+            self._extract_tech_count(country)
+            self._extract_exploration_progress(country)
+            self._extract_military_strength(country)
+            self._extract_fleet_size(country)
+            self._extract_player_empire_demographics(country)
+        for data_dict in [self.pop_count, self.owned_planets, self.tech_count, self.survey_count, self.military_power, self.fleet_size]:
+            for key in data_dict:
+                if len(data_dict[key]) < len(self.dates):
+                    data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
+
+    def iterate_data_sorted(self, data_dict):
+        for country, data in sorted(data_dict.items(), key=lambda x: (x[1][-1], x[0]), reverse=True):
+            yield country, data
+
+    def _extract_pop_count(self, country):
+        if show_demographic_info(country):
+            new_val = sum(pc.pop_count for pc in country.pop_counts)
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.pop_count, country.country_name, new_val)
+
+    def _extract_planet_count(self, country):
+        if show_geography_info(country):
+            new_val = country.owned_planets
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.owned_planets, country.country_name, new_val)
+
+    def _extract_tech_count(self, country):
+        if show_tech_info(country):
+            new_val = country.tech_progress
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.tech_count, country.country_name, new_val)
+
+    def _extract_exploration_progress(self, country):
+        if show_tech_info(country):
+            new_val = country.exploration_progress
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.survey_count, country.country_name, new_val)
+
+    def _extract_military_strength(self, country):
+        if show_military_info(country):
+            new_val = country.military_power
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.military_power, country.country_name, new_val)
+
+    def _extract_fleet_size(self, country):
+        if show_military_info(country):
+            new_val = country.fleet_size
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.fleet_size, country.country_name, new_val)
+
+    def _extract_player_empire_demographics(self, country):
+        if country.is_player:
+            total_pop_count = 0
+            current_species_count = {s: 0 for s in self.species_distribution}
+            for pc in country.pop_counts:
+                species = pc.species_name
+                if species not in self.species_distribution:
+                    current_species_count[species] = 0
+                current_species_count[species] += pc.pop_count
+                total_pop_count += pc.pop_count
+            for s, c in current_species_count.items():
+                if s not in self.species_distribution:
+                    self.species_distribution[s] = [0 for _ in range(len(self.dates) - 1)]
+                self.species_distribution[s].append(c)
+            for species in current_species_count:
+                if len(self.species_distribution[species]) < len(self.dates):
+                    self.species_distribution[species].append(0)
+            for species in self.species_distribution:
+                self.species_distribution[species][-1] /= total_pop_count
+
+    def _add_new_value_to_data_dict(self, data_dict, key, new_val):
+        if key not in data_dict:
+            data_dict[key] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
+        data_dict[key].append(new_val)
