@@ -16,6 +16,11 @@ STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Ste
 
 
 class SaveReader:
+    """
+    Check the save path for new save games. Found save files are parsed and returned
+    as gamestate dictionaries.
+    """
+
     def __init__(self, game_dir, threads=None):
         self.processed_saves = set()
         self.game_dir = pathlib.Path(game_dir)
@@ -69,10 +74,10 @@ def cli():
 @cli.command()
 @click.argument('game_name', type=click.STRING)
 def visualize(game_name):
-    f_visualize(game_name)
+    f_visualize_mpl(game_name)
 
 
-def f_visualize(game_name):
+def f_visualize_mpl(game_name):
     session = models.SessionFactory()
     plot_data = visualization.EmpireProgressionPlotData()
     try:
@@ -101,7 +106,7 @@ def monitor_saves(save_path, threads, polling_interval):
         if exit_prompt == "x" or exit_prompt == "X":
             stop_event.set()
             break
-    save_reader.running = False
+    save_reader.teardown()
     t.join()
 
 
@@ -113,9 +118,12 @@ def _monitor_saves(stop_event: threading.Event, save_reader: SaveReader, polling
     while not stop_event.wait(wait_time):
         wait_time = polling_interval
         try:
-            for gamestate in save_reader.check_for_new_saves():
+            for gamestate_dict in save_reader.check_for_new_saves():
                 show_waiting_message = True
-                tle.process_gamestate(save_reader.game_name, gamestate)
+                game_state = tle.process_gamestate(save_reader.game_name, gamestate_dict)
+                if game_state is not None:
+                    plot_data = visualization.get_current_execution_plot_data(game_state.game)
+                    plot_data.process_gamestate(game_state)
             if show_waiting_message:
                 show_waiting_message = False
                 print("Waiting for new saves...")
@@ -143,7 +151,7 @@ def f_parse_saves(save_path, threads=None):
 
 if __name__ == '__main__':
     # f_parse_saves("saves/blargel/", threads=1)
-    f_visualize("saathidmandate2_-896351359")
+    f_visualize_mpl("saathidmandate2_-896351359")
 
     # while True:
     #     f_visualize("alariunion2_361012875")

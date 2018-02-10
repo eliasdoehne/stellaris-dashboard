@@ -55,6 +55,22 @@ class Attitude(enum.Enum):
         return self != Attitude.unknown
 
 
+def date_to_days(date_str: str) -> float:
+    y, m, d = map(int, date_str.split("."))
+    return (y - 2200) * 360 + (m - 1) * 30 + d - 1
+
+
+def days_to_date(days: float) -> str:
+    days = int(days)
+    year_offset = days // 360
+    days -= 360 * year_offset
+    month_offset = days // 30
+    year = 2200 + year_offset
+    month = 1 + month_offset
+    day = days - 30 * month_offset + 1
+    return f"{year}.{month}.{day}"
+
+
 class Game(Base):
     __tablename__ = 'gametable'
     game_id = Column(Integer, primary_key=True)

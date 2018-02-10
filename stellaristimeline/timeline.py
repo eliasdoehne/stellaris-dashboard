@@ -1,14 +1,12 @@
 import logging
+from typing import Dict, Any, Union
 
 from stellaristimeline import models
 
 
-def date_to_days(date_str):
-    y, m, d = map(int, date_str.split("."))
-    return (y - 2200) * 360 + (m - 1) * 30 + d - 1
-
-
 class TimelineExtractor:
+    """ Process data from parsed save file dictionaries and add it to the database. """
+
     def __init__(self):
         self.gamestate_dict = None
         self.game = None
@@ -18,11 +16,12 @@ class TimelineExtractor:
         self._player_research_agreements = None
         self._player_sensor_links = None
 
-    def process_gamestate(self, game_name, gamestate_dict):
+    def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]) -> Union[models.GameState, None]:
+        self._new_db_objects = []
         self.gamestate_dict = gamestate_dict
         if len(self.gamestate_dict["player"]) != 1:
             logging.warning("Attempted to extract data from multiplayer save!")
-            return
+            return None
         self._player_country = self.gamestate_dict["player"][0]["country"]
         self._session = models.SessionFactory()
         try:
@@ -32,7 +31,7 @@ class TimelineExtractor:
                 self.game = models.Game(game_name=game_name)
                 self._session.add(self.game)
             date_str = gamestate_dict["date"]
-            days = date_to_days(self.gamestate_dict["date"])
+            days = models.date_to_days(self.gamestate_dict["date"])
             for gs in reversed(self.game.game_states):
                 if days == gs.date:
                     print(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
@@ -48,11 +47,17 @@ class TimelineExtractor:
             raise e
         finally:
             self._session.close()
-
+        result = self._current_gamestate
+        self._current_gamestate = None
         self.gamestate_dict = None
+        self._player_country = None
+        self._player_research_agreements = None
+        self._player_sensor_links = None
+        self._session = None
+        return result
 
     def _process_gamestate(self):
-        days = date_to_days(self.gamestate_dict["date"])
+        days = models.date_to_days(self.gamestate_dict["date"])
         self._current_gamestate = models.GameState(game=self.game, date=days)
         self._session.add(self._current_gamestate)
 
