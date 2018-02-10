@@ -1,9 +1,10 @@
+import enum
 import pathlib
+
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-import enum
 
 BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
 engine = sqlalchemy.create_engine(f'sqlite:///foo.db', echo=False)
@@ -70,6 +71,15 @@ def days_to_date(days: float) -> str:
     day = days - 30 * month_offset + 1
     return f"{year}.{month}.{day}"
 
+
+def get_gamestates_since(game_name, date):
+    session = SessionFactory()
+    print(game_name)
+
+    game = session.query(Game).filter(Game.game_name==game_name).one()
+    for gs in session.query(GameState).filter(GameState.game==game, GameState.date > date).all():
+        yield gs
+    session.close()
 
 class Game(Base):
     __tablename__ = 'gametable'

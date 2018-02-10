@@ -1,3 +1,4 @@
+import logging
 from typing import List, Dict, Union
 
 from matplotlib import pyplot as plt
@@ -6,15 +7,21 @@ from stellaristimeline import models
 
 COLOR_MAP = plt.get_cmap("plasma")
 
-_CURRENT_EXECUTION_PLOT_DATA: Dict[str, models.Game] = {}
+_CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 
 
-def get_current_execution_plot_data(game: models.Game) -> "EmpireProgressionPlotData":
+def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotData":
     global _CURRENT_EXECUTION_PLOT_DATA
-    if game.game_name not in _CURRENT_EXECUTION_PLOT_DATA:
-        _CURRENT_EXECUTION_PLOT_DATA[game.game_name] = EmpireProgressionPlotData()
-        _CURRENT_EXECUTION_PLOT_DATA[game.game_name].initialize(game)
-    return _CURRENT_EXECUTION_PLOT_DATA[game.game_name]
+    session = models.SessionFactory()
+    game = session.query(models.Game).filter_by(game_name=game_name).first()
+    if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name)
+        if game:
+            _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize(game)
+        else:
+            logging.warning(f"Warning: Game {game_name} could not be found in database!")
+    session.close()
+    return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
 def show_tech_info(country: models.CountryState):
@@ -40,7 +47,8 @@ def show_military_info(country: models.CountryState):
 class EmpireProgressionPlotData:
     DEFAULT_VAL = float("nan")
 
-    def __init__(self, show_everything=False):
+    def __init__(self, game_name, show_everything=False):
+        self.game_name = game_name
         self.dates = None
         self.player_country = None
         self.pop_count = None
@@ -63,8 +71,14 @@ class EmpireProgressionPlotData:
         self.fleet_size: Dict[str, List[float]] = {}
         self.species_distribution: Dict[str, List[float]] = {}
         if game:
+            assert game.game_name == self.game_name
             for gs in game.game_states:
                 self.process_gamestate(gs)
+
+    def update_with_new_gamestate(self):
+        date = self.dates[-1] if self.dates else 0
+        for gs in models.get_gamestates_since(self.game_name, date):
+            self.process_gamestate(gs)
 
     def process_gamestate(self, gs: models.GameState):
         self.dates.append(gs.date / 360.0)
@@ -159,11 +173,13 @@ class EmpireProgressionPlotData:
 class MatplotLibVisualization:
     """ Make a static visualization using matplotlib. """
 
-    def __init__(self, plot_data, plot_filename="./output/empire_demographics_plot.png"):
+    def __init__(self, plot_data, plot_filename=None):
         self.fig = None
         self.axes = None
         self.axes_iter = None
         self.plot_data: EmpireProgressionPlotData = plot_data
+        if plot_filename is None:
+            plot_filename = f"./output/empire_plot_{self.plot_data.game_name}.png"
         self.plot_filename = plot_filename
 
     def make_plots(self):
@@ -252,7 +268,7 @@ class MatplotLibVisualization:
         ax.legend()
 
     def _initialize_axes(self):
-        self.fig, self.axes = plt.subplots(3, 3, figsize=(32, 16))
+        self.fig, self.axes = plt.subplots(3, 3, figsize=(40, 24))
         self.axes_iter = iter(self.axes.flat)
         self.fig.suptitle(f"{self.plot_data.player_country[-1]}\n{models.days_to_date(self.plot_data.dates[0])} - {models.days_to_date(self.plot_data.dates[-1])}")
         for ax in self.axes.flat:

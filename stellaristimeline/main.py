@@ -4,6 +4,7 @@ import pathlib
 import threading
 import time
 import traceback
+from typing import Any, Dict, Tuple
 
 import click
 
@@ -24,8 +25,6 @@ class SaveReader:
     def __init__(self, game_dir, threads=None):
         self.processed_saves = set()
         self.game_dir = pathlib.Path(game_dir)
-        self.game_name = self.game_dir.stem
-        logging.info(f"parsing files in {self.game_dir} for game \"{self.game_name}\"")
         if threads is None:
             threads = max(1, mp.cpu_count() - 2)
         self.threads = threads
@@ -33,32 +32,31 @@ class SaveReader:
         if self.threads > 1:
             self.work_pool = mp.Pool(threads)
 
-    def check_for_new_saves(self):
-        new_files = [save_file for save_file in self.game_dir.glob("*.sav")
+    def check_for_new_saves(self) -> Tuple[str, Dict[str, Any]]:
+        new_files = [save_file for save_file in self.game_dir.glob("**/*.sav")
                      if save_file not in self.processed_saves
                      and "ironman" not in str(save_file)]
         self.processed_saves.update(new_files)
         if self.threads > 1:
-            results = [self.work_pool.apply_async(save_parser.parse_save, (f,)) for f in new_files]
+            results = [(f.parent.stem, self.work_pool.apply_async(save_parser.parse_save, (f,))) for f in new_files]
             while results:
-                for r in results:
+                for game_name, r in results:
                     if r.ready():
                         if r.successful():
-                            gamestate_dict = r.get()
-                            yield gamestate_dict
+                            yield game_name, r.get()
                         else:
                             try:
                                 r.get()
                             except Exception as e:
                                 print(e)
-                results = [r for r in results if not r.ready()]
+                results = [(gn, r) for (gn, r) in results if not r.ready()]
                 time.sleep(0.1)
         else:
             for save_file in new_files:
-                yield save_parser.parse_save(save_file)
+                yield save_file.parent.stem, save_parser.parse_save(save_file)
 
     def mark_all_existing_saves_processed(self):
-        self.processed_saves |= set(self.game_dir.glob("*.sav"))
+        self.processed_saves |= set(self.game_dir.glob("**/*.sav"))
 
     def teardown(self):
         if self.threads > 1:
@@ -77,9 +75,9 @@ def visualize(game_name):
     f_visualize_mpl(game_name)
 
 
-def f_visualize_mpl(game_name):
+def f_visualize_mpl(game_name: str):
     session = models.SessionFactory()
-    plot_data = visualization.EmpireProgressionPlotData()
+    plot_data = visualization.EmpireProgressionPlotData(game_name)
     try:
         game: models.Game = session.query(models.Game).filter_by(game_name=game_name).first()
         plot_data.initialize(game)
@@ -95,9 +93,12 @@ def f_visualize_mpl(game_name):
 @cli.command()
 @click.option('--threads', type=click.INT)
 @click.option('--polling_interval', type=click.INT, default=1)
-@click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def monitor_saves(save_path, threads, polling_interval):
-    save_reader = SaveReader(save_path, threads=threads)
+def monitor_saves(threads, polling_interval):
+    f_monitor_saves(threads, polling_interval)
+
+
+def f_monitor_saves(threads, polling_interval):
+    save_reader = SaveReader(STELLARIS_SAVE_DIR, threads=threads)
     stop_event = threading.Event()
     t = threading.Thread(target=_monitor_saves, daemon=True, args=(stop_event, save_reader, polling_interval))
     t.start()
@@ -112,21 +113,21 @@ def monitor_saves(save_path, threads, polling_interval):
 
 def _monitor_saves(stop_event: threading.Event, save_reader: SaveReader, polling_interval: float):
     save_reader.mark_all_existing_saves_processed()
-    wait_time = 0.01
+    wait_time = 0
     tle = timeline.TimelineExtractor()
     show_waiting_message = True
     while not stop_event.wait(wait_time):
         wait_time = polling_interval
         try:
-            for gamestate_dict in save_reader.check_for_new_saves():
+            for game_name, gamestate_dict in save_reader.check_for_new_saves():
                 show_waiting_message = True
-                game_state = tle.process_gamestate(save_reader.game_name, gamestate_dict)
-                if game_state is not None:
-                    plot_data = visualization.get_current_execution_plot_data(game_state.game)
-                    plot_data.process_gamestate(game_state)
+                tle.process_gamestate(game_name, gamestate_dict)
+                plot_data = visualization.get_current_execution_plot_data(game_name)
+                plot_data.initialize()
+                plot_data.update_with_new_gamestate()
             if show_waiting_message:
                 show_waiting_message = False
-                print("Waiting for new saves...")
+                logging.info("Waiting for new saves...")
         except Exception as e:
             traceback.print_exc()
             logging.error(e)
@@ -136,22 +137,23 @@ def _monitor_saves(stop_event: threading.Event, save_reader: SaveReader, polling
 
 @cli.command()
 @click.option('--threads', type=click.INT)
-@click.argument('save_path', type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def parse_saves(save_path, threads):
-    f_parse_saves(save_path, threads)
+def parse_saves(threads):
+    f_parse_saves(threads)
 
 
-def f_parse_saves(save_path, threads=None):
-    save_reader = SaveReader(save_path, threads=threads)
+def f_parse_saves(threads=None):
+    save_reader = SaveReader(STELLARIS_SAVE_DIR, threads=threads)
     tle = timeline.TimelineExtractor()
-    for gamestate in save_reader.check_for_new_saves():
-        tle.process_gamestate(save_reader.game_name, gamestate)
+    for game_name, gamestate in save_reader.check_for_new_saves():
+        tle.process_gamestate(game_name, gamestate)
         pass
 
 
 if __name__ == '__main__':
     # f_parse_saves("saves/blargel/", threads=1)
-    f_visualize_mpl("saathidmandate2_-896351359")
+    # f_visualize_mpl("saathidmandate2_-896351359")
+
+    f_monitor_saves(8, 1)
 
     # while True:
     #     f_visualize("alariunion2_361012875")

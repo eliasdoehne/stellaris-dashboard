@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 from stellaristimeline import models
 
@@ -16,8 +16,7 @@ class TimelineExtractor:
         self._player_research_agreements = None
         self._player_sensor_links = None
 
-    def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]) -> Union[models.GameState, None]:
-        self._new_db_objects = []
+    def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         self.gamestate_dict = gamestate_dict
         if len(self.gamestate_dict["player"]) != 1:
             logging.warning("Attempted to extract data from multiplayer save!")
@@ -47,14 +46,12 @@ class TimelineExtractor:
             raise e
         finally:
             self._session.close()
-        result = self._current_gamestate
         self._current_gamestate = None
         self.gamestate_dict = None
         self._player_country = None
         self._player_research_agreements = None
         self._player_sensor_links = None
         self._session = None
-        return result
 
     def _process_gamestate(self):
         days = models.date_to_days(self.gamestate_dict["date"])
