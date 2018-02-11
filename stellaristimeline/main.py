@@ -75,12 +75,12 @@ def visualize(game_name):
     f_visualize_mpl(game_name)
 
 
-def f_visualize_mpl(game_name: str):
+def f_visualize_mpl(game_name: str, show_everything=False):
     session = models.SessionFactory()
-    plot_data = visualization.EmpireProgressionPlotData(game_name)
+    plot_data = visualization.EmpireProgressionPlotData(game_name, show_everything=show_everything)
     try:
-        game: models.Game = session.query(models.Game).filter_by(game_name=game_name).first()
-        plot_data.initialize(game)
+        plot_data.initialize()
+        plot_data.update_with_new_gamestate()
     except Exception as e:
         raise e
     finally:
@@ -151,9 +151,17 @@ def f_parse_saves(threads=None):
 
 if __name__ == '__main__':
     # f_parse_saves("saves/blargel/", threads=1)
-    # f_visualize_mpl("saathidmandate2_-896351359")
 
-    f_monitor_saves(8, 1)
+    # f_monitor_saves(8, 1)
+
+    # f_parse_saves(6)
+    f_visualize_mpl("lokkenmechanists_1256936305", show_everything=True)
+    f_visualize_mpl("saathidmandate2_-896351359", show_everything=True)
+    f_visualize_mpl("alvanianholypolity_1520526598", show_everything=True)
+    f_visualize_mpl("neboritethrong_-145199095", show_everything=True)
+    f_visualize_mpl("saathidmandate_-1898185517", show_everything=True)
+    f_visualize_mpl("alariunion2_361012875", show_everything=True)
+
 
     # while True:
     #     f_visualize("alariunion2_361012875")

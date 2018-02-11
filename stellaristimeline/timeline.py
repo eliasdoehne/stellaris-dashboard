@@ -67,40 +67,81 @@ class TimelineExtractor:
             country_state = self._extract_country_info(country_id, country_data)
             self._extract_country_pop_info(country_data, country_state)
 
-    def _extract_country_info(self, country_id, country_data):
+    def _extract_country_info(self, country_id, country_dict):
         is_player = (country_id == self._player_country)
+        country = self._session.query(models.Country).filter_by(game=self.game, country_name=country_dict["name"]).one_or_none()
+        if country is None:
+            country = models.Country(is_player=is_player, game=self.game, country_name=country_dict["name"])
+            self._session.add(country)
+        has_research_agreement_with_player = is_player or (country_id in self._player_research_agreements)
+        has_sensor_link_with_player = is_player or (country_id in self._player_sensor_links)
         if is_player:
             attitude_towards_player = models.Attitude.friendly
         else:
-            attitude_towards_player = "unknown"
-            ai = country_data.get("ai", {})
-            if isinstance(ai, dict):
-                attitudes = ai.get("attitude", [])
-                for attitude in attitudes:
-                    if not isinstance(attitude, dict):
-                        continue
-                    if attitude["country"] == self._player_country:
-                        attitude_towards_player = attitude["attitude"]
-                        break
-                attitude_towards_player = models.Attitude.__members__.get(attitude_towards_player, models.Attitude.unknown)
-        has_research_agreement_with_player = is_player or (country_id in self._player_research_agreements)
-        has_sensor_link_with_player = is_player or (country_id in self._player_sensor_links)
+            attitude_towards_player = self._extract_ai_attitude_towards_player(country_dict)
 
-        country_state = models.CountryState(
-            country_name=country_data["name"],
+        economy_data = self._extract_economy_data(country_dict)
+
+        country_data = models.CountryData(
+            country=country,
             game_state=self._current_gamestate,
-            military_power=country_data["military_power"],
-            fleet_size=country_data["fleet_size"],
-            tech_progress=len(country_data["tech_status"]["technology"]),
-            exploration_progress=len(country_data["surveyed"]),
-            owned_planets=len(country_data["owned_planets"]),
-            is_player=is_player,
+            military_power=country_dict["military_power"],
+            fleet_size=country_dict["fleet_size"],
+            tech_progress=len(country_dict["tech_status"]["technology"]),
+            exploration_progress=len(country_dict["surveyed"]),
+            owned_planets=len(country_dict["owned_planets"]),
             has_research_agreement_with_player=has_research_agreement_with_player,
             has_sensor_link_with_player=has_sensor_link_with_player,
             attitude_towards_player=attitude_towards_player,
+            **economy_data,
         )
-        self._session.add(country_state)
-        return country_state
+        self._session.add(country_data)
+        self._extract_factions(country_data)
+        return country_data
+
+    def _extract_economy_data(self, country_dict):
+        economy = {}
+        if "budget" in country_dict and country_dict["budget"] != "none" and country_dict["budget"]:
+            last_month = country_dict["budget"]["last_month"]
+            budget = last_month["values"]
+            economy.update(
+                energy_spending_army=budget.get("army_maintenance", 0),
+                energy_spending_building=budget.get("buildings", 0),
+                energy_spending_pop=budget.get("pops", 0),
+                energy_spending_ship=budget.get("ship_maintenance", 0),
+                energy_spending_station=budget.get("station_maintenance", 0),
+                mineral_spending_pop=last_month.get("pop_mineral_maintenance", 0),
+                mineral_spending_ship=last_month.get("ship_mineral_maintenances", 0),
+            )
+        if "modules" in country_dict and "standard_economy_module" in country_dict["modules"] and "last_month" in country_dict["modules"]["standard_economy_module"]:
+            economy_module = country_dict["modules"]["standard_economy_module"]["last_month"]
+            default = [0, 0, 0]
+            economy.update(
+                mineral_production=economy_module.get("minerals", default)[1],
+                mineral_spending=economy_module.get("minerals", default)[2],
+                energy_production=economy_module.get("energy", default)[1],
+                energy_spending=economy_module.get("energy", default)[2],
+                food_production=economy_module.get("food", default)[1],
+                food_spending=economy_module.get("food", default)[2],
+                society_research=economy_module.get("society_research", default)[0],
+                physics_research=economy_module.get("physics_research", default)[0],
+                engineering_research=economy_module.get("engineering_research", default)[0],
+            )
+        return economy
+
+    def _extract_ai_attitude_towards_player(self, country_data):
+        attitude_towards_player = "unknown"
+        ai = country_data.get("ai", {})
+        if isinstance(ai, dict):
+            attitudes = ai.get("attitude", [])
+            for attitude in attitudes:
+                if not isinstance(attitude, dict):
+                    continue
+                if attitude["country"] == self._player_country:
+                    attitude_towards_player = attitude["attitude"]
+                    break
+            attitude_towards_player = models.Attitude.__members__.get(attitude_towards_player, models.Attitude.unknown)
+        return attitude_towards_player
 
     def _extract_player_trade_agreements(self):
         self._player_research_agreements = set()
@@ -122,27 +163,60 @@ class TimelineExtractor:
             if second.get("sensor_link") == "yes":
                 self._player_sensor_links.add(second["country"])
 
-    def _extract_country_pop_info(self, country_data, country_state):
-        demographics = {}
+    def _extract_factions(self, country_data: models.CountryData):
+        for faction_id, faction_data in self.gamestate_dict.get("pop_factions", {}).items():
+            if not faction_data or faction_data == "none":
+                continue
+            faction_name = faction_data["name"]
+            faction_country_name = self.gamestate_dict["country"][faction_data["country"]]["name"]
+            if faction_country_name != country_data.country.country_name:
+                continue
+            # If the faction is in the database, get it, otherwise add a new faction
+            faction = self._session.query(models.PoliticalFaction).filter_by(faction_name=faction_name, country=country_data.country).one_or_none()
+            if faction is None:
+                ethics = models.PopEthics.from_str(faction_data["type"])
+                if ethics == models.PopEthics.other:
+                    print(f"Found faction with unknown Ethics: {faction_data}")
+                faction = models.PoliticalFaction(
+                    country=country_data.country,
+                    faction_name=faction_name,
+                    ethics=ethics,
+                )
+                self._session.add(faction)
+            members = len(faction_data.get("members", []))
+            self._session.add(models.FactionSupport(
+                faction=faction,
+                country_data=country_data,
+                members=members,
+                support=faction_data.get("support", 0),
+                happiness=faction_data.get("happiness", 0),
+            ))
+
+    def _extract_country_pop_info(self, country_dict: Dict[str, Any], country_data: models.CountryData):
+        species_demographics = {}
         pop_data = self.gamestate_dict["pop"]
-        if country_state.is_player:
-            pass
-        for planet_id in country_data["owned_planets"]:
+        for planet_id in country_dict["owned_planets"]:
             planet_data = self.gamestate_dict["planet"][planet_id]
             for pop_id in planet_data.get("pop", []):
                 if pop_id not in pop_data:
                     logging.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     continue
                 pop_species_index = pop_data[pop_id]["species_index"]
-                if pop_species_index not in demographics:
-                    demographics[pop_species_index] = 0
+                if pop_species_index not in species_demographics:
+                    species_demographics[pop_species_index] = 0
                 if pop_data[pop_id]["growth_state"] == 1:
-                    demographics[pop_species_index] += 1
-        for pop_species_index, pop_count in demographics.items():
+                    species_demographics[pop_species_index] += 1
+
+        for pop_species_index, pop_count in species_demographics.items():
             species_name = self.gamestate_dict["species"][pop_species_index]["name"]
+            species = self._session.query(models.Species).filter_by(game=self.game, species_name=species_name).one_or_none()
+            if species is None:
+                species = models.Species(game=self.game, species_name=species_name)
+                self._session.add(species)
+
             pop_count = models.PopCount(
-                country_state=country_state,
-                species_name=species_name,
+                country_data=country_data,
+                species=species,
                 pop_count=pop_count,
             )
             self._session.add(pop_count)
