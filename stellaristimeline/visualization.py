@@ -12,15 +12,16 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 
 def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotData":
     global _CURRENT_EXECUTION_PLOT_DATA
-    session = models.SessionFactory()
-    game = session.query(models.Game).filter_by(game_name=game_name).first()
     if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
+        session = models.SessionFactory()
+        game = session.query(models.Game).filter_by(game_name=game_name).first()
+        session.close()
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name)
         if game:
-            _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize(game)
+            _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
         else:
             logging.warning(f"Warning: Game {game_name} could not be found in database!")
-    session.close()
+    _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
@@ -74,9 +75,8 @@ class EmpireProgressionPlotData:
         self.faction_size_distribution: Dict[str, List[float]] = {}
 
     def update_with_new_gamestate(self):
-        date = self.dates[-1] if self.dates else -1
+        date = 360.0 * self.dates[-1] if self.dates else -1
         for gs in models.get_gamestates_since(self.game_name, date):
-            print(gs.date)
             self.process_gamestate(gs)
 
     def process_gamestate(self, gs: models.GameState):
