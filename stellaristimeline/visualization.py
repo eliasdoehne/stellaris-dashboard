@@ -67,7 +67,7 @@ class EmpireProgressionPlotData:
 
     def initialize(self):
         self.dates: List[float] = []
-        self.player_country = None
+        self.player_country: str = None
         self.pop_count: Dict[str, List[int]] = {}
         self.owned_planets: Dict[str, List[int]] = {}
         self.tech_count: Dict[str, List[int]] = {}
@@ -358,7 +358,7 @@ class MatplotLibVisualization:
         data_iter = reversed(list(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.faction_size_distribution)))
         for i, (faction, supporter_count) in enumerate(data_iter):
             y.append(supporter_count)
-            labels.append(faction)
+            labels.append(f"{faction}")
             colors.append(COLOR_MAP(i / len(self.plot_data.faction_size_distribution)))
         ax.stackplot(self.plot_data.dates, y, labels=labels, colors=colors)
         ax.set_ylim((0, 1.0))

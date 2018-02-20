@@ -1,7 +1,10 @@
 import logging
+import traceback
 from typing import Dict, Any
 
 from stellaristimeline import models
+
+logger = logging.getLogger(__name__)
 
 
 class TimelineExtractor:
@@ -42,6 +45,7 @@ class TimelineExtractor:
             self._process_gamestate()
             self._session.commit()
         except Exception as e:
+            logger.error(traceback.f)
             self._session.rollback()
             raise e
         finally:

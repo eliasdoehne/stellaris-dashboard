@@ -10,10 +10,12 @@ import click
 
 from stellaristimeline import save_parser, timeline, visualization, models
 
-logging.basicConfig(level=logging.INFO)
-
 BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
 STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
+
+logging.basicConfig(level=logging.INFO, filename=BASE_DIR / "stellaris_dashboard.log")
+
+logger = logging.getLogger(__name__)
 
 
 class SaveReader:
@@ -127,10 +129,10 @@ def _monitor_saves(stop_event: threading.Event, save_reader: SaveReader, polling
                 plot_data.update_with_new_gamestate()
             if show_waiting_message:
                 show_waiting_message = False
-                logging.info("Waiting for new saves...")
+                logger.info("Waiting for new saves...")
         except Exception as e:
             traceback.print_exc()
-            logging.error(e)
+            logger.error(e)
             break
     save_reader.teardown()
 
@@ -149,20 +151,3 @@ def f_parse_saves(threads=None):
         pass
 
 
-if __name__ == '__main__':
-    # f_parse_saves("saves/blargel/", threads=1)
-
-    # f_monitor_saves(8, 1)
-
-    # f_parse_saves(6)
-    f_visualize_mpl("lokkenmechanists_1256936305", show_everything=True)
-    f_visualize_mpl("saathidmandate2_-896351359", show_everything=True)
-    f_visualize_mpl("alvanianholypolity_1520526598", show_everything=True)
-    f_visualize_mpl("neboritethrong_-145199095", show_everything=True)
-    f_visualize_mpl("saathidmandate_-1898185517", show_everything=True)
-    f_visualize_mpl("alariunion2_361012875", show_everything=True)
-
-
-    # while True:
-    #     f_visualize("alariunion2_361012875")
-    #     time.sleep(30)

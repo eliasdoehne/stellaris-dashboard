@@ -68,20 +68,20 @@ def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
 class SaveFileParser:
     """
     Parse an extracted gamestate file to a nested dictionary. 
-    The grammar is as follows:
+    The grammar is (roughly!) as follows:
     
     save      :== kv-pair save | EOF
     kv-pair   :== key EQ value
-    key       :== STR  |  Q_STR  |  INTEGER
+    key       :== literal
     value     :== literal
-                | BOPEN obj-list
+                | OPENBRACE obj-list
     obj-list  :== value obj-list'
                 | key kv-list
-                | BCLOSE
-    obj-list' :== value obj-list' | BCLOSE
+                | CLOSEDBRACE
+    obj-list' :== value obj-list' | CLOSEDBRACE
     kv-list   :== EQ value kv-list'
-    kv-list'  :== kv-pair kv-list' | BCLOSE
-    literal   :== Q_STR | INTEGER | FLOAT
+    kv-list'  :== kv-pair kv-list' | CLOSEDBRACE
+    literal   :== STR | INTEGER | FLOAT
     """
 
     def __init__(self, filename):
@@ -105,11 +105,9 @@ class SaveFileParser:
         self.gamestate_dict = {}
         while self._lookahead().token_type != TokenType.EOF:
             key, value = self._parse_key_value_pair()
-            # logging.debug(f"Adding {key}  ->  {str(value)[:100]}")
             self._add_key_value_pair_or_convert_to_list(self.gamestate_dict, key, value)
 
     def _parse_key_value_pair(self):
-        # logging.debug("Key-Value Pair")
         key_token = self._lookahead()
         if key_token.token_type != TokenType.STRING and key_token.token_type != TokenType.INTEGER:
             raise StellarisFileFormatError(
@@ -126,7 +124,6 @@ class SaveFileParser:
             )
 
     def _parse_value(self):
-        # logging.debug("Value")
         next_token = self._lookahead()
         if TokenType.is_literal(next_token.token_type):
             value = self._parse_literal()
@@ -139,7 +136,6 @@ class SaveFileParser:
         return value
 
     def _parse_composite_game_object_or_list(self):
-        # logging.debug("Composite object or list")
         brace = self._next_token()
         if brace.token_type != TokenType.BRACE_OPEN:
             raise StellarisFileFormatError(
@@ -160,7 +156,6 @@ class SaveFileParser:
         return res
 
     def _parse_key_value_pair_list(self, first_key_token):
-        #         # logging.debug("Key-Value pair list")
         eq_token = self._next_token()
         if eq_token.token_type != TokenType.EQUAL:
             raise StellarisFileFormatError(
@@ -196,7 +191,6 @@ class SaveFileParser:
         return res
 
     def _parse_literal(self):
-        #         # logging.debug("Literal")
         token = self._next_token()
         if not TokenType.is_literal(token.token_type):
             raise StellarisFileFormatError(
@@ -231,30 +225,3 @@ class SaveFileParser:
 
 def parse_save(filename):
     return SaveFileParser(filename).parse_save()
-
-
-if __name__ == "__main__":
-    from stellaristimeline import token_value_stream_re
-
-    with zipfile.ZipFile("saves/blargel/autosave_2232.04.01.sav") as save_zip:
-        gamestate = save_zip.read("gamestate").decode()
-        start = time.time()
-        print("Parsing with RE")
-        tc = 0
-        token_set_re = set()
-        for t in token_stream(gamestate, token_value_stream_re.token_value_stream):
-            tc += 1
-            token_set_re.add(t)
-        end1 = time.time()
-        print(f"Parsed {tc} tokens in {end1 - start} s")
-        print("Parsing with Cython")
-        tc = 0
-        token_set_cython = set()
-        for t in token_stream(gamestate):
-            tc += 1
-            token_set_cython.add(t)
-        end2 = time.time()
-        print(f"Parsed {tc} tokens in {end2 - end1} s")
-
-        print(f"{sorted(token_set_cython - token_set_re, key=lambda t: t.pos)}")
-        print(f"{sorted(token_set_re - token_set_cython, key=lambda t: t.pos)}")

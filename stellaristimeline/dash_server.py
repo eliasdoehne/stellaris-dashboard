@@ -87,7 +87,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_data
 
 def update_selected_game(new_selected_game):
     global SELECTED_GAME_NAME
-    if new_selected_game != SELECTED_GAME_NAME:
+    if new_selected_game and new_selected_game != SELECTED_GAME_NAME:
         assert new_selected_game in AVAILABLE_GAMES
         print(f"Selected game is {new_selected_game}")
         SELECTED_GAME_NAME = new_selected_game
