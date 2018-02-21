@@ -149,5 +149,3 @@ def f_parse_saves(threads=None):
     for game_name, gamestate in save_reader.check_for_new_saves():
         tle.process_gamestate(game_name, gamestate)
         pass
-
-

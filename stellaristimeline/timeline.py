@@ -45,7 +45,6 @@ class TimelineExtractor:
             self._process_gamestate()
             self._session.commit()
         except Exception as e:
-            logger.error(traceback.f)
             self._session.rollback()
             raise e
         finally:

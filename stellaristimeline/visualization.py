@@ -1,11 +1,77 @@
+import enum
 import logging
-from typing import List, Dict, Union
+from typing import List, Dict, Union, NamedTuple, Callable, Any
 
 from matplotlib import pyplot as plt
 
 from stellaristimeline import models
 
 COLOR_MAP = plt.get_cmap("viridis")
+
+
+@enum.unique
+class PlotStyle(enum.Enum):
+    line = 0
+    stacked = 1
+
+
+class PlotSpecification(NamedTuple):
+    plot_id: str
+    title: str
+    plot_data_function: Callable[["EmpireProgressionPlotData"], Any]
+    style: PlotStyle
+
+
+POP_COUNT_GRAPH = PlotSpecification(
+    plot_id='pop-count-graph',
+    title="Population",
+    plot_data_function=lambda pd: pd.pop_count, style=PlotStyle.line,
+)
+SURVEY_PROGRESS_GRAPH = PlotSpecification(
+    plot_id='survey-count-graph',
+    title="Exploration",
+    plot_data_function=lambda pd: pd.survey_count, style=PlotStyle.line,
+)
+MILITARY_POWER_GRAPH = PlotSpecification(
+    plot_id='military-power-graph',
+    title="Military",
+    plot_data_function=lambda pd: pd.military_power, style=PlotStyle.line,
+)
+FLEET_SIZE_GRAPH = PlotSpecification(
+    plot_id='fleet-size-graph',
+    title="Fleets",
+    plot_data_function=lambda pd: pd.fleet_size, style=PlotStyle.line,
+)
+EMPIRE_DEMOGRAPHICS_GRAPH = PlotSpecification(
+    plot_id='empire-demographics-graph',
+    title="Empire Demographics",
+    plot_data_function=lambda pd: pd.species_distribution, style=PlotStyle.stacked,
+)
+INTERNAL_POLITICS_GRAPH = PlotSpecification(
+    plot_id='empire-internal-politics-graph',
+    title="Empire Politics",
+    plot_data_function=lambda pd: pd.faction_size_distribution, style=PlotStyle.stacked,
+)
+EMPIRE_ECONOMY_GRAPH = PlotSpecification(
+    plot_id='empire-economy-graph',
+    title="Empire Economy",
+    plot_data_function=lambda pd: pd.empire_budget_allocation, style=PlotStyle.stacked,
+)
+RESEARCH_ALLOCATION_GRAPH = PlotSpecification(
+    plot_id='empire-research-allocation-graph',
+    title="Empire Research",
+    plot_data_function=lambda pd: pd.empire_research_allocation, style=PlotStyle.stacked,
+)
+PLOT_SPECIFICATIONS = {
+    'pop-count-graph': POP_COUNT_GRAPH,
+    'survey-count-graph': SURVEY_PROGRESS_GRAPH,
+    'military-power-graph': MILITARY_POWER_GRAPH,
+    'fleet-size-graph': FLEET_SIZE_GRAPH,
+    'empire-demographics-graph': EMPIRE_DEMOGRAPHICS_GRAPH,
+    'empire-internal-politics-graph': INTERNAL_POLITICS_GRAPH,
+    'empire-research-allocation-graph': RESEARCH_ALLOCATION_GRAPH,
+    'empire-economy-graph': EMPIRE_ECONOMY_GRAPH,
+}
 
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 
@@ -16,7 +82,7 @@ def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotDat
         session = models.SessionFactory()
         game = session.query(models.Game).filter_by(game_name=game_name).first()
         session.close()
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name, show_everything=True)
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name, show_everything=False)
         if game:
             _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
         else:
@@ -77,6 +143,7 @@ class EmpireProgressionPlotData:
         self.species_distribution: Dict[str, List[float]] = {}
         self.faction_size_distribution: Dict[str, List[float]] = {}
         self.empire_budget_allocation: Dict[str, List[float]] = {}
+        self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
 
     def update_with_new_gamestate(self):
         date = 360.0 * self.dates[-1] if self.dates else -1
@@ -107,7 +174,7 @@ class EmpireProgressionPlotData:
                 if len(data_dict[key]) < len(self.dates):
                     data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
 
-    def make_plot_lists(self, full_data):
+    def make_plot_lists(self, full_data: List[float]):
         dates = []
         plot_list = []
         for value, date in zip(full_data, self.dates):
@@ -128,23 +195,21 @@ class EmpireProgressionPlotData:
                     plot_list.append(value)
         return dates, plot_list
 
-    @staticmethod
-    def iterate_data_sorted(data_dict: Dict[str, List[Union[int, float]]]):
-        return_last_keys = {EmpireProgressionPlotData.NO_FACTION_POP_KEY}
-        return_last = []
+    def iterate_data_sorted(self, plot_spec: PlotSpecification):
+        data_dict = plot_spec.plot_data_function(self)
         for key, data in sorted(data_dict.items(), key=lambda x: (x[1][-1], x[0]), reverse=True):
-            if key in return_last_keys:
-                return_last.append((key, data))
-                continue
             if key == "ROBOT_POP_SPECIES_1":
                 key = "Robot"
             elif key == "ROBOT_POP_SPECIES_2":
                 key = "Droid"
             elif key == "ROBOT_POP_SPECIES_3":
                 key = "Synth"
-            yield key, data
-        for key, data in return_last:
-            yield key, data
+            if plot_spec.style == PlotStyle.stacked:
+                # For stacked plots, we need all entries!
+                x, y = self.dates, data
+            else:
+                x, y = self.make_plot_lists(data)
+            yield key, x, y
 
     def _extract_pop_count(self, country_data: models.CountryData):
         if self.show_everything or show_demographic_info(country_data):
@@ -230,15 +295,12 @@ class EmpireProgressionPlotData:
             if len(self.faction_size_distribution[faction]) < len(self.dates):
                 self.faction_size_distribution[faction].append(0)
         for faction in self.faction_size_distribution:
-            if total_faction_pop_count:  # avoid dividing by 0 => in the beginning, there are no factions
-                self.faction_size_distribution[faction][-1] /= pop_count
+            self.faction_size_distribution[faction][-1] /= pop_count
 
     def _extract_player_empire_budget_allocations(self, country_data: models.CountryData):
         pass
 
     def _extract_player_empire_research_allocations(self, country_data: models.CountryData):
-        if not self.empire_research_allocation:
-            self.empire_research_allocation: Dict[str, List[float]] = dict(physics=[], society=[], engineering=[])
         total = country_data.physics_research + country_data.society_research + country_data.engineering_research
         self.empire_research_allocation["physics"].append(country_data.physics_research / total)
         self.empire_research_allocation["society"].append(country_data.society_research / total)
@@ -264,114 +326,35 @@ class MatplotLibVisualization:
 
     def make_plots(self):
         self._initialize_axes()
-        self.pop_count_plot()
-        self.owned_planets_plot()
-        self.tech_count_plot()
-        self.survey_count_plot()
-        self.military_power_plot()
-        self.fleet_size_plot()
-        self.empire_demographics_plot()
-        self.empire_internal_politics_plot()
-        self.empire_research_allocations_plot()
+        for plot_id, plot_spec in PLOT_SPECIFICATIONS.items():
+            if plot_spec.style == PlotStyle.stacked:
+                self._stacked_plot(plot_spec)
+            else:
+                self._line_plot(plot_spec)
 
-    def pop_count_plot(self):
+    def _line_plot(self, plot_spec: PlotSpecification):
         ax = next(self.axes_iter)
         ax.set_title("Population Size")
-        for i, (country, pop_count) in enumerate(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.pop_count)):
-            dates, plot_pop_count = self.plot_data.make_plot_lists(pop_count)
-            if plot_pop_count:
-                plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.pop_count))
-                ax.plot(dates, plot_pop_count, **plot_kwargs)
+        for i, (key, x, y) in enumerate(self.plot_data.iterate_data_sorted(plot_spec)):
+            if y:
+                plot_kwargs = self._get_country_plot_kwargs(key, i, len(self.plot_data.pop_count))
+                ax.plot(x, y, **plot_kwargs)
         ax.legend()
 
-    def owned_planets_plot(self):
+    def _stacked_plot(self, plot_spec: PlotSpecification):
         ax = next(self.axes_iter)
-        ax.set_title("Owned Planets")
-        for i, (country, owned_planets) in enumerate(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.owned_planets)):
-            dates, plot_owned_planets = self.plot_data.make_plot_lists(owned_planets)
-            if plot_owned_planets:
-                plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.owned_planets))
-                ax.plot(dates, plot_owned_planets, **plot_kwargs)
-        ax.legend()
-
-    def tech_count_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title("Researched Technologies")
-        for i, (country, tech_count) in enumerate(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.tech_count)):
-            dates, plot_tech_count = self.plot_data.make_plot_lists(tech_count)
-            if plot_tech_count:
-                plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.tech_count))
-                ax.plot(dates, plot_tech_count, **plot_kwargs)
-        ax.legend()
-
-    def survey_count_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title("Surveyed Bodies")
-        for i, (country, surveyed_count) in enumerate(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.survey_count)):
-            dates, plot_survey_count = self.plot_data.make_plot_lists(surveyed_count)
-            if plot_survey_count:
-                plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.survey_count))
-                ax.plot(dates, plot_survey_count, **plot_kwargs)
-        ax.legend()
-
-    def military_power_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title("Military Power")
-        for i, (country, military_power) in enumerate(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.military_power)):
-            dates, plot_military_power = self.plot_data.make_plot_lists(military_power)
-            if plot_military_power:
-                plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.military_power))
-                ax.plot(dates, plot_military_power, **plot_kwargs)
-        ax.legend()
-
-    def fleet_size_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title("Fleet Size")
-        for i, (country, fleet_size) in enumerate(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.fleet_size)):
-            dates, plot_fleet_size = self.plot_data.make_plot_lists(fleet_size)
-            if plot_fleet_size:
-                plot_kwargs = self._get_country_plot_kwargs(country, i, len(self.plot_data.fleet_size))
-                ax.plot(dates, plot_fleet_size, **plot_kwargs)
-        ax.legend()
-
-    def empire_demographics_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title(f"Species Distribution in {self.plot_data.player_country}")
-        y = []
+        ax.set_title(plot_spec.title)
+        stacked = []
         labels = []
         colors = []
-        data_iter = reversed(list(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.species_distribution)))
-        for i, (species, species_count) in enumerate(data_iter):
-            y.append(species_count)
-            labels.append(species)
-            colors.append(COLOR_MAP(i / len(self.plot_data.species_distribution)))
-        ax.stackplot(self.plot_data.dates, y, labels=labels, colors=colors)
-        ax.set_ylim((0, 1.0))
-        ax.legend()
-
-    def empire_internal_politics_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title(f"Faction allegiance in {self.plot_data.player_country}")
-        y = []
-        labels = []
-        colors = []
-        data_iter = reversed(list(EmpireProgressionPlotData.iterate_data_sorted(self.plot_data.faction_size_distribution)))
-        for i, (faction, supporter_count) in enumerate(data_iter):
-            y.append(supporter_count)
-            labels.append(f"{faction}")
-            colors.append(COLOR_MAP(i / len(self.plot_data.faction_size_distribution)))
-        ax.stackplot(self.plot_data.dates, y, labels=labels, colors=colors)
-        ax.set_ylim((0, 1.0))
-        ax.legend()
-
-    def empire_research_allocations_plot(self):
-        ax = next(self.axes_iter)
-        ax.set_title(f"Relative allocation of research output in {self.plot_data.player_country}")
-        y = list(self.plot_data.empire_research_allocation.values())
-        labels = list(self.plot_data.empire_research_allocation.keys())
-        colors = [COLOR_MAP(0.0), COLOR_MAP(0.5), COLOR_MAP(1.0)]
-        ax.stackplot(self.plot_data.dates, y, labels=labels, colors=colors)
-        ax.set_ylim((0, 1.0))
+        data = list(self.plot_data.iterate_data_sorted(plot_spec))[::-1]
+        for i, (key, x, y) in enumerate(data):
+            stacked.append(y)
+            labels.append(key)
+            colors.append(COLOR_MAP(i / len(data)))
+        if stacked:
+            ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors)
+        ax.set_ylim((0.0, 1.0))
         ax.legend()
 
     def _initialize_axes(self):
