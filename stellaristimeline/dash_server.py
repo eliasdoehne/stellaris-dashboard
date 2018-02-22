@@ -32,7 +32,7 @@ DEFAULT_SELECTED_PLOT = next(iter(visualization.THEMATICALLY_GROUPED_PLOTS.keys(
 
 DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis={"type": "linear"},
-    height=600,
+    height=480,
 )
 GRAPHS = {g_id: dcc.Graph(id='pop-count-graph', figure={"layout": DEFAULT_PLOT_LAYOUT}) for g_id in visualization.PLOT_SPECIFICATIONS}
 

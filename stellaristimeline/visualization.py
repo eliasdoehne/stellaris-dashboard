@@ -75,7 +75,7 @@ FACTION_SUPPORT_GRAPH = PlotSpecification(
     plot_id='empire-faction-support-graph',
     title="Faction Support",
     plot_data_function=lambda pd: pd.faction_support,
-    style=PlotStyle.line,
+    style=PlotStyle.stacked,
 )
 INTERNAL_POLITICS_GRAPH = PlotSpecification(
     plot_id='empire-internal-politics-graph',
