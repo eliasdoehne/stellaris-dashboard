@@ -70,7 +70,7 @@ class PopEthics(enum.Enum):
 
     enslaved = 9
     purge = 10
-    no_ethics = 11  # e.g. robots
+    no_ethics = 11  # e.g. robots1476894696
 
     other = 99  # the other values should be exhaustive, but this value serves as a default fallback to detect any issues.
 

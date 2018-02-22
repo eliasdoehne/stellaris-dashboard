@@ -1,7 +1,7 @@
 import enum
 import logging
-from typing import List, Dict, Union, NamedTuple, Callable, Any
-
+from typing import List, Dict, NamedTuple, Callable, Any
+import dataclasses
 from matplotlib import pyplot as plt
 
 from stellaristimeline import models
@@ -15,7 +15,8 @@ class PlotStyle(enum.Enum):
     stacked = 1
 
 
-class PlotSpecification(NamedTuple):
+@dataclasses.dataclass
+class PlotSpecification:
     plot_id: str
     title: str
     plot_data_function: Callable[["EmpireProgressionPlotData"], Any]
@@ -24,53 +25,106 @@ class PlotSpecification(NamedTuple):
 
 POP_COUNT_GRAPH = PlotSpecification(
     plot_id='pop-count-graph',
-    title="Population",
-    plot_data_function=lambda pd: pd.pop_count, style=PlotStyle.line,
+    title="Total Population",
+    plot_data_function=lambda pd: pd.pop_count,
+    style=PlotStyle.line,
+)
+PLANET_COUNT_GRAPH = PlotSpecification(
+    plot_id='planet-count-graph',
+    title="Owned Planets",
+    plot_data_function=lambda pd: pd.owned_planets,
+    style=PlotStyle.line,
 )
 SURVEY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='survey-count-graph',
     title="Exploration",
-    plot_data_function=lambda pd: pd.survey_count, style=PlotStyle.line,
+    plot_data_function=lambda pd: pd.survey_count,
+    style=PlotStyle.line,
+)
+TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
+    plot_id='tech-count-graph',
+    title="Researched Technologies",
+    plot_data_function=lambda pd: pd.tech_count,
+    style=PlotStyle.line,
 )
 MILITARY_POWER_GRAPH = PlotSpecification(
     plot_id='military-power-graph',
-    title="Military",
-    plot_data_function=lambda pd: pd.military_power, style=PlotStyle.line,
+    title="Military Strength",
+    plot_data_function=lambda pd: pd.military_power,
+    style=PlotStyle.line,
 )
 FLEET_SIZE_GRAPH = PlotSpecification(
     plot_id='fleet-size-graph',
-    title="Fleets",
-    plot_data_function=lambda pd: pd.fleet_size, style=PlotStyle.line,
+    title="Fleet Size",
+    plot_data_function=lambda pd: pd.fleet_size,
+    style=PlotStyle.line,
 )
 EMPIRE_DEMOGRAPHICS_GRAPH = PlotSpecification(
     plot_id='empire-demographics-graph',
     title="Empire Demographics",
-    plot_data_function=lambda pd: pd.species_distribution, style=PlotStyle.stacked,
+    plot_data_function=lambda pd: pd.species_distribution,
+    style=PlotStyle.stacked,
+)
+FACTION_HAPPINESS_GRAPH = PlotSpecification(
+    plot_id='empire-faction-happiness-graph',
+    title="Faction Happiness",
+    plot_data_function=lambda pd: pd.faction_happiness,
+    style=PlotStyle.line,
+)
+FACTION_SUPPORT_GRAPH = PlotSpecification(
+    plot_id='empire-faction-support-graph',
+    title="Faction Support",
+    plot_data_function=lambda pd: pd.faction_support,
+    style=PlotStyle.line,
 )
 INTERNAL_POLITICS_GRAPH = PlotSpecification(
     plot_id='empire-internal-politics-graph',
     title="Empire Politics",
-    plot_data_function=lambda pd: pd.faction_size_distribution, style=PlotStyle.stacked,
+    plot_data_function=lambda pd: pd.faction_size_distribution,
+    style=PlotStyle.stacked,
 )
 EMPIRE_ECONOMY_GRAPH = PlotSpecification(
-    plot_id='empire-economy-graph',
-    title="Empire Economy",
-    plot_data_function=lambda pd: pd.empire_budget_allocation, style=PlotStyle.stacked,
+    plot_id='empire-energy-budget-graph',
+    title="Energy Budget (WARNING: INACCURATE!)",
+    plot_data_function=lambda pd: pd.empire_budget_allocation,
+    style=PlotStyle.stacked,
 )
 RESEARCH_ALLOCATION_GRAPH = PlotSpecification(
     plot_id='empire-research-allocation-graph',
     title="Empire Research",
-    plot_data_function=lambda pd: pd.empire_research_allocation, style=PlotStyle.stacked,
+    plot_data_function=lambda pd: pd.empire_research_allocation,
+    style=PlotStyle.stacked,
 )
 PLOT_SPECIFICATIONS = {
     'pop-count-graph': POP_COUNT_GRAPH,
     'survey-count-graph': SURVEY_PROGRESS_GRAPH,
+    'tech-count-graph': TECHNOLOGY_PROGRESS_GRAPH,
     'military-power-graph': MILITARY_POWER_GRAPH,
     'fleet-size-graph': FLEET_SIZE_GRAPH,
     'empire-demographics-graph': EMPIRE_DEMOGRAPHICS_GRAPH,
     'empire-internal-politics-graph': INTERNAL_POLITICS_GRAPH,
     'empire-research-allocation-graph': RESEARCH_ALLOCATION_GRAPH,
-    'empire-economy-graph': EMPIRE_ECONOMY_GRAPH,
+    'empire-energy-budget-graph': EMPIRE_ECONOMY_GRAPH,
+}
+
+THEMATICALLY_GROUPED_PLOTS = {
+    "Science": [
+        TECHNOLOGY_PROGRESS_GRAPH,
+        RESEARCH_ALLOCATION_GRAPH,
+        SURVEY_PROGRESS_GRAPH],
+    "Politics": [
+        INTERNAL_POLITICS_GRAPH,
+        FACTION_HAPPINESS_GRAPH,
+        FACTION_SUPPORT_GRAPH
+    ],
+    "Military": [
+        FLEET_SIZE_GRAPH,
+        MILITARY_POWER_GRAPH],
+    "Economy": [
+        POP_COUNT_GRAPH,
+        PLANET_COUNT_GRAPH,
+        EMPIRE_ECONOMY_GRAPH,
+    ],
 }
 
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
@@ -127,6 +181,8 @@ class EmpireProgressionPlotData:
         self.fleet_size = None
         self.species_distribution = None
         self.faction_size_distribution = None
+        self.faction_happiness = None
+        self.faction_support = None
         self.empire_budget_allocation = None
         self.empire_research_allocation = None
         self.show_everything = show_everything
@@ -142,7 +198,16 @@ class EmpireProgressionPlotData:
         self.fleet_size: Dict[str, List[float]] = {}
         self.species_distribution: Dict[str, List[float]] = {}
         self.faction_size_distribution: Dict[str, List[float]] = {}
-        self.empire_budget_allocation: Dict[str, List[float]] = {}
+        self.faction_happiness: Dict[str, List[float]] = {}
+        self.faction_support: Dict[str, List[float]] = {}
+        self.empire_budget_allocation: Dict[str, List[float]] = dict(
+            energy_production=[],
+            army_expenses=[],
+            buildings_expenses=[],
+            pops_expenses=[],
+            ships_expenses=[],
+            stations_expenses=[],
+        )
         self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
 
     def update_with_new_gamestate(self):
@@ -270,41 +335,63 @@ class EmpireProgressionPlotData:
             if len(self.species_distribution[species]) < len(self.dates):
                 self.species_distribution[species].append(0)
         for species in self.species_distribution:
-            self.species_distribution[species][-1] /= total_pop_count
+            self.species_distribution[species][-1] *= 100.0 / total_pop_count
 
     def _extract_player_empire_politics(self, country_data: models.CountryData):
         total_faction_pop_count = 0
         # first get the current size of each faction
         faction_sizes = {f: 0 for f in self.faction_size_distribution}
-        for faction_support in country_data.faction_support:
-            faction = faction_support.faction.faction_name
+        faction_happiness = {f: 0 for f in self.faction_happiness}
+        faction_support_dict = {f: 0 for f in self.faction_support}
+        for faction_data in country_data.faction_support:
+            faction = faction_data.faction.faction_name
             if faction not in self.faction_size_distribution:
                 faction_sizes[faction] = 0
-            faction_sizes[faction] += faction_support.members
-            total_faction_pop_count += faction_support.members
+                faction_happiness[faction] = 0
+                faction_support_dict[faction] = 0
+            total_faction_pop_count += faction_data.members
+            faction_sizes[faction] += faction_data.members
+            faction_happiness[faction] += faction_data.happiness
+            faction_support_dict[faction] += faction_data.support
 
         pop_count = self.pop_count[country_data.country.country_name][-1]
         faction_sizes[EmpireProgressionPlotData.NO_FACTION_POP_KEY] = pop_count - total_faction_pop_count
 
         # then add them to the data dictionary.
-        for f, members in faction_sizes.items():
+        for f in faction_sizes:
             if f not in self.faction_size_distribution:
                 self.faction_size_distribution[f] = [0 for _ in range(len(self.dates) - 1)]
-            self.faction_size_distribution[f].append(members)
+            self.faction_size_distribution[f].append(faction_sizes[f])
+        for f in faction_happiness:
+            if f not in self.faction_happiness:
+                self.faction_happiness[f] = [float("nan") for _ in range(len(self.dates) - 1)]
+                self.faction_support[f] = [float("nan") for _ in range(len(self.dates) - 1)]
+            self.faction_happiness[f].append(faction_happiness[f])
+            self.faction_support[f].append(faction_support_dict[f])
         for faction in faction_sizes:
             if len(self.faction_size_distribution[faction]) < len(self.dates):
                 self.faction_size_distribution[faction].append(0)
+                if faction in self.faction_happiness:
+                    self.faction_happiness[faction].append(float("nan"))
+                    self.faction_support[faction].append(float("nan"))
         for faction in self.faction_size_distribution:
-            self.faction_size_distribution[faction][-1] /= pop_count
+            self.faction_size_distribution[faction][-1] *= 100.0 / pop_count
 
     def _extract_player_empire_budget_allocations(self, country_data: models.CountryData):
-        pass
+        self.empire_budget_allocation["energy_production"].append(country_data.energy_production)
+        self.empire_budget_allocation["army_expenses"].append(country_data.energy_spending_army)
+
+        # TODO: Division by 2 in the following entries is purely based on experimentation.
+        self.empire_budget_allocation["buildings_expenses"].append(country_data.energy_spending_building / 2)
+        self.empire_budget_allocation["pops_expenses"].append(country_data.energy_spending_pop / 2)
+        self.empire_budget_allocation["ships_expenses"].append(country_data.energy_spending_ship / 2)
+        self.empire_budget_allocation["stations_expenses"].append(country_data.energy_spending_station / 2)
 
     def _extract_player_empire_research_allocations(self, country_data: models.CountryData):
         total = country_data.physics_research + country_data.society_research + country_data.engineering_research
-        self.empire_research_allocation["physics"].append(country_data.physics_research / total)
-        self.empire_research_allocation["society"].append(country_data.society_research / total)
-        self.empire_research_allocation["engineering"].append(country_data.engineering_research / total)
+        self.empire_research_allocation["physics"].append(100.0 * country_data.physics_research / total)
+        self.empire_research_allocation["society"].append(100.0 * country_data.society_research / total)
+        self.empire_research_allocation["engineering"].append(100.0 * country_data.engineering_research / total)
 
     def _add_new_value_to_data_dict(self, data_dict, key, new_val):
         if key not in data_dict:

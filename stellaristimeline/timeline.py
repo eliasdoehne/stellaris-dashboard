@@ -160,7 +160,7 @@ class TimelineExtractor:
             if first.get("country", -1) != self._player_country:
                 first, second = second, first  # make it so player is always first party
             if first.get("country", -1) != self._player_country:
-                continue  # trade doesn't involve player
+                continue  # trade doesn't_save_monitor involve player
             if second.get("research_agreement") == "yes":
                 self._player_research_agreements.add(second["country"])
             if second.get("sensor_link") == "yes":

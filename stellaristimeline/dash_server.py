@@ -26,13 +26,13 @@ def populate_available_games() -> Dict[str, models.Game]:
 AVAILABLE_GAMES = populate_available_games()
 SELECTED_GAME_NAME = None
 if AVAILABLE_GAMES:
-    SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES.keys()))
+    SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES.keys()))  # "unitednationsofearth_-15512622"  #
 
-DEFAULT_SELECTED_PLOT = next(iter(visualization.PLOT_SPECIFICATIONS.values()))
+DEFAULT_SELECTED_PLOT = next(iter(visualization.THEMATICALLY_GROUPED_PLOTS.keys()))
 
 DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis={"type": "linear"},
-    height=800,
+    height=600,
 )
 GRAPHS = {g_id: dcc.Graph(id='pop-count-graph', figure={"layout": DEFAULT_PLOT_LAYOUT}) for g_id in visualization.PLOT_SPECIFICATIONS}
 
@@ -47,13 +47,15 @@ app.layout = html.Div([
     html.Div([
         dcc.Tabs(
             tabs=[
-                {'label': p.title, 'value': plot_id} for plot_id, p in visualization.PLOT_SPECIFICATIONS.items()
+                {'label': category, 'value': category}
+                for category in visualization.THEMATICALLY_GROUPED_PLOTS
             ],
-            value=DEFAULT_SELECTED_PLOT.plot_id,
-            id='tabs'
+            value=DEFAULT_SELECTED_PLOT,
+            id='tabs',
+
         ),
         html.Div(id='tab-content', style={
-            'width': '80%',
+            'width': '100%',
             'margin-left': 'auto',
             'margin-right': 'auto'
         }),
@@ -73,7 +75,6 @@ def get_plot_data() -> visualization.EmpireProgressionPlotData:
 def update_selected_game(new_selected_game):
     global SELECTED_GAME_NAME
     if new_selected_game and new_selected_game != SELECTED_GAME_NAME:
-        assert new_selected_game in AVAILABLE_GAMES
         print(f"Selected game is {new_selected_game}")
         SELECTED_GAME_NAME = new_selected_game
 
@@ -82,17 +83,19 @@ def update_selected_game(new_selected_game):
                                                   Input('select-game-dropdown', 'value'), ])
 def update_content(tab_value, game_value):
     update_selected_game(game_value)
-    plot_spec = visualization.PLOT_SPECIFICATIONS[tab_value]
-    figure_data = get_figure_data(plot_spec)
-    figure_layout = get_figure_layout(plot_spec)
-    figure = {'data': figure_data, 'layout': figure_layout}
-    return [
-        html.H2(visualization.PLOT_SPECIFICATIONS[tab_value].title),
-        dcc.Graph(
-            id="tab-area-plot",
+    children = []
+    plots = visualization.THEMATICALLY_GROUPED_PLOTS[tab_value]
+    for plot_spec in plots:
+        figure_data = get_figure_data(plot_spec)
+        figure_layout = get_figure_layout(plot_spec)
+        figure = {'data': figure_data, 'layout': figure_layout}
+
+        children.append(html.H3(f"{plot_spec.title}  -  {SELECTED_GAME_NAME}"))
+        children.append(dcc.Graph(
+            id=f"{plot_spec.plot_id}",
             figure=figure,
-        ),
-    ]
+        ))
+    return children
 
 
 def get_figure_data(plot_spec: visualization.PlotSpecification):
@@ -112,9 +115,9 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
         if plot_spec.style == visualization.PlotStyle.stacked:
             if y_previous is None:
                 y_previous = [0.0 for _ in x_values]
-            line["text"] = [f"{100.0 * val:.1f}% - {key}" for val in line["y"]]
+            line["text"] = [f"{val:.1f}% - {key}" for val in line["y"]]
             y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
-            line["y"] = [100.0 * a for a in y_previous]
+            line["y"] = [a for a in y_previous]
             line["hoverinfo"] = "x+text"
             line["fill"] = "tonexty"
         if line["y"]:
@@ -139,5 +142,9 @@ def update_game_options(n) -> List[Dict[str, str]]:
     return [{'label': g, 'value': g} for g in AVAILABLE_GAMES]
 
 
-if __name__ == '__main__':
+def start_server():
     app.run_server()
+
+
+if __name__ == '__main__':
+    start_server()
