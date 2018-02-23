@@ -13,7 +13,7 @@ setup(
 
     entry_points={
         "console_scripts": [
-            "stellaristimeline = stellaristimeline.main:cli",
+            "stellaristimeline = stellaristimeline.cli:cli",
         ],
     },
 )

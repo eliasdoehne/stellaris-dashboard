@@ -57,7 +57,7 @@ class Attitude(enum.Enum):
 
 
 @enum.unique
-class PopEthics(enum.Enum):
+class PopEthics(enum.IntEnum):
     imperialist = 0
     isolationist = 1
     progressive = 2
@@ -164,12 +164,12 @@ class CountryData(Base):
     food_spending = Column(Float, default=0.0)
 
     energy_production = Column(Float, default=0.0)
-    energy_spending = Column(Float, default=0.0)
     energy_spending_army = Column(Float, default=0.0)
     energy_spending_building = Column(Float, default=0.0)
     energy_spending_pop = Column(Float, default=0.0)
     energy_spending_ship = Column(Float, default=0.0)
     energy_spending_station = Column(Float, default=0.0)
+    # TODO: Starbase Upkeep!
 
     has_research_agreement_with_player = Column(Boolean)
     has_sensor_link_with_player = Column(Boolean)

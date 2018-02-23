@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Dict, Any, List
 
@@ -9,6 +10,8 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 
 from stellaristimeline import models, visualization
+
+logger = logging.getLogger(__name__)
 
 flask_app = flask.Flask(__name__)  # in case we want to extend other functionality later, e.g. a ledger
 app = dash.Dash(name="Stellaris Timeline", server=flask_app, url_base_pathname="/")
@@ -31,10 +34,11 @@ if AVAILABLE_GAMES:
 DEFAULT_SELECTED_PLOT = next(iter(visualization.THEMATICALLY_GROUPED_PLOTS.keys()))
 
 DEFAULT_PLOT_LAYOUT = go.Layout(
-    yaxis={"type": "linear"},
+    yaxis={
+        "type": "linear"
+    },
     height=480,
 )
-GRAPHS = {g_id: dcc.Graph(id='pop-count-graph', figure={"layout": DEFAULT_PLOT_LAYOUT}) for g_id in visualization.PLOT_SPECIFICATIONS}
 
 app.layout = html.Div([
     dcc.Dropdown(
@@ -88,7 +92,7 @@ def update_content(tab_value, game_value):
     for plot_spec in plots:
         figure_data = get_figure_data(plot_spec)
         figure_layout = get_figure_layout(plot_spec)
-        figure = {'data': figure_data, 'layout': figure_layout}
+        figure = go.Figure(data=figure_data, layout=figure_layout)
 
         children.append(html.H3(f"{plot_spec.title}  -  {SELECTED_GAME_NAME}"))
         children.append(dcc.Graph(
@@ -110,16 +114,35 @@ def get_figure_data(plot_spec: visualization.PlotSpecification):
 def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec: visualization.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
     y_previous = None
+    y_previous_pos, y_previous_neg = None, None
     for key, x_values, y_values in plot_data.iterate_data_sorted(plot_spec):
         line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f}% - {key}" for val in y_values]}
         if plot_spec.style == visualization.PlotStyle.stacked:
             if y_previous is None:
                 y_previous = [0.0 for _ in x_values]
-            line["text"] = [f"{val:.1f}% - {key}" for val in line["y"]]
+            line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
             y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
             line["y"] = [a for a in y_previous]
             line["hoverinfo"] = "x+text"
             line["fill"] = "tonexty"
+        elif plot_spec.style == visualization.PlotStyle.budget:
+            if y_previous_pos is None:
+                y_previous_pos = [0.0 for _ in x_values]
+                y_previous_neg = [0.0 for _ in x_values]
+            line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
+            if all(y <= 0 for y in y_values):
+                y_prev = y_previous_pos
+            elif all(y >= 0 for y in y_values):
+                y_prev = y_previous_neg
+            else:
+                logger.warning("Not a real budget Graph!")
+                break
+            for i, y in enumerate(y_values):
+                y_prev[i] += y
+            line["y"] = y_prev[:]
+            line["hoverinfo"] = "x+text"
+            line["fill"] = "tonexty"
+
         if line["y"]:
             plot_list.append(line)
     return sorted(plot_list, key=lambda p: p["y"][-1])
@@ -129,7 +152,10 @@ def get_figure_layout(plot_spec: visualization.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
     if plot_spec.style == visualization.PlotStyle.stacked:
         layout["yaxis"] = {}
-    return layout
+        if plot_spec.y_to_zero:
+            print(plot_spec)
+            layout["yaxis"]["rangemode"] = "tozero"
+    return go.Layout(**layout)
 
 
 @app.callback(Output('select-game-dropdown', 'options'))

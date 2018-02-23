@@ -1,5 +1,4 @@
 import logging
-import traceback
 from typing import Dict, Any
 
 from stellaristimeline import models
@@ -20,32 +19,30 @@ class TimelineExtractor:
         self._player_sensor_links = None
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
+        date_str = gamestate_dict["date"]
+        logger.debug(f"Processing {game_name}, {date_str}")
         self.gamestate_dict = gamestate_dict
-        if len(self.gamestate_dict["player"]) != 1:
-            logging.warning("Attempted to extract data from multiplayer save!")
+        if len({player["country"] for player in self.gamestate_dict["player"]}) != 1:
+            logger.warning("Player country is ambiguous!")
             return None
         self._player_country = self.gamestate_dict["player"][0]["country"]
         self._session = models.SessionFactory()
         try:
             self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
             if self.game is None:
-                logging.info(f"Adding new game {game_name} to database.")
+                logger.info(f"Adding new game {game_name} to database.")
                 self.game = models.Game(game_name=game_name)
                 self._session.add(self.game)
-            date_str = gamestate_dict["date"]
             days = models.date_to_days(self.gamestate_dict["date"])
-            for gs in reversed(self.game.game_states):
-                if days == gs.date:
-                    print(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
-                    self._session.delete(gs)
-                    break
-                if days > gs.date:
-                    break
-            logging.info(f"Extracting country data to database.")
+            game_states_by_date = {gs.date: gs for gs in self.game.game_states}
+            if days in game_states_by_date:
+                logger.info(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
+                self._session.delete(game_states_by_date[days])
             self._process_gamestate()
             self._session.commit()
         except Exception as e:
             self._session.rollback()
+            logger.error(e)
             raise e
         finally:
             self._session.close()
@@ -67,6 +64,7 @@ class TimelineExtractor:
                 continue  # can be "none", apparently
             if country_data["type"] != "default":
                 continue  # Enclaves, Leviathans, etc ....
+            logger.debug(f"Extracting country data: {country_id}, {country_data.get('name', 'Unnamed Country')}")
             country_state = self._extract_country_info(country_id, country_data)
             self._extract_country_pop_info(country_data, country_state)
 
@@ -116,20 +114,22 @@ class TimelineExtractor:
                 mineral_spending_pop=last_month.get("pop_mineral_maintenance", 0),
                 mineral_spending_ship=last_month.get("ship_mineral_maintenances", 0),
             )
+            economy["energy_production"] = budget.get("base_income", 0) + budget.get("produced_energy", 0)
         if "modules" in country_dict and "standard_economy_module" in country_dict["modules"] and "last_month" in country_dict["modules"]["standard_economy_module"]:
             economy_module = country_dict["modules"]["standard_economy_module"]["last_month"]
             default = [0, 0, 0]
-            economy.update(
-                mineral_production=economy_module.get("minerals", default)[1],
-                mineral_spending=economy_module.get("minerals", default)[2],
-                energy_production=economy_module.get("energy", default)[1],
-                energy_spending=economy_module.get("energy", default)[2],
-                food_production=economy_module.get("food", default)[1],
-                food_spending=economy_module.get("food", default)[2],
-                society_research=economy_module.get("society_research", default)[0],
-                physics_research=economy_module.get("physics_research", default)[0],
-                engineering_research=economy_module.get("engineering_research", default)[0],
-            )
+            for key, dict_key, val_index in [
+                ("mineral_production", "minerals", 1),
+                ("mineral_spending", "minerals", 2),
+                ("food_production", "food", 1),
+                ("food_spending", "food", 2),
+                ("society_research", "society_research", 1),
+                ("physics_research", "physics_research", 1),
+                ("engineering_research", "engineering_research", 1),
+            ]:
+                val_list = economy_module.get(dict_key, default)
+                if isinstance(val_list, list):
+                    economy[key] = val_list[val_index]
         return economy
 
     def _extract_ai_attitude_towards_player(self, country_data):
@@ -202,7 +202,7 @@ class TimelineExtractor:
             planet_data = self.gamestate_dict["planet"][planet_id]
             for pop_id in planet_data.get("pop", []):
                 if pop_id not in pop_data:
-                    logging.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
+                    logger.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     continue
                 pop_species_index = pop_data[pop_id]["species_index"]
                 if pop_species_index not in species_demographics:
