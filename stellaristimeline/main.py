@@ -21,7 +21,7 @@ if __name__ == '__main__':
     t_dash.start()
     while True:
         time.sleep(5)
-        print(cli.MOST_RECENTLY_UPDATED_GAME)
         if cli.MOST_RECENTLY_UPDATED_GAME is not None and cli.MOST_RECENTLY_UPDATED_GAME != dash_server.SELECTED_GAME_NAME:
             print("Updating selected game in dash!")
+            print(cli.MOST_RECENTLY_UPDATED_GAME)
             dash_server.update_selected_game(cli.MOST_RECENTLY_UPDATED_GAME)

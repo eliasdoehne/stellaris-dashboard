@@ -40,16 +40,28 @@ PLANET_COUNT_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.owned_planets,
     style=PlotStyle.line,
 )
-SURVEY_PROGRESS_GRAPH = PlotSpecification(
-    plot_id='survey-count-graph',
-    title="Exploration",
-    plot_data_function=lambda pd: pd.survey_count,
-    style=PlotStyle.line,
-)
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='tech-count-graph',
     title="Researched Technologies",
     plot_data_function=lambda pd: pd.tech_count,
+    style=PlotStyle.line,
+)
+RESEARCH_ALLOCATION_GRAPH = PlotSpecification(
+    plot_id='empire-research-allocation-graph',
+    title="Research Allocation",
+    plot_data_function=lambda pd: pd.empire_research_allocation,
+    style=PlotStyle.stacked,
+)
+RESEARCH_OUTPUT_GRAPH = PlotSpecification(
+    plot_id='empire-research-output-graph',
+    title="Research Output",
+    plot_data_function=lambda pd: pd.empire_research_output,
+    style=PlotStyle.stacked,
+)
+SURVEY_PROGRESS_GRAPH = PlotSpecification(
+    plot_id='survey-count-graph',
+    title="Exploration",
+    plot_data_function=lambda pd: pd.survey_count,
     style=PlotStyle.line,
 )
 MILITARY_POWER_GRAPH = PlotSpecification(
@@ -70,6 +82,12 @@ EMPIRE_DEMOGRAPHICS_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.species_distribution,
     style=PlotStyle.stacked,
 )
+FACTION_SIZE_GRAPH = PlotSpecification(
+    plot_id='empire-internal-politics-graph',
+    title="Faction Size",
+    plot_data_function=lambda pd: pd.faction_size_distribution,
+    style=PlotStyle.stacked,
+)
 FACTION_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-faction-happiness-graph',
     title="Faction Happiness",
@@ -83,57 +101,35 @@ FACTION_SUPPORT_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.faction_support,
     style=PlotStyle.stacked,
 )
-INTERNAL_POLITICS_GRAPH = PlotSpecification(
-    plot_id='empire-internal-politics-graph',
-    title="Empire Politics",
-    plot_data_function=lambda pd: pd.faction_size_distribution,
-    style=PlotStyle.stacked,
-)
 EMPIRE_ENERGY_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-energy-budget-graph',
-    title="Energy Budget (Warning: Might be inaccurate!)",
-    plot_data_function=lambda pd: pd.empire_energy_budget_allocation,
+    title="Energy Budget (Warning: might be inaccurate!)",
+    plot_data_function=lambda pd: pd.empire_energy_budget,
     style=PlotStyle.budget,
 )
 EMPIRE_MINERAL_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-mineral-budget-graph',
-    title="Mineral Budget (Warning: Might be inaccurate!)",
-    plot_data_function=lambda pd: pd.empire_mineral_budget_allocation,
+    title="Mineral Budget (Warning: might be inaccurate!)",
+    plot_data_function=lambda pd: pd.empire_mineral_budget,
     style=PlotStyle.budget,
 )
 EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-food-budget-graph',
-    title="Food (Warning: Might be inaccurate!)",
-    plot_data_function=lambda pd: pd.empire_food_budget_allocation,
+    title="Food (Warning: might be inaccurate!)",
+    plot_data_function=lambda pd: pd.empire_food_budget,
     style=PlotStyle.budget,
 )
-RESEARCH_ALLOCATION_GRAPH = PlotSpecification(
-    plot_id='empire-research-allocation-graph',
-    title="Empire Research",
-    plot_data_function=lambda pd: pd.empire_research_allocation,
-    style=PlotStyle.stacked,
-)
-PLOT_SPECIFICATIONS = {
-    'pop-count-graph': POP_COUNT_GRAPH,
-    'survey-count-graph': SURVEY_PROGRESS_GRAPH,
-    'tech-count-graph': TECHNOLOGY_PROGRESS_GRAPH,
-    'military-power-graph': MILITARY_POWER_GRAPH,
-    'fleet-size-graph': FLEET_SIZE_GRAPH,
-    'empire-demographics-graph': EMPIRE_DEMOGRAPHICS_GRAPH,
-    'empire-internal-politics-graph': INTERNAL_POLITICS_GRAPH,
-    'empire-research-allocation-graph': RESEARCH_ALLOCATION_GRAPH,
-    'empire-energy-budget-graph': EMPIRE_ENERGY_ECONOMY_GRAPH,
-}
 
 THEMATICALLY_GROUPED_PLOTS = {
     "Science": [
         TECHNOLOGY_PROGRESS_GRAPH,
+        RESEARCH_OUTPUT_GRAPH,
         RESEARCH_ALLOCATION_GRAPH,
         SURVEY_PROGRESS_GRAPH],
     "Pops/Factions": [
         POP_COUNT_GRAPH,
         EMPIRE_DEMOGRAPHICS_GRAPH,
-        INTERNAL_POLITICS_GRAPH,
+        FACTION_SIZE_GRAPH,
         FACTION_SUPPORT_GRAPH,
         FACTION_HAPPINESS_GRAPH,
     ],
@@ -204,9 +200,10 @@ class EmpireProgressionPlotData:
         self.faction_size_distribution = None
         self.faction_happiness = None
         self.faction_support = None
-        self.empire_energy_budget_allocation = None
-        self.empire_mineral_budget_allocation = None
-        self.empire_food_budget_allocation = None
+        self.empire_energy_budget = None
+        self.empire_mineral_budget = None
+        self.empire_food_budget = None
+        self.empire_research_output = None
         self.empire_research_allocation = None
         self.show_everything = show_everything
 
@@ -223,24 +220,64 @@ class EmpireProgressionPlotData:
         self.faction_size_distribution: Dict[str, List[float]] = {}
         self.faction_happiness: Dict[str, List[float]] = {}
         self.faction_support: Dict[str, List[float]] = {}
-        self.empire_energy_budget_allocation: Dict[str, List[float]] = dict(
-            energy_production=[],
+        self.empire_energy_budget: Dict[str, List[float]] = dict(
+            base_income=[],
+            production=[],
+            trade_income=[],
+            mission_income=[],
             army_expenses=[],
-            buildings_expenses=[],
-            pops_expenses=[],
-            ships_expenses=[],
-            stations_expenses=[],
+            building_expenses=[],
+            pop_expenses=[],
+            ship_expenses=[],
+            station_expenses=[],
+            colonization_expenses=[],
+            starbase_expenses=[],
+            trade_expenses=[],
+            mission_expenses=[],
         )
-        self.empire_mineral_budget_allocation: Dict[str, List[float]] = dict(
-            mineral_production=[],
-            mineral_spending_pop=[],
-            mineral_spending_ship=[],
+        self.empire_mineral_budget: Dict[str, List[float]] = dict(
+            production=[],
+            trade_income=[],
+            pop_expenses=[],
+            ship_expenses=[],
+            trade_expenses=[],
         )
-        self.empire_food_budget_allocation: Dict[str, List[float]] = dict(
-            food_produced=[],
-            food_consumed=[],
+        self.empire_food_budget: Dict[str, List[float]] = dict(
+            production=[],
+            trade_income=[],
+            consumption=[],
+            trade_expenses=[],
         )
+        self.empire_research_output = dict(physics=[], society=[], engineering=[])
         self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
+
+    def _extract_player_empire_budget_allocations(self, gs: models.GameState):
+        # For some reason, some budget values have to be halved...
+        self.empire_energy_budget["base_income"].append(gs.energy_income_base)
+        self.empire_energy_budget["trade_income"].append(gs.energy_income_trade)
+        self.empire_energy_budget["production"].append(gs.energy_income_production / 2)
+        self.empire_energy_budget["mission_income"].append(gs.energy_income_mission / 2)
+
+        self.empire_energy_budget["army_expenses"].append(gs.energy_spending_army / 2)
+        self.empire_energy_budget["building_expenses"].append(gs.energy_spending_building / 2)
+        self.empire_energy_budget["pop_expenses"].append(gs.energy_spending_pop / 2)
+        self.empire_energy_budget["ship_expenses"].append(gs.energy_spending_ship / 2)
+        self.empire_energy_budget["station_expenses"].append(gs.energy_spending_station / 2)
+        self.empire_energy_budget["colonization_expenses"].append(gs.energy_spending_colonization)
+        self.empire_energy_budget["starbase_expenses"].append(gs.energy_spending_starbases / 2)
+        self.empire_energy_budget["mission_expenses"].append(gs.energy_spending_mission / 2)
+        self.empire_energy_budget["trade_expenses"].append(gs.energy_spending_trade)
+
+        self.empire_mineral_budget["production"].append(gs.mineral_income_production)
+        self.empire_mineral_budget["trade_income"].append(gs.mineral_income_trade / 2)
+        self.empire_mineral_budget["pop_expenses"].append(gs.mineral_spending_pop / 2)
+        self.empire_mineral_budget["ship_expenses"].append(gs.mineral_spending_ship / 2)
+        self.empire_mineral_budget["trade_expenses"].append(gs.mineral_income_trade / 2)
+
+        self.empire_food_budget["production"].append(gs.food_income_production)
+        self.empire_food_budget["trade_income"].append(gs.food_income_trade)
+        self.empire_food_budget["consumption"].append(- gs.food_spending)
+        self.empire_food_budget["trade_expenses"].append(- gs.food_spending_trade)
 
     def update_with_new_gamestate(self):
         date = 360.0 * self.dates[-1] if self.dates else -1
@@ -262,8 +299,8 @@ class EmpireProgressionPlotData:
             if country_data.country.is_player:
                 self._extract_player_empire_demographics(country_data)
                 self._extract_player_empire_politics(country_data)
-                self._extract_player_empire_research_allocations(country_data)
-                self._extract_player_empire_budget_allocations(country_data)
+                self._extract_player_empire_research(country_data)
+        self._extract_player_empire_budget_allocations(gs)
 
         # Pad every dict with the default value if no real value was added to keep them consistent with dates list
         for data_dict in [self.pop_count, self.owned_planets, self.tech_count, self.survey_count, self.military_power, self.fleet_size]:
@@ -418,23 +455,10 @@ class EmpireProgressionPlotData:
         for faction in self.faction_size_distribution:
             self.faction_size_distribution[faction][-1] *= 100.0 / pop_count
 
-    def _extract_player_empire_budget_allocations(self, country_data: models.CountryData):
-        # For some reason, some budget values have to be halved...
-        self.empire_energy_budget_allocation["energy_production"].append((country_data.energy_production - 5) / 2 + 5)
-        self.empire_energy_budget_allocation["army_expenses"].append(country_data.energy_spending_army / 2)
-        self.empire_energy_budget_allocation["buildings_expenses"].append(country_data.energy_spending_building / 2)
-        self.empire_energy_budget_allocation["pops_expenses"].append(country_data.energy_spending_pop / 2)
-        self.empire_energy_budget_allocation["ships_expenses"].append(country_data.energy_spending_ship / 2)
-        self.empire_energy_budget_allocation["stations_expenses"].append(country_data.energy_spending_station / 2)
-
-        self.empire_mineral_budget_allocation["mineral_production"].append(country_data.mineral_production)
-        self.empire_mineral_budget_allocation["mineral_spending_pop"].append(country_data.mineral_spending_pop / 2)
-        self.empire_mineral_budget_allocation["mineral_spending_ship"].append(country_data.mineral_spending_ship / 2)
-
-        self.empire_food_budget_allocation["food_produced"].append(country_data.food_production)
-        self.empire_food_budget_allocation["food_consumed"].append(country_data.food_spending)
-
-    def _extract_player_empire_research_allocations(self, country_data: models.CountryData):
+    def _extract_player_empire_research(self, country_data: models.CountryData):
+        self.empire_research_output["physics"].append(country_data.physics_research)
+        self.empire_research_output["society"].append(country_data.society_research)
+        self.empire_research_output["engineering"].append(country_data.engineering_research)
         total = country_data.physics_research + country_data.society_research + country_data.engineering_research
         self.empire_research_allocation["physics"].append(100.0 * country_data.physics_research / total)
         self.empire_research_allocation["society"].append(100.0 * country_data.society_research / total)

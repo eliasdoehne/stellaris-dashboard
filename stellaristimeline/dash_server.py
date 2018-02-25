@@ -41,13 +41,6 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
 )
 
 app.layout = html.Div([
-    dcc.Dropdown(
-        id='select-game-dropdown',
-        options=[
-            {'label': g, 'value': g} for g in AVAILABLE_GAMES
-        ],
-        value=SELECTED_GAME_NAME,
-    ),
     html.Div([
         dcc.Tabs(
             tabs=[
@@ -69,6 +62,13 @@ app.layout = html.Div([
         'margin-left': 'auto',
         'margin-right': 'auto'
     }),
+    dcc.Dropdown(
+        id='select-game-dropdown',
+        options=[
+            {'label': g, 'value': g} for g in AVAILABLE_GAMES
+        ],
+        value=SELECTED_GAME_NAME,
+    ),
 ])
 
 
@@ -87,14 +87,14 @@ def update_selected_game(new_selected_game):
                                                   Input('select-game-dropdown', 'value'), ])
 def update_content(tab_value, game_value):
     update_selected_game(game_value)
-    children = []
+    children = [html.H3(f"{game_value}")]
     plots = visualization.THEMATICALLY_GROUPED_PLOTS[tab_value]
     for plot_spec in plots:
         figure_data = get_figure_data(plot_spec)
         figure_layout = get_figure_layout(plot_spec)
         figure = go.Figure(data=figure_data, layout=figure_layout)
 
-        children.append(html.H3(f"{plot_spec.title}  -  {SELECTED_GAME_NAME}"))
+        children.append(html.H3(f"{plot_spec.title}"))
         children.append(dcc.Graph(
             id=f"{plot_spec.plot_id}",
             figure=figure,
@@ -116,7 +116,9 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
     y_previous = None
     y_previous_pos, y_previous_neg = None, None
     for key, x_values, y_values in plot_data.iterate_data_sorted(plot_spec):
-        line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f}% - {key}" for val in y_values]}
+        if not any(y_values):
+            continue
+        line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f} - {key}" for val in y_values]}
         if plot_spec.style == visualization.PlotStyle.stacked:
             if y_previous is None:
                 y_previous = [0.0 for _ in x_values]
@@ -127,6 +129,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
             line["fill"] = "tonexty"
         elif plot_spec.style == visualization.PlotStyle.budget:
             if y_previous_pos is None:
+                y_previous = [0.0 for _ in x_values]  # use y_previous to record the net gain/loss
                 y_previous_pos = [0.0 for _ in x_values]
                 y_previous_neg = [0.0 for _ in x_values]
             line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
@@ -139,12 +142,21 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
                 break
             for i, y in enumerate(y_values):
                 y_prev[i] += y
+                y_previous[i] += y
             line["y"] = y_prev[:]
             line["hoverinfo"] = "x+text"
             line["fill"] = "tonexty"
-
         if line["y"]:
             plot_list.append(line)
+    if plot_list and plot_spec.style == visualization.PlotStyle.budget:
+        plot_list.append({
+            "x": plot_list[0]["x"],
+            'y': y_previous,
+            'name': 'Net gain',
+            "text": [f"{val:.1f} - net gain" for val in y_previous],
+            "fill": "tonexty",
+            "hoverinfo": "x+text",
+        })
     return sorted(plot_list, key=lambda p: p["y"][-1])
 
 

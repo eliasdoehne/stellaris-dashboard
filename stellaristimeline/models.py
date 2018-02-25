@@ -122,6 +122,35 @@ class GameState(Base):
     game_id = Column(ForeignKey(Game.game_id))
     date = Column(Integer, index=True)  # Days since 2200.1.1
 
+    mineral_income_base = Column(Float, default=0.0)
+    mineral_income_production = Column(Float, default=0.0)
+    mineral_income_trade = Column(Float, default=0.0)
+    mineral_income_mission = Column(Float, default=0.0)
+    mineral_spending_pop = Column(Float, default=0.0)
+    mineral_spending_ship = Column(Float, default=0.0)
+    mineral_spending_trade = Column(Float, default=0.0)
+    mineral_spending_mission = Column(Float, default=0.0)
+
+    food_income_base = Column(Float, default=0.0)
+    food_income_production = Column(Float, default=0.0)
+    food_income_trade = Column(Float, default=0.0)
+    food_spending = Column(Float, default=0.0)
+    food_spending_trade = Column(Float, default=0.0)
+
+    energy_income_base = Column(Float, default=0.0)
+    energy_income_production = Column(Float, default=0.0)
+    energy_income_trade = Column(Float, default=0.0)
+    energy_income_mission = Column(Float, default=0.0)
+    energy_spending_army = Column(Float, default=0.0)
+    energy_spending_building = Column(Float, default=0.0)
+    energy_spending_pop = Column(Float, default=0.0)
+    energy_spending_ship = Column(Float, default=0.0)
+    energy_spending_station = Column(Float, default=0.0)
+    energy_spending_colonization = Column(Float, default=0.0)
+    energy_spending_starbases = Column(Float, default=0.0)
+    energy_spending_mission = Column(Float, default=0.0)
+    energy_spending_trade = Column(Float, default=0.0)
+
     game = relationship("Game", back_populates="game_states")
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
 
@@ -151,25 +180,19 @@ class CountryData(Base):
     exploration_progress = Column(Integer)
     owned_planets = Column(Integer)
 
+    mineral_income = Column(Float, default=0.0)
+    mineral_spending = Column(Float, default=0.0)
+    food_income = Column(Float, default=0.0)
+    food_spending = Column(Float, default=0.0)
+    energy_income = Column(Float, default=0.0)
+    energy_spending = Column(Float, default=0.0)
+    unity_income = Column(Float, default=0.0)
+    unity_spending = Column(Float, default=0.0)
+    influence_income = Column(Float, default=0.0)
+    influence_spending = Column(Float, default=0.0)
     society_research = Column(Float, default=0.0)
     physics_research = Column(Float, default=0.0)
     engineering_research = Column(Float, default=0.0)
-
-    mineral_production = Column(Float, default=0.0)
-    mineral_spending = Column(Float, default=0.0)
-    mineral_spending_pop = Column(Float, default=0.0)
-    mineral_spending_ship = Column(Float, default=0.0)
-
-    food_production = Column(Float, default=0.0)
-    food_spending = Column(Float, default=0.0)
-
-    energy_production = Column(Float, default=0.0)
-    energy_spending_army = Column(Float, default=0.0)
-    energy_spending_building = Column(Float, default=0.0)
-    energy_spending_pop = Column(Float, default=0.0)
-    energy_spending_ship = Column(Float, default=0.0)
-    energy_spending_station = Column(Float, default=0.0)
-    # TODO: Starbase Upkeep!
 
     has_research_agreement_with_player = Column(Boolean)
     has_sensor_link_with_player = Column(Boolean)
@@ -182,6 +205,8 @@ class CountryData(Base):
 
     def __repr__(self):
         return f"CountryData(country_name=\"{self.country_name}\", game_state={self.gamestate_id}, military_power={self.military_power}, fleet_size={self.fleet_size}, tech_progress={self.tech_progress}, exploration_progress={self.exploration_progress}, owned_planets={self.owned_planets})"
+
+
 
 
 class Species(Base):

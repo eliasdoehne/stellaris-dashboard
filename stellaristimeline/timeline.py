@@ -17,6 +17,7 @@ class TimelineExtractor:
         self._current_gamestate = None
         self._player_research_agreements = None
         self._player_sensor_links = None
+        self._player_monthly_trade_info = None
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         date_str = gamestate_dict["date"]
@@ -51,14 +52,19 @@ class TimelineExtractor:
         self._player_country = None
         self._player_research_agreements = None
         self._player_sensor_links = None
+        self._player_monthly_trade_info = None
         self._session = None
 
     def _process_gamestate(self):
         days = models.date_to_days(self.gamestate_dict["date"])
-        self._current_gamestate = models.GameState(game=self.game, date=days)
+        self._extract_player_trade_agreements()
+        player_economy = self._extract_player_economy(self.gamestate_dict["country"][self._player_country])
+        self._current_gamestate = models.GameState(
+            game=self.game, date=days,
+            **player_economy
+        )
         self._session.add(self._current_gamestate)
 
-        self._extract_player_trade_agreements()
         for country_id, country_data in self.gamestate_dict["country"].items():
             if not isinstance(country_data, dict):
                 continue  # can be "none", apparently
@@ -100,29 +106,58 @@ class TimelineExtractor:
         self._extract_factions(country_data)
         return country_data
 
+    def _extract_player_economy(self, country_dict):
+        base_economy_data = self._extract_economy_data(country_dict)
+
+        last_month = self._get_last_month_budget(country_dict)
+        economy_dict = {}
+        energy_budget = last_month.get("values", {})
+        economy_dict.update(
+            energy_income_base=energy_budget.get("base_income", 0),
+            energy_income_production=energy_budget.get("produced_energy", 0),
+            energy_income_trade=self._player_monthly_trade_info["energy_trade_income"],
+            energy_income_mission=energy_budget.get("mission_expense", 0),
+            energy_spending_army=energy_budget.get("army_maintenance", 0),
+            energy_spending_colonization=energy_budget.get("colonization", 0),
+            energy_spending_starbases=energy_budget.get("starbase_maintenance", 0),
+            energy_spending_trade=self._player_monthly_trade_info["energy_trade_spending"],
+            energy_spending_building=energy_budget.get("buildings", 0),
+            energy_spending_pop=energy_budget.get("pops", 0),
+            energy_spending_ship=energy_budget.get("ship_maintenance", 0),
+            energy_spending_station=energy_budget.get("station_maintenance", 0),
+            mineral_income_production=base_economy_data.get("mineral_income", 0),
+            mineral_income_trade=self._player_monthly_trade_info["mineral_trade_income"],
+            mineral_spending_pop=last_month.get("pop_mineral_maintenance", 0),
+            mineral_spending_ship=last_month.get("ship_mineral_maintenances", 0),
+            mineral_spending_trade=self._player_monthly_trade_info["mineral_trade_spending"],
+            food_income_production=base_economy_data.get("food_income", 0),
+            food_income_trade=self._player_monthly_trade_info["food_trade_income"],
+            food_spending=base_economy_data.get("food_spending", 0),
+            food_spending_trade=self._player_monthly_trade_info["food_trade_spending"],
+        )
+        return economy_dict
+
+    def _get_last_month_budget(self, country_dict):
+        if "budget" in country_dict and country_dict["budget"] != "none" and country_dict["budget"]:
+            return country_dict["budget"].get("last_month", {})
+        return {}
+
     def _extract_economy_data(self, country_dict):
         economy = {}
-        if "budget" in country_dict and country_dict["budget"] != "none" and country_dict["budget"]:
-            last_month = country_dict["budget"]["last_month"]
-            budget = last_month["values"]
-            economy.update(
-                energy_spending_army=budget.get("army_maintenance", 0),
-                energy_spending_building=budget.get("buildings", 0),
-                energy_spending_pop=budget.get("pops", 0),
-                energy_spending_ship=budget.get("ship_maintenance", 0),
-                energy_spending_station=budget.get("station_maintenance", 0),
-                mineral_spending_pop=last_month.get("pop_mineral_maintenance", 0),
-                mineral_spending_ship=last_month.get("ship_mineral_maintenances", 0),
-            )
-            economy["energy_production"] = budget.get("base_income", 0) + budget.get("produced_energy", 0)
         if "modules" in country_dict and "standard_economy_module" in country_dict["modules"] and "last_month" in country_dict["modules"]["standard_economy_module"]:
             economy_module = country_dict["modules"]["standard_economy_module"]["last_month"]
             default = [0, 0, 0]
             for key, dict_key, val_index in [
-                ("mineral_production", "minerals", 1),
+                ("mineral_income", "minerals", 1),
                 ("mineral_spending", "minerals", 2),
-                ("food_production", "food", 1),
+                ("energy_income", "energy", 1),
+                ("energy_spending", "energy", 2),
+                ("food_income", "food", 1),
                 ("food_spending", "food", 2),
+                ("unity_income", "unity", 1),
+                ("unity_spending", "unity", 2),
+                ("influence_income", "influence", 1),
+                ("influence_spending", "influence", 2),
                 ("society_research", "society_research", 1),
                 ("physics_research", "physics_research", 1),
                 ("engineering_research", "engineering_research", 1),
@@ -149,22 +184,39 @@ class TimelineExtractor:
     def _extract_player_trade_agreements(self):
         self._player_research_agreements = set()
         self._player_sensor_links = set()
+        self._player_monthly_trade_info = dict(
+            mineral_trade_income=0.0,
+            mineral_trade_spending=0.0,
+            energy_trade_income=0.0,
+            energy_trade_spending=0.0,
+            food_trade_income=0.0,
+            food_trade_spending=0.0,
+        )
         trades = self.gamestate_dict.get("trade_deal", {})
         if not trades:
             return
         for trade_id, trade_deal in trades.items():
             if not isinstance(trade_deal, dict):
-                continue
+                continue  # could be "none"
             first = trade_deal.get("first", {})
             second = trade_deal.get("second", {})
             if first.get("country", -1) != self._player_country:
                 first, second = second, first  # make it so player is always first party
             if first.get("country", -1) != self._player_country:
-                continue  # trade doesn't_save_monitor involve player
+                continue  # trade doesn't involve player
             if second.get("research_agreement") == "yes":
                 self._player_research_agreements.add(second["country"])
             if second.get("sensor_link") == "yes":
                 self._player_sensor_links.add(second["country"])
+
+            player_resources = first.get("monthly_resources", {})
+            self._player_monthly_trade_info["mineral_trade_spending"] += player_resources.get("minerals", 0.0)
+            self._player_monthly_trade_info["energy_trade_spending"] += player_resources.get("energy", 0.0)
+            self._player_monthly_trade_info["food_trade_spending"] += player_resources.get("food", 0.0)
+            other_resources = second.get("monthly_resources", {})
+            self._player_monthly_trade_info["mineral_trade_income"] += other_resources.get("minerals", 0.0)
+            self._player_monthly_trade_info["energy_trade_income"] += other_resources.get("energy", 0.0)
+            self._player_monthly_trade_info["food_trade_income"] += other_resources.get("food", 0.0)
 
     def _extract_factions(self, country_data: models.CountryData):
         for faction_id, faction_data in self.gamestate_dict.get("pop_factions", {}).items():
