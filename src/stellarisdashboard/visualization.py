@@ -3,11 +3,11 @@ import logging
 from typing import List, Dict, Callable, Any
 
 import dataclasses
+import math
 from matplotlib import pyplot as plt
 
-from stellaristimeline import models
+from stellarisdashboard import models
 
-COLOR_MAP = plt.get_cmap("viridis")
 logger = logging.getLogger(__name__)
 
 
@@ -103,19 +103,19 @@ FACTION_SUPPORT_GRAPH = PlotSpecification(
 )
 EMPIRE_ENERGY_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-energy-budget-graph',
-    title="Energy Budget (Warning: might be inaccurate!)",
+    title="Energy Budget",
     plot_data_function=lambda pd: pd.empire_energy_budget,
     style=PlotStyle.budget,
 )
 EMPIRE_MINERAL_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-mineral-budget-graph',
-    title="Mineral Budget (Warning: might be inaccurate!)",
+    title="Mineral Budget",
     plot_data_function=lambda pd: pd.empire_mineral_budget,
     style=PlotStyle.budget,
 )
 EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-food-budget-graph',
-    title="Food (Warning: might be inaccurate!)",
+    title="Food",
     plot_data_function=lambda pd: pd.empire_food_budget,
     style=PlotStyle.budget,
 )
@@ -125,8 +125,9 @@ THEMATICALLY_GROUPED_PLOTS = {
         TECHNOLOGY_PROGRESS_GRAPH,
         RESEARCH_OUTPUT_GRAPH,
         RESEARCH_ALLOCATION_GRAPH,
-        SURVEY_PROGRESS_GRAPH],
-    "Pops/Factions": [
+        SURVEY_PROGRESS_GRAPH,
+    ],
+    "Population": [
         POP_COUNT_GRAPH,
         EMPIRE_DEMOGRAPHICS_GRAPH,
         FACTION_SIZE_GRAPH,
@@ -135,7 +136,8 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
     "Military": [
         FLEET_SIZE_GRAPH,
-        MILITARY_POWER_GRAPH],
+        MILITARY_POWER_GRAPH
+    ],
     "Economy": [
         PLANET_COUNT_GRAPH,
         EMPIRE_ENERGY_ECONOMY_GRAPH,
@@ -472,30 +474,37 @@ class EmpireProgressionPlotData:
 
 class MatplotLibVisualization:
     """ Make a static visualization using matplotlib. """
+    COLOR_MAP = plt.get_cmap("plasma")
 
-    def __init__(self, plot_data, plot_filename=None):
+    def __init__(self, plot_data, plot_filename_base=None):
         self.fig = None
         self.axes = None
         self.axes_iter = None
         self.plot_data: EmpireProgressionPlotData = plot_data
-        if plot_filename is None:
-            plot_filename = f"./output/empire_plot_{self.plot_data.game_name}.png"
-        self.plot_filename = plot_filename
+        if plot_filename_base is None:
+            plot_filename_base = f"./output/{self.plot_data.game_name}_{{plot_id}}.png"
+        self.plot_filename_base = plot_filename_base
 
     def make_plots(self):
-        self._initialize_axes()
-        for plot_id, plot_spec in PLOT_SPECIFICATIONS.items():
-            if plot_spec.style == PlotStyle.stacked:
-                self._stacked_plot(plot_spec)
-            else:
-                self._line_plot(plot_spec)
+        for category, plot_specifications in THEMATICALLY_GROUPED_PLOTS.items():
+            self._initialize_axes(category, plot_specifications)
+            print(category)
+            for plot_spec in plot_specifications:
+                print(plot_spec)
+                if plot_spec.style == PlotStyle.stacked:
+                    self._stacked_plot(plot_spec)
+                elif plot_spec.style == PlotStyle.budget:
+                    self._budget_plot(plot_spec)
+                else:
+                    self._line_plot(plot_spec)
+            self.save_plot(self.plot_filename_base.format(plot_id=category))
 
     def _line_plot(self, plot_spec: PlotSpecification):
         ax = next(self.axes_iter)
-        ax.set_title("Population Size")
+        ax.set_title(plot_spec.title)
         for i, (key, x, y) in enumerate(self.plot_data.iterate_data_sorted(plot_spec)):
             if y:
-                plot_kwargs = self._get_country_plot_kwargs(key, i, len(self.plot_data.pop_count))
+                plot_kwargs = self._get_country_plot_kwargs(key, i, len(plot_spec.plot_data_function(self.plot_data)))
                 ax.plot(x, y, **plot_kwargs)
         ax.legend()
 
@@ -509,23 +518,61 @@ class MatplotLibVisualization:
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
-            colors.append(COLOR_MAP(i / len(data)))
+            colors.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
         if stacked:
-            ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors)
-        ax.set_ylim((0.0, 1.0))
+            ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.5)
         ax.legend()
 
-    def _initialize_axes(self):
-        self.fig, self.axes = plt.subplots(3, 3, figsize=(40, 24))
+    def _budget_plot(self, plot_spec: PlotSpecification):
+        ax = next(self.axes_iter)
+        ax.set_title(plot_spec.title)
+        stacked_pos = []
+        labels_pos = []
+        colors_pos = []
+        stacked_neg = []
+        labels_neg = []
+        colors_neg = []
+        data = list(self.plot_data.iterate_data_sorted(plot_spec))[::-1]
+        net = [0 for _ in self.plot_data.dates]
+        for i, (key, x_values, y_values) in enumerate(data):
+            if all(y == 0 for y in y_values):
+                continue
+            if y_values[-1] > 0:
+                stacked_pos.append(y_values)
+                labels_pos.append(key)
+                colors_pos.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
+            else:
+                stacked_neg.append(y_values)
+                labels_neg.append(key)
+                colors_neg.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
+            for i, y in enumerate(y_values):
+                net[i] += y
+        ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.5)
+        ax.stackplot(self.plot_data.dates, stacked_pos, labels=labels_pos, colors=colors_pos, alpha=0.5)
+        ax.plot(self.plot_data.dates, net, label="Net income", color="k")
+        ax.legend()
+
+    def _initialize_axes(self, category: str, plot_specifications: List[PlotSpecification]):
+        num_plots = len(plot_specifications)
+        cols = int(math.sqrt(num_plots))
+        rows = int(math.ceil(num_plots / cols))
+        figsize = (16 * cols, 9 * rows)
+        print(num_plots, rows, cols, figsize)
+        self.fig, self.axes = plt.subplots(rows, cols, figsize=figsize)
         self.axes_iter = iter(self.axes.flat)
-        self.fig.suptitle(f"{self.plot_data.player_country}\n{models.days_to_date(360 * self.plot_data.dates[0])} - {models.days_to_date(360 * self.plot_data.dates[-1])}")
+        title_lines = [
+            f"{self.plot_data.player_country}",
+            f"{category}",
+            f"{models.days_to_date(360 * self.plot_data.dates[0])} - {models.days_to_date(360 * self.plot_data.dates[-1])}"
+        ]
+        self.fig.suptitle("\n".join(title_lines))
         for ax in self.axes.flat:
             ax.set_xlim((self.plot_data.dates[0], self.plot_data.dates[-1]))
             ax.set_xlabel(f"Time (Years)")
 
     def _get_country_plot_kwargs(self, country_name: str, i: int, num_lines: int):
         linewidth = 1
-        c = COLOR_MAP(i / num_lines)
+        c = MatplotLibVisualization.COLOR_MAP(i / num_lines)
         label = f"{country_name}"
         if country_name == self.plot_data.player_country:
             linewidth = 2
@@ -533,6 +580,6 @@ class MatplotLibVisualization:
             label += " (player)"
         return {"label": label, "c": c, "linewidth": linewidth}
 
-    def save_plot(self):
-        plt.savefig(self.plot_filename, dpi=250)
+    def save_plot(self, plot_filename):
+        plt.savefig(plot_filename, dpi=250)
         plt.close("all")

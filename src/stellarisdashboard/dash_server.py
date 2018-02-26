@@ -9,7 +9,7 @@ import flask
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 
-from stellaristimeline import models, visualization
+from stellarisdashboard import models, visualization
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ app.scripts.config.serve_locally = True
 
 def populate_available_games() -> Dict[str, models.Game]:
     session = models.SessionFactory()
-    games = {g.game_name: g for g in session.query(models.Game).order_by(models.Game.game_name).all()}
+    games = {g.game_name: g.player_country_name for g in session.query(models.Game).order_by(models.Game.game_name).all()}
     session.close()
     return games
 
@@ -41,6 +41,13 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
 )
 
 app.layout = html.Div([
+    dcc.Dropdown(
+        id='select-game-dropdown',
+        options=[
+            {'label': country, 'value': g} for g, country in AVAILABLE_GAMES.items()
+        ],
+        value=SELECTED_GAME_NAME,
+    ),
     html.Div([
         dcc.Tabs(
             tabs=[
@@ -62,13 +69,6 @@ app.layout = html.Div([
         'margin-left': 'auto',
         'margin-right': 'auto'
     }),
-    dcc.Dropdown(
-        id='select-game-dropdown',
-        options=[
-            {'label': g, 'value': g} for g in AVAILABLE_GAMES
-        ],
-        value=SELECTED_GAME_NAME,
-    ),
 ])
 
 
@@ -86,7 +86,7 @@ def update_selected_game(new_selected_game):
 @app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'),
                                                   Input('select-game-dropdown', 'value'), ])
 def update_content(tab_value, game_value):
-    update_selected_game(game_value)
+    # update_selected_game(game_value)
     children = [html.H3(f"{game_value}")]
     plots = visualization.THEMATICALLY_GROUPED_PLOTS[tab_value]
     for plot_spec in plots:

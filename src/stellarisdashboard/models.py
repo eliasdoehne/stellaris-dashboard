@@ -7,7 +7,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
 BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
-engine = sqlalchemy.create_engine(f'sqlite:///foo.db', echo=False)
+DB_FILE = BASE_DIR / "timeline.db"
+engine = sqlalchemy.create_engine(f'sqlite:///{DB_FILE}', echo=False)
 SessionFactory = sessionmaker(bind=engine)
 
 Base = declarative_base()
@@ -107,6 +108,7 @@ class Game(Base):
     __tablename__ = 'gametable'
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
+    player_country_name = Column(String(50))
 
     countries = relationship("Country", back_populates="game", cascade="all,delete,delete-orphan")
     species = relationship("Species", back_populates="game", cascade="all,delete,delete-orphan")
@@ -165,7 +167,7 @@ class Country(Base):
 
     game = relationship("Game", back_populates="countries")
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan")
-    political_factions = relationship("PoliticalFaction", back_populates="country")
+    political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
 
 
 class CountryData(Base):
@@ -201,12 +203,10 @@ class CountryData(Base):
     country = relationship("Country", back_populates="country_data")
     game_state = relationship("GameState", back_populates="country_data")
     pop_counts = relationship("PopCount", back_populates="country_data", cascade="all,delete,delete-orphan")
-    faction_support = relationship("FactionSupport", back_populates="country_data")
+    faction_support = relationship("FactionSupport", back_populates="country_data", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
         return f"CountryData(country_name=\"{self.country_name}\", game_state={self.gamestate_id}, military_power={self.military_power}, fleet_size={self.fleet_size}, tech_progress={self.tech_progress}, exploration_progress={self.exploration_progress}, owned_planets={self.owned_planets})"
-
-
 
 
 class Species(Base):

@@ -8,7 +8,7 @@ from typing import Any, Dict, Tuple
 
 import click
 
-from stellaristimeline import save_parser, timeline, visualization, models
+from stellarisdashboard import save_parser, timeline, visualization, models
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,6 @@ def f_visualize_mpl(game_name: str, show_everything=False):
         session.close()
     plot = visualization.MatplotLibVisualization(plot_data)
     plot.make_plots()
-    plot.save_plot()
 
 
 @cli.command()

@@ -4,7 +4,7 @@ import threading
 
 import time
 
-from stellaristimeline import cli, dash_server, visualization
+from stellardashboard import cli, dash_server, visualization
 
 BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
 STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
@@ -12,7 +12,8 @@ logging.basicConfig(level=logging.INFO, filename=BASE_DIR / "stellaris_dashboard
 
 logger = logging.getLogger(__name__)
 
-if __name__ == '__main__':
+
+def main():
     save_reader = cli.SaveReader(STELLARIS_SAVE_DIR, threads=4)
     stop_event = threading.Event()
     t_save_monitor = threading.Thread(target=cli._monitor_saves, daemon=False, args=(stop_event, save_reader, 10))
@@ -25,3 +26,7 @@ if __name__ == '__main__':
             print("Updating selected game in dash!")
             print(cli.MOST_RECENTLY_UPDATED_GAME)
             dash_server.update_selected_game(cli.MOST_RECENTLY_UPDATED_GAME)
+
+
+if __name__ == '__main__':
+    main()

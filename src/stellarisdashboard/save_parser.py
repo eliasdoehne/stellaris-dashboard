@@ -8,10 +8,9 @@ try:
     import pyximport
 
     pyximport.install()
-    from stellaristimeline import token_value_stream
-
+    import token_value_stream
 except ImportError:
-    from stellaristimeline import token_value_stream_re as token_value_stream
+    from stellarisdashboard import token_value_stream_re as token_value_stream
 
 FilePosition = namedtuple("FilePosition", "line col")
 

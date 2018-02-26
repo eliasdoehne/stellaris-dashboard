@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any
 
-from stellaristimeline import models
+from stellarisdashboard import models
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +27,13 @@ class TimelineExtractor:
             logger.warning("Player country is ambiguous!")
             return None
         self._player_country = self.gamestate_dict["player"][0]["country"]
+        player_country_name = self.gamestate_dict["country"][self._player_country]["name"]
         self._session = models.SessionFactory()
         try:
             self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
             if self.game is None:
                 logger.info(f"Adding new game {game_name} to database.")
-                self.game = models.Game(game_name=game_name)
+                self.game = models.Game(game_name=game_name, player_country_name=player_country_name)
                 self._session.add(self.game)
             days = models.date_to_days(self.gamestate_dict["date"])
             game_states_by_date = {gs.date: gs for gs in self.game.game_states}
