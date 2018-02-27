@@ -8,7 +8,8 @@ try:
     import pyximport
 
     pyximport.install()
-    import token_value_stream
+    from cython_ext import token_value_stream
+
 except ImportError:
     from stellarisdashboard import token_value_stream_re as token_value_stream
 

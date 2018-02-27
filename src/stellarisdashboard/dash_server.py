@@ -44,7 +44,7 @@ app.layout = html.Div([
     dcc.Dropdown(
         id='select-game-dropdown',
         options=[
-            {'label': country, 'value': g} for g, country in AVAILABLE_GAMES.items()
+            {'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()
         ],
         value=SELECTED_GAME_NAME,
     ),

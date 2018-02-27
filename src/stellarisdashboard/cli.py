@@ -65,10 +65,10 @@ class SaveReader:
         self.processed_saves |= set(self.valid_save_files())
 
     def valid_save_files(self):
-        return [save_file for save_file in self.game_dir.glob("**/*.sav")
-                if save_file not in self.processed_saves
-                and "ironman" not in str(save_file)
-                and not str(save_file.parent.stem).startswith("mp")]
+        return sorted(save_file for save_file in self.game_dir.glob("**/*.sav")
+                      if save_file not in self.processed_saves
+                      and "ironman" not in str(save_file)
+                      and not str(save_file.parent.stem).startswith("mp"))
 
     def teardown(self):
         if self.threads > 1:
