@@ -40,14 +40,9 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
     height=480,
 )
 
+GAME_SELECTION_DROPDOWN = dcc.Dropdown(id='select-game-dropdown', options=[{'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()], value=SELECTED_GAME_NAME, )
 app.layout = html.Div([
-    dcc.Dropdown(
-        id='select-game-dropdown',
-        options=[
-            {'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()
-        ],
-        value=SELECTED_GAME_NAME,
-    ),
+    GAME_SELECTION_DROPDOWN,
     html.Div([
         dcc.Tabs(
             tabs=[
@@ -56,7 +51,6 @@ app.layout = html.Div([
             ],
             value=DEFAULT_SELECTED_PLOT,
             id='tabs',
-
         ),
         html.Div(id='tab-content', style={
             'width': '100%',
@@ -81,13 +75,14 @@ def update_selected_game(new_selected_game):
     if new_selected_game and new_selected_game != SELECTED_GAME_NAME:
         print(f"Selected game is {new_selected_game}")
         SELECTED_GAME_NAME = new_selected_game
+        GAME_SELECTION_DROPDOWN.value = new_selected_game
 
 
 @app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'),
                                                   Input('select-game-dropdown', 'value'), ])
-def update_content(tab_value, game_value):
-    # update_selected_game(game_value)
-    children = [html.H3(f"{game_value}")]
+def update_content(tab_value, game_id):
+    update_selected_game(game_id)
+    children = [html.H3(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
     plots = visualization.THEMATICALLY_GROUPED_PLOTS[tab_value]
     for plot_spec in plots:
         figure_data = get_figure_data(plot_spec)
@@ -107,7 +102,7 @@ def get_figure_data(plot_spec: visualization.PlotSpecification):
     plot_data = get_plot_data()
     plot_list = get_plot_lines(plot_data, plot_spec)
     end = time.time()
-    print(f"Update took {end - start} seconds!")
+    logger.debug(f"Update took {end - start} seconds!")
     return plot_list
 
 
@@ -134,9 +129,11 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
                 y_previous_neg = [0.0 for _ in x_values]
             line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
             if all(y <= 0 for y in y_values):
-                y_prev = y_previous_pos
-            elif all(y >= 0 for y in y_values):
                 y_prev = y_previous_neg
+                is_positive = False
+            elif all(y >= 0 for y in y_values):
+                y_prev = y_previous_pos
+                is_positive = True
             else:
                 logger.warning("Not a real budget Graph!")
                 break
@@ -145,7 +142,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
                 y_previous[i] += y
             line["y"] = y_prev[:]
             line["hoverinfo"] = "x+text"
-            line["fill"] = "tonexty"
+            line["fill"] = "tonexty" if is_positive else "tozeroy"
         if line["y"]:
             plot_list.append(line)
     if plot_list and plot_spec.style == visualization.PlotStyle.budget:
@@ -154,7 +151,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
             'y': y_previous,
             'name': 'Net gain',
             "text": [f"{val:.1f} - net gain" for val in y_previous],
-            "fill": "tonexty",
+            "fill": "tozeroy",
             "hoverinfo": "x+text",
         })
     return sorted(plot_list, key=lambda p: p["y"][-1])

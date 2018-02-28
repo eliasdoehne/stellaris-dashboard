@@ -25,7 +25,6 @@ class PlotSpecification:
     plot_data_function: Callable[["EmpireProgressionPlotData"], Any]
     style: PlotStyle
     yrange: float = None
-    y_to_zero: bool = None
 
 
 POP_COUNT_GRAPH = PlotSpecification(
@@ -50,6 +49,7 @@ RESEARCH_ALLOCATION_GRAPH = PlotSpecification(
     plot_id='empire-research-allocation-graph',
     title="Research Allocation",
     plot_data_function=lambda pd: pd.empire_research_allocation,
+    yrange=(0, 100),
     style=PlotStyle.stacked,
 )
 RESEARCH_OUTPUT_GRAPH = PlotSpecification(
@@ -80,12 +80,14 @@ EMPIRE_DEMOGRAPHICS_GRAPH = PlotSpecification(
     plot_id='empire-demographics-graph',
     title="Species in your Empire",
     plot_data_function=lambda pd: pd.species_distribution,
+    yrange=(0, 100.0),
     style=PlotStyle.stacked,
 )
 FACTION_SIZE_GRAPH = PlotSpecification(
     plot_id='empire-internal-politics-graph',
     title="Faction Size",
     plot_data_function=lambda pd: pd.faction_size_distribution,
+    yrange=(0, 100.0),
     style=PlotStyle.stacked,
 )
 FACTION_HAPPINESS_GRAPH = PlotSpecification(
@@ -93,12 +95,13 @@ FACTION_HAPPINESS_GRAPH = PlotSpecification(
     title="Faction Happiness",
     plot_data_function=lambda pd: pd.faction_happiness,
     style=PlotStyle.line,
-    y_to_zero=True,
+    yrange=(0, 1.0),
 )
 FACTION_SUPPORT_GRAPH = PlotSpecification(
     plot_id='empire-faction-support-graph',
     title="Faction Support",
     plot_data_function=lambda pd: pd.faction_support,
+    yrange=(0, 1.0),
     style=PlotStyle.stacked,
 )
 EMPIRE_ENERGY_ECONOMY_GRAPH = PlotSpecification(
@@ -291,7 +294,6 @@ class EmpireProgressionPlotData:
         for country_data in gs.country_data:
             if self.player_country is None and country_data.country.is_player:
                 self.player_country = country_data.country.country_name
-                print(self.player_country)
             self._extract_pop_count(country_data)
             self._extract_planet_count(country_data)
             self._extract_tech_count(country_data)
@@ -474,7 +476,7 @@ class EmpireProgressionPlotData:
 
 class MatplotLibVisualization:
     """ Make a static visualization using matplotlib. """
-    COLOR_MAP = plt.get_cmap("plasma")
+    COLOR_MAP = plt.get_cmap("viridis")
 
     def __init__(self, plot_data, plot_filename_base=None):
         self.fig = None
@@ -488,19 +490,19 @@ class MatplotLibVisualization:
     def make_plots(self):
         for category, plot_specifications in THEMATICALLY_GROUPED_PLOTS.items():
             self._initialize_axes(category, plot_specifications)
-            print(category)
             for plot_spec in plot_specifications:
-                print(plot_spec)
+                ax = next(self.axes_iter)
                 if plot_spec.style == PlotStyle.stacked:
-                    self._stacked_plot(plot_spec)
+                    self._stacked_plot(ax, plot_spec)
                 elif plot_spec.style == PlotStyle.budget:
-                    self._budget_plot(plot_spec)
+                    self._budget_plot(ax, plot_spec)
                 else:
-                    self._line_plot(plot_spec)
+                    self._line_plot(ax, plot_spec)
+                if plot_spec.yrange is not None:
+                    ax.set_ylim(plot_spec.yrange)
             self.save_plot(self.plot_filename_base.format(plot_id=category))
 
-    def _line_plot(self, plot_spec: PlotSpecification):
-        ax = next(self.axes_iter)
+    def _line_plot(self, ax, plot_spec: PlotSpecification):
         ax.set_title(plot_spec.title)
         for i, (key, x, y) in enumerate(self.plot_data.iterate_data_sorted(plot_spec)):
             if y:
@@ -508,23 +510,21 @@ class MatplotLibVisualization:
                 ax.plot(x, y, **plot_kwargs)
         ax.legend()
 
-    def _stacked_plot(self, plot_spec: PlotSpecification):
-        ax = next(self.axes_iter)
+    def _stacked_plot(self, ax, plot_spec: PlotSpecification):
         ax.set_title(plot_spec.title)
         stacked = []
         labels = []
         colors = []
-        data = list(self.plot_data.iterate_data_sorted(plot_spec))[::-1]
+        data = list(self.plot_data.iterate_data_sorted(plot_spec))
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
             colors.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
         if stacked:
-            ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.5)
-        ax.legend()
+            ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.75)
+        ax.legend(loc='upper left')
 
-    def _budget_plot(self, plot_spec: PlotSpecification):
-        ax = next(self.axes_iter)
+    def _budget_plot(self, ax, plot_spec: PlotSpecification):
         ax.set_title(plot_spec.title)
         stacked_pos = []
         labels_pos = []
@@ -532,32 +532,31 @@ class MatplotLibVisualization:
         stacked_neg = []
         labels_neg = []
         colors_neg = []
-        data = list(self.plot_data.iterate_data_sorted(plot_spec))[::-1]
+        data = sorted(self.plot_data.iterate_data_sorted(plot_spec), key=lambda tup: tup[-1][-1], reverse=True)
+        data = [(key, x_values, y_values) for (key, x_values, y_values) in data if not all(y == 0 for y in y_values)]
         net = [0 for _ in self.plot_data.dates]
         for i, (key, x_values, y_values) in enumerate(data):
-            if all(y == 0 for y in y_values):
-                continue
+            color_val = i / (len(data) - 1)
             if y_values[-1] > 0:
                 stacked_pos.append(y_values)
                 labels_pos.append(key)
-                colors_pos.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
+                colors_pos.append(MatplotLibVisualization.COLOR_MAP(color_val))
             else:
                 stacked_neg.append(y_values)
                 labels_neg.append(key)
-                colors_neg.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
-            for i, y in enumerate(y_values):
-                net[i] += y
-        ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.5)
-        ax.stackplot(self.plot_data.dates, stacked_pos, labels=labels_pos, colors=colors_pos, alpha=0.5)
+                colors_neg.append(MatplotLibVisualization.COLOR_MAP(color_val))
+            for j, y in enumerate(y_values):
+                net[j] += y
+        ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75)
+        ax.stackplot(self.plot_data.dates, stacked_pos, labels=labels_pos, colors=colors_pos, alpha=0.75)
         ax.plot(self.plot_data.dates, net, label="Net income", color="k")
-        ax.legend()
+        ax.legend(loc='upper left')
 
     def _initialize_axes(self, category: str, plot_specifications: List[PlotSpecification]):
         num_plots = len(plot_specifications)
         cols = int(math.sqrt(num_plots))
         rows = int(math.ceil(num_plots / cols))
         figsize = (16 * cols, 9 * rows)
-        print(num_plots, rows, cols, figsize)
         self.fig, self.axes = plt.subplots(rows, cols, figsize=figsize)
         self.axes_iter = iter(self.axes.flat)
         title_lines = [
