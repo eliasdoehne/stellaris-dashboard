@@ -53,7 +53,7 @@ class Attitude(enum.Enum):
     def reveals_demographic_info(self):
         return self.reveals_economy_info() or (self in {Attitude.neutral})
 
-    def reveals_geographic_info(self):
+    def is_known(self):
         return self != Attitude.unknown
 
 
@@ -75,9 +75,9 @@ class PopEthics(enum.IntEnum):
 
     other = 99  # the other values should be exhaustive, but this value serves as a default fallback to detect any issues.
 
-    @staticmethod
-    def from_str(ethics_description: str):
-        return PopEthics.__members__.get(ethics_description, PopEthics.other)
+    @classmethod
+    def from_str(cls, ethics_description: str):
+        return cls.__members__.get(ethics_description, PopEthics.other)
 
 
 def date_to_days(date_str: str) -> float:

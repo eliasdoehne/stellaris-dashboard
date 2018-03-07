@@ -182,7 +182,7 @@ def show_demographic_info(country_data: models.CountryData):
 
 
 def show_geography_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.attitude_towards_player.reveals_geographic_info()
+    return country_data.country.is_player or country_data.attitude_towards_player.is_known()
 
 
 def show_military_info(country_data: models.CountryData):

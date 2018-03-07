@@ -71,8 +71,10 @@ class TimelineExtractor:
                 continue  # can be "none", apparently
             if country_data["type"] != "default":
                 continue  # Enclaves, Leviathans, etc ....
-            logger.debug(f"Extracting country data: {country_id}, {country_data.get('name', 'Unnamed Country')}")
             country_state = self._extract_country_info(country_id, country_data)
+
+            debug_name = country_data.get('name', 'Unnamed Country') if country_state.attitude_towards_player.is_known() else 'Unknown'
+            logger.debug(f"Extracting country data: {country_id}, {debug_name}")
             self._extract_country_pop_info(country_data, country_state)
 
     def _extract_country_info(self, country_id, country_dict):
