@@ -9,7 +9,7 @@ import flask
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 
-from stellarisdashboard import models, visualization
+from stellarisdashboard import models, visualization_data
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ SELECTED_GAME_NAME = None
 if AVAILABLE_GAMES:
     SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES.keys()))  # "unitednationsofearth_-15512622"  #
 
-DEFAULT_SELECTED_PLOT = next(iter(visualization.THEMATICALLY_GROUPED_PLOTS.keys()))
+DEFAULT_SELECTED_PLOT = next(iter(visualization_data.THEMATICALLY_GROUPED_PLOTS.keys()))
 
 DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis={
@@ -47,7 +47,7 @@ app.layout = html.Div([
         dcc.Tabs(
             tabs=[
                 {'label': category, 'value': category}
-                for category in visualization.THEMATICALLY_GROUPED_PLOTS
+                for category in visualization_data.THEMATICALLY_GROUPED_PLOTS
             ],
             value=DEFAULT_SELECTED_PLOT,
             id='tabs',
@@ -66,8 +66,8 @@ app.layout = html.Div([
 ])
 
 
-def get_plot_data() -> visualization.EmpireProgressionPlotData:
-    return visualization.get_current_execution_plot_data(SELECTED_GAME_NAME)
+def get_plot_data() -> visualization_data.EmpireProgressionPlotData:
+    return visualization_data.get_current_execution_plot_data(SELECTED_GAME_NAME)
 
 
 def update_selected_game(new_selected_game):
@@ -83,7 +83,7 @@ def update_selected_game(new_selected_game):
 def update_content(tab_value, game_id):
     update_selected_game(game_id)
     children = [html.H3(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
-    plots = visualization.THEMATICALLY_GROUPED_PLOTS[tab_value]
+    plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
     for plot_spec in plots:
         figure_data = get_figure_data(plot_spec)
         figure_layout = get_figure_layout(plot_spec)
@@ -97,7 +97,7 @@ def update_content(tab_value, game_id):
     return children
 
 
-def get_figure_data(plot_spec: visualization.PlotSpecification):
+def get_figure_data(plot_spec: visualization_data.PlotSpecification):
     start = time.time()
     plot_data = get_plot_data()
     plot_list = get_plot_lines(plot_data, plot_spec)
@@ -106,7 +106,7 @@ def get_figure_data(plot_spec: visualization.PlotSpecification):
     return plot_list
 
 
-def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec: visualization.PlotSpecification) -> List[Dict[str, Any]]:
+def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
     y_previous = None
     y_previous_pos, y_previous_neg = None, None
@@ -114,7 +114,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
         if not any(y_values):
             continue
         line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f} - {key}" for val in y_values]}
-        if plot_spec.style == visualization.PlotStyle.stacked:
+        if plot_spec.style == visualization_data.PlotStyle.stacked:
             if y_previous is None:
                 y_previous = [0.0 for _ in x_values]
             line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
@@ -122,7 +122,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
             line["y"] = [a for a in y_previous]
             line["hoverinfo"] = "x+text"
             line["fill"] = "tonexty"
-        elif plot_spec.style == visualization.PlotStyle.budget:
+        elif plot_spec.style == visualization_data.PlotStyle.budget:
             if y_previous_pos is None:
                 y_previous = [0.0 for _ in x_values]  # use y_previous to record the net gain/loss
                 y_previous_pos = [0.0 for _ in x_values]
@@ -145,7 +145,7 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
             line["fill"] = "tonexty" if is_positive else "tozeroy"
         if line["y"]:
             plot_list.append(line)
-    if plot_list and plot_spec.style == visualization.PlotStyle.budget:
+    if plot_list and plot_spec.style == visualization_data.PlotStyle.budget:
         plot_list.append({
             "x": plot_list[0]["x"],
             'y': y_previous,
@@ -157,9 +157,9 @@ def get_plot_lines(plot_data: visualization.EmpireProgressionPlotData, plot_spec
     return sorted(plot_list, key=lambda p: p["y"][-1])
 
 
-def get_figure_layout(plot_spec: visualization.PlotSpecification):
+def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
-    if plot_spec.style == visualization.PlotStyle.stacked:
+    if plot_spec.style == visualization_data.PlotStyle.stacked:
         layout["yaxis"] = {}
     return go.Layout(**layout)
 
