@@ -7,20 +7,33 @@ Examples for the output can be found here:
 
 https://imgur.com/a/4dhVd
 
-There is also a video demonstrating integration with the in-game browser: https://gfycat.com/DifficultForkedGentoopenguin
+Here is a video demonstrating integration with the in-game browser: 
 
-# Installation
+https://gfycat.com/DifficultForkedGentoopenguin
 
-The Stellaris dashboard requires Python 3.6. It is only tested 
+# Installation and Use
 
-  1. Clone or download the repository.
-  2. (Optionally) create and activate a virtualenvironment using `virtualenv`.
-  3. (Optionally) Open a terminal or command line in the downloaded directory and run `pip install .`
-  4. Either run `stellarisdashboard` in your console if you ran step 3. or run `python src/stellarisdashboard/main.py` otherwise.
-  5. If you only want to run a specific part of the program (i.e. only monitor saves without hosting the visualization server) use 
-     the command line interface with the `stellarisdashboardcli` command.
+The Stellaris dashboard requires Python 3.6. It is currently only tested under Linux.
+
+  1. Clone or download and extract the repository.
+  2. (Optional) create and activate a virtualenvironment using `virtualenv`.
+  3. (Optional) Open a terminal or command line in the downloaded directory and run `pip install .`
+  4. Run the program:
+     1. Either run `stellarisdashboard` in your console to launch the program in default configuration or `stellarisdashboardcli` to 
+        execute specific commands
+     2. Or run `python src/stellarisdashboard/main.py` for the default program and `python src/stellarisdashboard/cli.py` for the CLI
+        if you did not install the program in step 3.
 
 # Instructions
+By default, the program starts a local web server at `http://127.0.0.1:8050/` and runs the code to read the save files. The save files
+are processed and the data is added to a database.
+
+If you only want a specific functionality (i.e. only monitor saves without hosting the visualization server) use 
+the command line interface with the `stellarisdashboardcli` command as described below.
+
+The resource footprint of the program depends on galaxy size, autosave frequency and game speed. On my system, 2 cores have been enough for 
+processing monthly autosaves at the fastest speed, but your mileage may vary depending on how often you pause the game. On the hard drive, 
+the database of a 60 year game with monthly autosaves uses about 3 MB of space.
 
 ## Default Execution
 
@@ -32,7 +45,7 @@ Note that save data is only copied to the database while the `monitor_saves` fun
 or `stellarisdashboardcli monitor_saves` are running. If you run the game without these programs active, the save files will eventually be 
 overwritten and the data will be lost, resulting in some larger gaps in the visualization.
 
-## CLI commands
+## Command Line Interface
 
 The CLI allows you to do the following tasks:
 
