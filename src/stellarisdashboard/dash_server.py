@@ -161,9 +161,6 @@ def get_figure_layout(plot_spec: visualization.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
     if plot_spec.style == visualization.PlotStyle.stacked:
         layout["yaxis"] = {}
-        if plot_spec.y_to_zero:
-            print(plot_spec)
-            layout["yaxis"]["rangemode"] = "tozero"
     return go.Layout(**layout)
 
 
