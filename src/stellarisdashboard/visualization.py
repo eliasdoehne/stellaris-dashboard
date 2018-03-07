@@ -126,13 +126,15 @@ EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
 THEMATICALLY_GROUPED_PLOTS = {
     "Science": [
         TECHNOLOGY_PROGRESS_GRAPH,
+        SURVEY_PROGRESS_GRAPH,
         RESEARCH_OUTPUT_GRAPH,
         RESEARCH_ALLOCATION_GRAPH,
-        SURVEY_PROGRESS_GRAPH,
     ],
     "Population": [
         POP_COUNT_GRAPH,
         EMPIRE_DEMOGRAPHICS_GRAPH,
+    ],
+    "Factions": [
         FACTION_SIZE_GRAPH,
         FACTION_SUPPORT_GRAPH,
         FACTION_HAPPINESS_GRAPH,
@@ -519,7 +521,7 @@ class MatplotLibVisualization:
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
-            colors.append(MatplotLibVisualization.COLOR_MAP(i / len(data)))
+            colors.append(MatplotLibVisualization.COLOR_MAP(i / (len(data) - 1)))
         if stacked:
             ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.75)
         ax.legend(loc='upper left')
@@ -528,27 +530,27 @@ class MatplotLibVisualization:
         ax.set_title(plot_spec.title)
         stacked_pos = []
         labels_pos = []
-        colors_pos = []
         stacked_neg = []
         labels_neg = []
-        colors_neg = []
         data = sorted(self.plot_data.iterate_data_sorted(plot_spec), key=lambda tup: tup[-1][-1], reverse=True)
         data = [(key, x_values, y_values) for (key, x_values, y_values) in data if not all(y == 0 for y in y_values)]
         net = [0 for _ in self.plot_data.dates]
         for i, (key, x_values, y_values) in enumerate(data):
-            color_val = i / (len(data) - 1)
             if y_values[-1] > 0:
                 stacked_pos.append(y_values)
                 labels_pos.append(key)
-                colors_pos.append(MatplotLibVisualization.COLOR_MAP(color_val))
             else:
                 stacked_neg.append(y_values)
                 labels_neg.append(key)
-                colors_neg.append(MatplotLibVisualization.COLOR_MAP(color_val))
             for j, y in enumerate(y_values):
                 net[j] += y
-        ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75)
-        ax.stackplot(self.plot_data.dates, stacked_pos, labels=labels_pos, colors=colors_pos, alpha=0.75)
+
+        num_pos = len(stacked_pos)
+        colors_pos = [MatplotLibVisualization.COLOR_MAP(0.9 - 0.5 * val / num_pos) for val in reversed(range(num_pos))]
+        num_neg = len(stacked_neg)
+        colors_neg = [MatplotLibVisualization.COLOR_MAP(0.0 + 0.5 * val / num_neg) for val in range(num_neg)]
+        ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75, )
+        ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=labels_pos, colors=colors_pos, alpha=0.75, )
         ax.plot(self.plot_data.dates, net, label="Net income", color="k")
         ax.legend(loc='upper left')
 
@@ -571,7 +573,7 @@ class MatplotLibVisualization:
 
     def _get_country_plot_kwargs(self, country_name: str, i: int, num_lines: int):
         linewidth = 1
-        c = MatplotLibVisualization.COLOR_MAP(i / num_lines)
+        c = MatplotLibVisualization.COLOR_MAP(i / (num_lines - 1))
         label = f"{country_name}"
         if country_name == self.plot_data.player_country:
             linewidth = 2
@@ -580,5 +582,6 @@ class MatplotLibVisualization:
         return {"label": label, "c": c, "linewidth": linewidth}
 
     def save_plot(self, plot_filename):
+        logger.info(f"Saving graph to {plot_filename}")
         plt.savefig(plot_filename, dpi=250)
         plt.close("all")
