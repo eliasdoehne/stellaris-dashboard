@@ -1,13 +1,24 @@
 import logging
 import pathlib
+import sys
 import threading
 import traceback
 
 import click
+import sqlalchemy
 
 from stellarisdashboard import save_parser, timeline, visualization_data, visualization_mpl, models
 
 logger = logging.getLogger(__name__)
+
+# Add a stream handler for stdout output
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+root_logger.addHandler(ch)
 
 STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
 
@@ -18,23 +29,28 @@ def cli():
 
 
 @cli.command()
-@click.argument('game_name', type=click.STRING)
-def visualize(game_name):
-    f_visualize_mpl(game_name)
+@click.option('--game_name_prefix', default="", type=click.STRING)
+@click.option('--showeverything', is_flag=True)
+def visualize(game_name_prefix, showeverything):
+    f_visualize_mpl(game_name_prefix, show_everything=showeverything)
 
 
-def f_visualize_mpl(game_name: str, show_everything=False):
-    plot_data = visualization_data.EmpireProgressionPlotData(game_name, show_everything=show_everything)
-    session = models.SessionFactory()
-    try:
-        plot_data.initialize()
-        plot_data.update_with_new_gamestate()
-    except Exception as e:
-        raise e
-    finally:
-        session.close()
-    plot = visualization_mpl.MatplotLibVisualization(plot_data)
-    plot.make_plots()
+def f_visualize_mpl(game_name_prefix: str, show_everything=False):
+    matching_games = list(models.get_game_names_matching(game_name_prefix))
+    if not matching_games:
+        logger.warning(f"No game matching {game_name_prefix} was found in the database!")
+    logger.info(f"Found matching games {', '.join(matching_games)} for prefix \"{game_name_prefix}\"")
+    for game_name in matching_games:
+        try:
+            plot_data = visualization_data.EmpireProgressionPlotData(game_name, show_everything=show_everything)
+            plot_data.initialize()
+            plot_data.update_with_new_gamestate()
+            plot = visualization_mpl.MatplotLibVisualization(plot_data)
+            plot.make_plots()
+        except sqlalchemy.orm.exc.NoResultFound as e:
+            logger.error(f'No game matching "{game_name}" was found in the database!')
+        except Exception as e:
+            logger.error(f"Error occurred while reading from database: {e}")
 
 
 @cli.command()

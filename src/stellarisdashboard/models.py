@@ -96,12 +96,25 @@ def days_to_date(days: float) -> str:
     return f"{year}.{month}.{day}"
 
 
+def get_game_names_matching(game_name_prefix):
+    session = SessionFactory()
+    try:
+        game = session.query(Game).all()
+        for g in game:
+            if g.game_name.startswith(game_name_prefix):
+                yield g.game_name
+    finally:
+        session.close()
+
+
 def get_gamestates_since(game_name, date):
     session = SessionFactory()
-    game = session.query(Game).filter(Game.game_name == game_name).one()
-    for gs in session.query(GameState).filter(GameState.game == game, GameState.date > date).order_by(GameState.date).all():
-        yield gs
-    session.close()
+    try:
+        game = session.query(Game).filter(Game.game_name == game_name).one()
+        for gs in session.query(GameState).filter(GameState.game == game, GameState.date > date).order_by(GameState.date).all():
+            yield gs
+    finally:
+        session.close()
 
 
 class Game(Base):
