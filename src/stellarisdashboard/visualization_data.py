@@ -1,6 +1,6 @@
 import enum
 import logging
-from typing import List, Dict, Callable, Any
+from typing import List, Dict, Callable, Any, Tuple, Iterable
 
 import dataclasses
 from stellarisdashboard import models
@@ -157,11 +157,10 @@ def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotDat
         session = models.SessionFactory()
         game = session.query(models.Game).filter_by(game_name=game_name).first()
         session.close()
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name, show_everything=False)
-        if game:
-            _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
-        else:
+        if not game:
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name, show_everything=False)
+        _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
@@ -284,12 +283,12 @@ class EmpireProgressionPlotData:
         self.empire_food_budget["trade_expenses"].append(- gs.food_spending_trade)
 
     def update_with_new_gamestate(self):
-        date = 360.0 * self.dates[-1] if self.dates else -1
-        for gs in models.get_gamestates_since(self.game_name, date):
+        date_in_days = 360.0 * self.dates[-1] if self.dates else -1
+        for gs in models.get_gamestates_since(self.game_name, date_in_days):
             self.process_gamestate(gs)
 
     def process_gamestate(self, gs: models.GameState):
-        self.dates.append(gs.date / 360.0)
+        self.dates.append(gs.date / 360.0)  # store date in years for visualization
         for country_data in gs.country_data:
             if self.player_country is None and country_data.country.is_player:
                 self.player_country = country_data.country.country_name
@@ -305,13 +304,18 @@ class EmpireProgressionPlotData:
                 self._extract_player_empire_research(country_data)
         self._extract_player_empire_budget_allocations(gs)
 
-        # Pad every dict with the default value if no real value was added to keep them consistent with dates list
+        # Pad every dict with the default value if no real value was added, to keep them consistent with the dates list
         for data_dict in [self.pop_count, self.owned_planets, self.tech_count, self.survey_count, self.military_power, self.fleet_size]:
             for key in data_dict:
                 if len(data_dict[key]) < len(self.dates):
                     data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
 
-    def make_plot_lists(self, full_data: List[float]):
+    def compress_plot_list(self, full_data: List[float]) -> Tuple[List[float], List[float]]:
+        """
+        Given a list of values that will be graphed, return a new list without all the redundant ones.
+        :param full_data:
+        :return:
+        """
         dates = []
         plot_list = []
         for value, date in zip(full_data, self.dates):
@@ -322,9 +326,11 @@ class EmpireProgressionPlotData:
                     dates.append(date)
                     plot_list.append(value)
             elif not plot_list or plot_list[-1] != value:
+                # always append if the list is empty or if the value is new
                 dates.append(date)
                 plot_list.append(value)
             elif plot_list[-1] == value:
+                # if the value is equal to the previous one, we still want to represent every interval by two datapoints
                 if len(plot_list) > 1 and plot_list[-2] == plot_list[-1]:
                     dates[-1] = date
                 else:
@@ -332,7 +338,7 @@ class EmpireProgressionPlotData:
                     plot_list.append(value)
         return dates, plot_list
 
-    def iterate_data_sorted(self, plot_spec: PlotSpecification):
+    def iterate_data_sorted(self, plot_spec: PlotSpecification) -> Iterable[Tuple[str, List[float], List[float]]]:
         data_dict = plot_spec.plot_data_function(self)
         for key, data in sorted(data_dict.items(), key=lambda x: (x[1][-1], x[0]), reverse=True):
             if key == "ROBOT_POP_SPECIES_1":
@@ -343,7 +349,7 @@ class EmpireProgressionPlotData:
                 key = "Synth"
             if plot_spec.style == PlotStyle.line:
                 # For line plots, we can compress the entries, as each line is independent
-                x, y = self.make_plot_lists(data)
+                x, y = self.compress_plot_list(data)
             else:
                 # other plots need to add data points to each other => return everything
                 x, y = self.dates, data
@@ -471,4 +477,3 @@ class EmpireProgressionPlotData:
         if key not in data_dict:
             data_dict[key] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
         data_dict[key].append(new_val)
-
