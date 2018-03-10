@@ -213,9 +213,9 @@ class TimelineExtractor:
                 self._player_sensor_links.add(second["country"])
 
             player_resources = first.get("monthly_resources", {})
-            self._player_monthly_trade_info["mineral_trade_spending"] += player_resources.get("minerals", 0.0)
-            self._player_monthly_trade_info["energy_trade_spending"] += player_resources.get("energy", 0.0)
-            self._player_monthly_trade_info["food_trade_spending"] += player_resources.get("food", 0.0)
+            self._player_monthly_trade_info["mineral_trade_spending"] -= player_resources.get("minerals", 0.0)
+            self._player_monthly_trade_info["energy_trade_spending"] -= player_resources.get("energy", 0.0)
+            self._player_monthly_trade_info["food_trade_spending"] -= player_resources.get("food", 0.0)
             other_resources = second.get("monthly_resources", {})
             self._player_monthly_trade_info["mineral_trade_income"] += other_resources.get("minerals", 0.0)
             self._player_monthly_trade_info["energy_trade_income"] += other_resources.get("energy", 0.0)
