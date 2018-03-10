@@ -1,14 +1,13 @@
 import re
-from collections import Counter
 
-WHITESPACE = re.compile("[\t\n ]*")
-EQ = re.compile("=")
+WHITESPACE = re.compile('[\t\n ]*')
+EQ = re.compile('=')
 BR_OPEN = re.compile('{')
 BR_CLOSE = re.compile('}')
 Q_STR = re.compile('"[^"]*"')
-IDENTIFIER = re.compile("[a-zA-Z_]+[a-zA-Z0-9_]*")
-FLOAT = re.compile("-?[0-9]+\.[0-9]*")
-INT = re.compile("-?[0-9]+")
+IDENTIFIER = re.compile('[0-9_]*[a-zA-Z_]+[a-zA-Z0-9_]*')
+FLOAT = re.compile('-?[0-9]+\.[0-9]*')
+INT = re.compile('-?[0-9]+')
 
 REG_EXES = [
     BR_OPEN,
