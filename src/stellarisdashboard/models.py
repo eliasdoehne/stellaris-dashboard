@@ -58,6 +58,12 @@ class Attitude(enum.Enum):
 
 
 @enum.unique
+class WarEventType(enum.Enum):
+    ships = 0
+    # TODO what other kinds are there?
+
+
+@enum.unique
 class PopEthics(enum.IntEnum):
     imperialist = 0
     isolationist = 1
@@ -68,7 +74,6 @@ class PopEthics(enum.IntEnum):
     totalitarian = 6
     traditionalist = 7
     xenoist = 8
-
     enslaved = 9
     purge = 10
     no_ethics = 11  # e.g. robots1476894696
@@ -118,6 +123,7 @@ def get_gamestates_since(game_name, date):
 
 
 class Game(Base):
+    """Root object representing an entire game."""
     __tablename__ = 'gametable'
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
@@ -126,12 +132,14 @@ class Game(Base):
     countries = relationship("Country", back_populates="game", cascade="all,delete,delete-orphan")
     species = relationship("Species", back_populates="game", cascade="all,delete,delete-orphan")
     game_states = relationship("GameState", back_populates="game", cascade="all,delete,delete-orphan")
+    wars = relationship("War", back_populates="game", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
-        return f"Game(game_id={self.game_id}, game_name=\"{self.game_name}\")"
+        return f"Game(game_id={self.game_id}, game_name={self.game_name})"
 
 
 class GameState(Base):
+    """Represents the state of the game at a specific moment."""
     __tablename__ = 'gamestatetable'
     gamestate_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
@@ -181,9 +189,14 @@ class Country(Base):
     game = relationship("Game", back_populates="countries")
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
+    war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
 
 
 class CountryData(Base):
+    """
+    Contains the state of the country at a specific moment, specifically basic data about economy, science and military.
+    Children objects contain data about demographics and political factions.
+    """
     __tablename__ = 'countrydatatable'
     country_data_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -219,10 +232,11 @@ class CountryData(Base):
     faction_support = relationship("FactionSupport", back_populates="country_data", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
-        return f"CountryData(country_name=\"{self.country_name}\", game_state={self.gamestate_id}, military_power={self.military_power}, fleet_size={self.fleet_size}, tech_progress={self.tech_progress}, exploration_progress={self.exploration_progress}, owned_planets={self.owned_planets})"
+        return f"CountryData(country_name={self.country_name}, game_state={self.gamestate_id}, military_power={self.military_power}, fleet_size={self.fleet_size}, tech_progress={self.tech_progress}, exploration_progress={self.exploration_progress}, owned_planets={self.owned_planets})"
 
 
 class Species(Base):
+    """Represents a species in a game. Not tied to any specific time."""
     __tablename__ = 'speciestable'
     species_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
@@ -231,8 +245,12 @@ class Species(Base):
 
     game = relationship("Game", back_populates="species")
 
+    def __repr__(self):
+        return f"Species(species_id={self.species_id}, game_id={self.game_id}, species_name={self.species_name})"
+
 
 class PopCount(Base):
+    """Contains the number of members of a single species in a single country."""
     __tablename__ = 'popcounttable'
     pc_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
@@ -243,10 +261,11 @@ class PopCount(Base):
     species = relationship("Species")
 
     def __repr__(self):
-        return f"PopCount(country_data_id={self.country_data_id}, species_name =\"{self.species_name}\", pop_count={self.pop_count})"
+        return f"PopCount(country_data_id={self.country_data_id}, species_name={self.species_name}, pop_count={self.pop_count})"
 
 
 class PoliticalFaction(Base):
+    """Represents a single political faction in a game. Not tied to any specific time."""
     __tablename__ = 'factiontable'
     faction_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -257,10 +276,11 @@ class PoliticalFaction(Base):
     faction_support = relationship("FactionSupport", back_populates="faction")
 
     def __repr__(self):
-        return f"PoliticalFaction(faction_id={self.faction_id}, country_id={self.country_id}, faction_name =\"{self.faction_name}\")"
+        return f"PoliticalFaction(faction_id={self.faction_id}, country_id={self.country_id}, faction_name={self.faction_name})"
 
 
 class FactionSupport(Base):
+    """Contains data about the status of a political faction at a specific time."""
     __tablename__ = 'factionsupporttable'
 
     fs_id = Column(Integer, primary_key=True)
@@ -275,7 +295,52 @@ class FactionSupport(Base):
     faction = relationship("PoliticalFaction", back_populates="faction_support")
 
     def __repr__(self):
-        return f"FactionSupport(fs_id={self.fs_id}, country_data_id={self.country_data_id}, faction_id =\"{self.faction_id}\", support ={self.support})"
+        return f"FactionSupport(fs_id={self.fs_id}, faction_id={self.faction_id}, country_data_id={self.country_data_id}, members={self.members}, happiness={self.happiness}, support={self.support})"
+
+
+class War(Base):
+    __tablename__ = 'wartable'
+    war_id = Column(Integer, primary_key=True)
+    game_id = Column(ForeignKey(Game.game_id), index=True, primary_key=True)
+
+    start_date_days = Column(Integer, index=True)
+    name = Column(String(100))
+
+    game = relationship("Game", back_populates="wars")
+    participants = relationship("WarParticipant", back_populates="war", cascade="all,delete,delete-orphan")
+
+    def __repr__(self):
+        return f"War(war_id={self.war_id}, game_id={self.game_id}, start_date_days={self.start_date_days}, name={self.name})"
+
+
+class WarParticipant(Base):
+    __tablename__ = 'warparticipanttable'
+    warparticipant_id = Column(Integer, primary_key=True)
+
+    war_id = Column(ForeignKey(War.war_id), index=True)
+    country_id = Column(ForeignKey(Country.country_id), index=True)
+    is_attacker = Column(Boolean)
+
+    war = relationship("War", back_populates="participants")
+    country = relationship("Country", back_populates="war_participation")
+    warevents = relationship("WarEvent", back_populates="war_participant")
+
+    def __repr__(self):
+        return f"WarParticipant(war_id={self.war_id}, country_id={self.country_id}, is_attacker={self.is_attacker})"
+
+
+class WarEvent(Base):
+    __tablename__ = 'wareventtable'
+    warevent_id = Column(Integer, primary_key=True)
+
+    date = Column(Integer, index=True)
+    war_participant_id = Column(ForeignKey(WarParticipant.warparticipant_id), index=True)
+    war_exhaustion = Column(Float)
+
+    war_participant = relationship("WarParticipant", back_populates="warevents")
+
+    def __repr__(self):
+        return f"WarEvent(warevent_id={warevent_id}, war_participant_id={self.war_participant_id}, date={self.date}, war_exhaustion={self.war_exhaustion})"
 
 
 Base.metadata.create_all(engine)

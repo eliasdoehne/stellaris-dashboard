@@ -1,15 +1,10 @@
 # Stellaris Dashboard
 
-The stellar dashboard provides in-depth statistics and historical information of your playthrough. Visualizations are available through a 
+The Stellaris Dashboard provides in-depth statistics and historical information of your playthrough. Visualizations are available through a 
 locally hosted web server, or can be generated using matplotlib through the command-line interface.
 
-Examples for the output can be found here: 
-
-https://imgur.com/a/4dhVd
-
-Here is a video demonstrating integration with the in-game browser: 
-
-https://gfycat.com/DifficultForkedGentoopenguin
+Examples for the output can be found [here](https://imgur.com/a/4dhVd), and [here](https://gfycat.com/DifficultForkedGentoopenguin) is a video 
+demonstrating the integration with the in-game browser.
 
 # Installation and Use
 
@@ -55,3 +50,11 @@ The CLI allows you to do the following tasks:
   so sometimes it may be necessary to manually re-parse them. (`stellarisdashboardcli parse_saves`)
 
 Further, the CLI commands `monitor_saves` and `parse_saves` allow to explicitly specify the number of CPU cores that are used by the parser.
+
+
+
+
+
+
+
+

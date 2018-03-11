@@ -1,3 +1,4 @@
+import itertools
 import logging
 from typing import Dict, Any
 
@@ -9,8 +10,19 @@ logger = logging.getLogger(__name__)
 class TimelineExtractor:
     """ Process data from parsed save file dictionaries and add it to the database. """
 
+    NO_FACTION = "No faction"
+    SLAVE_FACTION_NAME = "No faction (enslaved)"
+    PURGE_FACTION_NAME = "No faction (purge)"
+    NON_SENTIENT_ROBOT_NO_FACTION = "No faction (non-sentient robot)"
+
+    NO_FACTION_POP_ETHICS = {
+        SLAVE_FACTION_NAME: models.PopEthics.enslaved,
+        PURGE_FACTION_NAME: models.PopEthics.purge,
+        NON_SENTIENT_ROBOT_NO_FACTION: models.PopEthics.no_ethics,
+    }
+
     def __init__(self):
-        self.gamestate_dict = None
+        self._gamestate_dict = None
         self.game = None
         self._session = None
         self._player_country = None
@@ -18,16 +30,18 @@ class TimelineExtractor:
         self._player_research_agreements = None
         self._player_sensor_links = None
         self._player_monthly_trade_info = None
+        self._factionless_pops = None
+        self._date_in_days = None
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         date_str = gamestate_dict["date"]
         logger.debug(f"Processing {game_name}, {date_str}")
-        self.gamestate_dict = gamestate_dict
-        if len({player["country"] for player in self.gamestate_dict["player"]}) != 1:
+        self._gamestate_dict = gamestate_dict
+        if len({player["country"] for player in self._gamestate_dict["player"]}) != 1:
             logger.warning("Player country is ambiguous!")
             return None
-        self._player_country = self.gamestate_dict["player"][0]["country"]
-        player_country_name = self.gamestate_dict["country"][self._player_country]["name"]
+        self._player_country = self._gamestate_dict["player"][0]["country"]
+        player_country_name = self._gamestate_dict["country"][self._player_country]["name"]
         self._session = models.SessionFactory()
         try:
             self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
@@ -35,11 +49,11 @@ class TimelineExtractor:
                 logger.info(f"Adding new game {game_name} to database.")
                 self.game = models.Game(game_name=game_name, player_country_name=player_country_name)
                 self._session.add(self.game)
-            days = models.date_to_days(self.gamestate_dict["date"])
+            self._date_in_days = models.date_to_days(self._gamestate_dict["date"])
             game_states_by_date = {gs.date: gs for gs in self.game.game_states}
-            if days in game_states_by_date:
+            if self._date_in_days in game_states_by_date:
                 logger.info(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
-                self._session.delete(game_states_by_date[days])
+                self._session.delete(game_states_by_date[self._date_in_days])
             self._process_gamestate()
             self._session.commit()
         except Exception as e:
@@ -49,35 +63,38 @@ class TimelineExtractor:
         finally:
             self._session.close()
         self._current_gamestate = None
-        self.gamestate_dict = None
+        self._gamestate_dict = None
         self._player_country = None
         self._player_research_agreements = None
         self._player_sensor_links = None
         self._player_monthly_trade_info = None
         self._session = None
+        self._date_in_days = None
 
     def _process_gamestate(self):
-        days = models.date_to_days(self.gamestate_dict["date"])
         self._extract_player_trade_agreements()
-        player_economy = self._extract_player_economy(self.gamestate_dict["country"][self._player_country])
+        player_economy = self._extract_player_economy(self._gamestate_dict["country"][self._player_country])
         self._current_gamestate = models.GameState(
-            game=self.game, date=days,
+            game=self.game, date=self._date_in_days,
             **player_economy
         )
         self._session.add(self._current_gamestate)
 
-        for country_id, country_data in self.gamestate_dict["country"].items():
-            if not isinstance(country_data, dict):
+        for country_id, country_data_dict in self._gamestate_dict["country"].items():
+            if not isinstance(country_data_dict, dict):
                 continue  # can be "none", apparently
-            if country_data["type"] != "default":
+            if country_data_dict["type"] != "default":
                 continue  # Enclaves, Leviathans, etc ....
-            country_state = self._extract_country_info(country_id, country_data)
+            country_data = self._extract_country_data(country_id, country_data_dict)
 
-            debug_name = country_data.get('name', 'Unnamed Country') if country_state.attitude_towards_player.is_known() else 'Unknown'
+            debug_name = country_data_dict.get('name', 'Unnamed Country') if country_data.attitude_towards_player.is_known() else 'Unknown'
             logger.debug(f"Extracting country data: {country_id}, {debug_name}")
-            self._extract_country_pop_info(country_data, country_state)
+            self._extract_pop_info_from_planets(country_data_dict, country_data)
+            self._extract_factions(country_data)
 
-    def _extract_country_info(self, country_id, country_dict):
+        self._extract_wars()
+
+    def _extract_country_data(self, country_id, country_dict):
         is_player = (country_id == self._player_country)
         country = self._session.query(models.Country).filter_by(game=self.game, country_name=country_dict["name"]).one_or_none()
         if country is None:
@@ -106,12 +123,10 @@ class TimelineExtractor:
             **economy_data,
         )
         self._session.add(country_data)
-        self._extract_factions(country_data)
         return country_data
 
     def _extract_player_economy(self, country_dict):
         base_economy_data = self._extract_economy_data(country_dict)
-
         last_month = self._get_last_month_budget(country_dict)
         economy_dict = {}
         energy_budget = last_month.get("values", {})
@@ -140,12 +155,14 @@ class TimelineExtractor:
         )
         return economy_dict
 
-    def _get_last_month_budget(self, country_dict):
+    @staticmethod
+    def _get_last_month_budget(country_dict):
         if "budget" in country_dict and country_dict["budget"] != "none" and country_dict["budget"]:
             return country_dict["budget"].get("last_month", {})
         return {}
 
-    def _extract_economy_data(self, country_dict):
+    @staticmethod
+    def _extract_economy_data(country_dict):
         economy = {}
         if "modules" in country_dict and "standard_economy_module" in country_dict["modules"] and "last_month" in country_dict["modules"]["standard_economy_module"]:
             economy_module = country_dict["modules"]["standard_economy_module"]["last_month"]
@@ -195,7 +212,7 @@ class TimelineExtractor:
             food_trade_income=0.0,
             food_trade_spending=0.0,
         )
-        trades = self.gamestate_dict.get("trade_deal", {})
+        trades = self._gamestate_dict.get("trade_deal", {})
         if not trades:
             return
         for trade_id, trade_deal in trades.items():
@@ -222,51 +239,102 @@ class TimelineExtractor:
             self._player_monthly_trade_info["food_trade_income"] += other_resources.get("food", 0.0)
 
     def _extract_factions(self, country_data: models.CountryData):
-        for faction_id, faction_data in self.gamestate_dict.get("pop_factions", {}).items():
+        faction_pop_sum = 0
+        for faction_id, faction_data in self._gamestate_dict.get("pop_factions", {}).items():
             if not faction_data or faction_data == "none":
                 continue
             faction_name = faction_data["name"]
-            faction_country_name = self.gamestate_dict["country"][faction_data["country"]]["name"]
+            country_id = faction_data["country"]
+            faction_country_name = self._gamestate_dict["country"][country_id]["name"]
             if faction_country_name != country_data.country.country_name:
                 continue
             # If the faction is in the database, get it, otherwise add a new faction
-            faction = self._session.query(models.PoliticalFaction).filter_by(faction_name=faction_name, country=country_data.country).one_or_none()
-            if faction is None:
-                ethics = models.PopEthics.from_str(faction_data["type"])
-                if ethics == models.PopEthics.other:
-                    print(f"Found faction with unknown Ethics: {faction_data}")
-                faction = models.PoliticalFaction(
-                    country=country_data.country,
-                    faction_name=faction_name,
-                    ethics=ethics,
-                )
-                self._session.add(faction)
             members = len(faction_data.get("members", []))
-            self._session.add(models.FactionSupport(
-                faction=faction,
+            faction_pop_sum += members
+            self._add_faction_and_faction_support(
+                faction_name=faction_name,
                 country_data=country_data,
                 members=members,
                 support=faction_data.get("support", 0),
                 happiness=faction_data.get("happiness", 0),
-            ))
+                ethics=models.PopEthics.from_str(faction_data["type"]),
+            )
 
-    def _extract_country_pop_info(self, country_dict: Dict[str, Any], country_data: models.CountryData):
+        for faction_name, num in self._factionless_pops.items():
+            if not num:
+                continue
+            faction_pop_sum += num
+            self._add_faction_and_faction_support(
+                faction_name=faction_name,
+                country_data=country_data,
+                members=num,
+                support=0,
+                happiness=0,
+                ethics=TimelineExtractor.NO_FACTION_POP_ETHICS[faction_name],
+            )
+
+        no_faction_pops = sum(pc.pop_count for pc in country_data.pop_counts) - faction_pop_sum
+        if no_faction_pops:
+            self._add_faction_and_faction_support(
+                faction_name=TimelineExtractor.NO_FACTION,
+                country_data=country_data,
+                members=no_faction_pops,
+                support=0,
+                happiness=0,
+                ethics=models.PopEthics.no_ethics
+            )
+            self._factionless_pops = None
+
+    def _add_faction_and_faction_support(self,
+                                         faction_name: str,
+                                         country_data: models.CountryData,
+                                         members: int,
+                                         support: float,
+                                         happiness: float,
+                                         ethics: models.PopEthics,
+                                         ):
+        faction = self._session.query(models.PoliticalFaction).filter_by(faction_name=faction_name, country=country_data.country).one_or_none()
+        if faction is None:
+            faction = models.PoliticalFaction(
+                country=country_data.country,
+                faction_name=faction_name,
+                ethics=ethics,
+            )
+            self._session.add(faction)
+        fs = models.FactionSupport(faction=faction, country_data=country_data, members=members, support=support, happiness=happiness, )
+        self._session.add(fs)
+
+    def _extract_pop_info_from_planets(self, country_dict: Dict[str, Any], country_data: models.CountryData):
+        self._factionless_pops = {
+            TimelineExtractor.SLAVE_FACTION_NAME: 0,
+            TimelineExtractor.PURGE_FACTION_NAME: 0,
+            TimelineExtractor.NON_SENTIENT_ROBOT_NO_FACTION: 0,
+        }
         species_demographics = {}
-        pop_data = self.gamestate_dict["pop"]
+        pop_data = self._gamestate_dict["pop"]
         for planet_id in country_dict["owned_planets"]:
-            planet_data = self.gamestate_dict["planet"][planet_id]
+            planet_data = self._gamestate_dict["planet"][planet_id]
             for pop_id in planet_data.get("pop", []):
                 if pop_id not in pop_data:
                     logger.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     continue
-                pop_species_index = pop_data[pop_id]["species_index"]
+                this_pop = pop_data[pop_id]
+                if this_pop["growth_state"] != 1:
+                    continue
+                pop_species_index = this_pop["species_index"]
+                species_dict = self._gamestate_dict["species"][pop_species_index]
                 if pop_species_index not in species_demographics:
                     species_demographics[pop_species_index] = 0
-                if pop_data[pop_id]["growth_state"] == 1:
-                    species_demographics[pop_species_index] += 1
+                species_demographics[pop_species_index] += 1
+                if this_pop.get("is_enslaved") == "yes":
+                    self._factionless_pops[TimelineExtractor.SLAVE_FACTION_NAME] += 1
+                elif this_pop.get("purging") == "yes":
+                    self._factionless_pops[TimelineExtractor.PURGE_FACTION_NAME] += 1
+                elif species_dict.get("class") == "ROBOT" and species_dict.get("pops_can_join_factions") == "no":
+                    self._factionless_pops[TimelineExtractor.NON_SENTIENT_ROBOT_NO_FACTION] += 1
 
         for pop_species_index, pop_count in species_demographics.items():
-            species_name = self.gamestate_dict["species"][pop_species_index]["name"]
+            species_name = self._gamestate_dict["species"][pop_species_index]["name"]
             species = self._session.query(models.Species).filter_by(game=self.game, species_name=species_name).one_or_none()
             if species is None:
                 species = models.Species(game=self.game, species_name=species_name)
@@ -278,3 +346,47 @@ class TimelineExtractor:
                 pop_count=pop_count,
             )
             self._session.add(pop_count)
+
+    def _extract_wars(self):
+        wars_dict = self._gamestate_dict.get("war", {})
+        if not wars_dict:
+            return
+        for game_war_id, war_dict in wars_dict.items():
+            if war_dict == "none":
+                continue
+            db_war_id = game_war_id
+            war = self._session.query(models.War).filter_by(game=self.game,  war_id=db_war_id).one_or_none()
+            if war is None:
+                start_date_days = models.date_to_days(war_dict["start_date"])
+                war = models.War(
+                    war_id=db_war_id,
+                    game=self.game,
+                    start_date_days=start_date_days,
+                    name=war_dict.get("name", "Unnamed war")
+                )
+                self._session.add(war)
+
+            attackers = {p["country"] for p in war_dict["attackers"]}
+            for war_party_info in itertools.chain(war_dict["attackers"], war_dict["defenders"]):
+                country_id = war_party_info.get("country")
+                country_name = self._gamestate_dict["country"][country_id]["name"]
+                db_country = self._session.query(models.Country).filter_by(game=self.game, country_name=country_name).one()
+
+                is_attacker = country_id in attackers
+
+                war_participant = self._session.query(models.WarParticipant).filter_by(war=war, country=db_country).one_or_none()
+                if war_participant is None:
+                    war_participant = models.WarParticipant(
+                        war=war,
+                        country=db_country,
+                        is_attacker=is_attacker,
+                    )
+                    self._session.add(war_participant)
+
+                exhaustion = war_dict.get("attacker_war_exhaustion") if is_attacker else war_dict.get("defender_war_exhaustion")
+                war_status = models.WarEvent(
+                    war_participant=war_participant,
+                    date=self._date_in_days,
+                    war_exhaustion=exhaustion
+                )
+                self._session.add(war_status)

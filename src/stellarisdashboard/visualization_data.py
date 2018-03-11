@@ -187,7 +187,6 @@ def show_military_info(country_data: models.CountryData):
 
 class EmpireProgressionPlotData:
     DEFAULT_VAL = float("nan")
-    NO_FACTION_POP_KEY = "No faction (including robots and slaves)"
 
     def __init__(self, game_name, show_everything=False):
         self.game_name = game_name
@@ -442,8 +441,6 @@ class EmpireProgressionPlotData:
                 faction_support_dict[f] = 0
 
         pop_count = self.pop_count[country_data.country.country_name][-1]
-        faction_sizes[EmpireProgressionPlotData.NO_FACTION_POP_KEY] = pop_count - total_faction_pop_count
-
         # then add them to the data dictionary.
         for f in faction_sizes:
             if f not in self.faction_size_distribution:
