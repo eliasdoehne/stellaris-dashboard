@@ -3,7 +3,7 @@ import pathlib
 import sys
 import threading
 import time
-
+import multiprocessing as mp
 from stellarisdashboard import cli, dash_server, save_parser
 
 BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
@@ -23,9 +23,8 @@ root_logger.addHandler(ch)
 
 
 def main():
-    save_reader = save_parser.SaveReader(STELLARIS_SAVE_DIR, threads=4)
-    stop_event = threading.Event()
-    t_save_monitor = threading.Thread(target=cli._monitor_saves, daemon=False, args=(stop_event, save_reader, 10))
+    threads = max(1, mp.cpu_count() // 2 - 1)
+    t_save_monitor = threading.Thread(target=cli.f_monitor_saves, daemon=False, args=(threads, 10))
     t_save_monitor.start()
     t_dash = threading.Thread(target=dash_server.start_server, daemon=False, args=())
     t_dash.start()

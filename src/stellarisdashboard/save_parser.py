@@ -28,7 +28,7 @@ class StellarisFileFormatError(Exception): pass
 MOST_RECENTLY_UPDATED_GAME = None
 
 
-class SaveReader:
+class SavePathMonitor:
     """
     Check the save path for new save games. Found save files are parsed and returned
     as gamestate dictionaries.
@@ -134,21 +134,7 @@ def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
 
 class SaveFileParser:
     """
-    Parse an extracted gamestate file to a nested dictionary. 
-    The grammar is (roughly!) as follows:
-    
-    save      :== kv-pair save | EOF
-    kv-pair   :== key EQ value
-    key       :== literal
-    value     :== literal
-                | OPENBRACE obj-list
-    obj-list  :== value obj-list'
-                | key kv-list
-                | CLOSEDBRACE
-    obj-list' :== value obj-list' | CLOSEDBRACE
-    kv-list   :== EQ value kv-list'
-    kv-list'  :== kv-pair kv-list' | CLOSEDBRACE
-    literal   :== STR | INTEGER | FLOAT
+    Parse the contents of the gamestate file to a dictionary.
     """
 
     def __init__(self, filename):
@@ -276,12 +262,12 @@ class SaveFileParser:
             else:
                 obj[key] = [obj[key], value]
 
-    def _lookahead(self):
+    def _lookahead(self) -> Token:
         if self._lookahead_token is None:
             self._lookahead_token = self._next_token()
         return self._lookahead_token
 
-    def _next_token(self):
+    def _next_token(self) -> Token:
         if self._lookahead_token is None:
             res = next(self._token_stream)
         else:

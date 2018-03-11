@@ -9,8 +9,6 @@ import sqlalchemy
 
 from stellarisdashboard import save_parser, timeline, visualization_data, visualization_mpl, models
 
-logger = logging.getLogger(__name__)
-
 # Add a stream handler for stdout output
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.DEBUG)
@@ -19,6 +17,7 @@ ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 root_logger.addHandler(ch)
+logger = logging.getLogger(__name__)
 
 STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
 
@@ -61,20 +60,7 @@ def monitor_saves(threads, polling_interval):
 
 
 def f_monitor_saves(threads, polling_interval):
-    save_reader = save_parser.SaveReader(STELLARIS_SAVE_DIR, threads=threads)
-    stop_event = threading.Event()
-    t = threading.Thread(target=_monitor_saves, daemon=False, args=(stop_event, save_reader, polling_interval))
-    t.start()
-    while True:
-        exit_prompt = click.prompt("Press x and confirm with enter to exit the program")
-        if exit_prompt == "x" or exit_prompt == "X":
-            stop_event.set()
-            break
-    save_reader.teardown()
-    t.join()
-
-
-def _monitor_saves(stop_event: threading.Event, save_reader: save_parser.SaveReader, polling_interval: float):
+    save_reader = save_parser.SavePathMonitor(STELLARIS_SAVE_DIR, threads=threads)
     save_reader.mark_all_existing_saves_processed()
     wait_time = 0
     tle = timeline.TimelineExtractor()
@@ -105,7 +91,7 @@ def parse_saves(threads):
 
 
 def f_parse_saves(threads=None):
-    save_reader = save_parser.SaveReader(STELLARIS_SAVE_DIR, threads=threads)
+    save_reader = save_parser.SavePathMonitor(STELLARIS_SAVE_DIR, threads=threads)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.check_for_new_saves():
         tle.process_gamestate(game_name, gamestate_dict)
