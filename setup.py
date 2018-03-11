@@ -16,7 +16,7 @@ setup(
         "click",
         "Cython",
         "dash",
-        "dash-core-components==0.13.0-rc4",
+        "dash-core-components==0.21.0rc1",
         "dash-html-components",
         "dash-renderer",
         "dataclasses",
