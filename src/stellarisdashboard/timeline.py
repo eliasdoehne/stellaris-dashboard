@@ -10,15 +10,28 @@ logger = logging.getLogger(__name__)
 class TimelineExtractor:
     """ Process data from parsed save file dictionaries and add it to the database. """
 
+    # Some constants to represent custom "factions"
     NO_FACTION = "No faction"
     SLAVE_FACTION_NAME = "No faction (enslaved)"
     PURGE_FACTION_NAME = "No faction (purge)"
     NON_SENTIENT_ROBOT_NO_FACTION = "No faction (non-sentient robot)"
+    NO_FACTION_ID = -1
+    SLAVE_FACTION_ID = -2
+    PURGE_FACTION_ID = -3
+    NON_SENTIENT_ROBOT_FACTION_ID = -4
 
     NO_FACTION_POP_ETHICS = {
+        NO_FACTION: models.PopEthics.no_ethics,
         SLAVE_FACTION_NAME: models.PopEthics.enslaved,
         PURGE_FACTION_NAME: models.PopEthics.purge,
         NON_SENTIENT_ROBOT_NO_FACTION: models.PopEthics.no_ethics,
+    }
+
+    NO_FACTION_ID_MAP = {
+        NO_FACTION_ID: NO_FACTION_ID,
+        SLAVE_FACTION_NAME: SLAVE_FACTION_ID,
+        PURGE_FACTION_NAME: PURGE_FACTION_ID,
+        NON_SENTIENT_ROBOT_NO_FACTION: NON_SENTIENT_ROBOT_FACTION_ID,
     }
 
     def __init__(self):
@@ -96,9 +109,12 @@ class TimelineExtractor:
 
     def _extract_country_data(self, country_id, country_dict):
         is_player = (country_id == self._player_country)
-        country = self._session.query(models.Country).filter_by(game=self.game, country_name=country_dict["name"]).one_or_none()
+        country = self._session.query(models.Country).filter_by(
+            game=self.game,
+            country_id_in_game=country_id
+        ).one_or_none()
         if country is None:
-            country = models.Country(is_player=is_player, game=self.game, country_name=country_dict["name"])
+            country = models.Country(is_player=is_player, country_id_in_game=country_id, game=self.game, country_name=country_dict["name"])
             self._session.add(country)
         has_research_agreement_with_player = is_player or (country_id in self._player_research_agreements)
         has_sensor_link_with_player = is_player or (country_id in self._player_sensor_links)
@@ -252,6 +268,7 @@ class TimelineExtractor:
             members = len(faction_data.get("members", []))
             faction_pop_sum += members
             self._add_faction_and_faction_support(
+                faction_id=faction_id,
                 faction_name=faction_name,
                 country_data=country_data,
                 members=members,
@@ -265,6 +282,7 @@ class TimelineExtractor:
                 continue
             faction_pop_sum += num
             self._add_faction_and_faction_support(
+                faction_id=self.NO_FACTION_ID_MAP[faction_name],
                 faction_name=faction_name,
                 country_data=country_data,
                 members=num,
@@ -276,6 +294,7 @@ class TimelineExtractor:
         no_faction_pops = sum(pc.pop_count for pc in country_data.pop_counts) - faction_pop_sum
         if no_faction_pops:
             self._add_faction_and_faction_support(
+                faction_id=self.NO_FACTION_ID,
                 faction_name=TimelineExtractor.NO_FACTION,
                 country_data=country_data,
                 members=no_faction_pops,
@@ -286,6 +305,7 @@ class TimelineExtractor:
             self._factionless_pops = None
 
     def _add_faction_and_faction_support(self,
+                                         faction_id: int,
                                          faction_name: str,
                                          country_data: models.CountryData,
                                          members: int,
@@ -293,15 +313,19 @@ class TimelineExtractor:
                                          happiness: float,
                                          ethics: models.PopEthics,
                                          ):
-        faction = self._session.query(models.PoliticalFaction).filter_by(faction_name=faction_name, country=country_data.country).one_or_none()
+        faction = self._session.query(models.PoliticalFaction).filter_by(
+            faction_id_in_game=faction_id,
+            country=country_data.country,
+        ).one_or_none()
         if faction is None:
             faction = models.PoliticalFaction(
                 country=country_data.country,
                 faction_name=faction_name,
+                faction_id_in_game=faction_id,
                 ethics=ethics,
             )
             self._session.add(faction)
-        fs = models.FactionSupport(faction=faction, country_data=country_data, members=members, support=support, happiness=happiness, )
+        fs = models.FactionSupport(faction=faction, country_data=country_data, members=members, support=support, happiness=happiness)
         self._session.add(fs)
 
     def _extract_pop_info_from_planets(self, country_dict: Dict[str, Any], country_data: models.CountryData):
@@ -321,11 +345,11 @@ class TimelineExtractor:
                 this_pop = pop_data[pop_id]
                 if this_pop["growth_state"] != 1:
                     continue
-                pop_species_index = this_pop["species_index"]
-                species_dict = self._gamestate_dict["species"][pop_species_index]
-                if pop_species_index not in species_demographics:
-                    species_demographics[pop_species_index] = 0
-                species_demographics[pop_species_index] += 1
+                species_id = this_pop["species_index"]
+                species_dict = self._gamestate_dict["species"][species_id]
+                if species_id not in species_demographics:
+                    species_demographics[species_id] = 0
+                species_demographics[species_id] += 1
                 if this_pop.get("is_enslaved") == "yes":
                     self._factionless_pops[TimelineExtractor.SLAVE_FACTION_NAME] += 1
                 elif this_pop.get("purging") == "yes":
@@ -333,11 +357,15 @@ class TimelineExtractor:
                 elif species_dict.get("class") == "ROBOT" and species_dict.get("pops_can_join_factions") == "no":
                     self._factionless_pops[TimelineExtractor.NON_SENTIENT_ROBOT_NO_FACTION] += 1
 
-        for pop_species_index, pop_count in species_demographics.items():
-            species_name = self._gamestate_dict["species"][pop_species_index]["name"]
-            species = self._session.query(models.Species).filter_by(game=self.game, species_name=species_name).one_or_none()
+        for species_id, pop_count in species_demographics.items():
+            species_name = self._gamestate_dict["species"][species_id]["name"]
+            species = self._session.query(models.Species).filter_by(game=self.game, species_id_in_game=species_id).one_or_none()
             if species is None:
-                species = models.Species(game=self.game, species_name=species_name)
+                species = models.Species(
+                    game=self.game,
+                    species_name=species_name,
+                    species_id_in_game=species_id,
+                )
                 self._session.add(species)
 
             pop_count = models.PopCount(
@@ -355,7 +383,7 @@ class TimelineExtractor:
             if war_dict == "none":
                 continue
             db_war_id = game_war_id
-            war = self._session.query(models.War).filter_by(game=self.game,  war_id=db_war_id).one_or_none()
+            war = self._session.query(models.War).filter_by(game=self.game, war_id=db_war_id).one_or_none()
             if war is None:
                 start_date_days = models.date_to_days(war_dict["start_date"])
                 war = models.War(

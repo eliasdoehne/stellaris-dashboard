@@ -4,23 +4,20 @@ from typing import List
 
 from matplotlib import pyplot as plt
 
-from stellarisdashboard import models, visualization_data
+from stellarisdashboard import models, visualization_data, config
 
 logger = logging.getLogger(__name__)
 
 
 class MatplotLibVisualization:
     """ Make a static visualization using matplotlib. """
-    COLOR_MAP = plt.get_cmap("viridis")
+    COLOR_MAP = plt.get_cmap(name=config.CONFIG.colormap)
 
     def __init__(self, plot_data, plot_filename_base=None):
         self.fig = None
         self.axes = None
         self.axes_iter = None
         self.plot_data: visualization_data.EmpireProgressionPlotData = plot_data
-        if plot_filename_base is None:
-            plot_filename_base = f"./output/{self.plot_data.game_name}_{{plot_id}}.png"
-        self.plot_filename_base = plot_filename_base
 
     def make_plots(self):
         for category, plot_specifications in visualization_data.THEMATICALLY_GROUPED_PLOTS.items():
@@ -35,7 +32,7 @@ class MatplotLibVisualization:
                     self._line_plot(ax, plot_spec)
                 if plot_spec.yrange is not None:
                     ax.set_ylim(plot_spec.yrange)
-            self.save_plot(self.plot_filename_base.format(plot_id=category))
+            self.save_plot(plot_id=category)
 
     def _line_plot(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
@@ -114,7 +111,11 @@ class MatplotLibVisualization:
             label += " (player)"
         return {"label": label, "c": c, "linewidth": linewidth}
 
-    def save_plot(self, plot_filename):
+    def save_plot(self, plot_id):
+        plot_filename = self._get_path(plot_id)
         logger.info(f"Saving graph to {plot_filename}")
-        plt.savefig(plot_filename, dpi=250)
+        plt.savefig(str(plot_filename), dpi=250)
         plt.close("all")
+
+    def _get_path(self, plot_id: str):
+        return config.get_base_path() / f"./output/{self.plot_data.game_name}_{plot_id}.png"

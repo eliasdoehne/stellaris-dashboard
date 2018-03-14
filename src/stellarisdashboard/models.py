@@ -6,8 +6,9 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
-BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
-DB_FILE = BASE_DIR / "timeline.db"
+from stellarisdashboard import config
+
+DB_FILE = config.get_base_path() / "timeline.db"
 engine = sqlalchemy.create_engine(f'sqlite:///{DB_FILE}', echo=False)
 SessionFactory = sessionmaker(bind=engine)
 
@@ -185,6 +186,7 @@ class Country(Base):
 
     is_player = Column(Boolean)
     country_name = Column(String(80))
+    country_id_in_game = Column(Integer)
 
     game = relationship("Game", back_populates="countries")
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan")
@@ -240,6 +242,7 @@ class Species(Base):
     __tablename__ = 'speciestable'
     species_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
+    species_id_in_game = Column(Integer)
 
     species_name = Column(String(80))
 
@@ -268,8 +271,11 @@ class PoliticalFaction(Base):
     """Represents a single political faction in a game. Not tied to any specific time."""
     __tablename__ = 'factiontable'
     faction_id = Column(Integer, primary_key=True)
+
     country_id = Column(ForeignKey(Country.country_id), index=True)
+
     faction_name = Column(String(80))
+    faction_id_in_game = Column(Integer)
     ethics = Column(Enum(PopEthics))
 
     country = relationship("Country", back_populates="political_factions")

@@ -4,11 +4,9 @@ import sys
 import threading
 import time
 import multiprocessing as mp
-from stellarisdashboard import cli, dash_server, save_parser
+from stellarisdashboard import cli, dash_server, save_parser, config
 
-BASE_DIR = pathlib.Path.home() / ".local/share/stellaristimeline/"
-STELLARIS_SAVE_DIR = pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
-logging.basicConfig(level=logging.INFO, filename=BASE_DIR / "stellaris_dashboard.log")
+logging.basicConfig(level=logging.INFO, filename=config.get_base_path() / "stellaris_dashboard.log")
 
 logger = logging.getLogger(__name__)
 
