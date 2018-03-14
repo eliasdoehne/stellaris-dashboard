@@ -1,0 +1,119 @@
+guiTypes = {
+
+	containerWindowType = {
+		name = "browser_window"
+		position = { x=0 y=0 }	
+		size = { width = 1220 height = 704 }
+		moveable = yes
+		orientation = center
+		origo = center
+
+		background = {
+			name = "Background"	
+			spriteType = "GFX_tile_large_bg"
+		}			
+		
+		iconType = {
+			name = "hex_bg"
+			spriteType = "GFX_hex_bg"
+			position = { x = -10 y = -15 }
+			alwaysTransparent = yes
+		}
+
+		iconType = {
+			name = "empire_header_line"
+			quadTextureSprite = "GFX_line_long"
+			position = { x = 6 y = 22 }
+		}		
+				
+		instantTextBoxType={
+			name = "header"
+			font = "malgun_goth_24"
+			text = "INTERNET_BROWSER"
+			position = { x = 19 y = 5 }
+			maxWidth = 800
+			maxHeight = 40
+			fixedSize = yes
+			format = left
+			alwaysTransparent = yes
+		}
+		
+		
+		browserType = {
+			name = "browser"
+			spriteType = "GFX_dummy_browser"
+			position = { x = 15 y = 90 }
+			size = { x = 1190 y = 600 }
+		}
+		
+		buttonType =
+		{
+			name = "back"
+			quadTextureSprite = "GFX_button_back"
+			position = { x = 10 y = 40 }
+		}
+		
+		buttonType =
+		{
+			name = "forward"
+			quadTextureSprite = "GFX_fleet_order_button_move"
+			position = { x = 45 y = 40 }
+		}
+		
+		buttonType =
+		{
+			name = "reload"
+			quadTextureSprite = "GFX_button_update"
+			position = { x = 80 y = 40 }
+		}
+		
+		buttonType =
+		{
+			name = "forum"
+			quadTextureSprite = "GFX_button_pdx"
+			position = { x = 150 y = 40 }
+			web_link="https://forum.paradoxplaza.com/forum/index.php?forums/stellaris.900/"
+		}
+		
+		buttonType =
+		{
+			name = "home"
+			quadTextureSprite = "GFX_fleet_order_button_return"
+			position = { x = 185 y = 40 }
+		}
+		
+		buttonType =
+		{
+			name = "Timeline"
+			quadTextureSprite = "GFX_button_test_button"
+			position = { x = -150 y = 30 }
+			Orientation = UPPER_RIGHT
+			web_link="http://127.0.0.1:8050"
+			shortcut = "T"
+		}
+		
+		containerWindowType = {
+			name = "setting_bg_box"
+			size = { width = 1206 height = 616 }
+			position = { x = 7 y = 82 }
+			clipping = no
+			
+			background = {
+				name = "setting_bg_frame"
+				spriteType = "GFX_clean_frame_area"
+				alwaystransparent = yes
+			}
+		}
+		
+		buttonType =
+		{
+			name = "close"
+			quadTextureSprite = "GFX_close"
+			position = { x = -45 y = 17 }
+			Orientation = UPPER_RIGHT
+			clicksound = back_click
+			shortcut = "ESCAPE"
+		}		
+	}
+
+}
