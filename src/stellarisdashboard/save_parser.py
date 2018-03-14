@@ -8,16 +8,17 @@ import time
 import multiprocessing as mp
 from typing import Any, Dict, Tuple
 
+logger = logging.getLogger(__name__)
 try:
     import pyximport
 
     pyximport.install()
-    from cython_ext import token_value_stream
+    from stellarisdashboard.cython_ext import token_value_stream
 
-except ImportError:
+except ImportError as e:
+    logger.info(f"Cython-error \"{e}\" occurred, using slow parser")
     from stellarisdashboard import token_value_stream_re as token_value_stream
 
-logger = logging.getLogger(__name__)
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -35,6 +36,7 @@ class SavePathMonitor:
     """
 
     def __init__(self, game_dir, threads=None):
+        mp.freeze_support()
         self.processed_saves = set()
         self.game_dir = pathlib.Path(game_dir)
         if threads is None:
@@ -56,7 +58,6 @@ class SavePathMonitor:
                 for game_name, r in results:
                     if r.ready():
                         if r.successful():
-                            logger.debug("Parsing successful:")
                             MOST_RECENTLY_UPDATED_GAME = game_name
                             yield game_name, r.get()
                         else:

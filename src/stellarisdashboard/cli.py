@@ -1,5 +1,4 @@
 import logging
-import pathlib
 import sys
 import time
 import traceback
@@ -7,17 +6,22 @@ import traceback
 import click
 import sqlalchemy
 
-from stellarisdashboard import config, save_parser, timeline, visualization_data, visualization_mpl, models
 
-# Add a stream handler for stdout output
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-root_logger.addHandler(ch)
+def initialize_logger():
+    # Add a stream handler for stdout output
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    root_logger.addHandler(ch)
+
+
+initialize_logger()
 logger = logging.getLogger(__name__)
+
+from stellarisdashboard import config, save_parser, timeline, visualization_data, visualization_mpl, models
 
 
 @click.group()
@@ -51,8 +55,6 @@ def f_visualize_mpl(game_name_prefix: str, show_everything=False):
             plot.make_plots()
         except sqlalchemy.orm.exc.NoResultFound as e:
             logger.error(f'No game matching "{game_name}" was found in the database!')
-        # except Exception as e:
-        #     logger.error(f"Error occurred while reading from database: {e}")
 
 
 @cli.command()
@@ -63,7 +65,7 @@ def monitor_saves(threads, polling_interval):
 
 
 def f_monitor_saves(threads, polling_interval):
-    save_reader = save_parser.SavePathMonitor(config.get_save_path(), threads=threads)
+    save_reader = save_parser.SavePathMonitor(config.CONFIG.save_file_path, threads=threads)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
     show_waiting_message = True
@@ -94,7 +96,9 @@ def parse_saves(threads):
 
 
 def f_parse_saves(threads=None):
-    save_reader = save_parser.SavePathMonitor(config.get_save_path(), threads=threads)
+    if threads is None:
+        threads = config.CONFIG.threads
+    save_reader = save_parser.SavePathMonitor(config.CONFIG.save_file_path, threads=threads)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.check_for_new_saves():
         tle.process_gamestate(game_name, gamestate_dict)

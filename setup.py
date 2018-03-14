@@ -5,6 +5,11 @@ try:
 
     extension_modules = cythonize("src/stellarisdashboard/cython_ext/token_value_stream.pyx")
 except ImportError:
+    print("Cython is not installed, using slow parser.")
+    extension_modules = []
+except RuntimeError as e:
+    print(e)
+    print("Falling back to slow parser.")
     extension_modules = []
 
 setup(

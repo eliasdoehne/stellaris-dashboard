@@ -2,6 +2,9 @@ import pathlib
 import dataclasses
 import logging
 import platform
+import multiprocessing as mp
+
+mp.freeze_support()
 
 logger = logging.getLogger(__name__)
 CONFIG_FILE = pathlib.Path(__file__).parent / "config.ini"
@@ -11,7 +14,8 @@ CONFIG_FILE = pathlib.Path(__file__).parent / "config.ini"
 class Config:
     save_file_path: pathlib.Path = None
     base_output_path: pathlib.Path = None
-    threads: int = 1
+    threads: int = max(1, mp.cpu_count() // 2 - 1)
+    port: int = 8050
     colormap: str = "viridis"
 
     def is_valid(self):
@@ -31,18 +35,10 @@ class Config:
         return "\n".join(lines)
 
 
-def get_save_path():
-    return CONFIG.save_file_path
-
-
-def get_base_path():
-    return CONFIG.base_output_path
-
-
 def _get_default_save_path():
     if platform.system() == "Linux":
         return pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
-    elif platform.system() == "Linux":
+    elif platform.system() == "Windows":
         return pathlib.Path.home() / "\Documents\Paradox Interactive\Stellaris\save"
     return None
 
@@ -79,6 +75,7 @@ def _apply_config_ini():
         if config_lines:
             logger.info("Applying configuration from config.ini file...")
         for key, value in config_lines:
+            logger.info(f"Applying parameter {key} -> {value}")
             key = key.strip()
             value = value.strip()
             if not key or not value:
@@ -86,7 +83,10 @@ def _apply_config_ini():
             if key == "threads":
                 value = int(value)
             elif key in {"save_file_path", "base_output_path"}:
-                value = pathlib.Path(value)
+                if value.startswith("$HOME/"):
+                    value = pathlib.Path.home() / value[len("$HOME/"):]
+                else:
+                    value = pathlib.Path(value)
                 if not value.exists():
                     logger.info(f"Path {value} of type {key} does not exist yet.")
                     value.mkdir()

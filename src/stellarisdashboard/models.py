@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 
 from stellarisdashboard import config
 
-DB_FILE = config.get_base_path() / "timeline.db"
+DB_FILE = config.CONFIG.base_output_path / "timeline.db"
 engine = sqlalchemy.create_engine(f'sqlite:///{DB_FILE}', echo=False)
 SessionFactory = sessionmaker(bind=engine)
 

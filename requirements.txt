@@ -1,4 +1,5 @@
 click
+Cython
 dash
 dash-core-components==0.21.0rc1
 dash-html-components

@@ -1,27 +1,16 @@
 import logging
-import pathlib
-import sys
+import multiprocessing as mp
 import threading
 import time
-import multiprocessing as mp
-from stellarisdashboard import cli, dash_server, save_parser, config
 
-logging.basicConfig(level=logging.INFO, filename=config.get_base_path() / "stellaris_dashboard.log")
+from stellarisdashboard import cli, dash_server, save_parser, config
 
 logger = logging.getLogger(__name__)
 
-# Add a stream handler for stdout output
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-root_logger.addHandler(ch)
-
 
 def main():
-    threads = max(1, mp.cpu_count() // 2 - 1)
+    mp.freeze_support()
+    threads = config.CONFIG.threads
     t_save_monitor = threading.Thread(target=cli.f_monitor_saves, daemon=False, args=(threads, 10))
     t_save_monitor.start()
     t_dash = threading.Thread(target=dash_server.start_server, daemon=False, args=())

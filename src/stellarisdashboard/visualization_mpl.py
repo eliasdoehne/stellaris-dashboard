@@ -118,4 +118,4 @@ class MatplotLibVisualization:
         plt.close("all")
 
     def _get_path(self, plot_id: str):
-        return config.get_base_path() / f"./output/{self.plot_data.game_name}_{plot_id}.png"
+        return config.CONFIG.base_output_path / f"./output/{self.plot_data.game_name}_{plot_id}.png"

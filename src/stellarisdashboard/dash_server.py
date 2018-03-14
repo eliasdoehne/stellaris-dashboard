@@ -9,7 +9,7 @@ import flask
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 
-from stellarisdashboard import models, visualization_data
+from stellarisdashboard import config, models, visualization_data
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ def update_game_options(n) -> List[Dict[str, str]]:
 
 
 def start_server():
-    app.run_server()
+    app.run_server(port=config.CONFIG.port)
 
 
 if __name__ == '__main__':
