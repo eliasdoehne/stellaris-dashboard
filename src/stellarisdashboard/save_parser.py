@@ -36,7 +36,6 @@ class SavePathMonitor:
     """
 
     def __init__(self, game_dir, threads=None):
-        mp.freeze_support()
         self.processed_saves = set()
         self.game_dir = pathlib.Path(game_dir)
         if threads is None:
@@ -44,15 +43,19 @@ class SavePathMonitor:
         self.threads = threads
         self.work_pool = None
         if self.threads > 1:
+            mp.freeze_support()
             self.work_pool = mp.Pool(threads)
+            logger.debug("Initialized parsing worker pool")
 
     def check_for_new_saves(self) -> Tuple[str, Dict[str, Any]]:
+        logger.debug("Checking for new saves")
         global MOST_RECENTLY_UPDATED_GAME
         new_files = self.valid_save_files()
         self.processed_saves.update(new_files)
         if new_files:
-            logger.debug("Found new files: " + ", ".join(f.stem for f in new_files))
+            logger.debug(f"Found {len(new_files)} new files: " + ", ".join(f.stem for f in new_files[:10]))
         if self.threads > 1:
+            mp.freeze_support()
             results = [(f.parent.stem, self.work_pool.apply_async(parse_save, (f,))) for f in new_files]
             while results:
                 for game_name, r in results:
@@ -153,6 +156,7 @@ class SaveFileParser:
         self._parse_save()
         end_time = time.time()
         logging.info(f"Parsed save file in {end_time - start_time} seconds.")
+        print(f"Parsed save file in {end_time - start_time} seconds.")
         return self.gamestate_dict
 
     def _parse_save(self):

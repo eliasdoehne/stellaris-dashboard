@@ -39,14 +39,16 @@ def _get_default_save_path():
     if platform.system() == "Linux":
         return pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
     elif platform.system() == "Windows":
-        return pathlib.Path.home() / "\Documents\Paradox Interactive\Stellaris\save"
+        return pathlib.Path.home() / "Documents\Paradox Interactive\Stellaris\save games"
     return None
 
 
 def _get_default_base_output_path():
-    if platform.system() == "Linux":
+    system = platform.system()
+    if system == "Linux":
         return pathlib.Path.home() / ".local/share/stellaristimeline/"
-
+    elif system == "Windows":
+        return pathlib.Path.home() / "Documents/stellaristimeline"
     return None
 
 
@@ -98,4 +100,4 @@ def _apply_config_ini():
 
 _apply_config_ini()
 if not CONFIG.is_valid():
-    raise ValueError("Configuration is missing some options: \n{CONFIG}")
+    raise ValueError(f"Configuration is missing some options: \n{CONFIG}")

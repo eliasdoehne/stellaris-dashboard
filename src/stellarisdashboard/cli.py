@@ -80,11 +80,12 @@ def f_monitor_saves(threads, polling_interval):
                 plot_data.update_with_new_gamestate()
             if show_waiting_message:
                 show_waiting_message = False
-                logger.info("Waiting for new saves...")
+                logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
             time.sleep(polling_interval)
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
+        raise e
     finally:
         save_reader.teardown()
 
