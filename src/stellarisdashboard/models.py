@@ -1,5 +1,6 @@
 import enum
 import pathlib
+from typing import Dict
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -8,11 +9,30 @@ from sqlalchemy.orm import sessionmaker, relationship
 
 from stellarisdashboard import config
 
-DB_FILE = config.CONFIG.base_output_path / "timeline.db"
-engine = sqlalchemy.create_engine(f'sqlite:///{DB_FILE}', echo=False)
-SessionFactory = sessionmaker(bind=engine)
+_ENGINES = {}
+_SESSIONMAKERS: Dict[str, sessionmaker] = {}
+DB_PATH: pathlib.Path = config.CONFIG.base_output_path / "db"
+if not DB_PATH.exists():
+    print(f"Creating database path {DB_PATH}")
+    DB_PATH.mkdir()
 
 Base = declarative_base()
+
+
+def get_db_session(game_id):
+    if game_id not in _SESSIONMAKERS:
+        DB_FILE = DB_PATH / f"{game_id}.db"
+        engine = sqlalchemy.create_engine(f'sqlite:///{DB_FILE}', echo=False)
+        Base.metadata.create_all(bind=engine)
+        _ENGINES[game_id] = engine
+        _SESSIONMAKERS[game_id] = sessionmaker(bind=engine)
+
+    session_factory = _SESSIONMAKERS[game_id]
+    return session_factory()
+
+
+def get_known_games():
+    return [fname.stem for fname in DB_PATH.glob("*.db")]
 
 
 @enum.unique
@@ -86,6 +106,53 @@ class PopEthics(enum.IntEnum):
         return cls.__members__.get(ethics_description, PopEthics.other)
 
 
+@enum.unique
+class LeaderClass(enum.Enum):
+    ruler = 0
+    governor = 1
+    scientist = 2
+    admiral = 3
+    general = 4
+
+
+@enum.unique
+class LeaderGender(enum.Enum):
+    female = 0
+    male = 1
+    other = 2
+
+
+@enum.unique
+class LeaderAgenda(enum.Enum):
+    secure_the_borders = 0
+    fleet_expansion = 1
+    develop_industry = 2
+    scientific_leap = 3
+    grow_economy = 4
+    a_new_generation = 5
+    expansionist_overtures = 6
+    national_purity = 7
+    public_debates = 8
+    import__export = 9
+    native_privilege = 10
+    skill_development = 11
+    slave_optimizations = 12
+    selective_nostalgia = 13
+    xeno_outreach = 14
+
+    other = 99
+
+
+@enum.unique
+class LeaderAchievementType(enum.Enum):
+    researched_tech = 0
+    won_fleet_battle = 1
+    won_planet_invasion = 2
+    negotiated_peace_treaty = 3
+
+    special_event = 99
+
+
 def date_to_days(date_str: str) -> float:
     y, m, d = map(int, date_str.split("."))
     return (y - 2200) * 360 + (m - 1) * 30 + d - 1
@@ -103,20 +170,14 @@ def days_to_date(days: float) -> str:
 
 
 def get_game_names_matching(game_name_prefix):
-    session = SessionFactory()
-    try:
-        game = session.query(Game).all()
-        for g in game:
-            if g.game_name.startswith(game_name_prefix):
-                yield g.game_name
-    finally:
-        session.close()
+    for fname in DB_PATH.glob(f"{game_name_prefix}*"):
+        yield fname.stem
 
 
 def get_gamestates_since(game_name, date):
-    session = SessionFactory()
+    session = get_db_session(game_name)
     try:
-        game = session.query(Game).filter(Game.game_name == game_name).one()
+        game = session.query(Game).one()
         for gs in session.query(GameState).filter(GameState.game == game, GameState.date > date).order_by(GameState.date).all():
             yield gs
     finally:
@@ -226,6 +287,9 @@ class CountryData(Base):
 
     has_research_agreement_with_player = Column(Boolean)
     has_sensor_link_with_player = Column(Boolean)
+    has_defensive_pact_with_player = Column(Boolean)
+    has_federation_with_player = Column(Boolean)
+    has_non_aggression_pact_with_player = Column(Boolean)
     attitude_towards_player = Column(Enum(Attitude))
 
     country = relationship("Country", back_populates="country_data")
@@ -346,7 +410,36 @@ class WarEvent(Base):
     war_participant = relationship("WarParticipant", back_populates="warevents")
 
     def __repr__(self):
-        return f"WarEvent(warevent_id={warevent_id}, war_participant_id={self.war_participant_id}, date={self.date}, war_exhaustion={self.war_exhaustion})"
+        return f"WarEvent(warevent_id={self.warevent_id}, war_participant_id={self.war_participant_id}, date={self.date}, war_exhaustion={self.war_exhaustion})"
 
 
-Base.metadata.create_all(engine)
+class Leader(Base):
+    __tablename__ = "leadertable"
+
+    leader_id = Column(Integer, primary_key=True)
+
+    leader_id_in_game = Column(Integer)
+
+    leader_first_name = Column(String(80))
+    leader_second_name = Column(String(80))
+
+    leader_type = Column(Enum(LeaderClass))
+    gender = Column(Enum(LeaderGender))
+    leader_agenda = Column(Enum(LeaderAgenda))
+
+    date_hired = Column(Integer)  # The date when this leader was first encountered
+
+    achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
+
+
+class LeaderAchievement(Base):
+    __tablename__ = "leaderachievementtable"
+
+    leader_achievement_id = Column(Integer, primary_key=True)
+    leader_id = Column(ForeignKey(Leader.leader_id))
+
+    date = Column(Integer)
+    achievement_type = Column(Enum(LeaderAchievementType))
+    achievement_description = Column(String(80))
+
+    leader = relationship("Leader", back_populates="achievements")

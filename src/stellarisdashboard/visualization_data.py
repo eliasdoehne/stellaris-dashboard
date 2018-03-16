@@ -154,7 +154,7 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotData":
     global _CURRENT_EXECUTION_PLOT_DATA
     if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
-        session = models.SessionFactory()
+        session = models.get_db_session(game_name)
         game = session.query(models.Game).filter_by(game_name=game_name).first()
         session.close()
         if not game:

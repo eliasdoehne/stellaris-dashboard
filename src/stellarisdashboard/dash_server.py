@@ -20,9 +20,12 @@ app.scripts.config.serve_locally = True
 
 
 def populate_available_games() -> Dict[str, models.Game]:
-    session = models.SessionFactory()
-    games = {g.game_name: g.player_country_name for g in session.query(models.Game).order_by(models.Game.game_name).all()}
-    session.close()
+    games = {}
+    for game_name in sorted(models.get_known_games()):
+        session = models.get_db_session(game_name)
+        game = session.query(models.Game).order_by(models.Game.game_name).one()
+        games[game_name] = game.player_country_name
+        session.close()
     return games
 
 
@@ -167,7 +170,7 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
 @app.callback(Output('select-game-dropdown', 'options'))
 def update_game_options(n) -> List[Dict[str, str]]:
     global AVAILABLE_GAMES
-    AVAILABLE_GAMES = populate_available_games()
+    AVAILABLE_GAMES = sorted(models.get_known_games())
     print("Updated game list:")
     for g in AVAILABLE_GAMES:
         print(f"    {g}")

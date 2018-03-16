@@ -55,7 +55,7 @@ class TimelineExtractor:
             return None
         self._player_country = self._gamestate_dict["player"][0]["country"]
         player_country_name = self._gamestate_dict["country"][self._player_country]["name"]
-        self._session = models.SessionFactory()
+        self._session = models.get_db_session(game_name)
         try:
             self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
             if self.game is None:
