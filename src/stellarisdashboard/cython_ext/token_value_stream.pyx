@@ -1,4 +1,6 @@
-def token_value_stream(str gamestate):
+from cpython cimport bool
+
+def token_value_stream(str gamestate, bool debug=False):
     cdef int token_start, end_index, current_position, line_number, len_gs
     cdef str c
     cdef bint in_word, in_quoted_string
@@ -33,7 +35,7 @@ def token_value_stream(str gamestate):
                 token_start = end_index + 1
             else:
                 token_start += 1
-            if c == "\n":
+            if debug and c == "\n":
                 line_number += 1
         elif c == "{" or c == "}" or c == "=":
             if in_word:

@@ -14,11 +14,9 @@ try:
 
     pyximport.install()
     from stellarisdashboard.cython_ext import token_value_stream
-
 except ImportError as e:
     logger.info(f"Cython-error \"{e}\" occurred, using slow parser")
     from stellarisdashboard import token_value_stream_re as token_value_stream
-
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -27,6 +25,9 @@ class StellarisFileFormatError(Exception): pass
 
 
 MOST_RECENTLY_UPDATED_GAME = None
+DEBUG = True
+if DEBUG:
+    logger.info("Running in Debug mode...")
 
 
 class SavePathMonitor:
@@ -53,7 +54,8 @@ class SavePathMonitor:
         new_files = self.valid_save_files()
         self.processed_saves.update(new_files)
         if new_files:
-            logger.debug(f"Found {len(new_files)} new files: " + ", ".join(f.stem for f in new_files[:10]))
+            new_files_str = ", ".join(f.stem for f in new_files[:10])
+            logger.debug(f"Found {len(new_files)} new files: {new_files_str}...")
         if self.threads > 1:
             mp.freeze_support()
             results = [(f.parent.stem, self.work_pool.apply_async(parse_save, (f,))) for f in new_files]
@@ -108,8 +110,12 @@ Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
 def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
-    line_number = 0
-    for value, line_number in tokenizer(gamestate):
+    for token_info in tokenizer(gamestate, DEBUG):
+        if isinstance(token_info, tuple):
+            value, line_number = token_info
+        else:
+            value = token_info
+            line_number = 0
         if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)
         elif value == "}":
