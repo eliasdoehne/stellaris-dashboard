@@ -32,10 +32,9 @@ def populate_available_games() -> Dict[str, models.Game]:
 AVAILABLE_GAMES = populate_available_games()
 SELECTED_GAME_NAME = None
 if AVAILABLE_GAMES:
-    SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES.keys()))  # "unitednationsofearth_-15512622"  #
+    SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES.keys()))
 
 DEFAULT_SELECTED_PLOT = next(iter(visualization_data.THEMATICALLY_GROUPED_PLOTS.keys()))
-
 DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis={
         "type": "linear"
@@ -43,7 +42,8 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
     height=480,
 )
 
-GAME_SELECTION_DROPDOWN = dcc.Dropdown(id='select-game-dropdown', options=[{'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()], value=SELECTED_GAME_NAME, )
+dropdown_options = [{'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()]
+GAME_SELECTION_DROPDOWN = dcc.Dropdown(id='select-game-dropdown', options=dropdown_options, value=SELECTED_GAME_NAME, )
 app.layout = html.Div([
     GAME_SELECTION_DROPDOWN,
     html.Div([
@@ -85,19 +85,21 @@ def update_selected_game(new_selected_game):
 @app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'),
                                                   Input('select-game-dropdown', 'value'), ])
 def update_content(tab_value, game_id):
-    update_selected_game(game_id)
-    children = [html.H3(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
-    plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
-    for plot_spec in plots:
-        figure_data = get_figure_data(plot_spec)
-        figure_layout = get_figure_layout(plot_spec)
-        figure = go.Figure(data=figure_data, layout=figure_layout)
+    children = []
+    if game_id is not None:
+        update_selected_game(game_id)
+        children = [html.H3(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
+        plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+        for plot_spec in plots:
+            figure_data = get_figure_data(plot_spec)
+            figure_layout = get_figure_layout(plot_spec)
+            figure = go.Figure(data=figure_data, layout=figure_layout)
 
-        children.append(html.H3(f"{plot_spec.title}"))
-        children.append(dcc.Graph(
-            id=f"{plot_spec.plot_id}",
-            figure=figure,
-        ))
+            children.append(html.H3(f"{plot_spec.title}"))
+            children.append(dcc.Graph(
+                id=f"{plot_spec.plot_id}",
+                figure=figure,
+            ))
     return children
 
 
@@ -114,7 +116,7 @@ def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot
     plot_list = []
     y_previous = None
     y_previous_pos, y_previous_neg = None, None
-    for key, x_values, y_values in plot_data.iterate_data_sorted(plot_spec):
+    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
             continue
         line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f} - {key}" for val in y_values]}
