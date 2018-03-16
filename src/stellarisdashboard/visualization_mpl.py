@@ -51,7 +51,8 @@ class MatplotLibVisualization:
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
-            colors.append(MatplotLibVisualization.COLOR_MAP(i / (len(data) - 1)))
+            color_index = i / max(1, len(data) - 1)
+            colors.append(MatplotLibVisualization.COLOR_MAP(color_index))
         if stacked:
             ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.75)
         ax.legend(loc='upper left')
@@ -75,12 +76,14 @@ class MatplotLibVisualization:
             for j, y in enumerate(y_values):
                 net[j] += y
 
-        num_pos = len(stacked_pos)
-        colors_pos = [MatplotLibVisualization.COLOR_MAP(0.9 - 0.5 * val / num_pos) for val in reversed(range(num_pos))]
-        num_neg = len(stacked_neg)
-        colors_neg = [MatplotLibVisualization.COLOR_MAP(0.0 + 0.5 * val / num_neg) for val in range(num_neg)]
-        ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75, )
-        ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=labels_pos, colors=colors_pos, alpha=0.75, )
+        if stacked_neg:
+            num_neg = len(stacked_neg)
+            colors_neg = [MatplotLibVisualization.COLOR_MAP(0.0 + 0.5 * val / num_neg) for val in range(num_neg)]
+            ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75, )
+        if stacked_pos:
+            num_pos = len(stacked_pos)
+            colors_pos = [MatplotLibVisualization.COLOR_MAP(0.9 - 0.5 * val / num_pos) for val in reversed(range(num_pos))]
+            ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=labels_pos, colors=colors_pos, alpha=0.75, )
         ax.plot(self.plot_data.dates, net, label="Net income", color="k")
         ax.legend(loc='upper left')
 
@@ -103,7 +106,8 @@ class MatplotLibVisualization:
 
     def _get_country_plot_kwargs(self, country_name: str, i: int, num_lines: int):
         linewidth = 1
-        c = MatplotLibVisualization.COLOR_MAP(i / (num_lines - 1))
+        color_index = i / max(1, num_lines - 1)
+        c = MatplotLibVisualization.COLOR_MAP(color_index)
         label = f"{country_name}"
         if country_name == self.plot_data.player_country:
             linewidth = 2
