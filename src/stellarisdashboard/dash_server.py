@@ -78,6 +78,7 @@ def update_selected_game(new_selected_game):
     if new_selected_game and new_selected_game != SELECTED_GAME_NAME:
         print(f"Selected game is {new_selected_game}")
         SELECTED_GAME_NAME = new_selected_game
+        visualization_data.get_current_execution_plot_data(SELECTED_GAME_NAME)  # to ensure everything is initialized before the dropdown's callback is handled
         GAME_SELECTION_DROPDOWN.value = new_selected_game
 
 
