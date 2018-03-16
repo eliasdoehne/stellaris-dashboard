@@ -6,22 +6,9 @@ import traceback
 import click
 import sqlalchemy
 
-
-def initialize_logger():
-    # Add a stream handler for stdout output
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch.setFormatter(formatter)
-    root_logger.addHandler(ch)
-
-
-initialize_logger()
-logger = logging.getLogger(__name__)
-
 from stellarisdashboard import config, save_parser, timeline, visualization_data, visualization_mpl, models
+
+logger = logging.getLogger(__name__)
 
 
 @click.group()
@@ -59,13 +46,16 @@ def f_visualize_mpl(game_name_prefix: str, show_everything=False):
 
 @cli.command()
 @click.option('--threads', type=click.INT)
-@click.option('--polling-interval', type=click.INT, default=1)
-def monitor_saves(threads, polling_interval):
-    f_monitor_saves(threads, polling_interval)
+@click.option('--save-path', type=click.Path(exists=True, file_okay=False))
+@click.option('--polling-interval', type=click.FLOAT, default=0.5)
+def monitor_saves(threads, save_path, polling_interval):
+    f_monitor_saves(threads, polling_interval, save_path=save_path)
 
 
-def f_monitor_saves(threads, polling_interval):
-    save_reader = save_parser.SavePathMonitor(config.CONFIG.save_file_path, threads=threads)
+def f_monitor_saves(threads, polling_interval, save_path=None):
+    if save_path is None:
+        save_path = config.CONFIG.save_file_path
+    save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
     show_waiting_message = True
@@ -92,14 +82,17 @@ def f_monitor_saves(threads, polling_interval):
 
 @cli.command()
 @click.option('--threads', type=click.INT)
-def parse_saves(threads):
-    f_parse_saves(threads)
+@click.option('--save-path', type=click.Path(exists=True, file_okay=False))
+def parse_saves(threads, save_path):
+    f_parse_saves(threads, save_path)
 
 
-def f_parse_saves(threads=None):
+def f_parse_saves(threads=None, save_path=None):
     if threads is None:
         threads = config.CONFIG.threads
-    save_reader = save_parser.SavePathMonitor(config.CONFIG.save_file_path, threads=threads)
+    if save_path is None:
+        save_path = config.CONFIG.save_file_path
+    save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.check_for_new_saves():
         tle.process_gamestate(game_name, gamestate_dict)
