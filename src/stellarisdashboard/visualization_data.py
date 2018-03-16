@@ -337,9 +337,9 @@ class EmpireProgressionPlotData:
                     plot_list.append(value)
         return dates, plot_list
 
-    def iterate_data_sorted(self, plot_spec: PlotSpecification) -> Iterable[Tuple[str, List[float], List[float]]]:
+    def iterate_data(self, plot_spec: PlotSpecification) -> Iterable[Tuple[str, List[float], List[float]]]:
         data_dict = plot_spec.plot_data_function(self)
-        for key, data in sorted(data_dict.items(), key=lambda x: (x[1][-1], x[0]), reverse=True):
+        for key, data in data_dict.items():
             if key == "ROBOT_POP_SPECIES_1":
                 key = "Robot"
             elif key == "ROBOT_POP_SPECIES_2":
@@ -352,7 +352,12 @@ class EmpireProgressionPlotData:
             else:
                 # other plots need to add data points to each other => return everything
                 x, y = self.dates, data
-            yield key, x, y
+            if y:
+                yield key, x, y
+
+    def data_sorted_by_last_value(self, plot_spec: PlotSpecification) -> List[Tuple[str, List[float], List[float]]]:
+        unsorted_data = list(self.iterate_data(plot_spec))
+        return sorted(unsorted_data, key=lambda x: (x[2][-1], x[0]), reverse=True)
 
     def _extract_pop_count(self, country_data: models.CountryData):
         if self.show_everything or show_demographic_info(country_data):

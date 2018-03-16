@@ -36,7 +36,7 @@ class MatplotLibVisualization:
 
     def _line_plot(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
-        for i, (key, x, y) in enumerate(self.plot_data.iterate_data_sorted(plot_spec)):
+        for i, (key, x, y) in enumerate(self.plot_data.data_sorted_by_last_value(plot_spec)):
             if y:
                 plot_kwargs = self._get_country_plot_kwargs(key, i, len(plot_spec.plot_data_function(self.plot_data)))
                 ax.plot(x, y, **plot_kwargs)
@@ -47,7 +47,7 @@ class MatplotLibVisualization:
         stacked = []
         labels = []
         colors = []
-        data = list(self.plot_data.iterate_data_sorted(plot_spec))
+        data = list(self.plot_data.data_sorted_by_last_value(plot_spec))
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
@@ -63,7 +63,7 @@ class MatplotLibVisualization:
         labels_pos = []
         stacked_neg = []
         labels_neg = []
-        data = sorted(self.plot_data.iterate_data_sorted(plot_spec), key=lambda tup: tup[-1][-1], reverse=True)
+        data = sorted(self.plot_data.data_sorted_by_last_value(plot_spec), key=lambda tup: tup[-1][-1], reverse=True)
         data = [(key, x_values, y_values) for (key, x_values, y_values) in data if not all(y == 0 for y in y_values)]
         net = [0 for _ in self.plot_data.dates]
         for i, (key, x_values, y_values) in enumerate(data):
@@ -82,7 +82,7 @@ class MatplotLibVisualization:
             ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75, )
         if stacked_pos:
             num_pos = len(stacked_pos)
-            colors_pos = [MatplotLibVisualization.COLOR_MAP(0.9 - 0.5 * val / num_pos) for val in reversed(range(num_pos))]
+            colors_pos = [MatplotLibVisualization.COLOR_MAP(1.0 - 0.5 * val / num_pos) for val in reversed(range(num_pos))]
             ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=labels_pos, colors=colors_pos, alpha=0.75, )
         ax.plot(self.plot_data.dates, net, label="Net income", color="k")
         ax.legend(loc='upper left')
