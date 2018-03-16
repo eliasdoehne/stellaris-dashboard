@@ -3,9 +3,23 @@ import dataclasses
 import logging
 import platform
 import multiprocessing as mp
+import sys
 
 mp.freeze_support()
 
+
+def initialize_logger():
+    # Add a stream handler for stdout output
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    root_logger.addHandler(ch)
+
+
+initialize_logger()
 logger = logging.getLogger(__name__)
 CONFIG_FILE = pathlib.Path(__file__).parent / "config.ini"
 
