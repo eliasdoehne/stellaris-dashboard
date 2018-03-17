@@ -18,12 +18,18 @@ app = dash.Dash(name="Stellaris Timeline", server=flask_app, url_base_pathname="
 app.css.config.serve_locally = True
 app.scripts.config.serve_locally = True
 
+COLOR_PHYSICS = 'rgba(30,100,170,0.5)'
+COLOR_SOCIETY = 'rgba(60,150,90,0.5)'
+COLOR_ENGINEERING = 'rgba(190,150,30,0.5)'
+
 
 def populate_available_games() -> Dict[str, models.Game]:
     games = {}
     for game_name in sorted(models.get_known_games()):
         session = models.get_db_session(game_name)
-        game = session.query(models.Game).order_by(models.Game.game_name).one()
+        game = session.query(models.Game).order_by(models.Game.game_name).one_or_none()
+        if game is None:
+            continue
         games[game_name] = game.player_country_name
         session.close()
     return games
@@ -113,54 +119,92 @@ def get_figure_data(plot_spec: visualization_data.PlotSpecification):
 
 
 def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
+    if plot_spec.style == visualization_data.PlotStyle.line:
+        plot_list = _get_line_plot_data(plot_data, plot_spec)
+    elif plot_spec.style == visualization_data.PlotStyle.stacked:
+        plot_list = _get_stacked_plot_data(plot_data, plot_spec)
+    elif plot_spec.style == visualization_data.PlotStyle.budget:
+        plot_list = _get_budget_plot_data(plot_data, plot_spec)
+    else:
+        logger.warning(f"Unknown Plot type {plot_spec}")
+        plot_list = []
+    return sorted(plot_list, key=lambda p: p["y"][-1])
+
+
+def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
     plot_list = []
-    y_previous = None
-    y_previous_pos, y_previous_neg = None, None
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
             continue
         line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f} - {key}" for val in y_values]}
-        if plot_spec.style == visualization_data.PlotStyle.stacked:
-            if y_previous is None:
-                y_previous = [0.0 for _ in x_values]
-            line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
-            y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
-            line["y"] = [a for a in y_previous]
-            line["hoverinfo"] = "x+text"
-            line["fill"] = "tonexty"
-        elif plot_spec.style == visualization_data.PlotStyle.budget:
-            if y_previous_pos is None:
-                y_previous = [0.0 for _ in x_values]  # use y_previous to record the net gain/loss
-                y_previous_pos = [0.0 for _ in x_values]
-                y_previous_neg = [0.0 for _ in x_values]
-            line["text"] = [f"{val:.1f} - {key}" for val in line["y"]]
-            if all(y <= 0 for y in y_values):
-                y_prev = y_previous_neg
-                is_positive = False
-            elif all(y >= 0 for y in y_values):
-                y_prev = y_previous_pos
-                is_positive = True
-            else:
-                logger.warning("Not a real budget Graph!")
-                break
-            for i, y in enumerate(y_values):
-                y_prev[i] += y
-                y_previous[i] += y
-            line["y"] = y_prev[:]
-            line["hoverinfo"] = "x+text"
-            line["fill"] = "tonexty" if is_positive else "tozeroy"
+        plot_list.append(line)
+    return plot_list
+
+
+def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+    y_previous = None
+    plot_list = []
+    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+        if not any(y_values):
+            continue
+        line = {'x': x_values, 'name': key, "fill": "tonexty", "hoverinfo": "x+text"}
+        if y_previous is None:
+            y_previous = [0.0 for _ in x_values]
+        y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
+        line["y"] = y_previous[:]  # make a copy
         if line["y"]:
+            line["text"] = [f"{val:.1f} - {key}" if val else "" for val in y_values]
+            if key == "physics":
+                line["line"] = {"color": COLOR_PHYSICS}
+                line["fillcolor"] = COLOR_PHYSICS
+            elif key == "society":
+                line["line"] = {"color": COLOR_SOCIETY}
+                line["fillcolor"] = COLOR_SOCIETY
+            elif key == "engineering":
+                line["line"] = {"color": COLOR_ENGINEERING}
+                line["fillcolor"] = COLOR_ENGINEERING
             plot_list.append(line)
-    if plot_list and plot_spec.style == visualization_data.PlotStyle.budget:
-        plot_list.append({
-            "x": plot_list[0]["x"],
-            'y': y_previous,
-            'name': 'Net gain',
-            "text": [f"{val:.1f} - net gain" for val in y_previous],
-            "fill": "tozeroy",
-            "hoverinfo": "x+text",
-        })
-    return sorted(plot_list, key=lambda p: p["y"][-1])
+    return plot_list
+
+
+def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+    net_gain = None
+    y_previous_pos, y_previous_neg = None, None
+    plot_list = []
+    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+        if not any(y_values):
+            continue
+        if net_gain is None:
+            net_gain = [0.0 for _ in x_values]
+            y_previous_pos = [0.0 for _ in x_values]
+            y_previous_neg = [0.0 for _ in x_values]
+        if all(y <= 0 for y in y_values):
+            y_previous = y_previous_neg
+            is_positive = False
+        elif all(y >= 0 for y in y_values):
+            y_previous = y_previous_pos
+            is_positive = True
+        else:
+            logger.warning("Not a real budget Graph!")
+            break
+        line = {'x': x_values, 'name': key, "hoverinfo": "x+text"}
+        for i, y in enumerate(y_values):
+            y_previous[i] += y
+            net_gain[i] += y
+        line["y"] = y_previous[:]
+        line["fill"] = "tonexty" if is_positive else "tozeroy"
+        line["text"] = [f"{val:.1f} - {key}" if val else "" for val in y_values]
+        plot_list.append(line)
+    # TODO would be great to fill to y=0 with the color of the next greatest entry, but that's not so easy.
+    plot_list.append({
+        'x': plot_list[0]["x"],
+        'y': net_gain,
+        'name': 'Net gain',
+        'line': {'color': 'black'},
+        'text': [f'{val:.1f} - net gain' for val in net_gain],
+        'hoverinfo': 'x+text',
+    })
+    return plot_list
 
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
