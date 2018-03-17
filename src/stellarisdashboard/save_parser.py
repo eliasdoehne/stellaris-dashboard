@@ -24,7 +24,6 @@ FilePosition = namedtuple("FilePosition", "line col")
 class StellarisFileFormatError(Exception): pass
 
 
-MOST_RECENTLY_UPDATED_GAME = None
 DEBUG = True
 if DEBUG:
     logger.info("Running in Debug mode...")
@@ -50,7 +49,6 @@ class SavePathMonitor:
 
     def check_for_new_saves(self) -> Tuple[str, Dict[str, Any]]:
         logger.debug("Checking for new saves")
-        global MOST_RECENTLY_UPDATED_GAME
         new_files = self.valid_save_files()
         self.processed_saves.update(new_files)
         if new_files:
@@ -63,7 +61,6 @@ class SavePathMonitor:
                 for game_name, r in results:
                     if r.ready():
                         if r.successful():
-                            MOST_RECENTLY_UPDATED_GAME = game_name
                             yield game_name, r.get()
                         else:
                             try:

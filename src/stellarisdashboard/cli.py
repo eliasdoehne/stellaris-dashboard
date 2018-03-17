@@ -52,9 +52,13 @@ def monitor_saves(threads, save_path, polling_interval):
     f_monitor_saves(threads, polling_interval, save_path=save_path)
 
 
-def f_monitor_saves(threads, polling_interval, save_path=None):
+def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
     if save_path is None:
         save_path = config.CONFIG.save_file_path
+    if polling_interval is None:
+        polling_interval = 0.5  # TODO add to config
+    if threads is None:
+        threads = config.CONFIG.threads
     save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
@@ -68,6 +72,7 @@ def f_monitor_saves(threads, polling_interval, save_path=None):
                 plot_data = visualization_data.get_current_execution_plot_data(game_name)
                 plot_data.initialize()
                 plot_data.update_with_new_gamestate()
+                visualization_data.MOST_RECENTLY_UPDATED_GAME = game_name
             if show_waiting_message:
                 show_waiting_message = False
                 logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")

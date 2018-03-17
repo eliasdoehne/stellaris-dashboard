@@ -3,7 +3,7 @@ import multiprocessing as mp
 import threading
 import time
 
-from stellarisdashboard import cli, dash_server, save_parser, config
+from stellarisdashboard import cli, dash_server, save_parser, config, visualization_data
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,10 @@ def main():
             # This is a workaround since the game selection dropdown
             # from dash does not seem to work in the in-game browser.
             time.sleep(3)
-            if save_parser.MOST_RECENTLY_UPDATED_GAME is not None and save_parser.MOST_RECENTLY_UPDATED_GAME != dash_server.SELECTED_GAME_NAME:
+            if visualization_data.MOST_RECENTLY_UPDATED_GAME is not None and visualization_data.MOST_RECENTLY_UPDATED_GAME != dash_server.SELECTED_GAME_NAME:
                 logger.debug("Updating selected game in dash!")
-                logger.debug(save_parser.MOST_RECENTLY_UPDATED_GAME)
-                dash_server.update_selected_game(save_parser.MOST_RECENTLY_UPDATED_GAME)
+                logger.debug(visualization_data.MOST_RECENTLY_UPDATED_GAME)
+                dash_server.update_selected_game(visualization_data.MOST_RECENTLY_UPDATED_GAME)
         except KeyboardInterrupt:
             break
 

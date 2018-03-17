@@ -148,6 +148,7 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
 }
 
+MOST_RECENTLY_UPDATED_GAME = None
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 
 
