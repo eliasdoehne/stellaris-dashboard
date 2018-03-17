@@ -114,6 +114,8 @@ class LeaderClass(enum.Enum):
     admiral = 3
     general = 4
 
+    unknown = 99
+
 
 @enum.unique
 class LeaderGender(enum.Enum):
@@ -133,14 +135,33 @@ class LeaderAgenda(enum.Enum):
     expansionist_overtures = 6
     national_purity = 7
     public_debates = 8
-    import__export = 9
+    import_export = 9
     native_privilege = 10
     skill_development = 11
     slave_optimizations = 12
     selective_nostalgia = 13
     xeno_outreach = 14
-
     other = 99
+
+
+AGENDA_STR_TO_ENUM = dict(
+    agenda_defensive_focus=LeaderAgenda.secure_the_borders,
+    agenda_naval_focus=LeaderAgenda.fleet_expansion,
+    agenda_industrial=LeaderAgenda.develop_industry,
+    agenda_science=LeaderAgenda.scientific_leap,
+    agenda_finanical=LeaderAgenda.grow_economy,
+    agenda_welfare=LeaderAgenda.a_new_generation,
+    agenda_expansionist_overtures=LeaderAgenda.expansionist_overtures,
+    agenda_national_purity=LeaderAgenda.national_purity,
+    agenda_public_debates=LeaderAgenda.public_debates,
+    agenda_import_export=LeaderAgenda.import_export,
+    agenda_native_privilege=LeaderAgenda.native_privilege,
+    agenda_skill_development=LeaderAgenda.skill_development,
+    agenda_slave_optimization=LeaderAgenda.slave_optimizations,
+    agenda_selective_nostalgia=LeaderAgenda.selective_nostalgia,
+    agenda_xeno_outreach=LeaderAgenda.xeno_outreach,
+    agenda_null=LeaderAgenda.other,
+)
 
 
 @enum.unique
@@ -195,6 +216,7 @@ class Game(Base):
     species = relationship("Species", back_populates="game", cascade="all,delete,delete-orphan")
     game_states = relationship("GameState", back_populates="game", cascade="all,delete,delete-orphan")
     wars = relationship("War", back_populates="game", cascade="all,delete,delete-orphan")
+    leaders = relationship("Leader", back_populates="game", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
         return f"Game(game_id={self.game_id}, game_name={self.game_name})"
@@ -309,6 +331,8 @@ class Species(Base):
     species_id_in_game = Column(Integer)
 
     species_name = Column(String(80))
+    parent_species_id_in_game = Column(Integer)
+    is_robotic = Column(Boolean)
 
     game = relationship("Game", back_populates="species")
 
@@ -371,7 +395,7 @@ class FactionSupport(Base):
 class War(Base):
     __tablename__ = 'wartable'
     war_id = Column(Integer, primary_key=True)
-    game_id = Column(ForeignKey(Game.game_id), index=True, primary_key=True)
+    game_id = Column(ForeignKey(Game.game_id))
 
     start_date_days = Column(Integer, index=True)
     name = Column(String(100))
@@ -417,19 +441,24 @@ class Leader(Base):
     __tablename__ = "leadertable"
 
     leader_id = Column(Integer, primary_key=True)
+    game_id = Column(ForeignKey(Game.game_id))
 
     leader_id_in_game = Column(Integer)
 
-    leader_first_name = Column(String(80))
-    leader_second_name = Column(String(80))
+    leader_name = Column(String(80))
 
-    leader_type = Column(Enum(LeaderClass))
+    leader_class = Column(Enum(LeaderClass))
     gender = Column(Enum(LeaderGender))
     leader_agenda = Column(Enum(LeaderAgenda))
 
     date_hired = Column(Integer)  # The date when this leader was first encountered
+    date_born = Column(Integer)  # estimated birthday
 
+    game = relationship("Game", back_populates="leaders")
     achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
+
+    def __repr__(self):
+        return f"Leader(leader_id_in_game={self.leader_id_in_game}, leader_name={self.leader_name}, leader_class={self.leader_class}, gender={self.gender}, leader_agenda={self.leader_agenda}, date_hired={days_to_date(self.date_hired)}, date_born={days_to_date(self.date_born)})"
 
 
 class LeaderAchievement(Base):

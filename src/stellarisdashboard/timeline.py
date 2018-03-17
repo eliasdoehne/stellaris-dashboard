@@ -1,6 +1,6 @@
 import itertools
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from stellarisdashboard import models
 
@@ -75,14 +75,7 @@ class TimelineExtractor:
             raise e
         finally:
             self._session.close()
-        self._current_gamestate = None
-        self._gamestate_dict = None
-        self._player_country = None
-        self._player_research_agreements = None
-        self._player_sensor_links = None
-        self._player_monthly_trade_info = None
-        self._session = None
-        self._date_in_days = None
+            self._reset_state()
 
     def _process_gamestate(self):
         self._extract_player_trade_agreements()
@@ -104,6 +97,8 @@ class TimelineExtractor:
             logger.debug(f"Extracting country data: {country_id}, {debug_name}")
             self._extract_pop_info_from_planets(country_data_dict, country_data)
             self._extract_factions(country_data)
+            if country_data.country.is_player:
+                self._extract_player_leaders(country_data_dict.get("owned_leaders", []))
 
         self._extract_wars()
 
@@ -358,16 +353,20 @@ class TimelineExtractor:
                     self._factionless_pops[TimelineExtractor.NON_SENTIENT_ROBOT_NO_FACTION] += 1
 
         for species_id, pop_count in species_demographics.items():
-            species_name = self._gamestate_dict["species"][species_id]["name"]
-            species = self._session.query(models.Species).filter_by(game=self.game, species_id_in_game=species_id).one_or_none()
+            species_data = self._gamestate_dict["species"][species_id]
+            species_name = species_data["name"]
+            species = self._session.query(models.Species).filter_by(
+                game=self.game, species_id_in_game=species_id
+            ).one_or_none()
             if species is None:
                 species = models.Species(
                     game=self.game,
                     species_name=species_name,
                     species_id_in_game=species_id,
+                    is_robotic=species_data["class"] == "ROBOT",
+                    parent_species_id_in_game=species_data.get("base", -1),
                 )
                 self._session.add(species)
-
             pop_count = models.PopCount(
                 country_data=country_data,
                 species=species,
@@ -418,3 +417,50 @@ class TimelineExtractor:
                     war_exhaustion=exhaustion
                 )
                 self._session.add(war_status)
+
+    def _extract_player_leaders(self, player_owned_leaders: List[int]):
+        for leader_id in player_owned_leaders:
+            leader_dict = self._gamestate_dict["leaders"].get(leader_id)
+            if leader_dict is None or leader_dict == "none":
+                continue
+            leader = self._session.query(models.Leader).filter_by(game=self.game, leader_id_in_game=leader_id).one_or_none()
+            if leader is None:
+                leader = self._add_new_leader(leader_id, leader_dict)
+
+    def _add_new_leader(self, leader_id, leader_dict):
+        leader_class = models.LeaderClass.__members__.get(leader_dict.get("class"), models.LeaderClass.unknown)
+        leader_gender = models.LeaderGender.__members__.get(leader_dict.get("gender"), models.LeaderGender.other)
+        leader_agenda = models.AGENDA_STR_TO_ENUM.get(leader_dict.get("agenda"), models.LeaderAgenda.other)
+        first_name = leader_dict['name']['first_name']
+        last_name = leader_dict['name'].get('second_name', "")
+        leader_name = f"{first_name} {last_name}".strip()
+
+        date_hired = min(
+            self._date_in_days,
+            models.date_to_days(leader_dict.get("date", "10000.01.01")),
+            models.date_to_days(leader_dict.get("start", "10000.01.01")),
+            models.date_to_days(leader_dict.get("date_added", "10000.01.01")),
+        )
+        date_born = date_hired - 360 * leader_dict.get("age", 0.0)
+        leader = models.Leader(
+            leader_id_in_game=leader_id,
+            leader_class=leader_class,
+            leader_name=leader_name,
+            leader_agenda=leader_agenda,
+            game_id=self.game.game_id,
+            gender=leader_gender,
+            date_hired=date_hired,
+            date_born=date_born,
+        )
+        self._session.add(leader)
+        return leader
+
+    def _reset_state(self):
+        self._current_gamestate = None
+        self._gamestate_dict = None
+        self._player_country = None
+        self._player_research_agreements = None
+        self._player_sensor_links = None
+        self._player_monthly_trade_info = None
+        self._session = None
+        self._date_in_days = None
