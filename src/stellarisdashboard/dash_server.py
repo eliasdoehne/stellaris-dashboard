@@ -45,7 +45,7 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis={
         "type": "linear"
     },
-    height=480,
+    height=640,
 )
 
 dropdown_options = [{'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()]
@@ -101,7 +101,7 @@ def update_content(tab_value, game_id):
             figure_layout = get_figure_layout(plot_spec)
             figure = go.Figure(data=figure_data, layout=figure_layout)
 
-            children.append(html.H3(f"{plot_spec.title}"))
+            children.append(html.H2(f"{plot_spec.title}"))
             children.append(dcc.Graph(
                 id=f"{plot_spec.plot_id}",
                 figure=figure,
@@ -170,6 +170,7 @@ def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotDa
 def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
     net_gain = None
     y_previous_pos, y_previous_neg = None, None
+    pos_initiated = False
     plot_list = []
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
@@ -178,12 +179,14 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
             net_gain = [0.0 for _ in x_values]
             y_previous_pos = [0.0 for _ in x_values]
             y_previous_neg = [0.0 for _ in x_values]
+        fill_mode = "tozeroy"
         if all(y <= 0 for y in y_values):
             y_previous = y_previous_neg
-            is_positive = False
         elif all(y >= 0 for y in y_values):
             y_previous = y_previous_pos
-            is_positive = True
+            if pos_initiated:
+                fill_mode = "tonexty"
+            pos_initiated = True
         else:
             logger.warning("Not a real budget Graph!")
             break
@@ -192,10 +195,11 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
             y_previous[i] += y
             net_gain[i] += y
         line["y"] = y_previous[:]
-        line["fill"] = "tonexty" if is_positive else "tozeroy"
+        line["fill"] = fill_mode
         line["text"] = [f"{val:.1f} - {key}" if val else "" for val in y_values]
         plot_list.append(line)
     # TODO would be great to fill to y=0 with the color of the next greatest entry, but that's not so easy.
+
     plot_list.append({
         'x': plot_list[0]["x"],
         'y': net_gain,
