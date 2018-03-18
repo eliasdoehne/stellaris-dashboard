@@ -40,6 +40,7 @@ class TimelineExtractor:
         self._session = None
         self._player_country = None
         self._current_gamestate = None
+        self._country_starbasecount_dict = None
         self._player_research_agreements = None
         self._player_sensor_links = None
         self._player_monthly_trade_info = None
@@ -79,6 +80,7 @@ class TimelineExtractor:
 
     def _process_gamestate(self):
         self._extract_player_trade_agreements()
+        self._extract_country_starbase_count()
         player_economy = self._extract_player_economy(self._gamestate_dict["country"][self._player_country])
         self._current_gamestate = models.GameState(
             game=self.game, date=self._date_in_days,
@@ -95,14 +97,24 @@ class TimelineExtractor:
 
             debug_name = country_data_dict.get('name', 'Unnamed Country') if country_data.attitude_towards_player.is_known() else 'Unknown'
             logger.debug(f"Extracting country data: {country_id}, {debug_name}")
-            self._extract_pop_info_from_planets(country_data_dict, country_data)
-            self._extract_factions(country_data)
             if country_data.country.is_player:
+                self._extract_pop_info_from_planets(country_data_dict, country_data)
+                self._extract_factions(country_data)
                 self._extract_player_leaders(country_data_dict.get("owned_leaders", []))
 
         self._extract_wars()
 
-    def _extract_country_data(self, country_id, country_dict):
+    def _extract_country_starbase_count(self):
+        self._country_starbasecount_dict = {}
+        for starbase_dict in self._gamestate_dict.get("starbases", {}).values():
+            if not isinstance(starbase_dict, dict):
+                continue
+            owner_id = starbase_dict.get("owner", -1)
+            if owner_id not in self._country_starbasecount_dict:
+                self._country_starbasecount_dict[owner_id] = 0
+            self._country_starbasecount_dict[owner_id] += 1
+
+    def _extract_country_data(self, country_id, country_dict) -> models.CountryData:
         is_player = (country_id == self._player_country)
         country = self._session.query(models.Country).filter_by(
             game=self.game,
@@ -112,6 +124,7 @@ class TimelineExtractor:
             country = models.Country(is_player=is_player, country_id_in_game=country_id, game=self.game, country_name=country_dict["name"])
             self._session.add(country)
         has_research_agreement_with_player = is_player or (country_id in self._player_research_agreements)
+
         has_sensor_link_with_player = is_player or (country_id in self._player_sensor_links)
         if is_player:
             attitude_towards_player = models.Attitude.friendly
@@ -119,22 +132,54 @@ class TimelineExtractor:
             attitude_towards_player = self._extract_ai_attitude_towards_player(country_dict)
 
         economy_data = self._extract_economy_data(country_dict)
-
+        diplomacy_data = self._extract_diplomacy_toward_player(country_dict)
         country_data = models.CountryData(
             country=country,
             game_state=self._current_gamestate,
-            military_power=country_dict["military_power"],
-            fleet_size=country_dict["fleet_size"],
-            tech_progress=len(country_dict["tech_status"]["technology"]),
-            exploration_progress=len(country_dict["surveyed"]),
-            owned_planets=len(country_dict["owned_planets"]),
+            military_power=country_dict.get("military_power", 0.0),
+            fleet_size=country_dict.get("fleet_size", 0.0),
+            tech_progress=len(country_dict.get("tech_status", {}).get("technology", [])),
+            exploration_progress=len(country_dict.get("surveyed", 0.0)),
+            owned_planets=len(country_dict.get("owned_planets", [])),
+            controlled_systems=self._country_starbasecount_dict.get(country_id, 0),
             has_research_agreement_with_player=has_research_agreement_with_player,
             has_sensor_link_with_player=has_sensor_link_with_player,
             attitude_towards_player=attitude_towards_player,
             **economy_data,
+            **diplomacy_data,
         )
         self._session.add(country_data)
         return country_data
+
+    def _extract_diplomacy_toward_player(self, country_dict):
+        relations_manager = country_dict.get("relations_manager", [])
+        diplomacy_info = dict(
+            has_rivalry_with_player=False,
+            has_defensive_pact_with_player=False,
+            has_federation_with_player=False,
+            has_non_aggression_pact_with_player=False,
+            has_closed_borders_with_player=False,
+            has_communications_with_player=False,
+            has_migration_treaty_with_player=False,
+        )
+        if relations_manager == "none":
+            return diplomacy_info
+        for relation in relations_manager:
+            if not relation == "none":
+                continue
+            if relation.get("country") != self._player_country:
+                continue
+            diplomacy_info.update(
+                has_rivalry_with_player=relation.get("is_rival") == "yes",
+                has_defensive_pact_with_player=relation.get("defensive_pact") == "yes",
+                has_federation_with_player=relation.get("alliance") == "yes",
+                has_non_aggression_pact_with_player=relation.get("non_aggression_pledge") == "yes",
+                has_closed_borders_with_player=relation.get("closed_borders") == "yes",
+                has_communications_with_player=relation.get("communications") == "yes",
+                has_migration_treaty_with_player=relation.get("migration_access") == "yes",
+            )
+            break
+        return diplomacy_info
 
     def _extract_player_economy(self, country_dict):
         base_economy_data = self._extract_economy_data(country_dict)
@@ -345,7 +390,7 @@ class TimelineExtractor:
                 if species_id not in species_demographics:
                     species_demographics[species_id] = 0
                 species_demographics[species_id] += 1
-                if this_pop.get("is_enslaved") == "yes":
+                if this_pop.get("enslaved") == "yes":
                     self._factionless_pops[TimelineExtractor.SLAVE_FACTION_NAME] += 1
                 elif this_pop.get("purging") == "yes":
                     self._factionless_pops[TimelineExtractor.PURGE_FACTION_NAME] += 1
@@ -426,6 +471,7 @@ class TimelineExtractor:
             leader = self._session.query(models.Leader).filter_by(game=self.game, leader_id_in_game=leader_id).one_or_none()
             if leader is None:
                 leader = self._add_new_leader(leader_id, leader_dict)
+            # TODO Do something with this info?
 
     def _add_new_leader(self, leader_id, leader_dict):
         leader_class = models.LeaderClass.__members__.get(leader_dict.get("class"), models.LeaderClass.unknown)
@@ -456,6 +502,7 @@ class TimelineExtractor:
         return leader
 
     def _reset_state(self):
+        self._country_starbasecount_dict = None
         self._current_gamestate = None
         self._gamestate_dict = None
         self._player_country = None

@@ -229,6 +229,7 @@ class GameState(Base):
     game_id = Column(ForeignKey(Game.game_id))
     date = Column(Integer, index=True)  # Days since 2200.1.1
 
+    # Player budget: detailed information
     mineral_income_base = Column(Float, default=0.0)
     mineral_income_production = Column(Float, default=0.0)
     mineral_income_trade = Column(Float, default=0.0)
@@ -292,7 +293,9 @@ class CountryData(Base):
     tech_progress = Column(Integer)
     exploration_progress = Column(Integer)
     owned_planets = Column(Integer)
+    controlled_systems = Column(Integer)
 
+    # Basic economic data
     mineral_income = Column(Float, default=0.0)
     mineral_spending = Column(Float, default=0.0)
     food_income = Column(Float, default=0.0)
@@ -307,12 +310,17 @@ class CountryData(Base):
     physics_research = Column(Float, default=0.0)
     engineering_research = Column(Float, default=0.0)
 
+    # Diplomacy towards player
+    attitude_towards_player = Column(Enum(Attitude))
     has_research_agreement_with_player = Column(Boolean)
     has_sensor_link_with_player = Column(Boolean)
+    has_rivalry_with_player = Column(Boolean)
     has_defensive_pact_with_player = Column(Boolean)
+    has_migration_treaty_with_player = Column(Boolean)
     has_federation_with_player = Column(Boolean)
     has_non_aggression_pact_with_player = Column(Boolean)
-    attitude_towards_player = Column(Enum(Attitude))
+    has_closed_borders_with_player = Column(Boolean)
+    has_communications_with_player = Column(Boolean)
 
     country = relationship("Country", back_populates="country_data")
     game_state = relationship("GameState", back_populates="country_data")

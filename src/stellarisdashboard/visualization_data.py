@@ -36,6 +36,12 @@ PLANET_COUNT_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.owned_planets,
     style=PlotStyle.line,
 )
+SYSTEM_COUNT_GRAPH = PlotSpecification(
+    plot_id='system-count-graph',
+    title="Controlled Systems",
+    plot_data_function=lambda pd: pd.controlled_systems,
+    style=PlotStyle.line,
+)
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='tech-count-graph',
     title="Researched Technologies",
@@ -142,6 +148,7 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
     "Economy": [
         PLANET_COUNT_GRAPH,
+        SYSTEM_COUNT_GRAPH,
         EMPIRE_ENERGY_ECONOMY_GRAPH,
         EMPIRE_MINERAL_ECONOMY_GRAPH,
         EMPIRE_FOOD_ECONOMY_GRAPH,
@@ -195,6 +202,7 @@ class EmpireProgressionPlotData:
         self.player_country = None
         self.pop_count = None
         self.owned_planets = None
+        self.controlled_systems = None
         self.tech_count = None
         self.survey_count = None
         self.military_power = None
@@ -215,6 +223,7 @@ class EmpireProgressionPlotData:
         self.player_country: str = None
         self.pop_count: Dict[str, List[int]] = {}
         self.owned_planets: Dict[str, List[int]] = {}
+        self.controlled_systems: Dict[str, List[int]] = {}
         self.tech_count: Dict[str, List[int]] = {}
         self.survey_count: Dict[str, List[int]] = {}
         self.military_power: Dict[str, List[float]] = {}
@@ -261,7 +270,7 @@ class EmpireProgressionPlotData:
         self.empire_energy_budget["production"].append(gs.energy_income_production / 2)
         self.empire_energy_budget["mission_income"].append(gs.energy_income_mission / 2)
 
-        self.empire_energy_budget["army_expenses"].append(gs.energy_spending_army / 2)
+        self.empire_energy_budget["army_expenses"].append(gs.energy_spending_army)
         self.empire_energy_budget["building_expenses"].append(gs.energy_spending_building / 2)
         self.empire_energy_budget["pop_expenses"].append(gs.energy_spending_pop / 2)
         self.empire_energy_budget["ship_expenses"].append(gs.energy_spending_ship / 2)
@@ -294,6 +303,7 @@ class EmpireProgressionPlotData:
                 self.player_country = country_data.country.country_name
             self._extract_pop_count(country_data)
             self._extract_planet_count(country_data)
+            self._extract_system_count(country_data)
             self._extract_tech_count(country_data)
             self._extract_exploration_progress(country_data)
             self._extract_military_strength(country_data)
@@ -373,6 +383,13 @@ class EmpireProgressionPlotData:
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.owned_planets, country_data.country.country_name, new_val)
+
+    def _extract_system_count(self, country_data: models.CountryData):
+        if self.show_everything or show_geography_info(country_data):
+            new_val = country_data.controlled_systems
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.controlled_systems, country_data.country.country_name, new_val)
 
     def _extract_tech_count(self, country_data: models.CountryData):
         if self.show_everything or show_tech_info(country_data):
