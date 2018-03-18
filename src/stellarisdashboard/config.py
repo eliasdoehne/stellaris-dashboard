@@ -98,6 +98,8 @@ def _apply_config_ini():
                 logger.warning(f"Ignoring bad configuration option {key} with value {value}.")
             if key == "threads":
                 value = int(value)
+            elif key == "port":
+                value = int(value)
             elif key in {"save_file_path", "base_output_path"}:
                 if value.startswith("$HOME/"):
                     value = pathlib.Path.home() / value[len("$HOME/"):]
@@ -109,7 +111,7 @@ def _apply_config_ini():
             if hasattr(CONFIG, key):
                 setattr(CONFIG, key, value)
             else:
-                logger.warning(f'Unrecognized configuration option {key} with value {value}')
+                logger.warning(f'Ignoring unrecognized config.ini option {key} with value {value}.')
 
 
 _apply_config_ini()
