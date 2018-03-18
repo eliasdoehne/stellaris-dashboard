@@ -6,7 +6,7 @@ from collections import namedtuple
 import pathlib
 import time
 import multiprocessing as mp
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Set
 
 logger = logging.getLogger(__name__)
 try:
@@ -35,12 +35,13 @@ class SavePathMonitor:
     as gamestate dictionaries.
     """
 
-    def __init__(self, game_dir, threads=None):
-        self.processed_saves = set()
-        self.game_dir = pathlib.Path(game_dir)
+    def __init__(self, save_parent_dir, threads=None, game_name_prefix: str = ""):
+        self.processed_saves: Set[pathlib.Path] = set()
+        self.save_parent_dir = pathlib.Path(save_parent_dir)
         if threads is None:
             threads = max(1, mp.cpu_count() - 2)
         self.threads = threads
+        self.game_name_prefix = game_name_prefix
         self.work_pool = None
         if self.threads > 1:
             mp.freeze_support()
@@ -77,11 +78,20 @@ class SavePathMonitor:
     def mark_all_existing_saves_processed(self):
         self.processed_saves |= set(self.valid_save_files())
 
+    def apply_matching_prefix(self, game_name_prefix: str):
+        self.mark_all_existing_saves_processed()
+        whitelisted = set()
+        for fname in self.processed_saves:
+            if fname.parent.stem.startswith(game_name_prefix):
+                whitelisted.add(fname)
+        self.processed_saves -= whitelisted
+
     def valid_save_files(self):
-        return sorted(save_file for save_file in self.game_dir.glob("**/*.sav")
+        return sorted(save_file for save_file in self.save_parent_dir.glob("**/*.sav")
                       if save_file not in self.processed_saves
                       and "ironman" not in str(save_file)
-                      and not str(save_file.parent.stem).startswith("mp"))
+                      and not str(save_file.parent.stem).startswith("mp")
+                      and str(save_file.parent.stem).startswith(self.game_name_prefix))
 
     def teardown(self):
         if self.threads > 1:

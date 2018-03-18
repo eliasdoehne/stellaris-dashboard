@@ -88,18 +88,23 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
 @cli.command()
 @click.option('--threads', type=click.INT)
 @click.option('--save-path', type=click.Path(exists=True, file_okay=False))
-def parse_saves(threads, save_path):
-    f_parse_saves(threads, save_path)
+@click.option('--game-name', type=click.STRING)
+def parse_saves(threads, save_path, game_name):
+    f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
 
-def f_parse_saves(threads=None, save_path=None):
+def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
     if threads is None:
         threads = config.CONFIG.threads
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
+    if game_name_prefix is not None:
+        save_reader.apply_matching_prefix(game_name_prefix)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.check_for_new_saves():
+        if not game_name.startswith(game_name_prefix):
+            logger.info(f"Ignoring game {game_name}, as it does not match {game_name_prefix}.")
         tle.process_gamestate(game_name, gamestate_dict)
 
 
