@@ -37,7 +37,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "stellarisdashboard = stellarisdashboard.main:main",
+            "stellarisdashboard = stellarisdashboard.__main__:main",
             "stellarisdashboardcli = stellarisdashboard.cli:cli",
         ],
     },
