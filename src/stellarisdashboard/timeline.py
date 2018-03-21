@@ -47,6 +47,9 @@ class TimelineExtractor:
         self._factionless_pops = None
         self._date_in_days = None
 
+        self._enclave_trade_modifiers = None
+        self._initialize_enclave_trade_info()
+
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         date_str = gamestate_dict["date"]
         logger.debug(f"Processing {game_name}, {date_str}")
@@ -56,27 +59,28 @@ class TimelineExtractor:
             return None
         self._player_country = self._gamestate_dict["player"][0]["country"]
         player_country_name = self._gamestate_dict["country"][self._player_country]["name"]
-        self._session = models.get_db_session(game_name)
-        try:
-            self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
-            if self.game is None:
-                logger.info(f"Adding new game {game_name} to database.")
-                self.game = models.Game(game_name=game_name, player_country_name=player_country_name)
-                self._session.add(self.game)
-            self._date_in_days = models.date_to_days(self._gamestate_dict["date"])
-            game_states_by_date = {gs.date: gs for gs in self.game.game_states}
-            if self._date_in_days in game_states_by_date:
-                logger.info(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
-                self._session.delete(game_states_by_date[self._date_in_days])
-            self._process_gamestate()
-            self._session.commit()
-        except Exception as e:
-            self._session.rollback()
-            logger.error(e)
-            raise e
-        finally:
-            self._session.close()
-            self._reset_state()
+        with models.get_db_session(game_name) as session:
+            self._session = session
+            try:
+                self.game = self._session.query(models.Game).filter_by(game_name=game_name).first()
+                if self.game is None:
+                    logger.info(f"Adding new game {game_name} to database.")
+                    self.game = models.Game(game_name=game_name, player_country_name=player_country_name)
+                    self._session.add(self.game)
+                self._date_in_days = models.date_to_days(self._gamestate_dict["date"])
+                game_states_by_date = {gs.date: gs for gs in self.game.game_states}
+                if self._date_in_days in game_states_by_date:
+                    logger.info(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
+                    self._session.delete(game_states_by_date[self._date_in_days])
+                self._process_gamestate()
+                self._session.commit()
+            except Exception as e:
+                self._session.rollback()
+                logger.error(e)
+                raise e
+            finally:
+                self._session = None
+                self._reset_state()
 
     def _process_gamestate(self):
         self._extract_player_trade_agreements()
@@ -97,8 +101,8 @@ class TimelineExtractor:
 
             debug_name = country_data_dict.get('name', 'Unnamed Country') if country_data.attitude_towards_player.is_known() else 'Unknown'
             logger.debug(f"Extracting country data: {country_id}, {debug_name}")
+            self._extract_pop_info_from_planets(country_data_dict, country_data)
             if country_data.country.is_player:
-                self._extract_pop_info_from_planets(country_data_dict, country_data)
                 self._extract_factions(country_data)
                 self._extract_player_leaders(country_data_dict.get("owned_leaders", []))
 
@@ -136,10 +140,10 @@ class TimelineExtractor:
         country_data = models.CountryData(
             country=country,
             game_state=self._current_gamestate,
-            military_power=country_dict.get("military_power", 0.0),
-            fleet_size=country_dict.get("fleet_size", 0.0),
+            military_power=country_dict.get("military_power", 0),
+            fleet_size=country_dict.get("fleet_size", 0),
             tech_progress=len(country_dict.get("tech_status", {}).get("technology", [])),
-            exploration_progress=len(country_dict.get("surveyed", 0.0)),
+            exploration_progress=len(country_dict.get("surveyed", 0)),
             owned_planets=len(country_dict.get("owned_planets", [])),
             controlled_systems=self._country_starbasecount_dict.get(country_id, 0),
             has_research_agreement_with_player=has_research_agreement_with_player,
@@ -186,10 +190,14 @@ class TimelineExtractor:
         last_month = self._get_last_month_budget(country_dict)
         economy_dict = {}
         energy_budget = last_month.get("values", {})
+
+        enclave_deals = self._extract_enclave_resource_deals(country_dict)
+        sector_budget_info = self._extract_sector_budget_info(country_dict)
         economy_dict.update(
             energy_income_base=energy_budget.get("base_income", 0),
             energy_income_production=energy_budget.get("produced_energy", 0),
             energy_income_trade=self._player_monthly_trade_info["energy_trade_income"],
+            energy_income_sectors=sector_budget_info["energy_income_sectors"],
             energy_income_mission=energy_budget.get("mission_expense", 0),
             energy_spending_army=energy_budget.get("army_maintenance", 0),
             energy_spending_colonization=energy_budget.get("colonization", 0),
@@ -199,17 +207,90 @@ class TimelineExtractor:
             energy_spending_pop=energy_budget.get("pops", 0),
             energy_spending_ship=energy_budget.get("ship_maintenance", 0),
             energy_spending_station=energy_budget.get("station_maintenance", 0),
-            mineral_income_production=base_economy_data.get("mineral_income", 0),
+            mineral_income_production=base_economy_data.get("mineral_income", 0),  # note: includes sector production!
             mineral_income_trade=self._player_monthly_trade_info["mineral_trade_income"],
+            mineral_income_sectors=sector_budget_info["mineral_income_sectors"],
             mineral_spending_pop=last_month.get("pop_mineral_maintenance", 0),
             mineral_spending_ship=last_month.get("ship_mineral_maintenances", 0),
             mineral_spending_trade=self._player_monthly_trade_info["mineral_trade_spending"],
             food_income_production=base_economy_data.get("food_income", 0),
             food_income_trade=self._player_monthly_trade_info["food_trade_income"],
+            food_income_sectors=sector_budget_info["food_income_sectors"],
             food_spending=base_economy_data.get("food_spending", 0),
             food_spending_trade=self._player_monthly_trade_info["food_trade_spending"],
+            food_spending_sectors=sector_budget_info["food_spending_sectors"],
+            mineral_income_enclaves=enclave_deals["mineral_income_enclaves"],
+            mineral_spending_enclaves=enclave_deals["mineral_spending_enclaves"],
+            energy_income_enclaves=enclave_deals["energy_income_enclaves"],
+            energy_spending_enclaves=enclave_deals["energy_spending_enclaves"],
         )
         return economy_dict
+
+    def _extract_enclave_resource_deals(self, country_dict):
+        enclave_deals = dict(
+            mineral_income_enclaves=0,
+            mineral_spending_enclaves=0,
+            energy_income_enclaves=0,
+            energy_spending_enclaves=0,
+        )
+
+        for modifier_dict in country_dict.get("timed_modifier", []):
+            if not isinstance(modifier_dict, dict):
+                continue
+            modifier_id = modifier_dict.get("modifier", "")
+            enclave_trade_budget_dict = self._enclave_trade_modifiers.get(modifier_id, {})
+            for budget_item, amount in enclave_trade_budget_dict.items():
+                enclave_deals[budget_item] += amount
+        return enclave_deals
+
+    @staticmethod
+    def _extract_sector_budget_info(country_dict):
+        sector_economy_data = dict(
+            energy_income_sectors=0,
+            mineral_income_sectors=0,
+            food_income_sectors=0,
+            food_spending_sectors=0,
+        )
+        share_amount_dict = {
+            "none": 0,
+            "quarter": 0.25,
+            "half": 0.5,
+            "three_quarters": 0.75,
+        }
+        economy_module = TimelineExtractor._get_economy_module(country_dict)
+        sectors_dict = country_dict.get("sectors", {})
+        if not isinstance(sectors_dict, dict):
+            return sector_economy_data
+
+        for sector_economy in economy_module.get("sectors", []):
+            if "sector" not in sector_economy:
+                logger.warning(f"Weird: Sector economy module has no sector id:\n{sector_economy}")
+                continue
+
+            sector_id = sector_economy["sector"]
+            sector_info_dict = sectors_dict.get(sector_id, {})
+            sector_resources = sector_economy.get("resources", {})
+
+            energy_budget_list = sector_resources.get("energy")
+            sector_energy_share_factor = share_amount_dict[sector_info_dict.get("energy_share", "half")]
+            if isinstance(energy_budget_list, list):
+                energy_income = energy_budget_list[1] - energy_budget_list[2]
+                # the data we are reading gives the balances *available to* the sector. need to do some math to get the balances *returned by* the sector
+                sector_economy_data["energy_income_sectors"] += max(0, sector_energy_share_factor * energy_income / (1 - sector_energy_share_factor))
+
+            mineral_budget_list = sector_resources.get("minerals")
+            sector_mineral_share_factor = share_amount_dict[sector_info_dict.get("minerals_share", "half")]
+            if isinstance(mineral_budget_list, list):
+                mineral_income = mineral_budget_list[1] - mineral_budget_list[2]
+                sector_economy_data["mineral_income_sectors"] += max(0, sector_mineral_share_factor * mineral_income / (1 - sector_mineral_share_factor))
+
+            # Excess Food is passed to the core sector directly.
+            food_budget_list = sector_resources.get("food")
+            if isinstance(food_budget_list, list):
+                sector_economy_data["food_income_sectors"] += max(0, food_budget_list[1])
+                sector_economy_data["food_spending_sectors"] += max(0, food_budget_list[2])
+
+        return sector_economy_data
 
     @staticmethod
     def _get_last_month_budget(country_dict):
@@ -218,10 +299,19 @@ class TimelineExtractor:
         return {}
 
     @staticmethod
+    def _get_economy_module(country_dict):
+        if "modules" not in country_dict:
+            return {}
+        if "standard_economy_module" not in country_dict["modules"]:
+            return {}
+        return country_dict["modules"]["standard_economy_module"]
+
+    @staticmethod
     def _extract_economy_data(country_dict):
         economy = {}
-        if "modules" in country_dict and "standard_economy_module" in country_dict["modules"] and "last_month" in country_dict["modules"]["standard_economy_module"]:
-            economy_module = country_dict["modules"]["standard_economy_module"]["last_month"]
+        economy_module = TimelineExtractor._get_economy_module(country_dict)
+        if "last_month" in economy_module:
+            last_month_economy = economy_module["last_month"]
             default = [0, 0, 0]
             for key, dict_key, val_index in [
                 ("mineral_income", "minerals", 1),
@@ -238,7 +328,7 @@ class TimelineExtractor:
                 ("physics_research", "physics_research", 1),
                 ("engineering_research", "engineering_research", 1),
             ]:
-                val_list = economy_module.get(dict_key, default)
+                val_list = last_month_economy.get(dict_key, default)
                 if isinstance(val_list, list):
                     economy[key] = val_list[val_index]
         return economy
@@ -261,12 +351,12 @@ class TimelineExtractor:
         self._player_research_agreements = set()
         self._player_sensor_links = set()
         self._player_monthly_trade_info = dict(
-            mineral_trade_income=0.0,
-            mineral_trade_spending=0.0,
-            energy_trade_income=0.0,
-            energy_trade_spending=0.0,
-            food_trade_income=0.0,
-            food_trade_spending=0.0,
+            mineral_trade_income=0,
+            mineral_trade_spending=0,
+            energy_trade_income=0,
+            energy_trade_spending=0,
+            food_trade_income=0,
+            food_trade_spending=0,
         )
         trades = self._gamestate_dict.get("trade_deal", {})
         if not trades:
@@ -286,13 +376,13 @@ class TimelineExtractor:
                 self._player_sensor_links.add(second["country"])
 
             player_resources = first.get("monthly_resources", {})
-            self._player_monthly_trade_info["mineral_trade_spending"] -= player_resources.get("minerals", 0.0)
-            self._player_monthly_trade_info["energy_trade_spending"] -= player_resources.get("energy", 0.0)
-            self._player_monthly_trade_info["food_trade_spending"] -= player_resources.get("food", 0.0)
+            self._player_monthly_trade_info["mineral_trade_spending"] -= player_resources.get("minerals", 0)
+            self._player_monthly_trade_info["energy_trade_spending"] -= player_resources.get("energy", 0)
+            self._player_monthly_trade_info["food_trade_spending"] -= player_resources.get("food", 0)
             other_resources = second.get("monthly_resources", {})
-            self._player_monthly_trade_info["mineral_trade_income"] += other_resources.get("minerals", 0.0)
-            self._player_monthly_trade_info["energy_trade_income"] += other_resources.get("energy", 0.0)
-            self._player_monthly_trade_info["food_trade_income"] += other_resources.get("food", 0.0)
+            self._player_monthly_trade_info["mineral_trade_income"] += other_resources.get("minerals", 0)
+            self._player_monthly_trade_info["energy_trade_income"] += other_resources.get("energy", 0)
+            self._player_monthly_trade_info["food_trade_income"] += other_resources.get("food", 0)
 
     def _extract_factions(self, country_data: models.CountryData):
         faction_pop_sum = 0
@@ -376,7 +466,8 @@ class TimelineExtractor:
         }
         species_demographics = {}
         pop_data = self._gamestate_dict["pop"]
-        for planet_id in country_dict["owned_planets"]:
+
+        for planet_id in country_dict.get("owned_planets", []):
             planet_data = self._gamestate_dict["planet"][planet_id]
             for pop_id in planet_data.get("pop", []):
                 if pop_id not in pop_data:
@@ -500,6 +591,33 @@ class TimelineExtractor:
         )
         self._session.add(leader)
         return leader
+
+    def _initialize_enclave_trade_info(self):
+        trade_level_1 = [10, 20]
+        trade_level_2 = [25, 50]
+        trade_level_3 = [50, 100]
+        trade_for_minerals = ["mineral_income_enclaves", "energy_spending_enclaves"]
+        trade_for_energy = ["energy_income_enclaves", "mineral_spending_enclaves"]
+        self._enclave_trade_modifiers = {
+            "enclave_mineral_trade_1_mut": dict(zip(trade_for_minerals, trade_level_1)),
+            "enclave_mineral_trade_1_rig": dict(zip(trade_for_minerals, trade_level_1)),
+            "enclave_mineral_trade_1_xur": dict(zip(trade_for_minerals, trade_level_1)),
+            "enclave_mineral_trade_2_mut": dict(zip(trade_for_minerals, trade_level_2)),
+            "enclave_mineral_trade_2_rig": dict(zip(trade_for_minerals, trade_level_2)),
+            "enclave_mineral_trade_2_xur": dict(zip(trade_for_minerals, trade_level_2)),
+            "enclave_mineral_trade_3_mut": dict(zip(trade_for_minerals, trade_level_3)),
+            "enclave_mineral_trade_3_rig": dict(zip(trade_for_minerals, trade_level_3)),
+            "enclave_mineral_trade_3_xur": dict(zip(trade_for_minerals, trade_level_3)),
+            "enclave_energy_trade_1_mut": dict(zip(trade_for_energy, trade_level_1)),
+            "enclave_energy_trade_1_rig": dict(zip(trade_for_energy, trade_level_1)),
+            "enclave_energy_trade_1_xur": dict(zip(trade_for_energy, trade_level_1)),
+            "enclave_energy_trade_2_mut": dict(zip(trade_for_energy, trade_level_2)),
+            "enclave_energy_trade_2_rig": dict(zip(trade_for_energy, trade_level_2)),
+            "enclave_energy_trade_2_xur": dict(zip(trade_for_energy, trade_level_2)),
+            "enclave_energy_trade_3_mut": dict(zip(trade_for_energy, trade_level_3)),
+            "enclave_energy_trade_3_rig": dict(zip(trade_for_energy, trade_level_3)),
+            "enclave_energy_trade_3_xur": dict(zip(trade_for_energy, trade_level_3)),
+        }
 
     def _reset_state(self):
         self._country_starbasecount_dict = None
