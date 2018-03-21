@@ -104,7 +104,7 @@ FACTION_SUPPORT_GRAPH = PlotSpecification(
     plot_id='empire-faction-support-graph',
     title="Faction Support",
     plot_data_function=lambda pd: pd.faction_support,
-    yrange=(0, 1.0),
+    yrange=(0, 100),
     style=PlotStyle.stacked,
 )
 EMPIRE_ENERGY_ECONOMY_GRAPH = PlotSpecification(
@@ -162,15 +162,18 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotData":
     global _CURRENT_EXECUTION_PLOT_DATA
     if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
-        session = models.get_db_session(game_name)
-        game = session.query(models.Game).filter_by(game_name=game_name).first()
-        session.close()
+        with models.get_db_session(game_name) as session:
+            game = session.query(models.Game).filter_by(game_name=game_name).first()
         if not game:
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name, show_everything=False)
         _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
+
+
+def show_geography_info(country_data: models.CountryData):
+    return country_data.country.is_player or country_data.attitude_towards_player.is_known()
 
 
 def show_tech_info(country_data: models.CountryData):
@@ -182,15 +185,18 @@ def show_economic_info(country_data: models.CountryData):
 
 
 def show_demographic_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.has_sensor_link_with_player or country_data.attitude_towards_player.reveals_demographic_info()
-
-
-def show_geography_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.attitude_towards_player.is_known()
+    return (country_data.country.is_player
+            or country_data.attitude_towards_player.reveals_demographic_info()
+            or country_data.has_sensor_link_with_player
+            or country_data.has_migration_treaty_with_player)
 
 
 def show_military_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.has_sensor_link_with_player or country_data.attitude_towards_player.reveals_military_info()
+    return (country_data.country.is_player
+            or country_data.has_sensor_link_with_player
+            or country_data.attitude_towards_player.reveals_military_info()
+            or country_data.has_defensive_pact_with_player
+            or country_data.has_federation_with_player)
 
 
 class EmpireProgressionPlotData:
@@ -234,8 +240,9 @@ class EmpireProgressionPlotData:
         self.faction_support: Dict[str, List[float]] = {}
         self.empire_energy_budget: Dict[str, List[float]] = dict(
             base_income=[],
-            production=[],
             trade_income=[],
+            production=[],
+            sector_income=[],
             mission_income=[],
             army_expenses=[],
             building_expenses=[],
@@ -246,19 +253,27 @@ class EmpireProgressionPlotData:
             starbase_expenses=[],
             trade_expenses=[],
             mission_expenses=[],
+            enclaves_trade_income=[],
+            enclaves_trade_expenses=[],
         )
         self.empire_mineral_budget: Dict[str, List[float]] = dict(
             production=[],
             trade_income=[],
+            sector_income=[],
             pop_expenses=[],
             ship_expenses=[],
             trade_expenses=[],
+            enclaves_trade_income=[],
+            enclaves_trade_expenses=[],
         )
         self.empire_food_budget: Dict[str, List[float]] = dict(
             production=[],
             trade_income=[],
+            other=[],
             consumption=[],
             trade_expenses=[],
+            sector_production=[],
+            sector_consumption=[],
         )
         self.empire_research_output = dict(physics=[], society=[], engineering=[])
         self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
@@ -267,7 +282,9 @@ class EmpireProgressionPlotData:
         # For some reason, some budget values have to be halved...
         self.empire_energy_budget["base_income"].append(gs.energy_income_base)
         self.empire_energy_budget["trade_income"].append(gs.energy_income_trade)
+        self.empire_energy_budget["enclaves_trade_income"].append(gs.energy_income_enclaves)
         self.empire_energy_budget["production"].append(gs.energy_income_production / 2)
+        self.empire_energy_budget["sector_income"].append(gs.energy_income_sectors)
         self.empire_energy_budget["mission_income"].append(gs.energy_income_mission / 2)
 
         self.empire_energy_budget["army_expenses"].append(gs.energy_spending_army)
@@ -279,17 +296,23 @@ class EmpireProgressionPlotData:
         self.empire_energy_budget["starbase_expenses"].append(gs.energy_spending_starbases / 2)
         self.empire_energy_budget["mission_expenses"].append(gs.energy_spending_mission / 2)
         self.empire_energy_budget["trade_expenses"].append(gs.energy_spending_trade)
+        self.empire_energy_budget["enclaves_trade_expenses"].append(-gs.energy_spending_enclaves)
 
-        self.empire_mineral_budget["production"].append(gs.mineral_income_production)
-        self.empire_mineral_budget["trade_income"].append(gs.mineral_income_trade / 2)
+        self.empire_mineral_budget["production"].append(gs.mineral_income_production - gs.mineral_income_sectors - gs.mineral_income_enclaves)
+        self.empire_mineral_budget["enclaves_trade_income"].append(gs.mineral_income_enclaves)
+        self.empire_mineral_budget["enclaves_trade_expenses"].append(-gs.mineral_spending_enclaves)
+        self.empire_mineral_budget["trade_income"].append(gs.mineral_income_trade)
+        self.empire_mineral_budget["sector_income"].append(gs.mineral_income_sectors)
         self.empire_mineral_budget["pop_expenses"].append(gs.mineral_spending_pop / 2)
         self.empire_mineral_budget["ship_expenses"].append(gs.mineral_spending_ship / 2)
-        self.empire_mineral_budget["trade_expenses"].append(gs.mineral_income_trade / 2)
+        self.empire_mineral_budget["trade_expenses"].append(gs.mineral_spending_trade)
 
         self.empire_food_budget["production"].append(gs.food_income_production)
         self.empire_food_budget["trade_income"].append(gs.food_income_trade)
+        self.empire_food_budget["sector_production"].append(gs.food_income_sectors)
         self.empire_food_budget["consumption"].append(- gs.food_spending)
-        self.empire_food_budget["trade_expenses"].append(- gs.food_spending_trade)
+        self.empire_food_budget["trade_expenses"].append(gs.food_spending_trade)
+        self.empire_food_budget["sector_consumption"].append(-gs.food_spending_sectors)
 
     def update_with_new_gamestate(self):
         date_in_days = 360.0 * self.dates[-1] if self.dates else -1
@@ -471,24 +494,26 @@ class EmpireProgressionPlotData:
             self.faction_size_distribution[f].append(faction_sizes[f])
         for f in faction_happiness:
             if f not in self.faction_happiness:
-                self.faction_happiness[f] = [float("nan") for _ in range(len(self.dates) - 1)]
-                self.faction_support[f] = [float("nan") for _ in range(len(self.dates) - 1)]
+                self.faction_happiness[f] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
+                self.faction_support[f] = [0 for _ in range(len(self.dates) - 1)]
             self.faction_happiness[f].append(faction_happiness[f])
             self.faction_support[f].append(faction_support_dict[f])
         for faction in faction_sizes:
             if len(self.faction_size_distribution[faction]) < len(self.dates):
                 self.faction_size_distribution[faction].append(0)
                 if faction in self.faction_happiness:
-                    self.faction_happiness[faction].append(float("nan"))
-                    self.faction_support[faction].append(float("nan"))
+                    self.faction_happiness[faction].append(EmpireProgressionPlotData.DEFAULT_VAL)
+                    self.faction_support[faction].append(0)
         for faction in self.faction_size_distribution:
             self.faction_size_distribution[faction][-1] *= 100.0 / pop_count
+            self.faction_support[faction][-1] *= 100.0
 
     def _extract_player_empire_research(self, country_data: models.CountryData):
         self.empire_research_output["physics"].append(country_data.physics_research)
         self.empire_research_output["society"].append(country_data.society_research)
         self.empire_research_output["engineering"].append(country_data.engineering_research)
-        total = country_data.physics_research + country_data.society_research + country_data.engineering_research
+        research_sum = country_data.physics_research + country_data.society_research + country_data.engineering_research
+        total = max(1.0, research_sum)
         self.empire_research_allocation["physics"].append(100.0 * country_data.physics_research / total)
         self.empire_research_allocation["society"].append(100.0 * country_data.society_research / total)
         self.empire_research_allocation["engineering"].append(100.0 * country_data.engineering_research / total)

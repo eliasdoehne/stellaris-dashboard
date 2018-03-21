@@ -13,7 +13,7 @@ from stellarisdashboard import config, models, visualization_data
 
 logger = logging.getLogger(__name__)
 
-flask_app = flask.Flask(__name__)  # in case we want to extend other functionality later, e.g. a ledger
+flask_app = flask.Flask(__name__)
 app = dash.Dash(name="Stellaris Timeline", server=flask_app, url_base_pathname="/")
 app.css.config.serve_locally = True
 app.scripts.config.serve_locally = True
@@ -26,12 +26,11 @@ COLOR_ENGINEERING = 'rgba(190,150,30,0.5)'
 def populate_available_games() -> Dict[str, models.Game]:
     games = {}
     for game_name in sorted(models.get_known_games()):
-        session = models.get_db_session(game_name)
-        game = session.query(models.Game).order_by(models.Game.game_name).one_or_none()
-        if game is None:
-            continue
-        games[game_name] = game.player_country_name
-        session.close()
+        with models.get_db_session(game_name) as session:
+            game = session.query(models.Game).order_by(models.Game.game_name).one_or_none()
+            if game is None:
+                continue
+            games[game_name] = game.player_country_name
     return games
 
 
@@ -94,7 +93,7 @@ def update_content(tab_value, game_id):
     children = []
     if game_id is not None:
         update_selected_game(game_id)
-        children = [html.H3(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
+        children = [html.H1(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
         plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
         for plot_spec in plots:
             figure_data = get_figure_data(plot_spec)
@@ -198,13 +197,11 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
         line["fill"] = fill_mode
         line["text"] = [f"{val:.1f} - {key}" if val else "" for val in y_values]
         plot_list.append(line)
-    # TODO would be great to fill to y=0 with the color of the next greatest entry, but that's not so easy.
-
     plot_list.append({
         'x': plot_list[0]["x"],
         'y': net_gain,
         'name': 'Net gain',
-        'line': {'color': 'black'},
+        'line': {'color': 'rgba(0,0,0,1)'},
         'text': [f'{val:.1f} - net gain' for val in net_gain],
         'hoverinfo': 'x+text',
     })
@@ -222,9 +219,9 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
 def update_game_options(n) -> List[Dict[str, str]]:
     global AVAILABLE_GAMES
     AVAILABLE_GAMES = sorted(models.get_known_games())
-    print("Updated game list:")
+    logger.debug("Updated game list:")
     for g in AVAILABLE_GAMES:
-        print(f"    {g}")
+        logger.debug(f"    {g}")
     return [{'label': g, 'value': g} for g in AVAILABLE_GAMES]
 
 

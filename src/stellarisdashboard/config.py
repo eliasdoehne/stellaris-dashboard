@@ -19,6 +19,27 @@ def initialize_logger():
     root_logger.addHandler(ch)
 
 
+LAST_UPDATED_GAME_FILE = "last_updated_game.txt"
+
+
+def get_last_updated_game():
+    game_name = None
+    last_update_file = CONFIG.base_output_path / LAST_UPDATED_GAME_FILE
+    if last_update_file.exists():
+        with open(last_update_file, "r") as f:
+            game_name = f.readline().strip()
+    return game_name
+
+
+def set_last_updated_game(game_name: str):
+    last_update_file = CONFIG.base_output_path / LAST_UPDATED_GAME_FILE
+    if not last_update_file.parent.exists():
+        last_update_file.parent.mkdir()
+    with open(last_update_file, "w") as f:
+        game_name = f.write(game_name)
+    return game_name
+
+
 initialize_logger()
 logger = logging.getLogger(__name__)
 CONFIG_FILE = pathlib.Path(__file__).parent / "config.ini"
@@ -31,6 +52,10 @@ class Config:
     threads: int = max(1, mp.cpu_count() // 2 - 1)
     port: int = 8050
     colormap: str = "viridis"
+    debug_mode: bool = False
+    debug_save_name_filter: str = ""
+    debug_only_every_nth_save: int = 1
+    debug_only_last_save_file: bool = False
 
     def is_valid(self):
         return all([

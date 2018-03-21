@@ -2,6 +2,7 @@ import logging
 import math
 from typing import List
 
+import pathlib
 from matplotlib import pyplot as plt
 
 from stellarisdashboard import models, visualization_data, config
@@ -13,7 +14,7 @@ class MatplotLibVisualization:
     """ Make a static visualization using matplotlib. """
     COLOR_MAP = plt.get_cmap(name=config.CONFIG.colormap)
 
-    def __init__(self, plot_data, plot_filename_base=None):
+    def __init__(self, plot_data):
         self.fig = None
         self.axes = None
         self.axes_iter = None
@@ -63,10 +64,12 @@ class MatplotLibVisualization:
         labels_pos = []
         stacked_neg = []
         labels_neg = []
-        data = sorted(self.plot_data.data_sorted_by_last_value(plot_spec), key=lambda tup: tup[-1][-1], reverse=True)
+        data = self.plot_data.data_sorted_by_last_value(plot_spec)
         data = [(key, x_values, y_values) for (key, x_values, y_values) in data if not all(y == 0 for y in y_values)]
         net = [0 for _ in self.plot_data.dates]
         for i, (key, x_values, y_values) in enumerate(data):
+            if all(y == 0 for y in y_values):
+                continue
             if y_values[-1] > 0:
                 stacked_pos.append(y_values)
                 labels_pos.append(key)
@@ -78,13 +81,14 @@ class MatplotLibVisualization:
 
         if stacked_neg:
             num_neg = len(stacked_neg)
-            colors_neg = [MatplotLibVisualization.COLOR_MAP(0.0 + 0.5 * val / num_neg) for val in range(num_neg)]
+            colors_neg = [MatplotLibVisualization.COLOR_MAP(val / num_neg) for val in range(num_neg)]
             ax.stackplot(self.plot_data.dates, stacked_neg, labels=labels_neg, colors=colors_neg, alpha=0.75, )
         if stacked_pos:
             num_pos = len(stacked_pos)
-            colors_pos = [MatplotLibVisualization.COLOR_MAP(1.0 - 0.5 * val / num_pos) for val in reversed(range(num_pos))]
-            ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=labels_pos, colors=colors_pos, alpha=0.75, )
+            colors_pos = [MatplotLibVisualization.COLOR_MAP(1.0 - val / num_pos) for val in reversed(range(num_pos))]
+            ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=list(reversed(labels_pos)), colors=list(reversed(colors_pos)), alpha=0.75, )
         ax.plot(self.plot_data.dates, net, label="Net income", color="k")
+        ax.plot([self.plot_data.dates[0], self.plot_data.dates[-1]], [0, 0], label="Net income", color="k", linewidth=0.3)
         ax.legend(loc='upper left')
 
     def _initialize_axes(self, category: str, plot_specifications: List[visualization_data.PlotSpecification]):
@@ -117,9 +121,11 @@ class MatplotLibVisualization:
 
     def save_plot(self, plot_id):
         plot_filename = self._get_path(plot_id)
+        if not plot_filename.parent.exists():
+            plot_filename.parent.mkdir()
         logger.info(f"Saving graph to {plot_filename}")
         plt.savefig(str(plot_filename), dpi=250)
         plt.close("all")
 
-    def _get_path(self, plot_id: str):
-        return config.CONFIG.base_output_path / f"./output/{self.plot_data.game_name}_{plot_id}.png"
+    def _get_path(self, plot_id: str) -> pathlib.Path:
+        return config.CONFIG.base_output_path / f"./output/{self.plot_data.game_name}/{self.plot_data.game_name}_{plot_id}.png"

@@ -1,16 +1,17 @@
+import contextlib
 import enum
 import pathlib
-from typing import Dict
+import threading
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 
 from stellarisdashboard import config
 
 _ENGINES = {}
-_SESSIONMAKERS: Dict[str, sessionmaker] = {}
+_SESSIONMAKERS = {}
 DB_PATH: pathlib.Path = config.CONFIG.base_output_path / "db"
 if not DB_PATH.exists():
     print(f"Creating database path {DB_PATH}")
@@ -18,17 +19,25 @@ if not DB_PATH.exists():
 
 Base = declarative_base()
 
+_DB_LOCK = threading.Lock()
 
-def get_db_session(game_id):
-    if game_id not in _SESSIONMAKERS:
-        DB_FILE = DB_PATH / f"{game_id}.db"
-        engine = sqlalchemy.create_engine(f'sqlite:///{DB_FILE}', echo=False)
-        Base.metadata.create_all(bind=engine)
-        _ENGINES[game_id] = engine
-        _SESSIONMAKERS[game_id] = sessionmaker(bind=engine)
 
-    session_factory = _SESSIONMAKERS[game_id]
-    return session_factory()
+@contextlib.contextmanager
+def get_db_session(game_id) -> sqlalchemy.orm.Session:
+    with _DB_LOCK:
+        if game_id not in _SESSIONMAKERS:
+            db_file = DB_PATH / f"{game_id}.db"
+            engine = sqlalchemy.create_engine(f'sqlite:///{db_file}', echo=False)
+            Base.metadata.create_all(bind=engine)
+            _ENGINES[game_id] = engine
+            _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
+
+        session_factory = _SESSIONMAKERS[game_id]
+        s = session_factory()
+        try:
+            yield s
+        finally:
+            s.close()
 
 
 def get_known_games():
@@ -63,16 +72,16 @@ class Attitude(enum.Enum):
     berserk = 23
 
     def reveals_military_info(self):
-        return self in {Attitude.friendly, Attitude.loyal}
+        return self in {Attitude.friendly, Attitude.loyal, Attitude.disloyal, Attitude.overlord}
 
     def reveals_technology_info(self):
         return self.reveals_military_info() or (self in {Attitude.protective, Attitude.disloyal})
 
     def reveals_economy_info(self):
-        return self.reveals_technology_info() or (self in {Attitude.cordial})
+        return self.reveals_technology_info() or (self in {Attitude.cordial, Attitude.receptive})
 
     def reveals_demographic_info(self):
-        return self.reveals_economy_info() or (self in {Attitude.neutral})
+        return self.reveals_economy_info() or (self in {Attitude.neutral, Attitude.wary})
 
     def is_known(self):
         return self != Attitude.unknown
@@ -196,13 +205,10 @@ def get_game_names_matching(game_name_prefix):
 
 
 def get_gamestates_since(game_name, date):
-    session = get_db_session(game_name)
-    try:
+    with get_db_session(game_name) as session:
         game = session.query(Game).one()
         for gs in session.query(GameState).filter(GameState.game == game, GameState.date > date).order_by(GameState.date).all():
             yield gs
-    finally:
-        session.close()
 
 
 class Game(Base):
@@ -233,21 +239,33 @@ class GameState(Base):
     mineral_income_base = Column(Float, default=0.0)
     mineral_income_production = Column(Float, default=0.0)
     mineral_income_trade = Column(Float, default=0.0)
+    mineral_income_enclaves = Column(Float, default=0.0)
     mineral_income_mission = Column(Float, default=0.0)
+    mineral_income_sectors = Column(Float, default=0.0)
+    mineral_income_other = Column(Float, default=0.0)
     mineral_spending_pop = Column(Float, default=0.0)
     mineral_spending_ship = Column(Float, default=0.0)
     mineral_spending_trade = Column(Float, default=0.0)
+    mineral_spending_enclaves = Column(Float, default=0.0)
     mineral_spending_mission = Column(Float, default=0.0)
+    mineral_spending_other = Column(Float, default=0.0)
 
     food_income_base = Column(Float, default=0.0)
     food_income_production = Column(Float, default=0.0)
     food_income_trade = Column(Float, default=0.0)
+    food_income_sectors = Column(Float, default=0.0)
+    food_income_other = Column(Float, default=0.0)
     food_spending = Column(Float, default=0.0)
     food_spending_trade = Column(Float, default=0.0)
+    food_spending_sectors = Column(Float, default=0.0)
+    food_spending_other = Column(Float, default=0.0)
 
     energy_income_base = Column(Float, default=0.0)
     energy_income_production = Column(Float, default=0.0)
     energy_income_trade = Column(Float, default=0.0)
+    energy_income_enclaves = Column(Float, default=0.0)
+    energy_income_sectors = Column(Float, default=0.0)
+    energy_income_other = Column(Float, default=0.0)
     energy_income_mission = Column(Float, default=0.0)
     energy_spending_army = Column(Float, default=0.0)
     energy_spending_building = Column(Float, default=0.0)
@@ -258,6 +276,8 @@ class GameState(Base):
     energy_spending_starbases = Column(Float, default=0.0)
     energy_spending_mission = Column(Float, default=0.0)
     energy_spending_trade = Column(Float, default=0.0)
+    energy_spending_enclaves = Column(Float, default=0.0)
+    energy_spending_other = Column(Float, default=0.0)
 
     game = relationship("Game", back_populates="game_states")
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
