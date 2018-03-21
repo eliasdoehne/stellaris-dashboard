@@ -10,23 +10,17 @@ from typing import Any, Dict, Tuple, Set
 
 logger = logging.getLogger(__name__)
 try:
-    import pyximport
-
-    pyximport.install()
     from stellarisdashboard.cython_ext import token_value_stream
-except ImportError as e:
-    logger.info(f"Cython-error \"{e}\" occurred, using slow parser")
+except ImportError as import_error:
+    logger.info(f"Cython extensions not available, using slow parser. Error message: \"{import_error}\"")
     from stellarisdashboard import token_value_stream_re as token_value_stream
+
+from stellarisdashboard import config
 
 FilePosition = namedtuple("FilePosition", "line col")
 
 
 class StellarisFileFormatError(Exception): pass
-
-
-DEBUG = True
-if DEBUG:
-    logger.info("Running in Debug mode...")
 
 
 class SavePathMonitor:
@@ -49,8 +43,14 @@ class SavePathMonitor:
             logger.debug("Initialized parsing worker pool")
 
     def check_for_new_saves(self) -> Tuple[str, Dict[str, Any]]:
-        logger.debug("Checking for new saves")
         new_files = self.valid_save_files()
+        if config.CONFIG.debug_mode:
+            if new_files and config.CONFIG.debug_only_last_save_file:
+                new_files = [new_files[-1]]
+            if config.CONFIG.debug_save_name_filter:
+                new_files = [f for (i, f) in enumerate(new_files) if f.stem.find(config.CONFIG.debug_save_name_filter) >= 0]
+            if config.CONFIG.debug_only_every_nth_save > 1:
+                new_files = [f for (i, f) in enumerate(new_files) if i % config.CONFIG.debug_only_every_nth_save == 0]
         self.processed_saves.update(new_files)
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
@@ -61,15 +61,16 @@ class SavePathMonitor:
             while results:
                 for game_name, r in results:
                     if r.ready():
-                        if r.successful():
-                            yield game_name, r.get()
-                        else:
-                            try:
+                        try:
+                            if r.successful():
+                                yield game_name, r.get()
+                            else:
                                 r.get()
-                            except Exception as e:
-                                logger.error("Parsing error:")
-                                logger.error(e)
-                        results.remove((game_name, r))
+                        except Exception as e:
+                            logger.error("Parsing error:")
+                            logger.error(e)
+                        finally:
+                            results.remove((game_name, r))
                 time.sleep(0.3)
         else:
             for save_file in new_files:
@@ -117,7 +118,7 @@ Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
 def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
-    for token_info in tokenizer(gamestate, DEBUG):
+    for token_info in tokenizer(gamestate, config.CONFIG.debug_mode):
         if isinstance(token_info, tuple):
             value, line_number = token_info
         else:
