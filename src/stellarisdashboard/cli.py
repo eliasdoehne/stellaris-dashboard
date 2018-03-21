@@ -16,8 +16,10 @@ def cli():
     pass
 
 
+save_path_help_string = 'The path where the Stellaris save files are stored. This should be the path to the folder containing the save folders for each game.'
 game_name_help_string = 'An identifier of the game that you want to visualize. It matches prefixes, such that "--game-name uni" matches the game id "unitednationsofearth_-15512622", but not "lokkenmechanists_1256936305"'
 showeverything_help_string = 'Use this flag if you want to include all empires regardless of visibility.'
+threads_help_string = 'The number of threads that run in parallel when reading save games.'
 
 
 @cli.command()
@@ -56,27 +58,30 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     if polling_interval is None:
-        polling_interval = 0.5  # TODO add to config
+        polling_interval = 0.5
     if threads is None:
         threads = config.CONFIG.threads
     save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
-    show_waiting_message = True
 
+    show_wait_message = True
     try:
         while True:
+            nothing_new = True
             for game_name, gamestate_dict in save_reader.check_for_new_saves():
-                show_waiting_message = True
+                show_wait_message = True
+                nothing_new = False
                 tle.process_gamestate(game_name, gamestate_dict)
                 plot_data = visualization_data.get_current_execution_plot_data(game_name)
                 plot_data.initialize()
                 plot_data.update_with_new_gamestate()
                 visualization_data.MOST_RECENTLY_UPDATED_GAME = game_name
-            if show_waiting_message:
-                show_waiting_message = False
-                logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
-            time.sleep(polling_interval)
+            if nothing_new:
+                if show_wait_message:
+                    show_wait_message = False
+                    logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
+                time.sleep(polling_interval)
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
@@ -86,9 +91,9 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
 
 
 @cli.command()
-@click.option('--threads', type=click.INT)
-@click.option('--save-path', type=click.Path(exists=True, file_okay=False))
-@click.option('--game-name', type=click.STRING)
+@click.option('--threads', type=click.INT, help=threads_help_string)
+@click.option('--save-path', type=click.Path(exists=True, file_okay=False), help=save_path_help_string)
+@click.option('--game-name', type=click.STRING, help=game_name_help_string)
 def parse_saves(threads, save_path, game_name):
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
