@@ -20,11 +20,12 @@ def main():
             # update the selected game when a save game from a different game is detected.
             # This is a workaround since the game selection dropdown
             # from dash does not seem to work in the in-game browser.
-            time.sleep(3)
-            if visualization_data.MOST_RECENTLY_UPDATED_GAME is not None and visualization_data.MOST_RECENTLY_UPDATED_GAME != dash_server.SELECTED_GAME_NAME:
+            game_id = config.get_last_updated_game()
+            if game_id is not None and game_id != dash_server.SELECTED_GAME_NAME:
                 logger.info("Updating selected game in dash!")
-                logger.info(visualization_data.MOST_RECENTLY_UPDATED_GAME)
-                dash_server.update_selected_game(visualization_data.MOST_RECENTLY_UPDATED_GAME)
+                logger.info(game_id)
+                dash_server.update_selected_game(game_id)
+            time.sleep(3)
         except KeyboardInterrupt:
             break
 

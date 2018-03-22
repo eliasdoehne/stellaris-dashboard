@@ -22,6 +22,38 @@ def initialize_logger():
 
 
 LAST_UPDATED_GAME_FILE = "last_updated_game.txt"
+LAST_UPDATED_GAME = None
+
+
+def get_last_updated_game():
+    global LAST_UPDATED_GAME
+    if LAST_UPDATED_GAME is not None:
+        return LAST_UPDATED_GAME
+    game_name = None
+    last_update_file = CONFIG.base_output_path / "db" / LAST_UPDATED_GAME_FILE
+    if last_update_file.exists():
+        with open(last_update_file, "r") as f:
+            game_name = f.readline().strip()
+            if game_name:
+                LAST_UPDATED_GAME = game_name
+                logger.info(f"Initialized last updated game as {game_name} from file...")
+            else:
+                game_name = None
+    return game_name
+
+
+def set_last_updated_game(game_name: str):
+    global LAST_UPDATED_GAME
+    if game_name != LAST_UPDATED_GAME:
+        LAST_UPDATED_GAME = game_name
+        last_update_file = CONFIG.base_output_path / "db" / LAST_UPDATED_GAME_FILE
+        if not last_update_file.parent.exists():
+            last_update_file.parent.mkdir()
+        with open(last_update_file, "w") as f:
+            game_name = f.write(game_name)
+            logger.info(f"Updated last updated game as {game_name} in file...")
+    return game_name
+
 
 initialize_logger()
 logger = logging.getLogger(__name__)
@@ -32,7 +64,7 @@ class Config:
     save_file_path: pathlib.Path = None
     base_output_path: pathlib.Path = None
     threads: int = max(1, mp.cpu_count() // 2 - 1)
-    port: int = 8050
+    port: int = 28053
     colormap: str = "viridis"
     log_level: str = "INFO"
 

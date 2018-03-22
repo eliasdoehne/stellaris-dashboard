@@ -14,6 +14,7 @@ from stellarisdashboard import config, models, visualization_data
 logger = logging.getLogger(__name__)
 
 flask_app = flask.Flask(__name__)
+flask_app.logger.setLevel(logging.WARNING)
 app = dash.Dash(name="Stellaris Timeline", server=flask_app, url_base_pathname="/")
 app.css.config.serve_locally = True
 app.scripts.config.serve_locally = True
@@ -35,9 +36,10 @@ def populate_available_games() -> Dict[str, models.Game]:
 
 
 AVAILABLE_GAMES = populate_available_games()
-SELECTED_GAME_NAME = None
-if AVAILABLE_GAMES:
-    SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES.keys()))
+SELECTED_GAME_NAME = config.get_last_updated_game()
+if AVAILABLE_GAMES and SELECTED_GAME_NAME is not None and SELECTED_GAME_NAME not in AVAILABLE_GAMES:
+    logger.warning("Last updated game no longer available, fallback to arbitrary save game")
+    SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES))
 
 DEFAULT_SELECTED_PLOT = next(iter(visualization_data.THEMATICALLY_GROUPED_PLOTS.keys()))
 DEFAULT_PLOT_LAYOUT = go.Layout(
@@ -74,14 +76,11 @@ app.layout = html.Div([
 ])
 
 
-def get_plot_data() -> visualization_data.EmpireProgressionPlotData:
-    return visualization_data.get_current_execution_plot_data(SELECTED_GAME_NAME)
-
-
 def update_selected_game(new_selected_game):
     global SELECTED_GAME_NAME
-    if new_selected_game and new_selected_game != SELECTED_GAME_NAME:
-        print(f"Selected game is {new_selected_game}")
+    populate_available_games()
+    if new_selected_game in AVAILABLE_GAMES and new_selected_game != SELECTED_GAME_NAME:
+        logger.info(f"Selected game is {new_selected_game}")
         SELECTED_GAME_NAME = new_selected_game
         visualization_data.get_current_execution_plot_data(SELECTED_GAME_NAME)  # to ensure everything is initialized before the dropdown's callback is handled
         GAME_SELECTION_DROPDOWN.value = new_selected_game
@@ -110,10 +109,10 @@ def update_content(tab_value, game_id):
 
 def get_figure_data(plot_spec: visualization_data.PlotSpecification):
     start = time.time()
-    plot_data = get_plot_data()
+    plot_data = visualization_data.get_current_execution_plot_data(SELECTED_GAME_NAME)
     plot_list = get_plot_lines(plot_data, plot_spec)
     end = time.time()
-    logger.debug(f"Update took {end - start} seconds!")
+    logger.info(f"Update took {end - start} seconds!")
     return plot_list
 
 
@@ -216,7 +215,7 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
 
 
 @app.callback(Output('select-game-dropdown', 'options'))
-def update_game_options(n) -> List[Dict[str, str]]:
+def update_game_options() -> List[Dict[str, str]]:
     global AVAILABLE_GAMES
     AVAILABLE_GAMES = sorted(models.get_known_games())
     logger.info("Updated list of available games:")

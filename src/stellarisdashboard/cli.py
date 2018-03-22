@@ -75,7 +75,7 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
                 plot_data = visualization_data.get_current_execution_plot_data(game_name)
                 plot_data.initialize()
                 plot_data.update_with_new_gamestate()
-                visualization_data.MOST_RECENTLY_UPDATED_GAME = game_name
+                config.set_last_updated_game(game_name)
             if nothing_new:
                 if show_wait_message:
                     show_wait_message = False
