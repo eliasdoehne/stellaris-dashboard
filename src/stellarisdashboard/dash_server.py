@@ -135,7 +135,7 @@ def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
             continue
-        line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.1f} - {key}" for val in y_values]}
+        line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.2f} - {key}" for val in y_values]}
         plot_list.append(line)
     return plot_list
 
@@ -152,7 +152,7 @@ def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotDa
         y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
         line["y"] = y_previous[:]  # make a copy
         if line["y"]:
-            line["text"] = [f"{val:.1f} - {key}" if val else "" for val in y_values]
+            line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
             if key == "physics":
                 line["line"] = {"color": COLOR_PHYSICS}
                 line["fillcolor"] = COLOR_PHYSICS
@@ -195,14 +195,14 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
             net_gain[i] += y
         line["y"] = y_previous[:]
         line["fill"] = fill_mode
-        line["text"] = [f"{val:.1f} - {key}" if val else "" for val in y_values]
+        line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
         plot_list.append(line)
     plot_list.append({
         'x': plot_list[0]["x"],
         'y': net_gain,
         'name': 'Net gain',
         'line': {'color': 'rgba(0,0,0,1)'},
-        'text': [f'{val:.1f} - net gain' for val in net_gain],
+        'text': [f'{val:.2f} - net gain' for val in net_gain],
         'hoverinfo': 'x+text',
     })
     return plot_list
@@ -219,9 +219,9 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
 def update_game_options(n) -> List[Dict[str, str]]:
     global AVAILABLE_GAMES
     AVAILABLE_GAMES = sorted(models.get_known_games())
-    logger.debug("Updated game list:")
+    logger.info("Updated list of available games:")
     for g in AVAILABLE_GAMES:
-        logger.debug(f"    {g}")
+        logger.info(f"    {g}")
     return [{'label': g, 'value': g} for g in AVAILABLE_GAMES]
 
 
