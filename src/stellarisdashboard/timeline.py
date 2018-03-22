@@ -52,7 +52,7 @@ class TimelineExtractor:
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         date_str = gamestate_dict["date"]
-        logger.debug(f"Processing {game_name}, {date_str}")
+        logger.info(f"Processing {game_name}, {date_str}")
         self._gamestate_dict = gamestate_dict
         if len({player["country"] for player in self._gamestate_dict["player"]}) != 1:
             logger.warning("Player country is ambiguous!")
@@ -99,8 +99,9 @@ class TimelineExtractor:
                 continue  # Enclaves, Leviathans, etc ....
             country_data = self._extract_country_data(country_id, country_data_dict)
 
-            debug_name = country_data_dict.get('name', 'Unnamed Country') if country_data.attitude_towards_player.is_known() else 'Unknown'
-            logger.debug(f"Extracting country data: {country_id}, {debug_name}")
+            if country_data.attitude_towards_player.is_known():
+                debug_name = country_data_dict.get('name', 'Unnamed Country')
+                logger.info(f"Extracting country info: {debug_name}")
             self._extract_pop_info_from_planets(country_data_dict, country_data)
             if country_data.country.is_player:
                 self._extract_factions(country_data)

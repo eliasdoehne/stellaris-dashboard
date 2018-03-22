@@ -1,5 +1,4 @@
 import logging
-import sys
 import time
 import traceback
 
@@ -69,7 +68,7 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
     try:
         while True:
             nothing_new = True
-            for game_name, gamestate_dict in save_reader.check_for_new_saves():
+            for game_name, gamestate_dict in save_reader.get_new_game_states():
                 show_wait_message = True
                 nothing_new = False
                 tle.process_gamestate(game_name, gamestate_dict)
@@ -107,7 +106,7 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
     if game_name_prefix is not None:
         save_reader.apply_matching_prefix(game_name_prefix)
     tle = timeline.TimelineExtractor()
-    for game_name, gamestate_dict in save_reader.check_for_new_saves():
+    for game_name, gamestate_dict in save_reader.get_new_game_states():
         if not game_name.startswith(game_name_prefix):
             logger.info(f"Ignoring game {game_name}, as it does not match {game_name_prefix}.")
         tle.process_gamestate(game_name, gamestate_dict)

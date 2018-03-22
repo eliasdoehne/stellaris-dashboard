@@ -7,11 +7,13 @@ import sys
 
 mp.freeze_support()
 
+LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
+
 
 def initialize_logger():
     # Add a stream handler for stdout output
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -21,28 +23,8 @@ def initialize_logger():
 
 LAST_UPDATED_GAME_FILE = "last_updated_game.txt"
 
-
-def get_last_updated_game():
-    game_name = None
-    last_update_file = CONFIG.base_output_path / LAST_UPDATED_GAME_FILE
-    if last_update_file.exists():
-        with open(last_update_file, "r") as f:
-            game_name = f.readline().strip()
-    return game_name
-
-
-def set_last_updated_game(game_name: str):
-    last_update_file = CONFIG.base_output_path / LAST_UPDATED_GAME_FILE
-    if not last_update_file.parent.exists():
-        last_update_file.parent.mkdir()
-    with open(last_update_file, "w") as f:
-        game_name = f.write(game_name)
-    return game_name
-
-
 initialize_logger()
 logger = logging.getLogger(__name__)
-CONFIG_FILE = pathlib.Path(__file__).parent / "config.ini"
 
 
 @dataclasses.dataclass
@@ -52,6 +34,8 @@ class Config:
     threads: int = max(1, mp.cpu_count() // 2 - 1)
     port: int = 8050
     colormap: str = "viridis"
+    log_level: str = "INFO"
+
     debug_mode: bool = False
     debug_save_name_filter: str = ""
     debug_only_every_nth_save: int = 1
@@ -98,10 +82,15 @@ CONFIG = Config(
 
 
 def _apply_config_ini():
+    this_dir = pathlib.Path(__file__).parent
+    config_file = this_dir / "config.ini"
+    if not config_file.exists():
+        logger.info(f"No config.ini file found in {this_dir}... Using defaults.")
+        return
     logger.info("Reading config.ini file...")
     ini_comment_symbol = ";"
-    if pathlib.Path(CONFIG_FILE).exists() and pathlib.Path(CONFIG_FILE).is_file():
-        with open(CONFIG_FILE, "r") as f:
+    if pathlib.Path(config_file).exists() and pathlib.Path(config_file).is_file():
+        with open(config_file, "r") as f:
             config_lines = []
             for line in f:
                 processed_line = line.strip()
@@ -137,6 +126,10 @@ def _apply_config_ini():
                 setattr(CONFIG, key, value)
             else:
                 logger.warning(f'Ignoring unrecognized config.ini option {key} with value {value}.')
+
+    level = LOG_LEVELS.get(CONFIG.log_level, logging.INFO)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
 
 
 _apply_config_ini()

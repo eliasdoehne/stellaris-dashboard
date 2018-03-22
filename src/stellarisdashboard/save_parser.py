@@ -40,9 +40,9 @@ class SavePathMonitor:
         if self.threads > 1:
             mp.freeze_support()
             self.work_pool = mp.Pool(threads)
-            logger.debug("Initialized parsing worker pool")
+            logger.info(f"Initialized parsing worker pool with {self.threads} many threads.")
 
-    def check_for_new_saves(self) -> Tuple[str, Dict[str, Any]]:
+    def get_new_game_states(self) -> Tuple[str, Dict[str, Any]]:
         new_files = self.valid_save_files()
         if config.CONFIG.debug_mode:
             if new_files and config.CONFIG.debug_only_last_save_file:

@@ -3,7 +3,7 @@ import multiprocessing as mp
 import threading
 import time
 
-from stellarisdashboard import cli, dash_server, save_parser, config, visualization_data
+from stellarisdashboard import cli, dash_server, config, visualization_data
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ def main():
             # from dash does not seem to work in the in-game browser.
             time.sleep(3)
             if visualization_data.MOST_RECENTLY_UPDATED_GAME is not None and visualization_data.MOST_RECENTLY_UPDATED_GAME != dash_server.SELECTED_GAME_NAME:
-                logger.debug("Updating selected game in dash!")
-                logger.debug(visualization_data.MOST_RECENTLY_UPDATED_GAME)
+                logger.info("Updating selected game in dash!")
+                logger.info(visualization_data.MOST_RECENTLY_UPDATED_GAME)
                 dash_server.update_selected_game(visualization_data.MOST_RECENTLY_UPDATED_GAME)
         except KeyboardInterrupt:
             break
