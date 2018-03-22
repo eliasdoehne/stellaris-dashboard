@@ -6,10 +6,11 @@ from collections import namedtuple
 import pathlib
 import time
 import multiprocessing as mp
-from typing import Any, Dict, Tuple, Set
+from typing import Any, Dict, Tuple, Set, Iterable
 
 logger = logging.getLogger(__name__)
 try:
+    # try to load the cython-compiled C-extension
     from stellarisdashboard.cython_ext import token_value_stream
 except ImportError as import_error:
     logger.info(f"Cython extensions not available, using slow parser. Error message: \"{import_error}\"")
@@ -42,7 +43,13 @@ class SavePathMonitor:
             self.work_pool = mp.Pool(threads)
             logger.info(f"Initialized parsing worker pool with {self.threads} threads.")
 
-    def get_new_game_states(self) -> Tuple[str, Dict[str, Any]]:
+    def get_new_game_states(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+        """
+        Check the save directory for new files. If any are found, parse them and
+        return the results as gamestate dictionaries as they come in.
+
+        :return:
+        """
         new_files = self.valid_save_files()
         if config.CONFIG.debug_mode:
             if new_files and config.CONFIG.debug_only_last_save_file:
@@ -77,13 +84,14 @@ class SavePathMonitor:
                 yield save_file.parent.stem, parse_save(save_file)
 
     def mark_all_existing_saves_processed(self):
+        """ Ensure that no existing files are re-parsed. """
         self.processed_saves |= set(self.valid_save_files())
 
     def apply_matching_prefix(self, game_name_prefix: str):
         self.mark_all_existing_saves_processed()
         whitelisted = set()
         for fname in self.processed_saves:
-            if fname.parent.stem.startswith(game_name_prefix):
+            if fname.parent.stem.startswith(game_name_prefix.lower()):
                 whitelisted.add(fname)
         self.processed_saves -= whitelisted
 
@@ -118,6 +126,14 @@ Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
 def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
+    """
+    Take each value obtained from the tokenizer and wrap it in an appropriate
+    Token object.
+
+    :param gamestate: Gamestate dictionary
+    :param tokenizer: tokenizer function. Passed as an argument to allow either the cython-accelerated one or the fallback regex one
+    :return:
+    """
     for token_info in tokenizer(gamestate, config.CONFIG.debug_mode):
         if isinstance(token_info, tuple):
             value, line_number = token_info

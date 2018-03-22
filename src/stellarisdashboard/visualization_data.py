@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 @enum.unique
 class PlotStyle(enum.Enum):
+    """ Used to define the kind of visualization that is specified by a given PlotSpecification (defined below)"""
     line = 0
     stacked = 1
     budget = 2
@@ -17,6 +18,11 @@ class PlotStyle(enum.Enum):
 
 @dataclasses.dataclass
 class PlotSpecification:
+    """
+    This class is used to define all the different visualizations in a way that is
+    independent of the frontend, so that they are defined in a single place for
+    both the matplotlib and plotly frontends.
+    """
     plot_id: str
     title: str
     plot_data_function: Callable[["EmpireProgressionPlotData"], Any]
@@ -125,7 +131,8 @@ EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.empire_food_budget,
     style=PlotStyle.budget,
 )
-
+# This specifies how the plots should be laid out in tabs by the plotly frontend
+# and how they should be split to different images by matplotlib
 THEMATICALLY_GROUPED_PLOTS = {
     "Science": [
         TECHNOLOGY_PROGRESS_GRAPH,
@@ -155,7 +162,6 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
 }
 
-MOST_RECENTLY_UPDATED_GAME = None
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 
 
