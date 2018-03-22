@@ -107,8 +107,6 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
         save_reader.apply_matching_prefix(game_name_prefix)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.get_new_game_states():
-        if not game_name.startswith(game_name_prefix):
-            logger.info(f"Ignoring game {game_name}, as it does not match {game_name_prefix}.")
         tle.process_gamestate(game_name, gamestate_dict)
 
 

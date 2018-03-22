@@ -40,7 +40,7 @@ class SavePathMonitor:
         if self.threads > 1:
             mp.freeze_support()
             self.work_pool = mp.Pool(threads)
-            logger.info(f"Initialized parsing worker pool with {self.threads} many threads.")
+            logger.info(f"Initialized parsing worker pool with {self.threads} threads.")
 
     def get_new_game_states(self) -> Tuple[str, Dict[str, Any]]:
         new_files = self.valid_save_files()
