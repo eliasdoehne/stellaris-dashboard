@@ -152,9 +152,6 @@ def _apply_config_ini():
                     value = pathlib.Path.home() / value[len("$HOME/"):]
                 else:
                     value = pathlib.Path(value)
-                if not value.exists():
-                    logger.info(f"Path {value} of type {key} does not exist yet.")
-                    value.mkdir()
             elif key == "show_everything":
                 if value.lower() == "false":
                     value = False
@@ -164,7 +161,10 @@ def _apply_config_ini():
                 setattr(CONFIG, key, value)
             else:
                 logger.warning(f'Ignoring unrecognized config.ini option {key} with value {value}.')
-
+    if not CONFIG.base_output_path.exists():
+        CONFIG.base_output_path.mkdir()
+        (CONFIG.base_output_path / "db").mkdir()
+        (CONFIG.base_output_path / "output").mkdir()
     level = LOG_LEVELS.get(CONFIG.log_level, logging.INFO)
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
