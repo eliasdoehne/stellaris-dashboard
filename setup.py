@@ -1,21 +1,16 @@
-import platform
-
 from setuptools import setup, find_packages
 
 try:
+    # Try to build the cython extension locally
     from Cython.Build import cythonize
 
     extension_modules = cythonize("src/stellarisdashboard/cython_ext/token_value_stream.pyx")
-    # Currently, the cython extensions do not work on windows. For now, disable them
-    if platform.platform() == "Windows":
-        extension_modules = []
-
 except ImportError:
-    print("Cython is not installed, using pre-built or (slow) fallback tokenizer.")
+    print("Cython is not installed, using pre-built C-extension if available, or (slow) fallback solution.")
     extension_modules = []
 except RuntimeError as e:
     print(f"Warning: RuntimeError while building Cython extension: {e}")
-    print("Using pre-built or (slow) fallback tokenizer.")
+    print("Using pre-built C-extension if available, or (slow) fallback solution.")
     extension_modules = []
 
 setup(

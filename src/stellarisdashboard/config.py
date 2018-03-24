@@ -50,7 +50,7 @@ def set_last_updated_game(game_name: str):
         if not last_update_file.parent.exists():
             last_update_file.parent.mkdir()
         with open(last_update_file, "w") as f:
-            game_name = f.write(game_name)
+            f.write(game_name)
             logger.info(f"Updated last updated game as {game_name} in file...")
     return game_name
 
@@ -67,6 +67,7 @@ class Config:
     port: int = 28053
     colormap: str = "viridis"
     log_level: str = "INFO"
+    show_everything: bool = False
 
     debug_mode: bool = False
     debug_save_name_filter: str = ""
@@ -154,6 +155,11 @@ def _apply_config_ini():
                 if not value.exists():
                     logger.info(f"Path {value} of type {key} does not exist yet.")
                     value.mkdir()
+            elif key == "show_everything":
+                if value.lower() == "false":
+                    value = False
+                else:
+                    value = bool(value)
             if hasattr(CONFIG, key):
                 setattr(CONFIG, key, value)
             else:

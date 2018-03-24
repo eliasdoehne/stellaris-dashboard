@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict, Callable, Any, Tuple, Iterable
 
 import dataclasses
-from stellarisdashboard import models
+from stellarisdashboard import models, config
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ def show_military_info(country_data: models.CountryData):
 class EmpireProgressionPlotData:
     DEFAULT_VAL = float("nan")
 
-    def __init__(self, game_name, show_everything=False):
+    def __init__(self, game_name, show_everything=config.CONFIG.show_everything):
         self.game_name = game_name
         self.dates = None
         self.player_country = None

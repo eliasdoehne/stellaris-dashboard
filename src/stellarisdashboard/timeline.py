@@ -46,18 +46,18 @@ class TimelineExtractor:
         self._player_monthly_trade_info = None
         self._factionless_pops = None
         self._date_in_days = None
-        self._logger_state = None
+        self._logger_str = None
 
         self._enclave_trade_modifiers = None
         self._initialize_enclave_trade_info()
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         date_str = gamestate_dict["date"]
-        self._logger_state = f"{self.game.game_id} {date_str}:"
+        self._logger_str = f"{game_name} {date_str}:"
         logger.info(f"Processing {game_name}, {date_str}")
         self._gamestate_dict = gamestate_dict
         if len({player["country"] for player in self._gamestate_dict["player"]}) != 1:
-            logger.warning(f"{self._logger_str}Player country is ambiguous!")
+            logger.warning(f"{self._logger_str} Player country is ambiguous!")
             return None
         self._player_country = self._gamestate_dict["player"][0]["country"]
         player_country_name = self._gamestate_dict["country"][self._player_country]["name"]
@@ -103,7 +103,7 @@ class TimelineExtractor:
 
             if country_data.attitude_towards_player.is_known():
                 debug_name = country_data_dict.get('name', 'Unnamed Country')
-                logger.info(f"{self._logger_str}Extracting country info: {debug_name}")
+                logger.info(f"{self._logger_str} Extracting country info: {debug_name}")
             self._extract_pop_info_from_planets(country_data_dict, country_data)
             if country_data.country.is_player:
                 self._extract_factions(country_data)
