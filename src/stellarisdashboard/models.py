@@ -2,6 +2,7 @@ import contextlib
 import enum
 import pathlib
 import threading
+import logging
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -10,6 +11,7 @@ from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 
 from stellarisdashboard import config
 
+logger = logging.getLogger(__name__)
 _ENGINES = {}
 _SESSIONMAKERS = {}
 DB_PATH: pathlib.Path = config.CONFIG.base_output_path / "db"
@@ -27,6 +29,8 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
     with _DB_LOCK:
         if game_id not in _SESSIONMAKERS:
             db_file = DB_PATH / f"{game_id}.db"
+            if not db_file.exists():
+                logger.info(f"Creating database for game {game_id} in file {db_file}.")
             engine = sqlalchemy.create_engine(f'sqlite:///{db_file}', echo=False)
             Base.metadata.create_all(bind=engine)
             _ENGINES[game_id] = engine
@@ -253,10 +257,12 @@ class GameState(Base):
     food_income_base = Column(Float, default=0.0)
     food_income_production = Column(Float, default=0.0)
     food_income_trade = Column(Float, default=0.0)
+    food_income_enclaves = Column(Float, default=0.0)
     food_income_sectors = Column(Float, default=0.0)
     food_income_other = Column(Float, default=0.0)
     food_spending = Column(Float, default=0.0)
     food_spending_trade = Column(Float, default=0.0)
+    food_spending_enclaves = Column(Float, default=0.0)
     food_spending_sectors = Column(Float, default=0.0)
     food_spending_other = Column(Float, default=0.0)
 
