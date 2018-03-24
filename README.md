@@ -30,7 +30,7 @@ The dashboard completely ignores saves from Multiplayer and Ironman mode, so it 
 The Stellaris dashboard requires Python 3.6, which you can download and install from https://www.python.org/.
 So far, it has been tested with Ubuntu 16.04 and Windows 10, but it should work on most available platforms.
 
-  1. Download and extract the repository.
+  1. Download and extract the repository. (If you are not sure: Click the green "Clone or Download" button above and select "Download ZIP")
   2. (Optional) create and activate a virtual environment using `virtualenv`. This avoids interfering with any other python programs you use or might use in the future.
   3. (Optional) Open a terminal or command line in the downloaded directory and run `pip install .` to install the program using pip. This should take care of all dependencies and allow you to run the program from anywhere. 
   4. Alternatively, use `pip install -r requirements.txt` to only install the dependencies, or install them manually. 
