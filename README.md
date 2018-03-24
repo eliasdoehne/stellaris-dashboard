@@ -4,7 +4,7 @@ Stellaris currently does not have a timeline feature that shows some statistics 
 
 Here is a one minute animation of the interactive dashboard, as available in-game:
 
-https://gfycat.com/RealAnguishedAustralianfreshwatercrocodile
+<iframe src='https://gfycat.com/ifr/RealAnguishedAustralianfreshwatercrocodile' frameborder='0' scrolling='no' allowfullscreen width='640' height='360'></iframe>
 
 Alternatively, you can export static images:
 
@@ -30,7 +30,7 @@ However, you can configure a cheat mode which shows everything.
 The Stellaris dashboard requires Python 3.6, which you can download and install from https://www.python.org/.
 It is mainly tested in Linux, but it should also work in Windows and theoretically Mac.
 
-  1. Download and extract the repository.
+  1. Download and extract, or clone the repository.
   2. (Optional) create and activate a virtual environment using `virtualenv`. This avoids interfering with any other python programs you use or might use in the future.
   3. (Optional) Open a terminal or command line in the downloaded directory and run `pip install .` to install the program using pip. This should take care of all dependencies and allow you to run the program from anywhere. 
   4. Alternatively, use `pip install -r requirements.txt` to only install the dependencies, or install them manually. 
