@@ -88,7 +88,7 @@ class MatplotLibVisualization:
             colors_pos = [MatplotLibVisualization.COLOR_MAP(1.0 - val / num_pos) for val in reversed(range(num_pos))]
             ax.stackplot(self.plot_data.dates, list(reversed(stacked_pos)), labels=list(reversed(labels_pos)), colors=list(reversed(colors_pos)), alpha=0.75, )
         ax.plot(self.plot_data.dates, net, label="Net income", color="k")
-        ax.plot([self.plot_data.dates[0], self.plot_data.dates[-1]], [0, 0], label="Net income", color="k", linewidth=0.3)
+        ax.plot([self.plot_data.dates[0], self.plot_data.dates[-1]], [0, 0], color="k", linewidth=0.3)
         ax.legend(loc='upper left')
 
     def _initialize_axes(self, category: str, plot_specifications: List[visualization_data.PlotSpecification]):
