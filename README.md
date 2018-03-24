@@ -37,6 +37,7 @@ So far, it has been tested with Ubuntu 16.04 and Windows 10, but it should work 
   5. To use the interactive dashboard in-game, copy the contents of the `mod/` folder into your Stellaris mod folder and enable the "Stellaris Dashboard Integration" mod in the game's launcher. Alternatively, you can use your regular browser to view the page.
 
 Note: You may have to use `python -m pip install .` instead of `pip install .` if you use Windows. In this case, just replace `pip` with `python -m pip` wherever necessary.
+If this is the case, then you may also have to type `python -m stellarisdashboard` and `python -m stellarisdashboardcli` instead of `stellarisdashboard` and `stellarisdashboardcli`.
 
 # Instructions
 
