@@ -46,16 +46,18 @@ class TimelineExtractor:
         self._player_monthly_trade_info = None
         self._factionless_pops = None
         self._date_in_days = None
+        self._logger_state = None
 
         self._enclave_trade_modifiers = None
         self._initialize_enclave_trade_info()
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         date_str = gamestate_dict["date"]
+        self._logger_state = f"{self.game.game_id} {date_str}:"
         logger.info(f"Processing {game_name}, {date_str}")
         self._gamestate_dict = gamestate_dict
         if len({player["country"] for player in self._gamestate_dict["player"]}) != 1:
-            logger.warning("Player country is ambiguous!")
+            logger.warning(f"{self._logger_str}Player country is ambiguous!")
             return None
         self._player_country = self._gamestate_dict["player"][0]["country"]
         player_country_name = self._gamestate_dict["country"][self._player_country]["name"]
@@ -101,7 +103,7 @@ class TimelineExtractor:
 
             if country_data.attitude_towards_player.is_known():
                 debug_name = country_data_dict.get('name', 'Unnamed Country')
-                logger.info(f"Extracting country info: {debug_name}")
+                logger.info(f"{self._logger_str}Extracting country info: {debug_name}")
             self._extract_pop_info_from_planets(country_data_dict, country_data)
             if country_data.country.is_player:
                 self._extract_factions(country_data)
@@ -233,6 +235,8 @@ class TimelineExtractor:
             mineral_spending_enclaves=0,
             energy_income_enclaves=0,
             energy_spending_enclaves=0,
+            food_income_enclaves=0,
+            food_spending_enclaves=0,
         )
 
         for modifier_dict in country_dict.get("timed_modifier", []):
@@ -242,6 +246,9 @@ class TimelineExtractor:
             enclave_trade_budget_dict = self._enclave_trade_modifiers.get(modifier_id, {})
             for budget_item, amount in enclave_trade_budget_dict.items():
                 enclave_deals[budget_item] += amount
+        enclave_deals["mineral_spending_enclaves"] *= -1
+        enclave_deals["energy_spending_enclaves"] *= -1
+        enclave_deals["food_spending_enclaves"] *= -1
         return enclave_deals
 
     @staticmethod
@@ -472,7 +479,7 @@ class TimelineExtractor:
             planet_data = self._gamestate_dict["planet"][planet_id]
             for pop_id in planet_data.get("pop", []):
                 if pop_id not in pop_data:
-                    logger.warning(f"Reference to non-existing pop with id {pop_id} on planet {planet_id}")
+                    logger.warning(f"{self._logger_str} Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     continue
                 this_pop = pop_data[pop_id]
                 if this_pop["growth_state"] != 1:
@@ -629,4 +636,5 @@ class TimelineExtractor:
         self._player_sensor_links = None
         self._player_monthly_trade_info = None
         self._session = None
+        self._logger_str = None
         self._date_in_days = None

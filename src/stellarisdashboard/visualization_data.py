@@ -134,11 +134,12 @@ EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
 # This specifies how the plots should be laid out in tabs by the plotly frontend
 # and how they should be split to different images by matplotlib
 THEMATICALLY_GROUPED_PLOTS = {
-    "Science": [
-        TECHNOLOGY_PROGRESS_GRAPH,
-        SURVEY_PROGRESS_GRAPH,
-        RESEARCH_OUTPUT_GRAPH,
-        RESEARCH_ALLOCATION_GRAPH,
+    "Economy": [
+        PLANET_COUNT_GRAPH,
+        SYSTEM_COUNT_GRAPH,
+        EMPIRE_ENERGY_ECONOMY_GRAPH,
+        EMPIRE_MINERAL_ECONOMY_GRAPH,
+        EMPIRE_FOOD_ECONOMY_GRAPH,
     ],
     "Population": [
         POP_COUNT_GRAPH,
@@ -149,16 +150,15 @@ THEMATICALLY_GROUPED_PLOTS = {
         FACTION_SUPPORT_GRAPH,
         FACTION_HAPPINESS_GRAPH,
     ],
+    "Science": [
+        TECHNOLOGY_PROGRESS_GRAPH,
+        SURVEY_PROGRESS_GRAPH,
+        RESEARCH_OUTPUT_GRAPH,
+        RESEARCH_ALLOCATION_GRAPH,
+    ],
     "Military": [
         FLEET_SIZE_GRAPH,
         MILITARY_POWER_GRAPH
-    ],
-    "Economy": [
-        PLANET_COUNT_GRAPH,
-        SYSTEM_COUNT_GRAPH,
-        EMPIRE_ENERGY_ECONOMY_GRAPH,
-        EMPIRE_MINERAL_ECONOMY_GRAPH,
-        EMPIRE_FOOD_ECONOMY_GRAPH,
     ],
 }
 
@@ -286,6 +286,7 @@ class EmpireProgressionPlotData:
 
     def _extract_player_empire_budget_allocations(self, gs: models.GameState):
         # For some reason, some budget values have to be halved...
+        # ENERGY
         self.empire_energy_budget["base_income"].append(gs.energy_income_base)
         self.empire_energy_budget["trade_income"].append(gs.energy_income_trade)
         self.empire_energy_budget["enclaves_trade_income"].append(gs.energy_income_enclaves)
@@ -302,17 +303,20 @@ class EmpireProgressionPlotData:
         self.empire_energy_budget["starbase_expenses"].append(gs.energy_spending_starbases / 2)
         self.empire_energy_budget["mission_expenses"].append(gs.energy_spending_mission / 2)
         self.empire_energy_budget["trade_expenses"].append(gs.energy_spending_trade)
-        self.empire_energy_budget["enclaves_trade_expenses"].append(-gs.energy_spending_enclaves)
+        self.empire_energy_budget["enclaves_trade_expenses"].append(gs.energy_spending_enclaves)
 
+        # MINERALS
         self.empire_mineral_budget["production"].append(gs.mineral_income_production - gs.mineral_income_sectors - gs.mineral_income_enclaves)
-        self.empire_mineral_budget["enclaves_trade_income"].append(gs.mineral_income_enclaves)
-        self.empire_mineral_budget["enclaves_trade_expenses"].append(-gs.mineral_spending_enclaves)
         self.empire_mineral_budget["trade_income"].append(gs.mineral_income_trade)
+        self.empire_mineral_budget["enclaves_trade_income"].append(gs.mineral_income_enclaves)
         self.empire_mineral_budget["sector_income"].append(gs.mineral_income_sectors)
+
         self.empire_mineral_budget["pop_expenses"].append(gs.mineral_spending_pop / 2)
         self.empire_mineral_budget["ship_expenses"].append(gs.mineral_spending_ship / 2)
         self.empire_mineral_budget["trade_expenses"].append(gs.mineral_spending_trade)
+        self.empire_mineral_budget["enclaves_trade_expenses"].append(gs.mineral_spending_enclaves)
 
+        # FOOD
         self.empire_food_budget["production"].append(gs.food_income_production)
         self.empire_food_budget["trade_income"].append(gs.food_income_trade)
         self.empire_food_budget["sector_production"].append(gs.food_income_sectors)
@@ -397,7 +401,7 @@ class EmpireProgressionPlotData:
 
     def data_sorted_by_last_value(self, plot_spec: PlotSpecification) -> List[Tuple[str, List[float], List[float]]]:
         unsorted_data = list(self.iterate_data(plot_spec))
-        return sorted(unsorted_data, key=lambda x: (x[2][-1], x[0]), reverse=True)
+        return sorted(unsorted_data, key=lambda key_x_y_tup: (key_x_y_tup[2][-1], key_x_y_tup[0]), reverse=True)
 
     def _extract_pop_count(self, country_data: models.CountryData):
         if self.show_everything or show_demographic_info(country_data):
