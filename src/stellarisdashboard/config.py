@@ -101,7 +101,7 @@ def _get_default_save_path():
 def _get_default_base_output_path():
     system = platform.system()
     if system == "Linux":
-        return pathlib.Path.home() / ".local/share/stellaristimeline/"
+        return pathlib.Path.home() / "Documents/stellaristimeline/"
     elif system == "Windows":
         return pathlib.Path.home() / "Documents/stellaristimeline"
     return None

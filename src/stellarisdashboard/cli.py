@@ -108,6 +108,7 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.get_new_game_states():
         tle.process_gamestate(game_name, gamestate_dict)
+        config.set_last_updated_game(game_name)
 
 
 if __name__ == '__main__':
