@@ -41,9 +41,11 @@ If this is the case, then you may also have to type `python -m stellarisdashboar
 
 # Instructions
 
-If you just want the basics, run the `stellarisdashboard` command while you play the game and it should do everything for you. 
+If you just want the basics, run the `stellarisdashboard` command while you play the game and it should do everything for you: If you installed the program in step 3 above, run `stellarisdashboard` in your command line to launch the dashboard in default configuration or `stellarisdashboardcli` to execute specific commands, which are described below.
 
-If you installed the program in step 3 above, run `stellarisdashboard` in your command line to launch the dashboard in default configuration or `stellarisdashboardcli` to execute specific commands, which are described below.
+While `stellarisdashboard`  is running, you can open the in-game browser with the help button in the lower left corner of the game UI, 
+or by pressing the shortcut Alt-B. Then, there should be a big button with the galaxy icon in the top right corner of the browser window. 
+Clicking this button (or the shortcut "T") should open the dashboard.
 
 Otherwise, you can change your working directory to the `src/` folder and run `python -m stellarisdashboard` for the default program, or `python -m stellarisdashboard.cli` for the CLI if you did not install the program in step 3.
 
