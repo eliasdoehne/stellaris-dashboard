@@ -11,11 +11,11 @@ try:
         extension_modules = []
 
 except ImportError:
-    print("Cython is not installed, using slow parser.")
+    print("Cython is not installed, using pre-built or (slow) fallback tokenizer.")
     extension_modules = []
 except RuntimeError as e:
-    print(f"Warning: RuntimeError while preparing Cython extension: {e}")
-    print("Falling back to slow parser.")
+    print(f"Warning: RuntimeError while building Cython extension: {e}")
+    print("Using pre-built or (slow) fallback tokenizer.")
     extension_modules = []
 
 setup(
@@ -25,14 +25,12 @@ setup(
     package_dir={"": "src"},
     install_requires=[
         "click",
-        "Cython",
         "dash",
         "dash-core-components==0.21.0rc1",
         "dash-html-components",
         "dash-renderer",
         "dataclasses",
         "matplotlib",
-        "numpy",
         'sqlalchemy',
     ],
     entry_points={
