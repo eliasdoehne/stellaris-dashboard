@@ -22,8 +22,9 @@ def main():
             # from dash does not seem to work in the in-game browser.
             game_id = config.get_last_updated_game()
             if game_id is not None and game_id != dash_server.SELECTED_GAME_NAME:
-                logger.info("Updating selected game in dash!")
-                logger.info(game_id)
+                config.set_last_updated_game(game_id)
+                logger.info("Updating selected game in dash web interface:")
+                logger.info(f"{dash_server.SELECTED_GAME_NAME} -> {game_id}")
                 dash_server.update_selected_game(game_id)
             time.sleep(3)
         except KeyboardInterrupt:
