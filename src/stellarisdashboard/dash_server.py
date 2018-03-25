@@ -196,14 +196,15 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
         line["fill"] = fill_mode
         line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
         plot_list.append(line)
-    plot_list.append({
-        'x': plot_list[0]["x"],
-        'y': net_gain,
-        'name': 'Net gain',
-        'line': {'color': 'rgba(0,0,0,1)'},
-        'text': [f'{val:.2f} - net gain' for val in net_gain],
-        'hoverinfo': 'x+text',
-    })
+    if plot_list:
+        plot_list.append({
+            'x': plot_list[0]["x"],
+            'y': net_gain,
+            'name': 'Net gain',
+            'line': {'color': 'rgba(0,0,0,1)'},
+            'text': [f'{val:.2f} - net gain' for val in net_gain],
+            'hoverinfo': 'x+text',
+        })
     return plot_list
 
 
