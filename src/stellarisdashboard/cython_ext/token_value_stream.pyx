@@ -15,7 +15,8 @@ def token_value_stream(str gamestate, bool debug=False):
 
     while current_position < len_gs:
         c = gamestate[current_position]
-        if c == '"':
+        #Second part checks if this quotation mark should be escaped.
+        if c == '"' and gamestate[current_position-1] != '\\':
             if in_quoted_string:  # Closing quote
                 end_index = current_position + 1
                 yield gamestate[token_start:end_index], line_number
