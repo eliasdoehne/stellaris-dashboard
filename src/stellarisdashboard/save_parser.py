@@ -6,6 +6,7 @@ from collections import namedtuple
 import pathlib
 import time
 import multiprocessing as mp
+import concurrent.futures
 from typing import Any, Dict, Tuple, Set, Iterable
 
 logger = logging.getLogger(__name__)
@@ -34,14 +35,10 @@ class SavePathMonitor:
         self.processed_saves: Set[pathlib.Path] = set()
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         if threads is None:
-            threads = max(1, mp.cpu_count() - 2)
+            threads = config.CONFIG.threads
         self.threads = threads
         self.game_name_prefix = game_name_prefix
         self.work_pool = None
-        if self.threads > 1:
-            mp.freeze_support()
-            self.work_pool = mp.Pool(threads)
-            logger.info(f"Initialized parsing worker pool with {self.threads} threads.")
 
     def get_new_game_states(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
         """
@@ -63,22 +60,10 @@ class SavePathMonitor:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.debug(f"Found {len(new_files)} new files: {new_files_str}...")
         if self.threads > 1:
-            mp.freeze_support()
-            results = [(f.parent.stem, self.work_pool.apply_async(parse_save, (f,))) for f in new_files]
-            while results:
-                for game_name, r in results:
-                    if r.ready():
-                        try:
-                            if r.successful():
-                                yield game_name, r.get()
-                            else:
-                                r.get()
-                        except Exception as e:
-                            logger.error("Parsing error:")
-                            logger.error(e)
-                        finally:
-                            results.remove((game_name, r))
-                time.sleep(0.3)
+            game_ids = [f.parent.stem for f in new_files]
+            with concurrent.futures.ProcessPoolExecutor(max_workers=self.threads) as executor:
+                for game_name, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
+                    yield game_name, result
         else:
             for save_file in new_files:
                 yield save_file.parent.stem, parse_save(save_file)
@@ -101,11 +86,6 @@ class SavePathMonitor:
                       and "ironman" not in str(save_file)
                       and not str(save_file.parent.stem).startswith("mp")
                       and str(save_file.parent.stem).startswith(self.game_name_prefix))
-
-    def teardown(self):
-        if self.threads > 1:
-            self.work_pool.close()
-            self.work_pool.join()
 
 
 class TokenType(enum.Enum):
