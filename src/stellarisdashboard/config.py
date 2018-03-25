@@ -2,10 +2,8 @@ import pathlib
 import dataclasses
 import logging
 import platform
-import multiprocessing as mp
+import multiprocessing as mp  # only to get the cpu count
 import sys
-
-mp.freeze_support()
 
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 
@@ -116,13 +114,13 @@ CONFIG = Config(
 
 def _apply_config_ini():
     this_dir = pathlib.Path(__file__).parent
-    config_file = this_dir / "config.ini"
+    config_file = pathlib.Path(this_dir / "config.ini")
     if not config_file.exists():
         logger.info(f"No config.ini file found in {this_dir}... Using defaults.")
         return
     logger.info("Reading config.ini file...")
     ini_comment_symbol = ";"
-    if pathlib.Path(config_file).exists() and pathlib.Path(config_file).is_file():
+    if config_file.exists() and config_file.is_file():
         with open(config_file, "r") as f:
             config_lines = []
             for line in f:
