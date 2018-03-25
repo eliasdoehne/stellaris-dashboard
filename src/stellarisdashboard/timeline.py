@@ -539,9 +539,15 @@ class TimelineExtractor:
 
             attackers = {p["country"] for p in war_dict["attackers"]}
             for war_party_info in itertools.chain(war_dict["attackers"], war_dict["defenders"]):
+                if not isinstance(war_party_info, dict):
+                    continue  # just in case
                 country_id = war_party_info.get("country")
-                country_name = self._gamestate_dict["country"][country_id]["name"]
-                db_country = self._session.query(models.Country).filter_by(game=self.game, country_name=country_name).one()
+                db_country = self._session.query(models.Country).filter_by(game=self.game, country_id_in_game=country_id).one_or_none()
+
+                if db_country is None:
+                    country_name = self._gamestate_dict["country"][country_id]["name"]
+                    logger.warning(f"Could not find country matching war participant {country_name}")
+                    continue
 
                 is_attacker = country_id in attackers
 
