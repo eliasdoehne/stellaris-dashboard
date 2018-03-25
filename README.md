@@ -32,11 +32,11 @@ So far, it has been tested with Ubuntu 16.04 and Windows 10, but it should work 
 
   1. Download and extract the repository. (If you are not sure: Click the green "Clone or Download" button above and select "Download ZIP")
   2. (Optional) create and activate a virtual environment using `virtualenv`. This avoids interfering with any other python programs you use or might use in the future.
-  3. (Optional) Open a terminal or command line in the downloaded directory and run `pip install .` to install the program using pip. This should take care of all dependencies and allow you to run the program from anywhere. 
+  3. (Optional) Open a terminal or command line in the downloaded directory and run `pip install -e .` to install the program using pip. This should take care of all dependencies and allow you to run the program from anywhere. The `-e` flag tells pip to use the python code where it is instead of copying it to another location, which might be confusing for editing your `config.ini` file.
   4. Alternatively, use `pip install -r requirements.txt` to only install the dependencies, or install them manually. 
   5. To use the interactive dashboard in-game, copy the contents of the `mod/` folder into your Stellaris mod folder and enable the "Stellaris Dashboard Integration" mod in the game's launcher. Alternatively, you can use your regular browser to view the page.
 
-Note: You may have to use `python -m pip install .` instead of `pip install .` if you use Windows. In this case, just replace `pip` with `python -m pip` wherever necessary.
+Note: You may have to use `python -m pip` instead of `pip` if you use Windows. In this case, just replace `pip` with `python -m pip` wherever necessary.
 If this is the case, then you may also have to type `python -m stellarisdashboard` and `python -m stellarisdashboardcli` instead of `stellarisdashboard` and `stellarisdashboardcli`.
 
 # Instructions
