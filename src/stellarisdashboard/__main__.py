@@ -3,7 +3,7 @@ import multiprocessing as mp
 import threading
 import time
 
-from stellarisdashboard import cli, dash_server, config, visualization_data
+from stellarisdashboard import cli, dash_server, config
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 def main():
     mp.freeze_support()
     threads = config.CONFIG.threads
-    t_save_monitor = threading.Thread(target=cli.f_monitor_saves, daemon=False, args=(threads, 10))
+    polling_interval = 0.5
+    t_save_monitor = threading.Thread(target=cli.f_monitor_saves, daemon=False, args=(threads, polling_interval))
     t_save_monitor.start()
     t_dash = threading.Thread(target=dash_server.start_server, daemon=False, args=())
     t_dash.start()
