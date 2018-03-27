@@ -1229,12 +1229,13 @@ int __pyx_module_is_main_stellarisdashboard__cython_ext__token_value_stream = 0;
 /* Implementation of 'stellarisdashboard.cython_ext.token_value_stream' */
 static const char __pyx_k_[] = "\"";
 static const char __pyx_k_c[] = "c";
-static const char __pyx_k__2[] = " ";
-static const char __pyx_k__3[] = "\t";
-static const char __pyx_k__4[] = "\n";
-static const char __pyx_k__5[] = "{";
-static const char __pyx_k__6[] = "}";
-static const char __pyx_k__7[] = "=";
+static const char __pyx_k__2[] = "\\";
+static const char __pyx_k__3[] = " ";
+static const char __pyx_k__4[] = "\t";
+static const char __pyx_k__5[] = "\n";
+static const char __pyx_k__6[] = "{";
+static const char __pyx_k__7[] = "}";
+static const char __pyx_k__8[] = "=";
 static const char __pyx_k_args[] = "args";
 static const char __pyx_k_main[] = "__main__";
 static const char __pyx_k_send[] = "send";
@@ -1261,6 +1262,7 @@ static PyObject *__pyx_kp_s__4;
 static PyObject *__pyx_kp_s__5;
 static PyObject *__pyx_kp_s__6;
 static PyObject *__pyx_kp_s__7;
+static PyObject *__pyx_kp_s__8;
 static PyObject *__pyx_n_s_args;
 static PyObject *__pyx_n_s_c;
 static PyObject *__pyx_n_s_cline_in_traceback;
@@ -1283,8 +1285,8 @@ static PyObject *__pyx_n_s_token_start;
 static PyObject *__pyx_n_s_token_value_stream;
 static PyObject *__pyx_pf_18stellarisdashboard_10cython_ext_18token_value_stream_token_value_stream(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_gamestate, PyBoolObject *__pyx_v_debug); /* proto */
 static PyObject *__pyx_tp_new_18stellarisdashboard_10cython_ext_18token_value_stream___pyx_scope_struct__token_value_stream(PyTypeObject *t, PyObject *a, PyObject *k); /*proto*/
-static PyObject *__pyx_tuple__8;
-static PyObject *__pyx_codeobj__9;
+static PyObject *__pyx_tuple__9;
+static PyObject *__pyx_codeobj__10;
 static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream_2generator(__pyx_CoroutineObject *__pyx_generator, CYTHON_UNUSED PyThreadState *__pyx_tstate, PyObject *__pyx_sent_value); /* proto */
 
 /* "stellarisdashboard/cython_ext/token_value_stream.pyx":3
@@ -1411,17 +1413,19 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
   int __pyx_t_2;
   PyObject *__pyx_t_3 = NULL;
   int __pyx_t_4;
-  PyObject *__pyx_t_5 = NULL;
-  PyObject *__pyx_t_6 = NULL;
-  int __pyx_t_7;
+  int __pyx_t_5;
+  long __pyx_t_6;
+  PyObject *__pyx_t_7 = NULL;
+  PyObject *__pyx_t_8 = NULL;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("token_value_stream", 0);
   switch (__pyx_generator->resume_label) {
     case 0: goto __pyx_L3_first_run;
-    case 1: goto __pyx_L8_resume_from_yield;
-    case 2: goto __pyx_L13_resume_from_yield;
-    case 3: goto __pyx_L21_resume_from_yield;
-    case 4: goto __pyx_L22_resume_from_yield;
+    case 1: goto __pyx_L10_resume_from_yield;
+    case 2: goto __pyx_L15_resume_from_yield;
+    case 3: goto __pyx_L23_resume_from_yield;
+    case 4: goto __pyx_L24_resume_from_yield;
+    case 5: goto __pyx_L26_resume_from_yield;
     default: /* CPython raises the right error here */
     __Pyx_RefNannyFinishContext();
     return NULL;
@@ -1498,7 +1502,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  * 
  *     while current_position < len_gs:             # <<<<<<<<<<<<<<
  *         c = gamestate[current_position]
- *         if c == '"':
+ *         #Second part checks if this quotation mark should be escaped.
  */
   while (1) {
     __pyx_t_2 = ((__pyx_cur_scope->__pyx_v_current_position < __pyx_cur_scope->__pyx_v_len_gs) != 0);
@@ -1508,8 +1512,8 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  * 
  *     while current_position < len_gs:
  *         c = gamestate[current_position]             # <<<<<<<<<<<<<<
- *         if c == '"':
- *             if in_quoted_string:  # Closing quote
+ *         #Second part checks if this quotation mark should be escaped.
+ *         if c == '"' and gamestate[current_position - 1] != '\\':
  */
     __pyx_t_3 = __Pyx_GetItemInt(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_current_position, int, 1, __Pyx_PyInt_From_int, 0, 1, 1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 17, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
@@ -1519,29 +1523,41 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
     __Pyx_GIVEREF(__pyx_t_3);
     __pyx_t_3 = 0;
 
-    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":18
- *     while current_position < len_gs:
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":19
  *         c = gamestate[current_position]
- *         if c == '"':             # <<<<<<<<<<<<<<
+ *         #Second part checks if this quotation mark should be escaped.
+ *         if c == '"' and gamestate[current_position - 1] != '\\':             # <<<<<<<<<<<<<<
  *             if in_quoted_string:  # Closing quote
  *                 end_index = current_position + 1
  */
-    __pyx_t_2 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s_, Py_EQ)); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 18, __pyx_L1_error)
-    __pyx_t_4 = (__pyx_t_2 != 0);
-    if (__pyx_t_4) {
+    __pyx_t_4 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s_, Py_EQ)); if (unlikely(__pyx_t_4 < 0)) __PYX_ERR(0, 19, __pyx_L1_error)
+    __pyx_t_5 = (__pyx_t_4 != 0);
+    if (__pyx_t_5) {
+    } else {
+      __pyx_t_2 = __pyx_t_5;
+      goto __pyx_L7_bool_binop_done;
+    }
+    __pyx_t_6 = (__pyx_cur_scope->__pyx_v_current_position - 1);
+    __pyx_t_3 = __Pyx_GetItemInt(__pyx_cur_scope->__pyx_v_gamestate, __pyx_t_6, long, 1, __Pyx_PyInt_From_long, 0, 1, 1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 19, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_5 = (__Pyx_PyString_Equals(__pyx_t_3, __pyx_kp_s__2, Py_NE)); if (unlikely(__pyx_t_5 < 0)) __PYX_ERR(0, 19, __pyx_L1_error)
+    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
+    __pyx_t_2 = __pyx_t_5;
+    __pyx_L7_bool_binop_done:;
+    if (__pyx_t_2) {
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":19
- *         c = gamestate[current_position]
- *         if c == '"':
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":20
+ *         #Second part checks if this quotation mark should be escaped.
+ *         if c == '"' and gamestate[current_position - 1] != '\\':
  *             if in_quoted_string:  # Closing quote             # <<<<<<<<<<<<<<
  *                 end_index = current_position + 1
  *                 yield gamestate[token_start:end_index], line_number
  */
-      __pyx_t_4 = (__pyx_cur_scope->__pyx_v_in_quoted_string != 0);
-      if (__pyx_t_4) {
+      __pyx_t_2 = (__pyx_cur_scope->__pyx_v_in_quoted_string != 0);
+      if (__pyx_t_2) {
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":20
- *         if c == '"':
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":21
+ *         if c == '"' and gamestate[current_position - 1] != '\\':
  *             if in_quoted_string:  # Closing quote
  *                 end_index = current_position + 1             # <<<<<<<<<<<<<<
  *                 yield gamestate[token_start:end_index], line_number
@@ -1549,7 +1565,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_end_index = (__pyx_cur_scope->__pyx_v_current_position + 1);
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":21
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":22
  *             if in_quoted_string:  # Closing quote
  *                 end_index = current_position + 1
  *                 yield gamestate[token_start:end_index], line_number             # <<<<<<<<<<<<<<
@@ -1558,32 +1574,32 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         if (unlikely(__pyx_cur_scope->__pyx_v_gamestate == Py_None)) {
           PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-          __PYX_ERR(0, 21, __pyx_L1_error)
+          __PYX_ERR(0, 22, __pyx_L1_error)
         }
-        __pyx_t_3 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_end_index); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 21, __pyx_L1_error)
+        __pyx_t_3 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_end_index); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 22, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_3);
-        __pyx_t_5 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 21, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_5);
-        __pyx_t_6 = PyTuple_New(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 21, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
+        __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 22, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_7);
+        __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 22, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_8);
         __Pyx_GIVEREF(__pyx_t_3);
-        PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_3);
-        __Pyx_GIVEREF(__pyx_t_5);
-        PyTuple_SET_ITEM(__pyx_t_6, 1, __pyx_t_5);
+        PyTuple_SET_ITEM(__pyx_t_8, 0, __pyx_t_3);
+        __Pyx_GIVEREF(__pyx_t_7);
+        PyTuple_SET_ITEM(__pyx_t_8, 1, __pyx_t_7);
         __pyx_t_3 = 0;
-        __pyx_t_5 = 0;
-        __pyx_r = __pyx_t_6;
-        __pyx_t_6 = 0;
+        __pyx_t_7 = 0;
+        __pyx_r = __pyx_t_8;
+        __pyx_t_8 = 0;
         __Pyx_XGIVEREF(__pyx_r);
         __Pyx_RefNannyFinishContext();
         __Pyx_Coroutine_ResetAndClearException(__pyx_generator);
         /* return from generator, yielding value */
         __pyx_generator->resume_label = 1;
         return __pyx_r;
-        __pyx_L8_resume_from_yield:;
-        if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 21, __pyx_L1_error)
+        __pyx_L10_resume_from_yield:;
+        if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 22, __pyx_L1_error)
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":22
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":23
  *                 end_index = current_position + 1
  *                 yield gamestate[token_start:end_index], line_number
  *                 in_word = False             # <<<<<<<<<<<<<<
@@ -1592,7 +1608,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_in_word = 0;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":23
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":24
  *                 yield gamestate[token_start:end_index], line_number
  *                 in_word = False
  *                 token_start = end_index             # <<<<<<<<<<<<<<
@@ -1601,17 +1617,17 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_token_start = __pyx_cur_scope->__pyx_v_end_index;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":19
- *         c = gamestate[current_position]
- *         if c == '"':
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":20
+ *         #Second part checks if this quotation mark should be escaped.
+ *         if c == '"' and gamestate[current_position - 1] != '\\':
  *             if in_quoted_string:  # Closing quote             # <<<<<<<<<<<<<<
  *                 end_index = current_position + 1
  *                 yield gamestate[token_start:end_index], line_number
  */
-        goto __pyx_L7;
+        goto __pyx_L9;
       }
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":25
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":26
  *                 token_start = end_index
  *             else:  # Opening quote
  *                 in_word = True             # <<<<<<<<<<<<<<
@@ -1621,7 +1637,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
       /*else*/ {
         __pyx_cur_scope->__pyx_v_in_word = 1;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":26
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":27
  *             else:  # Opening quote
  *                 in_word = True
  *                 token_start = current_position             # <<<<<<<<<<<<<<
@@ -1630,9 +1646,9 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_token_start = __pyx_cur_scope->__pyx_v_current_position;
       }
-      __pyx_L7:;
+      __pyx_L9:;
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":27
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":28
  *                 in_word = True
  *                 token_start = current_position
  *             in_quoted_string = not in_quoted_string             # <<<<<<<<<<<<<<
@@ -1641,66 +1657,66 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
       __pyx_cur_scope->__pyx_v_in_quoted_string = (!(__pyx_cur_scope->__pyx_v_in_quoted_string != 0));
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":18
- *     while current_position < len_gs:
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":19
  *         c = gamestate[current_position]
- *         if c == '"':             # <<<<<<<<<<<<<<
+ *         #Second part checks if this quotation mark should be escaped.
+ *         if c == '"' and gamestate[current_position - 1] != '\\':             # <<<<<<<<<<<<<<
  *             if in_quoted_string:  # Closing quote
  *                 end_index = current_position + 1
  */
       goto __pyx_L6;
     }
 
-    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":28
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":29
  *                 token_start = current_position
  *             in_quoted_string = not in_quoted_string
  *         elif in_quoted_string:             # <<<<<<<<<<<<<<
  *             pass
  *         elif c == " " or c == "\t" or c == "\n":
  */
-    __pyx_t_4 = (__pyx_cur_scope->__pyx_v_in_quoted_string != 0);
-    if (__pyx_t_4) {
+    __pyx_t_2 = (__pyx_cur_scope->__pyx_v_in_quoted_string != 0);
+    if (__pyx_t_2) {
       goto __pyx_L6;
     }
 
-    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":30
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":31
  *         elif in_quoted_string:
  *             pass
  *         elif c == " " or c == "\t" or c == "\n":             # <<<<<<<<<<<<<<
  *             if in_word:
  *                 in_word = False
  */
-    __pyx_t_2 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__2, Py_EQ)); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 30, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_2 != 0);
-    if (!__pyx_t_7) {
+    __pyx_t_5 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__3, Py_EQ)); if (unlikely(__pyx_t_5 < 0)) __PYX_ERR(0, 31, __pyx_L1_error)
+    __pyx_t_4 = (__pyx_t_5 != 0);
+    if (!__pyx_t_4) {
     } else {
-      __pyx_t_4 = __pyx_t_7;
-      goto __pyx_L9_bool_binop_done;
+      __pyx_t_2 = __pyx_t_4;
+      goto __pyx_L11_bool_binop_done;
     }
-    __pyx_t_7 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__3, Py_EQ)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 30, __pyx_L1_error)
-    __pyx_t_2 = (__pyx_t_7 != 0);
-    if (!__pyx_t_2) {
+    __pyx_t_4 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__4, Py_EQ)); if (unlikely(__pyx_t_4 < 0)) __PYX_ERR(0, 31, __pyx_L1_error)
+    __pyx_t_5 = (__pyx_t_4 != 0);
+    if (!__pyx_t_5) {
     } else {
-      __pyx_t_4 = __pyx_t_2;
-      goto __pyx_L9_bool_binop_done;
+      __pyx_t_2 = __pyx_t_5;
+      goto __pyx_L11_bool_binop_done;
     }
-    __pyx_t_2 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__4, Py_EQ)); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 30, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_2 != 0);
-    __pyx_t_4 = __pyx_t_7;
-    __pyx_L9_bool_binop_done:;
-    if (__pyx_t_4) {
+    __pyx_t_5 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__5, Py_EQ)); if (unlikely(__pyx_t_5 < 0)) __PYX_ERR(0, 31, __pyx_L1_error)
+    __pyx_t_4 = (__pyx_t_5 != 0);
+    __pyx_t_2 = __pyx_t_4;
+    __pyx_L11_bool_binop_done:;
+    if (__pyx_t_2) {
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":31
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":32
  *             pass
  *         elif c == " " or c == "\t" or c == "\n":
  *             if in_word:             # <<<<<<<<<<<<<<
  *                 in_word = False
  *                 end_index = current_position
  */
-      __pyx_t_4 = (__pyx_cur_scope->__pyx_v_in_word != 0);
-      if (__pyx_t_4) {
+      __pyx_t_2 = (__pyx_cur_scope->__pyx_v_in_word != 0);
+      if (__pyx_t_2) {
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":32
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":33
  *         elif c == " " or c == "\t" or c == "\n":
  *             if in_word:
  *                 in_word = False             # <<<<<<<<<<<<<<
@@ -1709,7 +1725,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_in_word = 0;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":33
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":34
  *             if in_word:
  *                 in_word = False
  *                 end_index = current_position             # <<<<<<<<<<<<<<
@@ -1718,7 +1734,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_end_index = __pyx_cur_scope->__pyx_v_current_position;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":34
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":35
  *                 in_word = False
  *                 end_index = current_position
  *                 yield gamestate[token_start:end_index], line_number             # <<<<<<<<<<<<<<
@@ -1727,20 +1743,20 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         if (unlikely(__pyx_cur_scope->__pyx_v_gamestate == Py_None)) {
           PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-          __PYX_ERR(0, 34, __pyx_L1_error)
+          __PYX_ERR(0, 35, __pyx_L1_error)
         }
-        __pyx_t_6 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_end_index); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 34, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
-        __pyx_t_5 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 34, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_5);
-        __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 34, __pyx_L1_error)
+        __pyx_t_8 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_end_index); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 35, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_8);
+        __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 35, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_7);
+        __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 35, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_3);
-        __Pyx_GIVEREF(__pyx_t_6);
-        PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_6);
-        __Pyx_GIVEREF(__pyx_t_5);
-        PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_t_5);
-        __pyx_t_6 = 0;
-        __pyx_t_5 = 0;
+        __Pyx_GIVEREF(__pyx_t_8);
+        PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_8);
+        __Pyx_GIVEREF(__pyx_t_7);
+        PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_t_7);
+        __pyx_t_8 = 0;
+        __pyx_t_7 = 0;
         __pyx_r = __pyx_t_3;
         __pyx_t_3 = 0;
         __Pyx_XGIVEREF(__pyx_r);
@@ -1749,10 +1765,10 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
         /* return from generator, yielding value */
         __pyx_generator->resume_label = 2;
         return __pyx_r;
-        __pyx_L13_resume_from_yield:;
-        if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 34, __pyx_L1_error)
+        __pyx_L15_resume_from_yield:;
+        if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 35, __pyx_L1_error)
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":35
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":36
  *                 end_index = current_position
  *                 yield gamestate[token_start:end_index], line_number
  *                 token_start = end_index + 1             # <<<<<<<<<<<<<<
@@ -1761,17 +1777,17 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_token_start = (__pyx_cur_scope->__pyx_v_end_index + 1);
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":31
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":32
  *             pass
  *         elif c == " " or c == "\t" or c == "\n":
  *             if in_word:             # <<<<<<<<<<<<<<
  *                 in_word = False
  *                 end_index = current_position
  */
-        goto __pyx_L12;
+        goto __pyx_L14;
       }
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":37
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":38
  *                 token_start = end_index + 1
  *             else:
  *                 token_start += 1             # <<<<<<<<<<<<<<
@@ -1781,28 +1797,28 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
       /*else*/ {
         __pyx_cur_scope->__pyx_v_token_start = (__pyx_cur_scope->__pyx_v_token_start + 1);
       }
-      __pyx_L12:;
+      __pyx_L14:;
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":38
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":39
  *             else:
  *                 token_start += 1
  *             if debug and c == "\n":             # <<<<<<<<<<<<<<
  *                 line_number += 1
  *         elif c == "{" or c == "}" or c == "=":
  */
-      __pyx_t_7 = __Pyx_PyObject_IsTrue(((PyObject *)__pyx_cur_scope->__pyx_v_debug)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 38, __pyx_L1_error)
-      if (__pyx_t_7) {
-      } else {
-        __pyx_t_4 = __pyx_t_7;
-        goto __pyx_L15_bool_binop_done;
-      }
-      __pyx_t_7 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__4, Py_EQ)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 38, __pyx_L1_error)
-      __pyx_t_2 = (__pyx_t_7 != 0);
-      __pyx_t_4 = __pyx_t_2;
-      __pyx_L15_bool_binop_done:;
+      __pyx_t_4 = __Pyx_PyObject_IsTrue(((PyObject *)__pyx_cur_scope->__pyx_v_debug)); if (unlikely(__pyx_t_4 < 0)) __PYX_ERR(0, 39, __pyx_L1_error)
       if (__pyx_t_4) {
+      } else {
+        __pyx_t_2 = __pyx_t_4;
+        goto __pyx_L17_bool_binop_done;
+      }
+      __pyx_t_4 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__5, Py_EQ)); if (unlikely(__pyx_t_4 < 0)) __PYX_ERR(0, 39, __pyx_L1_error)
+      __pyx_t_5 = (__pyx_t_4 != 0);
+      __pyx_t_2 = __pyx_t_5;
+      __pyx_L17_bool_binop_done:;
+      if (__pyx_t_2) {
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":39
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":40
  *                 token_start += 1
  *             if debug and c == "\n":
  *                 line_number += 1             # <<<<<<<<<<<<<<
@@ -1811,7 +1827,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_line_number = (__pyx_cur_scope->__pyx_v_line_number + 1);
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":38
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":39
  *             else:
  *                 token_start += 1
  *             if debug and c == "\n":             # <<<<<<<<<<<<<<
@@ -1820,7 +1836,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
       }
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":30
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":31
  *         elif in_quoted_string:
  *             pass
  *         elif c == " " or c == "\t" or c == "\n":             # <<<<<<<<<<<<<<
@@ -1830,44 +1846,44 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
       goto __pyx_L6;
     }
 
-    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":40
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":41
  *             if debug and c == "\n":
  *                 line_number += 1
  *         elif c == "{" or c == "}" or c == "=":             # <<<<<<<<<<<<<<
  *             if in_word:
  *                 in_word = False
  */
-    __pyx_t_2 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__5, Py_EQ)); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 40, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_2 != 0);
-    if (!__pyx_t_7) {
+    __pyx_t_5 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__6, Py_EQ)); if (unlikely(__pyx_t_5 < 0)) __PYX_ERR(0, 41, __pyx_L1_error)
+    __pyx_t_4 = (__pyx_t_5 != 0);
+    if (!__pyx_t_4) {
     } else {
-      __pyx_t_4 = __pyx_t_7;
-      goto __pyx_L17_bool_binop_done;
+      __pyx_t_2 = __pyx_t_4;
+      goto __pyx_L19_bool_binop_done;
     }
-    __pyx_t_7 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__6, Py_EQ)); if (unlikely(__pyx_t_7 < 0)) __PYX_ERR(0, 40, __pyx_L1_error)
-    __pyx_t_2 = (__pyx_t_7 != 0);
-    if (!__pyx_t_2) {
+    __pyx_t_4 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__7, Py_EQ)); if (unlikely(__pyx_t_4 < 0)) __PYX_ERR(0, 41, __pyx_L1_error)
+    __pyx_t_5 = (__pyx_t_4 != 0);
+    if (!__pyx_t_5) {
     } else {
-      __pyx_t_4 = __pyx_t_2;
-      goto __pyx_L17_bool_binop_done;
+      __pyx_t_2 = __pyx_t_5;
+      goto __pyx_L19_bool_binop_done;
     }
-    __pyx_t_2 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__7, Py_EQ)); if (unlikely(__pyx_t_2 < 0)) __PYX_ERR(0, 40, __pyx_L1_error)
-    __pyx_t_7 = (__pyx_t_2 != 0);
-    __pyx_t_4 = __pyx_t_7;
-    __pyx_L17_bool_binop_done:;
-    if (__pyx_t_4) {
+    __pyx_t_5 = (__Pyx_PyString_Equals(__pyx_cur_scope->__pyx_v_c, __pyx_kp_s__8, Py_EQ)); if (unlikely(__pyx_t_5 < 0)) __PYX_ERR(0, 41, __pyx_L1_error)
+    __pyx_t_4 = (__pyx_t_5 != 0);
+    __pyx_t_2 = __pyx_t_4;
+    __pyx_L19_bool_binop_done:;
+    if (__pyx_t_2) {
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":41
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":42
  *                 line_number += 1
  *         elif c == "{" or c == "}" or c == "=":
  *             if in_word:             # <<<<<<<<<<<<<<
  *                 in_word = False
  *                 end_index = current_position
  */
-      __pyx_t_4 = (__pyx_cur_scope->__pyx_v_in_word != 0);
-      if (__pyx_t_4) {
+      __pyx_t_2 = (__pyx_cur_scope->__pyx_v_in_word != 0);
+      if (__pyx_t_2) {
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":42
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":43
  *         elif c == "{" or c == "}" or c == "=":
  *             if in_word:
  *                 in_word = False             # <<<<<<<<<<<<<<
@@ -1876,7 +1892,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_in_word = 0;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":43
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":44
  *             if in_word:
  *                 in_word = False
  *                 end_index = current_position             # <<<<<<<<<<<<<<
@@ -1885,7 +1901,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         __pyx_cur_scope->__pyx_v_end_index = __pyx_cur_scope->__pyx_v_current_position;
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":44
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":45
  *                 in_word = False
  *                 end_index = current_position
  *                 yield gamestate[token_start:end_index], line_number             # <<<<<<<<<<<<<<
@@ -1894,32 +1910,32 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
         if (unlikely(__pyx_cur_scope->__pyx_v_gamestate == Py_None)) {
           PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-          __PYX_ERR(0, 44, __pyx_L1_error)
+          __PYX_ERR(0, 45, __pyx_L1_error)
         }
-        __pyx_t_3 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_end_index); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 44, __pyx_L1_error)
+        __pyx_t_3 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_end_index); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 45, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_3);
-        __pyx_t_5 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 44, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_5);
-        __pyx_t_6 = PyTuple_New(2); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 44, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_6);
+        __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 45, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_7);
+        __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 45, __pyx_L1_error)
+        __Pyx_GOTREF(__pyx_t_8);
         __Pyx_GIVEREF(__pyx_t_3);
-        PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_3);
-        __Pyx_GIVEREF(__pyx_t_5);
-        PyTuple_SET_ITEM(__pyx_t_6, 1, __pyx_t_5);
+        PyTuple_SET_ITEM(__pyx_t_8, 0, __pyx_t_3);
+        __Pyx_GIVEREF(__pyx_t_7);
+        PyTuple_SET_ITEM(__pyx_t_8, 1, __pyx_t_7);
         __pyx_t_3 = 0;
-        __pyx_t_5 = 0;
-        __pyx_r = __pyx_t_6;
-        __pyx_t_6 = 0;
+        __pyx_t_7 = 0;
+        __pyx_r = __pyx_t_8;
+        __pyx_t_8 = 0;
         __Pyx_XGIVEREF(__pyx_r);
         __Pyx_RefNannyFinishContext();
         __Pyx_Coroutine_ResetAndClearException(__pyx_generator);
         /* return from generator, yielding value */
         __pyx_generator->resume_label = 3;
         return __pyx_r;
-        __pyx_L21_resume_from_yield:;
-        if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 44, __pyx_L1_error)
+        __pyx_L23_resume_from_yield:;
+        if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 45, __pyx_L1_error)
 
-        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":41
+        /* "stellarisdashboard/cython_ext/token_value_stream.pyx":42
  *                 line_number += 1
  *         elif c == "{" or c == "}" or c == "=":
  *             if in_word:             # <<<<<<<<<<<<<<
@@ -1928,7 +1944,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
       }
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":45
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":46
  *                 end_index = current_position
  *                 yield gamestate[token_start:end_index], line_number
  *             yield gamestate[current_position:current_position + 1], line_number             # <<<<<<<<<<<<<<
@@ -1937,20 +1953,20 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
       if (unlikely(__pyx_cur_scope->__pyx_v_gamestate == Py_None)) {
         PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
-        __PYX_ERR(0, 45, __pyx_L1_error)
+        __PYX_ERR(0, 46, __pyx_L1_error)
       }
-      __pyx_t_6 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_current_position, (__pyx_cur_scope->__pyx_v_current_position + 1)); if (unlikely(!__pyx_t_6)) __PYX_ERR(0, 45, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_5 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 45, __pyx_L1_error)
-      __Pyx_GOTREF(__pyx_t_5);
-      __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 45, __pyx_L1_error)
+      __pyx_t_8 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_current_position, (__pyx_cur_scope->__pyx_v_current_position + 1)); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 46, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_8);
+      __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 46, __pyx_L1_error)
+      __Pyx_GOTREF(__pyx_t_7);
+      __pyx_t_3 = PyTuple_New(2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 46, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
-      __Pyx_GIVEREF(__pyx_t_6);
-      PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_6);
-      __Pyx_GIVEREF(__pyx_t_5);
-      PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_t_5);
-      __pyx_t_6 = 0;
-      __pyx_t_5 = 0;
+      __Pyx_GIVEREF(__pyx_t_8);
+      PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_8);
+      __Pyx_GIVEREF(__pyx_t_7);
+      PyTuple_SET_ITEM(__pyx_t_3, 1, __pyx_t_7);
+      __pyx_t_8 = 0;
+      __pyx_t_7 = 0;
       __pyx_r = __pyx_t_3;
       __pyx_t_3 = 0;
       __Pyx_XGIVEREF(__pyx_r);
@@ -1959,10 +1975,10 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
       /* return from generator, yielding value */
       __pyx_generator->resume_label = 4;
       return __pyx_r;
-      __pyx_L22_resume_from_yield:;
-      if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 45, __pyx_L1_error)
+      __pyx_L24_resume_from_yield:;
+      if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 46, __pyx_L1_error)
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":46
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":47
  *                 yield gamestate[token_start:end_index], line_number
  *             yield gamestate[current_position:current_position + 1], line_number
  *             token_start = current_position + 1             # <<<<<<<<<<<<<<
@@ -1971,7 +1987,7 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
  */
       __pyx_cur_scope->__pyx_v_token_start = (__pyx_cur_scope->__pyx_v_current_position + 1);
 
-      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":40
+      /* "stellarisdashboard/cython_ext/token_value_stream.pyx":41
  *             if debug and c == "\n":
  *                 line_number += 1
  *         elif c == "{" or c == "}" or c == "=":             # <<<<<<<<<<<<<<
@@ -1981,23 +1997,75 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
       goto __pyx_L6;
     }
 
-    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":48
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":49
  *             token_start = current_position + 1
  *         else:
  *             in_word = True             # <<<<<<<<<<<<<<
  *         current_position += 1
+ * 
  */
     /*else*/ {
       __pyx_cur_scope->__pyx_v_in_word = 1;
     }
     __pyx_L6:;
 
-    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":49
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":50
  *         else:
  *             in_word = True
  *         current_position += 1             # <<<<<<<<<<<<<<
+ * 
+ *     if in_word:
  */
     __pyx_cur_scope->__pyx_v_current_position = (__pyx_cur_scope->__pyx_v_current_position + 1);
+  }
+
+  /* "stellarisdashboard/cython_ext/token_value_stream.pyx":52
+ *         current_position += 1
+ * 
+ *     if in_word:             # <<<<<<<<<<<<<<
+ *         yield gamestate[token_start:len_gs], line_number
+ */
+  __pyx_t_2 = (__pyx_cur_scope->__pyx_v_in_word != 0);
+  if (__pyx_t_2) {
+
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":53
+ * 
+ *     if in_word:
+ *         yield gamestate[token_start:len_gs], line_number             # <<<<<<<<<<<<<<
+ */
+    if (unlikely(__pyx_cur_scope->__pyx_v_gamestate == Py_None)) {
+      PyErr_SetString(PyExc_TypeError, "'NoneType' object is not subscriptable");
+      __PYX_ERR(0, 53, __pyx_L1_error)
+    }
+    __pyx_t_3 = PySequence_GetSlice(__pyx_cur_scope->__pyx_v_gamestate, __pyx_cur_scope->__pyx_v_token_start, __pyx_cur_scope->__pyx_v_len_gs); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 53, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_3);
+    __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_cur_scope->__pyx_v_line_number); if (unlikely(!__pyx_t_7)) __PYX_ERR(0, 53, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_7);
+    __pyx_t_8 = PyTuple_New(2); if (unlikely(!__pyx_t_8)) __PYX_ERR(0, 53, __pyx_L1_error)
+    __Pyx_GOTREF(__pyx_t_8);
+    __Pyx_GIVEREF(__pyx_t_3);
+    PyTuple_SET_ITEM(__pyx_t_8, 0, __pyx_t_3);
+    __Pyx_GIVEREF(__pyx_t_7);
+    PyTuple_SET_ITEM(__pyx_t_8, 1, __pyx_t_7);
+    __pyx_t_3 = 0;
+    __pyx_t_7 = 0;
+    __pyx_r = __pyx_t_8;
+    __pyx_t_8 = 0;
+    __Pyx_XGIVEREF(__pyx_r);
+    __Pyx_RefNannyFinishContext();
+    __Pyx_Coroutine_ResetAndClearException(__pyx_generator);
+    /* return from generator, yielding value */
+    __pyx_generator->resume_label = 5;
+    return __pyx_r;
+    __pyx_L26_resume_from_yield:;
+    if (unlikely(!__pyx_sent_value)) __PYX_ERR(0, 53, __pyx_L1_error)
+
+    /* "stellarisdashboard/cython_ext/token_value_stream.pyx":52
+ *         current_position += 1
+ * 
+ *     if in_word:             # <<<<<<<<<<<<<<
+ *         yield gamestate[token_start:len_gs], line_number
+ */
   }
   CYTHON_MAYBE_UNUSED_VAR(__pyx_cur_scope);
 
@@ -2014,8 +2082,8 @@ static PyObject *__pyx_gb_18stellarisdashboard_10cython_ext_18token_value_stream
   goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_XDECREF(__pyx_t_5);
-  __Pyx_XDECREF(__pyx_t_6);
+  __Pyx_XDECREF(__pyx_t_7);
+  __Pyx_XDECREF(__pyx_t_8);
   __Pyx_AddTraceback("token_value_stream", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_L0:;
   __Pyx_XDECREF(__pyx_r); __pyx_r = 0;
@@ -2167,6 +2235,7 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_kp_s__5, __pyx_k__5, sizeof(__pyx_k__5), 0, 0, 1, 0},
   {&__pyx_kp_s__6, __pyx_k__6, sizeof(__pyx_k__6), 0, 0, 1, 0},
   {&__pyx_kp_s__7, __pyx_k__7, sizeof(__pyx_k__7), 0, 0, 1, 0},
+  {&__pyx_kp_s__8, __pyx_k__8, sizeof(__pyx_k__8), 0, 0, 1, 0},
   {&__pyx_n_s_args, __pyx_k_args, sizeof(__pyx_k_args), 0, 0, 1, 1},
   {&__pyx_n_s_c, __pyx_k_c, sizeof(__pyx_k_c), 0, 0, 1, 1},
   {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
@@ -2204,10 +2273,10 @@ static int __Pyx_InitCachedConstants(void) {
  *     cdef int token_start, end_index, current_position, line_number, len_gs
  *     cdef str c
  */
-  __pyx_tuple__8 = PyTuple_Pack(10, __pyx_n_s_gamestate, __pyx_n_s_debug, __pyx_n_s_token_start, __pyx_n_s_end_index, __pyx_n_s_current_position, __pyx_n_s_line_number, __pyx_n_s_len_gs, __pyx_n_s_c, __pyx_n_s_in_word, __pyx_n_s_in_quoted_string); if (unlikely(!__pyx_tuple__8)) __PYX_ERR(0, 3, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__8);
-  __Pyx_GIVEREF(__pyx_tuple__8);
-  __pyx_codeobj__9 = (PyObject*)__Pyx_PyCode_New(2, 0, 10, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__8, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_src_stellarisdashboard_cython_ex, __pyx_n_s_token_value_stream, 3, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__9)) __PYX_ERR(0, 3, __pyx_L1_error)
+  __pyx_tuple__9 = PyTuple_Pack(10, __pyx_n_s_gamestate, __pyx_n_s_debug, __pyx_n_s_token_start, __pyx_n_s_end_index, __pyx_n_s_current_position, __pyx_n_s_line_number, __pyx_n_s_len_gs, __pyx_n_s_c, __pyx_n_s_in_word, __pyx_n_s_in_quoted_string); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(0, 3, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__9);
+  __Pyx_GIVEREF(__pyx_tuple__9);
+  __pyx_codeobj__10 = (PyObject*)__Pyx_PyCode_New(2, 0, 10, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__9, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_src_stellarisdashboard_cython_ex, __pyx_n_s_token_value_stream, 3, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__10)) __PYX_ERR(0, 3, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
