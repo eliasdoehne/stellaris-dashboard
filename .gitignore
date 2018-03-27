@@ -5,6 +5,9 @@ data
 *.db
 **/*.c
 **/config.ini
+**/*.json
+**/.pytest*
+random_execution.py  # file I use to debug issues
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
