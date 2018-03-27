@@ -1,12 +1,10 @@
+import concurrent.futures
 import enum
 import logging
-import zipfile
-from collections import namedtuple
-
 import pathlib
 import time
-import multiprocessing as mp
-import concurrent.futures
+import zipfile
+from collections import namedtuple
 from typing import Any, Dict, Tuple, Set, Iterable
 
 logger = logging.getLogger(__name__)
@@ -59,7 +57,7 @@ class SavePathMonitor:
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.debug(f"Found {len(new_files)} new files: {new_files_str}...")
-        if self.threads > 1:
+        if self.threads > 1 and len(new_files) > 1:
             game_ids = [f.parent.stem for f in new_files]
             with concurrent.futures.ProcessPoolExecutor(max_workers=self.threads) as executor:
                 for game_name, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
@@ -115,11 +113,7 @@ def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
     :return:
     """
     for token_info in tokenizer(gamestate, config.CONFIG.debug_mode):
-        if isinstance(token_info, tuple):
-            value, line_number = token_info
-        else:
-            value = token_info
-            line_number = 0
+        value, line_number = token_info
         if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)
         elif value == "}":
@@ -143,7 +137,7 @@ def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
                 value = value.strip('"')
                 token_type = TokenType.STRING
             yield Token(token_type, value, line_number)
-    yield Token(TokenType.EOF, None, line_number)
+    yield Token(TokenType.EOF, None, -1)
 
 
 class SaveFileParser:
@@ -165,8 +159,7 @@ class SaveFileParser:
         self._token_stream = token_stream(gamestate)
         self._parse_save()
         end_time = time.time()
-        logging.info(f"Parsed save file in {end_time - start_time} seconds.")
-        print(f"Parsed save file in {end_time - start_time} seconds.")
+        print(f"Parsed save file {self.save_filename} in {end_time - start_time} seconds.")
         return self.gamestate_dict
 
     def _parse_save(self):
