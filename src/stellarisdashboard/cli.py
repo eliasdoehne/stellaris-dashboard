@@ -1,5 +1,6 @@
 import logging
 import multiprocessing as mp
+import threading
 import time
 import traceback
 
@@ -54,20 +55,22 @@ def monitor_saves(threads, save_path, polling_interval):
     f_monitor_saves(threads, polling_interval, save_path=save_path)
 
 
-def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
+def f_monitor_saves(threads=None, polling_interval=None, save_path=None, stop_event: threading.Event=None):
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     if polling_interval is None:
         polling_interval = 0.5
     if threads is None:
         threads = config.CONFIG.threads
+    if stop_event is None:
+        stop_event = threading.Event()
     save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
 
     show_wait_message = True
     try:
-        while True:
+        while not stop_event.is_set():
             nothing_new = True
             for game_name, gamestate_dict in save_reader.get_new_game_states():
                 show_wait_message = True
@@ -81,11 +84,12 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
                 if show_wait_message:
                     show_wait_message = False
                     logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
-                time.sleep(polling_interval)
+                stop_event.wait(polling_interval)
     except Exception as e:
         traceback.print_exc()
         logger.error(e)
         raise e
+    logger.info("Save monitor shutting down.")
 
 
 @cli.command()
