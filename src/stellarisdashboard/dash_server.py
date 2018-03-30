@@ -24,7 +24,8 @@ COLOR_SOCIETY = 'rgba(60,150,90,0.5)'
 COLOR_ENGINEERING = 'rgba(190,150,30,0.5)'
 
 
-def populate_available_games() -> Dict[str, models.Game]:
+def get_available_games_dict() -> Dict[str, str]:
+    """ Returns a dictionary mapping game id to the name of the game's player country. """
     games = {}
     for game_name in sorted(models.get_known_games()):
         with models.get_db_session(game_name) as session:
@@ -35,7 +36,7 @@ def populate_available_games() -> Dict[str, models.Game]:
     return games
 
 
-AVAILABLE_GAMES = populate_available_games()
+AVAILABLE_GAMES = get_available_games_dict()
 SELECTED_GAME_NAME = config.get_last_updated_game()
 if AVAILABLE_GAMES and SELECTED_GAME_NAME is not None and SELECTED_GAME_NAME not in AVAILABLE_GAMES:
     logger.warning("Last updated game no longer available, fallback to arbitrary save game")
@@ -77,9 +78,11 @@ app.layout = html.Div([
 
 
 def update_selected_game(new_selected_game):
-    global SELECTED_GAME_NAME
-    populate_available_games()
-    if new_selected_game in AVAILABLE_GAMES and new_selected_game != SELECTED_GAME_NAME:
+    global SELECTED_GAME_NAME, AVAILABLE_GAMES
+    AVAILABLE_GAMES = get_available_games_dict()
+    if new_selected_game != SELECTED_GAME_NAME:
+        if new_selected_game not in AVAILABLE_GAMES:
+            logger.warning(f"Selected game {new_selected_game} might not exist...")
         logger.info(f"Selected game is {new_selected_game}")
         SELECTED_GAME_NAME = new_selected_game
         visualization_data.get_current_execution_plot_data(SELECTED_GAME_NAME)  # to ensure everything is initialized before the dropdown's callback is handled
@@ -89,21 +92,24 @@ def update_selected_game(new_selected_game):
 @app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'),
                                                   Input('select-game-dropdown', 'value'), ])
 def update_content(tab_value, game_id):
-    children = []
-    if game_id is not None:
-        update_selected_game(game_id)
-        children = [html.H1(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
-        plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
-        for plot_spec in plots:
-            figure_data = get_figure_data(plot_spec)
-            figure_layout = get_figure_layout(plot_spec)
-            figure = go.Figure(data=figure_data, layout=figure_layout)
+    logger.debug(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
+    if game_id is None:
+        game_id = config.get_last_updated_game()
+        if game_id is None:
+            return []
+    update_selected_game(game_id)
+    children = [html.H1(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
+    plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+    for plot_spec in plots:
+        figure_data = get_figure_data(plot_spec)
+        figure_layout = get_figure_layout(plot_spec)
+        figure = go.Figure(data=figure_data, layout=figure_layout)
 
-            children.append(html.H2(f"{plot_spec.title}"))
-            children.append(dcc.Graph(
-                id=f"{plot_spec.plot_id}",
-                figure=figure,
-            ))
+        children.append(html.H2(f"{plot_spec.title}"))
+        children.append(dcc.Graph(
+            id=f"{plot_spec.plot_id}",
+            figure=figure,
+        ))
     return children
 
 
