@@ -239,7 +239,11 @@ class TimelineExtractor:
             food_spending_enclaves=0,
         )
 
-        for modifier_dict in country_dict.get("timed_modifier", []):
+        timed_modifier_list = country_dict.get("timed_modifier", [])
+        if not isinstance(timed_modifier_list, list):
+            # if for some reason there is only a single timed_modifier, timed_modifier_list will not be a list but a dictionary => Put it in a list!
+            timed_modifier_list = [timed_modifier_list]
+        for modifier_dict in timed_modifier_list:
             if not isinstance(modifier_dict, dict):
                 continue
             modifier_id = modifier_dict.get("modifier", "")
