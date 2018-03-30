@@ -1,4 +1,6 @@
 import pathlib
+from typing import Optional
+
 import dataclasses
 import logging
 import platform
@@ -23,7 +25,7 @@ LAST_UPDATED_GAME_FILE = "last_updated_game.txt"
 LAST_UPDATED_GAME = None
 
 
-def get_last_updated_game():
+def get_last_updated_game() -> Optional[str]:
     global LAST_UPDATED_GAME
     if LAST_UPDATED_GAME is not None:
         return LAST_UPDATED_GAME
@@ -32,9 +34,10 @@ def get_last_updated_game():
     if last_update_file.exists():
         with open(last_update_file, "r") as f:
             game_name = f.readline().strip()
-            if game_name:
+            game_db_file = (CONFIG.base_output_path / "db" / f"{game_name}.db")
+            if game_name and game_db_file.exists():
                 LAST_UPDATED_GAME = game_name
-                logger.info(f"Initialized last updated game as {game_name} from file...")
+                logger.info(f"Initialized last updated game as {game_name} from file.")
             else:
                 game_name = None
     return game_name
