@@ -1,4 +1,5 @@
 import logging
+import multiprocessing as mp
 import time
 import traceback
 
@@ -85,8 +86,6 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None):
         traceback.print_exc()
         logger.error(e)
         raise e
-    finally:
-        save_reader.teardown()
 
 
 @cli.command()
@@ -112,4 +111,5 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
 
 
 if __name__ == '__main__':
+    mp.freeze_support()
     cli()

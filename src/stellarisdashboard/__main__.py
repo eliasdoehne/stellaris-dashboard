@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    mp.freeze_support()
     threads = config.CONFIG.threads
     polling_interval = 0.5
     t_save_monitor = threading.Thread(target=cli.f_monitor_saves, daemon=False, args=(threads, polling_interval))
@@ -33,4 +32,5 @@ def main():
 
 
 if __name__ == '__main__':
+    mp.freeze_support()
     main()
