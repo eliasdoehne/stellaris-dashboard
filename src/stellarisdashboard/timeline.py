@@ -226,6 +226,8 @@ class TimelineExtractor:
             mineral_spending_enclaves=enclave_deals["mineral_spending_enclaves"],
             energy_income_enclaves=enclave_deals["energy_income_enclaves"],
             energy_spending_enclaves=enclave_deals["energy_spending_enclaves"],
+            food_income_enclaves=enclave_deals["food_income_enclaves"],
+            food_spending_enclaves=enclave_deals["food_spending_enclaves"],
         )
         return economy_dict
 
@@ -250,6 +252,7 @@ class TimelineExtractor:
             enclave_trade_budget_dict = self._enclave_trade_modifiers.get(modifier_id, {})
             for budget_item, amount in enclave_trade_budget_dict.items():
                 enclave_deals[budget_item] += amount
+        # Make spending numbers negative:
         enclave_deals["mineral_spending_enclaves"] *= -1
         enclave_deals["energy_spending_enclaves"] *= -1
         enclave_deals["food_spending_enclaves"] *= -1
@@ -614,27 +617,69 @@ class TimelineExtractor:
         trade_level_1 = [10, 20]
         trade_level_2 = [25, 50]
         trade_level_3 = [50, 100]
-        trade_for_minerals = ["mineral_income_enclaves", "energy_spending_enclaves"]
-        trade_for_energy = ["energy_income_enclaves", "mineral_spending_enclaves"]
+
+        trade_energy_for_minerals = ["mineral_income_enclaves", "energy_spending_enclaves"]
+        trade_food_for_minerals = ["mineral_income_enclaves", "food_spending_enclaves"]
+        trade_minerals_for_energy = ["energy_income_enclaves", "mineral_spending_enclaves"]
+        trade_food_for_energy = ["energy_income_enclaves", "food_spending_enclaves"]
+        trade_minerals_for_food = ["food_income_enclaves", "mineral_spending_enclaves"]
+        trade_energy_for_food = ["food_income_enclaves", "energy_spending_enclaves"]
+
         self._enclave_trade_modifiers = {
-            "enclave_mineral_trade_1_mut": dict(zip(trade_for_minerals, trade_level_1)),
-            "enclave_mineral_trade_1_rig": dict(zip(trade_for_minerals, trade_level_1)),
-            "enclave_mineral_trade_1_xur": dict(zip(trade_for_minerals, trade_level_1)),
-            "enclave_mineral_trade_2_mut": dict(zip(trade_for_minerals, trade_level_2)),
-            "enclave_mineral_trade_2_rig": dict(zip(trade_for_minerals, trade_level_2)),
-            "enclave_mineral_trade_2_xur": dict(zip(trade_for_minerals, trade_level_2)),
-            "enclave_mineral_trade_3_mut": dict(zip(trade_for_minerals, trade_level_3)),
-            "enclave_mineral_trade_3_rig": dict(zip(trade_for_minerals, trade_level_3)),
-            "enclave_mineral_trade_3_xur": dict(zip(trade_for_minerals, trade_level_3)),
-            "enclave_energy_trade_1_mut": dict(zip(trade_for_energy, trade_level_1)),
-            "enclave_energy_trade_1_rig": dict(zip(trade_for_energy, trade_level_1)),
-            "enclave_energy_trade_1_xur": dict(zip(trade_for_energy, trade_level_1)),
-            "enclave_energy_trade_2_mut": dict(zip(trade_for_energy, trade_level_2)),
-            "enclave_energy_trade_2_rig": dict(zip(trade_for_energy, trade_level_2)),
-            "enclave_energy_trade_2_xur": dict(zip(trade_for_energy, trade_level_2)),
-            "enclave_energy_trade_3_mut": dict(zip(trade_for_energy, trade_level_3)),
-            "enclave_energy_trade_3_rig": dict(zip(trade_for_energy, trade_level_3)),
-            "enclave_energy_trade_3_xur": dict(zip(trade_for_energy, trade_level_3)),
+            "enclave_mineral_trade_1_mut": dict(zip(trade_energy_for_minerals, trade_level_1)),
+            "enclave_mineral_trade_1_rig": dict(zip(trade_energy_for_minerals, trade_level_1)),
+            "enclave_mineral_trade_1_xur": dict(zip(trade_energy_for_minerals, trade_level_1)),
+            "enclave_mineral_trade_2_mut": dict(zip(trade_energy_for_minerals, trade_level_2)),
+            "enclave_mineral_trade_2_rig": dict(zip(trade_energy_for_minerals, trade_level_2)),
+            "enclave_mineral_trade_2_xur": dict(zip(trade_energy_for_minerals, trade_level_2)),
+            "enclave_mineral_trade_3_mut": dict(zip(trade_energy_for_minerals, trade_level_3)),
+            "enclave_mineral_trade_3_rig": dict(zip(trade_energy_for_minerals, trade_level_3)),
+            "enclave_mineral_trade_3_xur": dict(zip(trade_energy_for_minerals, trade_level_3)),
+            "enclave_mineral_food_trade_1_mut": dict(zip(trade_food_for_minerals, trade_level_1)),
+            "enclave_mineral_food_trade_1_rig": dict(zip(trade_food_for_minerals, trade_level_1)),
+            "enclave_mineral_food_trade_1_xur": dict(zip(trade_food_for_minerals, trade_level_1)),
+            "enclave_mineral_food_trade_2_mut": dict(zip(trade_food_for_minerals, trade_level_2)),
+            "enclave_mineral_food_trade_2_rig": dict(zip(trade_food_for_minerals, trade_level_2)),
+            "enclave_mineral_food_trade_2_xur": dict(zip(trade_food_for_minerals, trade_level_2)),
+            "enclave_mineral_food_trade_3_mut": dict(zip(trade_food_for_minerals, trade_level_3)),
+            "enclave_mineral_food_trade_3_rig": dict(zip(trade_food_for_minerals, trade_level_3)),
+            "enclave_mineral_food_trade_3_xur": dict(zip(trade_food_for_minerals, trade_level_3)),
+            "enclave_energy_trade_1_mut": dict(zip(trade_minerals_for_energy, trade_level_1)),
+            "enclave_energy_trade_1_rig": dict(zip(trade_minerals_for_energy, trade_level_1)),
+            "enclave_energy_trade_1_xur": dict(zip(trade_minerals_for_energy, trade_level_1)),
+            "enclave_energy_trade_2_mut": dict(zip(trade_minerals_for_energy, trade_level_2)),
+            "enclave_energy_trade_2_rig": dict(zip(trade_minerals_for_energy, trade_level_2)),
+            "enclave_energy_trade_2_xur": dict(zip(trade_minerals_for_energy, trade_level_2)),
+            "enclave_energy_trade_3_mut": dict(zip(trade_minerals_for_energy, trade_level_3)),
+            "enclave_energy_trade_3_rig": dict(zip(trade_minerals_for_energy, trade_level_3)),
+            "enclave_energy_trade_3_xur": dict(zip(trade_minerals_for_energy, trade_level_3)),
+            "enclave_energy_food_trade_1_mut": dict(zip(trade_food_for_energy, trade_level_1)),
+            "enclave_energy_food_trade_1_rig": dict(zip(trade_food_for_energy, trade_level_1)),
+            "enclave_energy_food_trade_1_xur": dict(zip(trade_food_for_energy, trade_level_1)),
+            "enclave_energy_food_trade_2_mut": dict(zip(trade_food_for_energy, trade_level_2)),
+            "enclave_energy_food_trade_2_rig": dict(zip(trade_food_for_energy, trade_level_2)),
+            "enclave_energy_food_trade_2_xur": dict(zip(trade_food_for_energy, trade_level_2)),
+            "enclave_energy_food_trade_3_mut": dict(zip(trade_food_for_energy, trade_level_3)),
+            "enclave_energy_food_trade_3_rig": dict(zip(trade_food_for_energy, trade_level_3)),
+            "enclave_energy_food_trade_3_xur": dict(zip(trade_food_for_energy, trade_level_3)),
+            "enclave_food_minerals_trade_1_mut": dict(zip(trade_minerals_for_food, trade_level_1)),
+            "enclave_food_minerals_trade_1_rig": dict(zip(trade_minerals_for_food, trade_level_1)),
+            "enclave_food_minerals_trade_1_xur": dict(zip(trade_minerals_for_food, trade_level_1)),
+            "enclave_food_minerals_trade_2_mut": dict(zip(trade_minerals_for_food, trade_level_2)),
+            "enclave_food_minerals_trade_2_rig": dict(zip(trade_minerals_for_food, trade_level_2)),
+            "enclave_food_minerals_trade_2_xur": dict(zip(trade_minerals_for_food, trade_level_2)),
+            "enclave_food_minerals_trade_3_mut": dict(zip(trade_minerals_for_food, trade_level_3)),
+            "enclave_food_minerals_trade_3_rig": dict(zip(trade_minerals_for_food, trade_level_3)),
+            "enclave_food_minerals_trade_3_xur": dict(zip(trade_minerals_for_food, trade_level_3)),
+            "enclave_food_energy_trade_1_mut": dict(zip(trade_energy_for_food, trade_level_1)),
+            "enclave_food_energy_trade_1_rig": dict(zip(trade_energy_for_food, trade_level_1)),
+            "enclave_food_energy_trade_1_xur": dict(zip(trade_energy_for_food, trade_level_1)),
+            "enclave_food_energy_trade_2_mut": dict(zip(trade_energy_for_food, trade_level_2)),
+            "enclave_food_energy_trade_2_rig": dict(zip(trade_energy_for_food, trade_level_2)),
+            "enclave_food_energy_trade_2_xur": dict(zip(trade_energy_for_food, trade_level_2)),
+            "enclave_food_energy_trade_3_mut": dict(zip(trade_energy_for_food, trade_level_3)),
+            "enclave_food_energy_trade_3_rig": dict(zip(trade_energy_for_food, trade_level_3)),
+            "enclave_food_energy_trade_3_xur": dict(zip(trade_energy_for_food, trade_level_3)),
         }
 
     def _reset_state(self):

@@ -275,9 +275,11 @@ class EmpireProgressionPlotData:
         self.empire_food_budget: Dict[str, List[float]] = dict(
             production=[],
             trade_income=[],
+            enclave_trade_income=[],
             other=[],
             consumption=[],
             trade_expenses=[],
+            enclave_trade_expenses=[],
             sector_production=[],
             sector_consumption=[],
         )
@@ -319,9 +321,11 @@ class EmpireProgressionPlotData:
         # FOOD
         self.empire_food_budget["production"].append(gs.food_income_production)
         self.empire_food_budget["trade_income"].append(gs.food_income_trade)
+        self.empire_food_budget["enclave_trade_income"].append(gs.food_income_enclaves)
         self.empire_food_budget["sector_production"].append(gs.food_income_sectors)
-        self.empire_food_budget["consumption"].append(- gs.food_spending)
+        self.empire_food_budget["consumption"].append(- gs.food_spending - gs.food_spending_enclaves - gs.food_spending_trade)
         self.empire_food_budget["trade_expenses"].append(gs.food_spending_trade)
+        self.empire_food_budget["enclave_trade_expenses"].append(gs.food_spending_enclaves)
         self.empire_food_budget["sector_consumption"].append(-gs.food_spending_sectors)
 
     def update_with_new_gamestate(self):
