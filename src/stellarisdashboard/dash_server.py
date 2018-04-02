@@ -1,4 +1,5 @@
 import logging
+import random
 import time
 from typing import Dict, Any, List
 
@@ -9,12 +10,12 @@ import flask
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 
-from stellarisdashboard import config, models, visualization_data
+from stellarisdashboard import config, models, visualization_data, game_info
 
 logger = logging.getLogger(__name__)
 
 flask_app = flask.Flask(__name__)
-flask_app.logger.setLevel(logging.WARNING)
+flask_app.logger.setLevel(logging.DEBUG)
 app = dash.Dash(name="Stellaris Timeline", server=flask_app, url_base_pathname="/")
 app.css.config.serve_locally = True
 app.scripts.config.serve_locally = True
@@ -42,25 +43,25 @@ if AVAILABLE_GAMES and SELECTED_GAME_NAME is not None and SELECTED_GAME_NAME not
     logger.warning("Last updated game no longer available, fallback to arbitrary save game")
     SELECTED_GAME_NAME = next(iter(AVAILABLE_GAMES))
 
-DEFAULT_SELECTED_PLOT = next(iter(visualization_data.THEMATICALLY_GROUPED_PLOTS.keys()))
 DEFAULT_PLOT_LAYOUT = go.Layout(
-    yaxis={
-        "type": "linear"
-    },
+    yaxis=dict(
+        type="linear",
+    ),
     height=640,
 )
 
 dropdown_options = [{'label': f"{country} ({g})", 'value': g} for g, country in AVAILABLE_GAMES.items()]
 GAME_SELECTION_DROPDOWN = dcc.Dropdown(id='select-game-dropdown', options=dropdown_options, value=SELECTED_GAME_NAME, )
+CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
+CATEGORY_TABS.append({'label': "Leaders", 'value': "Leaders"})
+DEFAULT_SELECTED_CATEGORY = next(iter(visualization_data.THEMATICALLY_GROUPED_PLOTS.keys()))
+
 app.layout = html.Div([
     GAME_SELECTION_DROPDOWN,
     html.Div([
         dcc.Tabs(
-            tabs=[
-                {'label': category, 'value': category}
-                for category in visualization_data.THEMATICALLY_GROUPED_PLOTS
-            ],
-            value=DEFAULT_SELECTED_PLOT,
+            tabs=CATEGORY_TABS,
+            value=DEFAULT_SELECTED_CATEGORY,
             id='tabs',
         ),
         html.Div(id='tab-content', style={
@@ -89,28 +90,62 @@ def update_selected_game(new_selected_game):
         GAME_SELECTION_DROPDOWN.value = new_selected_game
 
 
+def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
+    layout = DEFAULT_PLOT_LAYOUT
+    if plot_spec.style == visualization_data.PlotStyle.stacked:
+        layout["yaxis"] = {}
+    return go.Layout(**layout)
+
+
+@app.callback(Output('select-game-dropdown', 'options'))
+def update_game_options() -> List[Dict[str, str]]:
+    global AVAILABLE_GAMES
+    AVAILABLE_GAMES = sorted(models.get_known_games())
+    logger.info("Updated list of available games:")
+    for g in AVAILABLE_GAMES:
+        logger.info(f"    {g}")
+    return [{'label': g, 'value': g} for g in AVAILABLE_GAMES]
+
+
 @app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'),
                                                   Input('select-game-dropdown', 'value'), ])
 def update_content(tab_value, game_id):
-    logger.debug(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
+    logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
     if game_id is None:
         game_id = config.get_last_updated_game()
         if game_id is None:
             return []
     update_selected_game(game_id)
     children = [html.H1(f"{AVAILABLE_GAMES[game_id]} ({game_id})")]
-    plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
-    for plot_spec in plots:
-        figure_data = get_figure_data(plot_spec)
-        figure_layout = get_figure_layout(plot_spec)
-        figure = go.Figure(data=figure_data, layout=figure_layout)
+    if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
+        plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+        for plot_spec in plots:
+            figure_data = get_figure_data(plot_spec)
+            figure_layout = get_figure_layout(plot_spec)
+            figure = go.Figure(data=figure_data, layout=figure_layout)
 
-        children.append(html.H2(f"{plot_spec.title}"))
-        children.append(dcc.Graph(
-            id=f"{plot_spec.plot_id}",
-            figure=figure,
-        ))
+            children.append(html.H2(f"{plot_spec.title}"))
+            children.append(dcc.Graph(
+                id=f"{plot_spec.plot_id}",
+                figure=figure,
+            ))
+        if tab_value == "Military":
+            with models.get_db_session(game_id) as session:
+                children += get_war_descriptions(session, get_most_recent_date(session))
+    elif tab_value == "Leaders":
+        with models.get_db_session(game_id) as session:
+            children += get_ruler_descriptions(session, get_most_recent_date(session))
+
     return children
+
+
+def get_most_recent_date(session):
+    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
+    if most_recent_gs is None:
+        most_recent_date = 0
+    else:
+        most_recent_date = most_recent_gs.date
+    return most_recent_date
 
 
 def get_figure_data(plot_spec: visualization_data.PlotSpecification):
@@ -148,7 +183,7 @@ def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
 def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
     y_previous = None
     plot_list = []
-    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+    for key, x_values, y_values in plot_data.iterate_data(plot_spec):
         if not any(y_values):
             continue
         line = {'x': x_values, 'name': key, "fill": "tonexty", "hoverinfo": "x+text"}
@@ -214,21 +249,159 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
     return plot_list
 
 
-def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
-    layout = DEFAULT_PLOT_LAYOUT
-    if plot_spec.style == visualization_data.PlotStyle.stacked:
-        layout["yaxis"] = {}
-    return go.Layout(**layout)
+def get_ruler_descriptions(session, most_recent_date):
+    ruler_html_children = []
+    rulers = {}
+    scientists = {}
+    governors = {}
+    admirals = {}
+    generals = {}
+    leader_header = {}
+    basic_leader_info = {}
+    for leader in session.query(models.Leader).order_by(models.Leader.date_hired).all():
+        name = leader.leader_name
+        in_game_id = leader.leader_id_in_game
+        bday = models.days_to_date(leader.date_born)
+        date_hired = models.days_to_date(leader.date_hired)
+
+        status = f"active (as of {models.days_to_date(most_recent_date)})"
+        if leader.last_date < most_recent_date - 3600:
+            status = f"dismissed or deceased around {models.days_to_date(leader.last_date + random.randint(0, 30))}"
+        basic_leader_info[in_game_id, name] = html.Ul([
+            html.Li(f"Species:  {leader.species.species_name}"),
+            html.Li(f"Born: {bday}"),
+            html.Li(f"Hired: {date_hired}"),
+            html.Li(f"Status: {status}")
+        ])
+        leader_class_to_achievement_dict = {
+            models.LeaderClass.scientist: scientists,
+            models.LeaderClass.governor: governors,
+            models.LeaderClass.admiral: admirals,
+            models.LeaderClass.general: generals,
+            models.LeaderClass.ruler: rulers,
+        }
+        if leader.leader_class == models.LeaderClass.scientist:
+            scientists[in_game_id, name] = []
+            leader_header[in_game_id, name] = [html.H3(f"Scientist {name}")]
+        elif leader.leader_class == models.LeaderClass.governor:
+            governors[in_game_id, name] = []
+            leader_header[in_game_id, name] = [html.H3(f"Governor {name}")]
+        elif leader.leader_class == models.LeaderClass.admiral:
+            admirals[in_game_id, name] = []
+            leader_header[in_game_id, name] = [html.H3(f"Admiral {name}")]
+        elif leader.leader_class == models.LeaderClass.general:
+            generals[in_game_id, name] = []
+            leader_header[in_game_id, name] = [html.H3(f"General {name}")]
+        elif leader.leader_class == models.LeaderClass.ruler:
+            leader_header[in_game_id, name] = [html.H3(f"{name}")]
+        for a in leader.achievements:
+            start_date = models.days_to_date(a.start_date_days)
+            end_date = models.days_to_date(a.end_date_days)
+            if a.achievement_type == models.LeaderAchievementType.was_ruler:
+                if name not in rulers:
+                    rulers[in_game_id, name] = []
+                achievement_text = f"{start_date} - {end_date}: Ruled the {a.achievement_description} with agenda \"{leader.leader_agenda}\""
+                rulers[in_game_id, name].append(achievement_text)
+                if leader.leader_class in leader_class_to_achievement_dict:
+                    leader_class_to_achievement_dict[leader.leader_class][in_game_id, name].append(
+                        achievement_text
+                    )
+            elif a.achievement_type == models.LeaderAchievementType.negotiated_peace_treaty:
+                achievement_text = f"{end_date}: Negotiated peace in the {a.achievement_description}"
+                rulers[in_game_id, name].append(achievement_text)
+                if leader.leader_class in leader_class_to_achievement_dict:
+                    leader_class_to_achievement_dict[leader.leader_class][in_game_id, name].append(
+                        achievement_text
+                    )
+            elif a.achievement_type == models.LeaderAchievementType.passed_edict:
+                achievement_text = f'{end_date}: Passed edict "{a.achievement_description}"'
+                rulers[in_game_id, name].append(achievement_text)
+                if leader.leader_class in leader_class_to_achievement_dict:
+                    leader_class_to_achievement_dict[leader.leader_class][in_game_id, name].append(
+                        achievement_text
+                    )
+            elif a.achievement_type == models.LeaderAchievementType.embraced_tradition:
+                tradition = game_info.convert_id_to_name(a.achievement_description, remove_prefix="tr")
+                achievement_text = f"{end_date}: Embraced tradition \"{tradition}\""
+                rulers[in_game_id, name].append(achievement_text)
+                if leader.leader_class in leader_class_to_achievement_dict:
+                    leader_class_to_achievement_dict[leader.leader_class][in_game_id, name].append(
+                        achievement_text
+                    )
+            elif a.achievement_type == models.LeaderAchievementType.achieved_ascension:
+                perk = game_info.convert_id_to_name(a.achievement_description, remove_prefix="ap")
+                achievement_text = f"{end_date}: Ascension: {perk}"
+                rulers[in_game_id, name].append(achievement_text)
+                if leader.leader_class in leader_class_to_achievement_dict:
+                    leader_class_to_achievement_dict[leader.leader_class][in_game_id, name].append(
+                        achievement_text
+                    )
+            elif a.achievement_type == models.LeaderAchievementType.researched_technology:
+                perk = game_info.convert_id_to_name(a.achievement_description, remove_prefix="tech")
+                scientists[in_game_id, name].append(f"{end_date}: Researched \"{perk}\"")
+            elif a.achievement_type == models.LeaderAchievementType.was_faction_leader:
+                leader_class_to_achievement_dict[leader.leader_class][in_game_id, name].append(
+                    f"{start_date} - {end_date}: Leader of the \"{a.achievement_description}\" faction."
+                )
+
+    leaders_by_category = {
+        "Rulers": rulers,
+        "Scientists": scientists,
+        "Governors": governors,
+        "Admirals": admirals,
+        "Generals": generals,
+    }
+    for category, leader_dict in leaders_by_category.items():
+        if not leader_dict:
+            continue
+        ruler_html_children.append(html.H2(category))
+        for id_name, achievement_list in leader_dict.items():
+            ruler_html_children.append(html.H3(leader_header[id_name]))
+            ruler_html_children.append("Basic Information:")
+            ruler_html_children.append(basic_leader_info[id_name])
+            if not achievement_list:
+                continue
+            ruler_html_children.append("Achievements:")
+            ruler_html_children.append(html.Ul([
+                html.Li(f"{a}") for a in achievement_list
+            ]))
+    return ruler_html_children
 
 
-@app.callback(Output('select-game-dropdown', 'options'))
-def update_game_options() -> List[Dict[str, str]]:
-    global AVAILABLE_GAMES
-    AVAILABLE_GAMES = sorted(models.get_known_games())
-    logger.info("Updated list of available games:")
-    for g in AVAILABLE_GAMES:
-        logger.info(f"    {g}")
-    return [{'label': g, 'value': g} for g in AVAILABLE_GAMES]
+def get_war_descriptions(session, current_date):
+    war_description_children = [html.H2("Wars")]
+    for war in session.query(models.War).order_by(models.War.start_date_days).all():
+        start = models.days_to_date(war.start_date_days)
+        end = models.days_to_date(current_date)
+        if war.end_date_days:
+            end = models.days_to_date(war.end_date_days)
+
+        war_description_children.append(html.H3(f"{war.name} ({start}  -  {end})"))
+        war_description_children.append(html.P(f"Outcome: {war.outcome}"))
+        war_description_children.append(html.H4(f"Attackers:"))
+        war_description_children.append(html.Ul([
+            html.Li(f'{wp.country.country_name}: "{wp.war_goal}" war goal') for wp in war.participants
+            if wp.is_attacker
+        ]))
+        war_description_children.append(html.H4(f"Defenders:"))
+        war_description_children.append(html.Ul([
+            html.Li(f'{wp.country.country_name}: "{wp.war_goal}" war goal') for wp in war.participants
+            if not wp.is_attacker
+        ]))
+
+        war_description_children.append(html.H4(f"Combat Log:"))
+        victories = sorted([we for wp in war.participants for we in wp.victories], key=lambda we: we.date)
+        war_event_list = []
+        for vic in victories:
+            country_name = vic.war_participant.country.country_name
+            if vic.combat_type == models.CombatType.ships:
+                war_event_list.append(html.Li(f"{models.days_to_date(vic.date)}: {country_name} fleet combat victory in the {vic.system} system."))
+            if vic.combat_type == models.CombatType.armies:
+                verb = "defended against" if vic.attacker_victory else "succeeded in"
+                war_event_list.append(html.Li(f"{models.days_to_date(vic.date)}: {country_name} {verb} planetary invasion of {vic.planet}."))
+        war_description_children.append(html.Ul(war_event_list))
+
+    return war_description_children
 
 
 def start_server():
