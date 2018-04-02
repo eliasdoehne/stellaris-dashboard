@@ -92,9 +92,72 @@ class Attitude(enum.Enum):
 
 
 @enum.unique
-class WarEventType(enum.Enum):
+class CombatType(enum.Enum):
     ships = 0
-    # TODO what other kinds are there?
+    armies = 1
+
+    other = 99
+    # TODO are there other types of war events?
+
+
+@enum.unique
+class WarOutcome(enum.Enum):
+    status_quo = 0
+    attacker_victory = 1
+    defender_victory = 2
+    in_progress = 3
+    other = 99
+
+
+@enum.unique
+class WarGoal(enum.Enum):
+    """
+    A list of possible wargoals, taken/adapted from https://stellaris.paradoxwikis.com/War_goals
+    """
+    wg_conquest = 0
+    wg_force_ideology = 1
+    wg_vassalize = 2
+    wg_make_tributary = 3
+    wg_humiliate = 4
+    wg_independence = 5
+    wg_plunder = 6
+    wg_colossus = 7
+    wg_stop_colossus = 8
+    wg_cleansing = 9  # fanatic purifiers
+    wg_absorption = 10  # devouring swarm
+    wg_assimilation = 11  # driven assimilators
+    wg_end_threat = 12
+
+    # Fallen Empire Wargoals
+    wg_stop_atrocities = 13
+    wg_outlaw_ai = 14
+    wg_cleanse_holy_world = 15
+    wg_decontaminate = 16
+
+    wg_other = 99
+
+    def __str__(self):
+        descriptions = {
+            self.wg_conquest: "Conquest",
+            self.wg_force_ideology: "Force Ideology",
+            self.wg_vassalize: "Vassalize",
+            self.wg_make_tributary: "Make Tributary",
+            self.wg_humiliate: "Humiliate",
+            self.wg_independence: "Independence",
+            self.wg_plunder: "Plunder",
+            self.wg_colossus: "Colossus",
+            self.wg_stop_colossus: "Stop Colossus",
+            self.wg_cleansing: "Cleansing",
+            self.wg_absorption: "Absorption",
+            self.wg_assimilation: "Assimilation",
+            self.wg_end_threat: "End Threat",
+            self.wg_stop_atrocities: "Stop Atrocities",
+            self.wg_outlaw_ai: "Outlaw AI",
+            self.wg_cleanse_holy_world: "Cleanse Holy World",
+            self.wg_decontaminate: "Decontaminate",
+            self.wg_other: "Other",
+        }
+        return descriptions[self]
 
 
 @enum.unique
@@ -156,6 +219,27 @@ class LeaderAgenda(enum.Enum):
     xeno_outreach = 14
     other = 99
 
+    def __str__(self):
+        descriptions = {
+            self.secure_the_borders: "Secure the Borders",
+            self.fleet_expansion: "Fleet Expansion",
+            self.develop_industry: "Develop Industry",
+            self.scientific_leap: "Scientific Leap",
+            self.grow_economy: "Grow Economy",
+            self.a_new_generation: "New Generation",
+            self.expansionist_overtures: "Expansionist Overtures",
+            self.national_purity: "National Purity",
+            self.public_debates: "Public Debates",
+            self.import_export: "Import / Export",
+            self.native_privilege: "Native Privilege",
+            self.skill_development: "Skill Development",
+            self.slave_optimizations: "Slave Optimizations",
+            self.selective_nostalgia: "Selective Nostalgia",
+            self.xeno_outreach: "Xeno Outreach",
+            self.other: "Other",
+        }
+        return descriptions[self]
+
 
 AGENDA_STR_TO_ENUM = dict(
     agenda_defensive_focus=LeaderAgenda.secure_the_borders,
@@ -179,10 +263,24 @@ AGENDA_STR_TO_ENUM = dict(
 
 @enum.unique
 class LeaderAchievementType(enum.Enum):
-    researched_tech = 0
+    # All leaders:
+    was_faction_leader = 5
+
+    # Scientists:
+    researched_technology = 0
+
+    # Admirals:
     won_fleet_battle = 1
+
+    # Generals:
     won_planet_invasion = 2
-    negotiated_peace_treaty = 3
+
+    # Rulers:
+    was_ruler = 3
+    negotiated_peace_treaty = 4
+    passed_edict = 6
+    embraced_tradition = 7
+    achieved_ascension = 8
 
     special_event = 99
 
@@ -431,8 +529,12 @@ class War(Base):
     war_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
 
-    start_date_days = Column(Integer, index=True)
+    war_id_in_game = Column(Integer)
     name = Column(String(100))
+    start_date_days = Column(Integer, index=True)
+    end_date_days = Column(Integer, index=True)
+
+    outcome = Column(Enum(WarOutcome))
 
     game = relationship("Game", back_populates="wars")
     participants = relationship("WarParticipant", back_populates="war", cascade="all,delete,delete-orphan")
@@ -448,27 +550,34 @@ class WarParticipant(Base):
     war_id = Column(ForeignKey(War.war_id), index=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     is_attacker = Column(Boolean)
+    war_goal = Column(Enum(WarGoal))
 
     war = relationship("War", back_populates="participants")
     country = relationship("Country", back_populates="war_participation")
-    warevents = relationship("WarEvent", back_populates="war_participant")
+    victories = relationship("CombatVictory", back_populates="war_participant")
 
     def __repr__(self):
         return f"WarParticipant(war_id={self.war_id}, country_id={self.country_id}, is_attacker={self.is_attacker})"
 
 
-class WarEvent(Base):
-    __tablename__ = 'wareventtable'
-    warevent_id = Column(Integer, primary_key=True)
+class CombatVictory(Base):
+    __tablename__ = 'combatvictorytable'
+    combat_victory_id = Column(Integer, primary_key=True)
 
     date = Column(Integer, index=True)
     war_participant_id = Column(ForeignKey(WarParticipant.warparticipant_id), index=True)
-    war_exhaustion = Column(Float)
+    inflicted_war_exhaustion = Column(Float)
+    combat_type = Column(Enum(CombatType))
 
-    war_participant = relationship("WarParticipant", back_populates="warevents")
+    attacker_victory = Column(Boolean)
+
+    system = Column(String(80))
+    planet = Column(String(80))
+
+    war_participant = relationship("WarParticipant", back_populates="victories")
 
     def __repr__(self):
-        return f"WarEvent(warevent_id={self.warevent_id}, war_participant_id={self.war_participant_id}, date={self.date}, war_exhaustion={self.war_exhaustion})"
+        return f"CombatVictory(combat_victory_id={self.combat_victory_id}, war_participant_id={self.war_participant_id}, date={self.date}, inflicted_war_exhaustion={self.inflicted_war_exhaustion}, combat_type={self.combat_type})"
 
 
 class Leader(Base):
@@ -481,14 +590,17 @@ class Leader(Base):
 
     leader_name = Column(String(80))
 
+    species_id = Column(ForeignKey(Species.species_id))
     leader_class = Column(Enum(LeaderClass))
     gender = Column(Enum(LeaderGender))
     leader_agenda = Column(Enum(LeaderAgenda))
 
     date_hired = Column(Integer)  # The date when this leader was first encountered
     date_born = Column(Integer)  # estimated birthday
+    last_date = Column(Integer)  # estimated death / dismissal
 
     game = relationship("Game", back_populates="leaders")
+    species = relationship("Species")
     achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
@@ -501,7 +613,8 @@ class LeaderAchievement(Base):
     leader_achievement_id = Column(Integer, primary_key=True)
     leader_id = Column(ForeignKey(Leader.leader_id))
 
-    date = Column(Integer)
+    start_date_days = Column(Integer, index=True)
+    end_date_days = Column(Integer, index=True)
     achievement_type = Column(Enum(LeaderAchievementType))
     achievement_description = Column(String(80))
 
