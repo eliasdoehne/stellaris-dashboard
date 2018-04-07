@@ -37,7 +37,7 @@ If you are using Windows, make sure to check the "Add Python 3.6 to PATH" option
 
 ## Installation
 
-  1. Download and extract this repository. (Click the green "Clone or Download" button above and select "Download ZIP")
+  1. Download the latest release at https://github.com/eliasdoehne/stellaris-dashboard/releases
   2. Install the `stellarisdashboard` program:
      - Windows users: 
      
@@ -128,8 +128,7 @@ As for disk space, the dashboard has a fairly small footprint. The database curr
 Each game's data is stored in a separate database in your output folder, so you can delete them individually if you wish. 
 
 The game deletes the autosaves in a "rolling" manner, so only the most recent files are kept. If you plan a long game 
-and want to be able to re-generate the database later, you need to continually backup the save files yourself. This can be done by
-running a script that automatically copies them to another location or some backup program.
+and want to be able to re-generate the database later, you need to continually backup the save files yourself. This can be done by running a script that automatically copies them to another location or some backup program.
 
 This uses much more disk space (~1 GB every 50 years of game time with monthly saves), but allows you to rebuild the full database at any point using 
 `stellarisdashboardcli parse_saves --save-path path/to/your/save_backup`. 
