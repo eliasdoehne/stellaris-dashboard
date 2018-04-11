@@ -50,8 +50,10 @@ setup(
         "dash-core-components==0.21.0rc1",
         "dash-html-components",
         "dash-renderer",
+        "flask",
         "dataclasses",
         "matplotlib",
+        "plotly",
         'sqlalchemy',
     ],
     entry_points={
