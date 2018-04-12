@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<a name="index"></a>
+<a href="/">Return to Index</a>
+<h1>{{country}}</h1>
+
+<a href="#wars">Wars</a>
+<a href="#leaders">Leaders</a>
+
+<a name="wars"></a>
+<h2>Wars</h2>
+{% for war in wars %}
+<h3>{{ war["name"] }} ({{ war["start"] }} - {{ war["end"] }}) </h3>
+<h4>Attackers:</h4>
+<ul>
+    {% for country in war["attackers"] %}
+    <li>{{country}}</li>
+    {% endfor %}
+</ul>
+<h4>Defenders:</h4>
+<ul>
+    {% for country in war["defenders"] %}
+    <li>{{country}}</li>
+    {% endfor %}
+</ul>
+<h4>Combat Log: </h4>
+<ul>
+    {% for engagement in war["combat"] %}
+    <li>{{engagement}}</li>
+    {% endfor %}
+</ul>
+{% endfor %}
+<a href="#index">Back to top</a>
+
+<a name="leaders"></a>
+<h2>Leaders</h2>
+{% for leader in leaders %}
+<h4>{{leader["class"]}} {{leader["name"]}}</h4>
+<h5>Basic Information:</h5>
+<ul class="basicLeaderInfoList">
+    <li>Species: {{leader["species"]}}</li>
+    <li>Born: {{leader["birthday"]}}</li>
+    <li>Hired: {{leader["date_hired"]}}</li>
+    <li>Status: {{leader["status"]}}</li>
+</ul>
+<h5>Achievements:</h5>
+<ul class="achievementList">
+    {% for achievement in leader["achievements"] %}
+    <li> {{achievement}}</li>
+    {% endfor %}
+</ul>
+{% endfor %}
+<a href="#index">Back to top</a>
+
+{% endblock %}

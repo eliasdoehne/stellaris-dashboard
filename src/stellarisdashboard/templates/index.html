@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block body %}
+<ul class=entries>
+    <h2>Index Page</h2>
+    <p>Select your game:</p>
+    {% for game in games %}
+    <li><h3>{{ game["country"] }} ({{ game["game_name"] }})</h3>
+        <a href={{url_for("/timeline", game_name=game["game_name"])}}>Timeline Graphs</a>
+        <a href={{url_for("history_page", game_name=game["game_name"])}}>History Ledger</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}
+
