@@ -70,6 +70,7 @@ class TimelineExtractor:
                     logger.info(f"Adding new game {game_name} to database.")
                     self.game = models.Game(game_name=game_name, player_country_name=player_country_name)
                     self._session.add(self.game)
+                    self._extract_galaxy_data()
                 self._date_in_days = models.date_to_days(self._gamestate_dict["date"])
                 game_states_by_date = {gs.date: gs for gs in self.game.game_states}
                 if self._date_in_days in game_states_by_date:
@@ -86,9 +87,38 @@ class TimelineExtractor:
                 self._session = None
                 self._reset_state()
 
+    def _extract_galaxy_data(self):
+        logger.info(f"{self._logger_str} Extracting galaxy data...")
+        hyperlanes = set()
+        for system_id_in_game, system_data in self._gamestate_dict.get("galactic_object", {}).items():
+            original_system_name = system_data.get("name")
+            coordinate_x = system_data.get("coordinate", {}).get("x", 0)
+            coordinate_y = system_data.get("coordinate", {}).get("y", 0)
+            self._session.add(models.System(
+                game=self.game,
+                system_id_in_game=system_id_in_game,
+                original_name=original_system_name,
+                coordinate_x=coordinate_x,
+                coordinate_y=coordinate_y,
+            ))
+            for hl_data in system_data.get("hyperlane", []):
+                neighbor = hl_data.get("to")
+                # use frozenset to avoid antiparallel duplicates
+                hyperlanes.add(frozenset([system_id_in_game, neighbor]))
+        for hl in hyperlanes:
+            a, b = hl
+            one = self._session.query(models.System).filter_by(system_id_in_game=a, ).one_or_none()
+            two = self._session.query(models.System).filter_by(system_id_in_game=b, ).one_or_none()
+            if one is None or two is None:
+                logger.warning(f"Could not find systems with IDs {a}, {b}")
+            self._session.add(models.HyperLane(
+                system_one=one,
+                system_two=two,
+            ))
+
     def _process_gamestate(self):
         self._extract_player_trade_agreements()
-        self._extract_country_starbase_count()
+        self._count_starbases()
         player_economy = self._extract_player_economy(self._gamestate_dict["country"][self._player_country])
         self._current_gamestate = models.GameState(
             game=self.game, date=self._date_in_days,
@@ -115,7 +145,7 @@ class TimelineExtractor:
 
             if country_data_dict.get("type") != "default":
                 continue  # Enclaves, Leviathans, etc ....
-
+            self._extract_country_government(country, country_data_dict)
             country_data = self._extract_country_data(country_id, country, country_data_dict)
             if country_data.attitude_towards_player.is_known():
                 debug_name = country_data_dict.get('name', 'Unnamed Country')
@@ -126,12 +156,68 @@ class TimelineExtractor:
                 player_country_dict = country_data_dict
                 self._extract_factions(country_data)
         self._extract_wars()
+        self._extract_player_leaders(player_country_dict.get("owned_leaders", []))
         self._add_ruler_leader_achievements(player_country_dict)
         self._add_research_leader_achievements(player_country_dict)
-        self._extract_player_leaders(player_country_dict.get("owned_leaders", []))
         self._extract_truces(player_country_dict)
+        self._extract_system_ownership()
 
-    def _extract_country_starbase_count(self):
+    def _extract_country_government(self, country_model: models.Country, country_dict):
+        prev_gov = self._session.query(models.Government).order_by(
+            models.Government.end_date_days.desc()
+        ).filter_by(
+            country=country_model,
+        ).first()
+
+        gov_name = country_dict.get("name", "Unnamed")
+
+        ethics = set(country_dict.get("ethos", {}).get("ethic", []))
+        civics = set(country_dict.get("government", {}).get("civics", []))
+        authority = models.GovernmentAuthority.from_str(
+            country_dict.get("government", {}).get("authority", "other")
+        )
+
+        gov_type = country_dict.get("government", {}).get("type", "other")
+        if prev_gov is not None:
+            prev_gov.end_date_days = self._date_in_days
+            previous_ethics = [
+                prev_gov.ethics_1,
+                prev_gov.ethics_2,
+                prev_gov.ethics_3,
+                prev_gov.ethics_4,
+                prev_gov.ethics_5,
+            ]
+            previous_ethics = {c for c in previous_ethics if c is not None}
+            previous_civics = [
+                prev_gov.civic_1,
+                prev_gov.civic_2,
+                prev_gov.civic_3,
+                prev_gov.civic_4,
+                prev_gov.civic_5,
+            ]
+            previous_civics = {c for c in previous_civics if c is not None}
+            if ((ethics == previous_ethics)
+                    and (civics == previous_civics)
+                    and (gov_name == prev_gov.gov_name)
+                    and (gov_type == prev_gov.gov_type)):
+                # nothing has changed...
+                return
+
+        ethics = dict(zip([f"ethics_{i}" for i in range(1, 6)], ethics))
+        civics = dict(zip([f"civic_{i}" for i in range(1, 6)], civics))
+
+        self._session.add(models.Government(
+            country=country_model,
+            start_date_days=self._date_in_days,
+            end_date_days=self._date_in_days,
+            gov_name=gov_name,
+            gov_type=gov_type,
+            authority=authority,
+            **ethics,
+            **civics,
+        ))
+
+    def _count_starbases(self):
         self._country_starbasecount_dict = {}
         for starbase_dict in self._gamestate_dict.get("starbases", {}).values():
             if not isinstance(starbase_dict, dict):
@@ -549,28 +635,35 @@ class TimelineExtractor:
         wars_dict = self._gamestate_dict.get("war", {})
         if not wars_dict:
             return
+
         for war_id, war_dict in wars_dict.items():
-            if war_dict == "none":
+            if not isinstance(war_dict, dict):
                 continue
-            war = self._session.query(models.War).filter_by(game=self.game, war_id_in_game=war_id).one_or_none()
+            war_name = war_dict.get("name", "Unnamed war")
+            war = self._session.query(models.War).order_by(models.War.end_date_days.desc()).filter_by(
+                game=self.game, name=war_name
+            ).first()
             if war is None:
                 start_date_days = models.date_to_days(war_dict["start_date"])
                 war = models.War(
                     war_id_in_game=war_id,
                     game=self.game,
                     start_date_days=start_date_days,
-                    name=war_dict.get("name", "Unnamed war"),
+                    end_date_days=self._date_in_days,
+                    name=war_name,
                     outcome=models.WarOutcome.in_progress,
                 )
                 self._session.add(war)
-            elif war.outcome != models.WarOutcome.in_progress:
-                continue
             elif war_dict.get("defender_force_peace") == "yes":
                 war.outcome = models.WarOutcome.status_quo
                 war.end_date_days = models.date_to_days(war_dict.get("defender_force_peace_date"))
             elif war_dict.get("attacker_force_peace") == "yes":
                 war.outcome = models.WarOutcome.status_quo
                 war.end_date_days = models.date_to_days(war_dict.get("attacker_force_peace_date"))
+            elif war.outcome != models.WarOutcome.in_progress:
+                continue
+            else:
+                war.end_date_days = self._date_in_days
             war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
             war_goal_defender = war_dict.get("defender_war_goal", {})
             if war_goal_defender:
@@ -692,14 +785,20 @@ class TimelineExtractor:
                 continue  # truce is due to diplomatic agreements or similar
             matching_war = self._session.query(models.War).order_by(models.War.start_date_days.desc()).filter_by(name=war_name).first()
             if matching_war is None:
-                logger.warning(f"Could not find war matching {war_name}")
+                logger.warning(f"Could not find war matching truce for {war_name}")
                 continue
-            if matching_war.end_date_days is None:
-                end_date = truce_info.get("start_date", None)
-                if end_date:
-                    end_date_days = models.date_to_days(end_date)
-                    matching_war.end_date_days = end_date_days
-                    self._add_truce_negotiation_leader_achievement(war_name, end_date_days)
+            end_date = truce_info.get("start_date")
+            if end_date:
+                end_date_days = models.date_to_days(end_date)
+                matching_war.end_date_days = end_date_days
+                self._add_truce_negotiation_leader_achievement(war_name, end_date_days)
+            if matching_war.outcome == models.WarOutcome.in_progress:
+                if matching_war.attacker_war_exhaustion < matching_war.defender_war_exhaustion:
+                    matching_war.outcome = models.WarOutcome.attacker_victory
+                elif matching_war.defender_war_exhaustion < matching_war.attacker_war_exhaustion:
+                    matching_war.outcome = models.WarOutcome.defender_victory
+                else:
+                    matching_war.outcome = models.WarOutcome.status_quo
 
     def _add_truce_negotiation_leader_achievement(self, war_name, end_date_days):
         # try to find ruler and add peace treaty as their achievement
@@ -886,6 +985,31 @@ class TimelineExtractor:
                 achievement_description=faction_dict.get("name")
             )
             self._session.add(matching_achievement)
+
+    def _extract_system_ownership(self):
+        starbases = self._gamestate_dict.get("starbases", {})
+        if not isinstance(starbases, dict):
+            return
+        for starbase_dict in starbases.values():
+            if not isinstance(starbase_dict, dict):
+                continue
+            owner_id = starbase_dict.get("owner", -1)
+            system_id = starbase_dict.get("system", -1)
+            system = self._session.query(models.System).filter_by(system_id_in_game=system_id).one_or_none()
+            country = self._session.query(models.Country).filter_by(country_id_in_game=owner_id).one_or_none()
+            if system is None or country is None:
+                logger.warning(f"Cannot establish ownership for system {system} and country {country}")
+                continue
+            last_ownership = self._session.query(models.SystemOwnership).filter_by(system=system).order_by(models.SystemOwnership.end_date_days.desc()).first()
+            if last_ownership is None or last_ownership.country != country:
+                self._session.add(models.SystemOwnership(
+                    start_date_days=self._date_in_days,
+                    end_date_days=self._date_in_days,
+                    country=country,
+                    system=system,
+                ))
+            if last_ownership is not None:
+                last_ownership.end_date_days = self._date_in_days
 
     def _initialize_enclave_trade_info(self):
         trade_level_1 = [10, 20]
