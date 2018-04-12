@@ -9,14 +9,14 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 
-from stellarisdashboard import config
+from stellarisdashboard import config, game_info
 
 logger = logging.getLogger(__name__)
 _ENGINES = {}
 _SESSIONMAKERS = {}
 DB_PATH: pathlib.Path = config.CONFIG.base_output_path / "db"
 if not DB_PATH.exists():
-    print(f"Creating database path {DB_PATH}")
+    logger.info(f"Creating database path {DB_PATH}")
     DB_PATH.mkdir()
 
 Base = declarative_base()
@@ -46,6 +46,23 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
 
 def get_known_games():
     return [fname.stem for fname in DB_PATH.glob("*.db")]
+
+
+@enum.unique
+class GovernmentAuthority(enum.Enum):
+    democratic = 0
+    oligarchic = 1
+    dictatorial = 2
+    imperial = 3
+    hive_mind = 4
+    machine_intelligence = 5
+
+    other = 99
+
+    @classmethod
+    def from_str(cls, auth_str):
+        auth_str = auth_str.split("auth_")[-1]
+        return cls.__members__.get(auth_str, cls.other)
 
 
 @enum.unique
@@ -320,6 +337,7 @@ class Game(Base):
     game_name = Column(String(50))
     player_country_name = Column(String(50))
 
+    systems = relationship("System", back_populates="game", cascade="all,delete,delete-orphan")
     countries = relationship("Country", back_populates="game", cascade="all,delete,delete-orphan")
     species = relationship("Species", back_populates="game", cascade="all,delete,delete-orphan")
     game_states = relationship("GameState", back_populates="game", cascade="all,delete,delete-orphan")
@@ -328,6 +346,68 @@ class Game(Base):
 
     def __repr__(self):
         return f"Game(game_id={self.game_id}, game_name={self.game_name})"
+
+
+class System(Base):
+    __tablename__ = 'systemtable'
+    system_id = Column(Integer, primary_key=True)
+    game_id = Column(ForeignKey(Game.game_id))
+
+    system_id_in_game = Column(Integer, index=True)
+    original_name = Column(String(80))
+
+    coordinate_x = Column(Float)
+    coordinate_y = Column(Float)
+
+    game = relationship("Game", back_populates="systems")
+    ownership = relationship("SystemOwnership", back_populates="system", cascade="all,delete,delete-orphan")
+
+    # this could probably be done better....
+    hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
+    hyperlanes_two = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_two_id])
+
+    def get_owner_at(self, time_in_days):
+        # could be slow, but fine for now
+        for ownership in self.ownership:
+            if ownership.start_date_days <= time_in_days <= ownership.end_date_days:
+                return ownership.country
+        return None
+
+    def __str__(self):
+        return f'System "{self.original_name}" @ {self.coordinate_x}, {self.coordinate_y}'
+
+
+class SystemOwnership(Base):
+    __tablename__ = 'systemownershiptable'
+    system_ownership_id = Column(Integer, primary_key=True)
+
+    system_id = Column(ForeignKey(System.system_id), index=True)
+    owner_country_id = Column(ForeignKey("countrytable.country_id"), index=True)
+
+    start_date_days = Column(Integer)
+    end_date_days = Column(Integer)
+
+    system = relationship("System", back_populates="ownership")
+    country = relationship("Country", back_populates="owned_systems")
+
+
+class HyperLane(Base):
+    __tablename__ = "hyperlanetable"
+    hyperlane_id = Column(Integer, primary_key=True)
+
+    system_one_id = Column(ForeignKey(System.system_id))
+    system_two_id = Column(ForeignKey(System.system_id))
+
+    system_one = relationship(
+        "System",
+        back_populates="hyperlanes_one",
+        foreign_keys=[system_one_id],
+    )
+    system_two = relationship(
+        "System",
+        back_populates="hyperlanes_two",
+        foreign_keys=[system_two_id],
+    )
 
 
 class GameState(Base):
@@ -397,9 +477,39 @@ class Country(Base):
     country_id_in_game = Column(Integer)
 
     game = relationship("Game", back_populates="countries")
+    governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
+    owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
+
+
+class Government(Base):
+    __tablename__ = 'govtable'
+    gov_id = Column(Integer, primary_key=True)
+
+    country_id = Column(ForeignKey(Country.country_id), index=True)
+
+    start_date_days = Column(Integer, index=True)
+    end_date_days = Column(Integer, index=True)
+
+    gov_name = Column(String(100))
+    gov_type = Column(String(100))
+    authority = Column(Enum(GovernmentAuthority))
+
+    ethics_1 = Column(String(80))
+    ethics_2 = Column(String(80))
+    ethics_3 = Column(String(80))
+    ethics_4 = Column(String(80))
+    ethics_5 = Column(String(80))
+
+    civic_1 = Column(String(80))
+    civic_2 = Column(String(80))
+    civic_3 = Column(String(80))
+    civic_4 = Column(String(80))
+    civic_5 = Column(String(80))
+
+    country = relationship("Country", back_populates="governments")
 
 
 class CountryData(Base):
@@ -534,6 +644,9 @@ class War(Base):
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer, index=True)
 
+    attacker_war_exhaustion = Column(Float)
+    defender_war_exhaustion = Column(Float)
+
     outcome = Column(Enum(WarOutcome))
 
     game = relationship("Game", back_populates="wars")
@@ -619,3 +732,27 @@ class LeaderAchievement(Base):
     achievement_description = Column(String(80))
 
     leader = relationship("Leader", back_populates="achievements")
+
+    def __str__(self):
+        start_date = days_to_date(self.start_date_days)
+        end_date = days_to_date(self.end_date_days)
+        if self.achievement_type == LeaderAchievementType.was_ruler:
+            achievement_text = f"{start_date} - {end_date}: Ruled the {self.achievement_description} with agenda \"{self.leader.leader_agenda}\""
+        elif self.achievement_type == LeaderAchievementType.negotiated_peace_treaty:
+            achievement_text = f"{end_date}: Negotiated peace in the {self.achievement_description}"
+        elif self.achievement_type == LeaderAchievementType.passed_edict:
+            achievement_text = f'{end_date}: Passed edict "{self.achievement_description}"'
+        elif self.achievement_type == LeaderAchievementType.embraced_tradition:
+            tradition = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tr")
+            achievement_text = f"{end_date}: Embraced tradition \"{tradition}\""
+        elif self.achievement_type == LeaderAchievementType.achieved_ascension:
+            perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="ap")
+            achievement_text = f"{end_date}: Ascension: {perk}"
+        elif self.achievement_type == LeaderAchievementType.researched_technology:
+            perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tech")
+            achievement_text = f"{end_date}: Researched \"{perk}\""
+        elif self.achievement_type == LeaderAchievementType.was_faction_leader:
+            achievement_text = f"{start_date} - {end_date}: Leader of the \"{self.achievement_description}\" faction."
+        else:
+            achievement_text = f"{start_date} - {end_date}: {self.achievement_description}"
+        return achievement_text
