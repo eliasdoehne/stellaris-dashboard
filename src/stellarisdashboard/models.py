@@ -3,6 +3,7 @@ import enum
 import pathlib
 import threading
 import logging
+from typing import Dict
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -42,10 +43,6 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
             yield s
         finally:
             s.close()
-
-
-def get_known_games():
-    return [fname.stem for fname in DB_PATH.glob("*.db")]
 
 
 @enum.unique
@@ -318,9 +315,25 @@ def days_to_date(days: float) -> str:
     return f"{year}.{month}.{day}"
 
 
+def get_known_games():
+    return [fname.stem for fname in DB_PATH.glob("*.db")]
+
+
 def get_game_names_matching(game_name_prefix):
     for fname in DB_PATH.glob(f"{game_name_prefix}*"):
         yield fname.stem
+
+
+def get_available_games_dict() -> Dict[str, str]:
+    """ Returns a dictionary mapping game id to the name of the game's player country. """
+    games = {}
+    for game_name in sorted(get_known_games()):
+        with get_db_session(game_name) as session:
+            game = session.query(Game).order_by(Game.game_name).one_or_none()
+            if game is None:
+                continue
+            games[game_name] = game.player_country_name
+    return games
 
 
 def get_gamestates_since(game_name, date):
@@ -366,12 +379,17 @@ class System(Base):
     hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
     hyperlanes_two = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_two_id])
 
-    def get_owner_at(self, time_in_days):
+    def get_owner_country_id_at(self, time_in_days: int) -> int:
+        if not self.ownership:
+            return -1
         # could be slow, but fine for now
+        most_recent_owner = -1
+        most_recent_owner_end = -1
         for ownership in self.ownership:
-            if ownership.start_date_days <= time_in_days <= ownership.end_date_days:
-                return ownership.country
-        return None
+            if most_recent_owner_end <= ownership.start_date_days <= time_in_days:
+                most_recent_owner_end = ownership.end_date_days
+                most_recent_owner = ownership.country.country_id
+        return most_recent_owner
 
     def __str__(self):
         return f'System "{self.original_name}" @ {self.coordinate_x}, {self.coordinate_y}'
@@ -482,6 +500,27 @@ class Country(Base):
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
+
+    def get_country_name_for_date(self, date_in_days):
+        # could be slow, but fine for now
+        most_recent_name = "Unclaimed Systems"
+        most_recent_name_end = -1
+        for government in self.governments:
+            if most_recent_name_end <= government.start_date_days <= date_in_days:
+                most_recent_name = government.gov_name
+                most_recent_name_end = government.end_date_days
+        return most_recent_name
+
+    def get_country_data_for_date(self, date_in_days) -> "CountryData":
+        # could be slow, but fine for now
+        most_recent_data = None
+        most_recent_data_date = -1
+        for country_data in self.country_data:
+            assert isinstance(country_data, CountryData)
+            if most_recent_data_date <= country_data.game_state.date <= date_in_days:
+                most_recent_data = country_data
+                most_recent_data_date = country_data.game_state.date
+        return most_recent_data
 
 
 class Government(Base):

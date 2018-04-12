@@ -53,6 +53,7 @@ setup(
         "flask",
         "dataclasses",
         "matplotlib",
+        "networkx",
         "plotly",
         'sqlalchemy',
     ],

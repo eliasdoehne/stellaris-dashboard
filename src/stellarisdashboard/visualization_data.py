@@ -3,7 +3,10 @@ import logging
 from typing import List, Dict, Callable, Any, Tuple, Iterable
 
 import dataclasses
+import time
+
 from stellarisdashboard import models, config
+import networkx as nx
 
 logger = logging.getLogger(__name__)
 
@@ -536,3 +539,67 @@ class EmpireProgressionPlotData:
         if key not in data_dict:
             data_dict[key] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
         data_dict[key].append(new_val)
+
+
+_GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
+
+
+def get_galaxy_data(game_name: str) -> "GalaxyMapData":
+    if game_name not in _GALAXY_DATA:
+        _GALAXY_DATA[game_name] = GalaxyMapData(game_name)
+        _GALAXY_DATA[game_name].initialize_galaxy_graph()
+    return _GALAXY_DATA[game_name]
+
+
+class GalaxyMapData:
+    def __init__(self, game_id):
+        self.game_id = game_id
+        self.galaxy_graph = None
+        self.system_cells = None
+
+    def initialize_galaxy_graph(self):
+        start_time = time.clock()
+        self.galaxy_graph = nx.Graph()
+        with models.get_db_session(self.game_id) as session:
+            for system in session.query(models.System).all():
+                assert isinstance(system, models.System)  # to remove IDE warnings
+                self.galaxy_graph.add_node(
+                    system.system_id_in_game,
+                    name=system.original_name,
+                    country="Unclaimed Systems",
+                    pos=[-system.coordinate_x, -system.coordinate_y],
+                )
+            for hl in session.query(models.HyperLane).all():
+                sys_one, sys_two = hl.system_one.system_id_in_game, hl.system_two.system_id_in_game
+                self.galaxy_graph.add_edge(sys_one, sys_two)
+        logger.debug(f"Initialized networkx graph in {time.clock()-start_time} seconds.")
+
+    def get_graph_for_date(self, time_days):
+        start_time = time.clock()
+        owner_dict = self._get_system_ids_by_owner(time_days)
+        for name, nodes in owner_dict.items():
+            for node in nodes:
+                self.galaxy_graph.node[node]["country"] = name
+        logger.debug(f"Updated networkx graph in {time.clock()-start_time} seconds.")
+        return self.galaxy_graph
+
+    def _get_system_ids_by_owner(self, time_days):
+        result = {}
+        with models.get_db_session(self.game_id) as session:
+            attitudes = {}
+            for system in session.query(models.System).all():
+                owner_id = system.get_owner_country_id_at(time_days)
+                country = session.query(models.Country).filter_by(country_id=owner_id).one_or_none()
+                if country is not None and owner_id not in attitudes:
+                    country_data = country.get_country_data_for_date(time_days)
+                    if country_data is not None:
+                        attitudes[owner_id] = country_data.attitude_towards_player
+                if country is None or attitudes.get(owner_id) == models.Attitude.unknown:
+                    name = "Unclaimed Systems"
+                else:
+                    name = country.get_country_name_for_date(time_days)
+
+                if name not in result:
+                    result[name] = set()
+                result[name].add(system.system_id_in_game)
+        return result

@@ -12,15 +12,15 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template
 
-from stellarisdashboard import config, models, visualization_data, game_info
+from stellarisdashboard import config, models, visualization_data
 
 logger = logging.getLogger(__name__)
 
 flask_app = flask.Flask(__name__)
 flask_app.logger.setLevel(logging.DEBUG)
-app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=False, url_base_pathname="/timeline")
-app.css.config.serve_locally = True
-app.scripts.config.serve_locally = True
+timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=False, url_base_pathname="/timeline")
+timeline_app.css.config.serve_locally = True
+timeline_app.scripts.config.serve_locally = True
 
 COLOR_PHYSICS = 'rgba(30,100,170,0.5)'
 COLOR_SOCIETY = 'rgba(60,150,90,0.5)'
@@ -29,13 +29,13 @@ COLOR_ENGINEERING = 'rgba(190,150,30,0.5)'
 
 @flask_app.route("/")
 def index_page():
-    games = [dict(country=country, game_name=g) for g, country in get_available_games_dict().items()]
+    games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
     return render_template("index.html", games=games)
 
 
 @flask_app.route("/history/<game_name>")
 def history_page(game_name):
-    games_dict = get_available_games_dict()
+    games_dict = models.get_available_games_dict()
     if game_name not in games_dict:
         matches = list(models.get_game_names_matching(game_name))
         if not matches:
@@ -44,26 +44,10 @@ def history_page(game_name):
         game_name = matches[0]
     country = games_dict[game_name]
     with models.get_db_session(game_name) as session:
-        last_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
-        if last_gs is None:
-            logger.warning(f"Found no gamestate for game {game_name}...")
-            return "500"
-        wars = get_war_dicts(session, last_gs.date)
-        leaders = get_leader_dicts(session, last_gs.date)
-    print(leaders[:5])
+        date = get_most_recent_date(session)
+        wars = get_war_dicts(session, date)
+        leaders = get_leader_dicts(session, date)
     return render_template("history_page.html", country=country, wars=wars, leaders=leaders)
-
-
-def get_available_games_dict() -> Dict[str, str]:
-    """ Returns a dictionary mapping game id to the name of the game's player country. """
-    games = {}
-    for game_name in sorted(models.get_known_games()):
-        with models.get_db_session(game_name) as session:
-            game = session.query(models.Game).order_by(models.Game.game_name).one_or_none()
-            if game is None:
-                continue
-            games[game_name] = game.player_country_name
-    return games
 
 
 DEFAULT_PLOT_LAYOUT = go.Layout(
@@ -74,9 +58,10 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
 )
 
 CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
-DEFAULT_SELECTED_CATEGORY = next(iter(visualization_data.THEMATICALLY_GROUPED_PLOTS.keys()))
+CATEGORY_TABS.append({'label': "Galaxy", 'value': "Galaxy"})
+DEFAULT_SELECTED_CATEGORY = "Galaxy"  # CATEGORY_TABS[0]["value"]
 
-app.layout = html.Div([
+timeline_app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     html.A("Return to index", id='index-link', href="/"),
     html.Div([
@@ -90,6 +75,13 @@ app.layout = html.Div([
             'margin-left': 'auto',
             'margin-right': 'auto'
         }),
+        dcc.Slider(
+            id='dateslider',
+            min=0,
+            max=100,  # todo make dynamic
+            step=0.125,
+            value=50,
+        ),
     ], style={
         'width': '100%',
         'fontFamily': 'Sans-Serif',
@@ -106,12 +98,12 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     return go.Layout(**layout)
 
 
-@app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'), Input('url', 'search')])
-def update_content(tab_value, search):
+@timeline_app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
+def update_content(tab_value, search, date):
     game_id = parse.parse_qs(parse.urlparse(search).query).get("game_name", [None])[0]
     if game_id is None:
         game_id = ""
-    available_games = get_available_games_dict()
+    available_games = models.get_available_games_dict()
     if game_id not in available_games:
         for g in available_games:
             if g.startswith(game_id):
@@ -122,28 +114,87 @@ def update_content(tab_value, search):
             logger.warning(f"Game {game_id} does not match any known game!")
             return []
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
-    children = [html.H1(f"{available_games[game_id]} ({game_id})")]
-    plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
-    for plot_spec in plots:
-        figure_data = get_figure_data(game_id, plot_spec)
-        figure_layout = get_figure_layout(plot_spec)
-        figure = go.Figure(data=figure_data, layout=figure_layout)
+    with models.get_db_session(game_id) as session:
+        current_date = get_most_recent_date(session)
+    current_date
 
-        children.append(html.H2(f"{plot_spec.title}"))
-        children.append(dcc.Graph(
-            id=f"{plot_spec.plot_id}",
-            figure=figure,
-        ))
+    children = [html.H1(f"{available_games[game_id]} ({game_id})")]
+    if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
+        plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+        for plot_spec in plots:
+            figure_data = get_figure_data(game_id, plot_spec)
+            figure_layout = get_figure_layout(plot_spec)
+            figure = go.Figure(data=figure_data, layout=figure_layout)
+
+            children.append(html.H2(f"{plot_spec.title}"))
+            children.append(dcc.Graph(
+                id=f"{plot_spec.plot_id}",
+                figure=figure,
+            ))
+    else:
+        children.append(get_galaxy(game_id, date))
     return children
 
 
-def get_most_recent_date(session):
-    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
-    if most_recent_gs is None:
-        most_recent_date = 0
-    else:
-        most_recent_date = most_recent_gs.date
-    return most_recent_date
+def get_galaxy(game_id, date):
+    # adapted from https://plot.ly/python/network-graphs/
+    galaxy = visualization_data.get_galaxy_data(game_id)
+    graph = galaxy.get_graph_for_date(360 * date)
+    edge_trace = go.Scatter(
+        x=[],
+        y=[],
+        line=go.Line(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines',
+        name="Hyperlane Network",
+    )
+    for edge in graph.edges:
+        x0, y0 = graph.node[edge[0]]['pos']
+        x1, y1 = graph.node[edge[1]]['pos']
+        edge_trace['x'] += [x0, x1, None]
+        edge_trace['y'] += [y0, y1, None]
+
+    node_traces = {}
+    for node in graph.nodes:
+        country = graph.node[node]["country"]
+        if country not in node_traces:
+            node_traces[country] = go.Scatter(
+                x=[], y=[],
+                text=[],
+                mode='markers',
+                hoverinfo='text',
+                marker=go.Marker(
+                    color=[],
+                    size=8,
+                    line=dict(width=0.5)),
+                name=country,
+            )
+        if country == "Unclaimed Systems":
+            color = "white"
+        else:
+            random.seed(country)
+            r, g, b = [random.randint(20, 235) for _ in range(3)]
+            color = f"rgb({r},{g},{b})"
+        node_traces[country]['marker']['color'].append(color)
+        x, y = graph.node[node]['pos']
+        node_traces[country]['x'].append(x)
+        node_traces[country]['y'].append(y)
+        node_traces[country]['text'].append(graph.node[node]["name"])
+
+    layout = go.Layout(
+        height=1024,
+        width=1024,
+        xaxis=go.XAxis(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=go.YAxis(showgrid=False, zeroline=False, showticklabels=False),
+        hovermode='closest',
+    )
+
+    return dcc.Graph(
+        id="galaxy-map",
+        figure=go.Figure(
+            data=go.Data([edge_trace] + list(node_traces.values())),
+            layout=layout,
+        ))
 
 
 def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
@@ -247,6 +298,15 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
     return plot_list
 
 
+def get_most_recent_date(session):
+    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
+    if most_recent_gs is None:
+        most_recent_date = 0
+    else:
+        most_recent_date = most_recent_gs.date
+    return most_recent_date
+
+
 def get_leader_dicts(session, most_recent_date):
     rulers = []
     scientists = []
@@ -335,7 +395,7 @@ def get_war_dicts(session, current_date):
 
 
 def start_server():
-    app.run_server(port=config.CONFIG.port)
+    timeline_app.run_server(port=config.CONFIG.port)
 
 
 if __name__ == '__main__':

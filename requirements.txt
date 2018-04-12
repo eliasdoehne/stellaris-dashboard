@@ -6,5 +6,6 @@ dash-renderer
 dataclasses
 flask
 matplotlib
+networkx
 plotly
 sqlalchemy
