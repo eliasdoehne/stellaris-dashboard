@@ -1,7 +1,6 @@
 import logging
 import multiprocessing as mp
 import threading
-import time
 import traceback
 
 import click
@@ -55,7 +54,7 @@ def monitor_saves(threads, save_path, polling_interval):
     f_monitor_saves(threads, polling_interval, save_path=save_path)
 
 
-def f_monitor_saves(threads=None, polling_interval=None, save_path=None, stop_event: threading.Event=None):
+def f_monitor_saves(threads=None, polling_interval=None, save_path=None, stop_event: threading.Event = None):
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     if polling_interval is None:
@@ -79,7 +78,7 @@ def f_monitor_saves(threads=None, polling_interval=None, save_path=None, stop_ev
                 plot_data = visualization_data.get_current_execution_plot_data(game_name)
                 plot_data.initialize()
                 plot_data.update_with_new_gamestate()
-                config.set_last_updated_game(game_name)
+                del gamestate_dict
             if nothing_new:
                 if show_wait_message:
                     show_wait_message = False
@@ -111,7 +110,7 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.get_new_game_states():
         tle.process_gamestate(game_name, gamestate_dict)
-        config.set_last_updated_game(game_name)
+        del gamestate_dict
 
 
 if __name__ == '__main__':

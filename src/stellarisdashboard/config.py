@@ -1,11 +1,10 @@
+import logging
+import multiprocessing as mp  # only to get the cpu count
 import pathlib
-from typing import Optional
+import platform
+import sys
 
 import dataclasses
-import logging
-import platform
-import multiprocessing as mp  # only to get the cpu count
-import sys
 
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 
@@ -13,47 +12,12 @@ LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 def initialize_logger():
     # Add a stream handler for stdout output
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     root_logger.addHandler(ch)
-
-
-LAST_UPDATED_GAME_FILE = "last_updated_game.txt"
-LAST_UPDATED_GAME = None
-
-
-def get_last_updated_game() -> Optional[str]:
-    global LAST_UPDATED_GAME
-    if LAST_UPDATED_GAME is not None:
-        return LAST_UPDATED_GAME
-    game_name = None
-    last_update_file = CONFIG.base_output_path / "db" / LAST_UPDATED_GAME_FILE
-    if last_update_file.exists():
-        with open(last_update_file, "r") as f:
-            game_name = f.readline().strip()
-            game_db_file = (CONFIG.base_output_path / "db" / f"{game_name}.db")
-            if game_name and game_db_file.exists():
-                LAST_UPDATED_GAME = game_name
-                logger.info(f"Initialized last updated game as {game_name} from file.")
-            else:
-                game_name = None
-    return game_name
-
-
-def set_last_updated_game(game_name: str):
-    global LAST_UPDATED_GAME
-    if game_name != LAST_UPDATED_GAME:
-        LAST_UPDATED_GAME = game_name
-        last_update_file = CONFIG.base_output_path / "db" / LAST_UPDATED_GAME_FILE
-        if not last_update_file.parent.exists():
-            last_update_file.parent.mkdir()
-        with open(last_update_file, "w") as f:
-            f.write(game_name)
-            logger.info(f"Updated last updated game as {game_name} in file...")
-    return game_name
 
 
 initialize_logger()
@@ -67,7 +31,7 @@ class Config:
     threads: int = max(1, mp.cpu_count() // 2 - 1)
     port: int = 28053
     colormap: str = "viridis"
-    log_level: str = "INFO"
+    log_level: str = "DEBUG"
     show_everything: bool = False
 
     debug_mode: bool = False
@@ -166,6 +130,10 @@ def _apply_config_ini():
         CONFIG.base_output_path.mkdir()
         (CONFIG.base_output_path / "db").mkdir()
         (CONFIG.base_output_path / "output").mkdir()
+    update_log_level()
+
+
+def update_log_level():
     level = LOG_LEVELS.get(CONFIG.log_level, logging.INFO)
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
