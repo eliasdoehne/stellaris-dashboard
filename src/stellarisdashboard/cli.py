@@ -37,7 +37,7 @@ def f_visualize_mpl(game_name_prefix: str, show_everything=False):
     logger.info(f"Found matching games {match_games_string} for prefix \"{game_name_prefix}\"")
     for game_name in matching_games:
         try:
-            plot_data = visualization_data.EmpireProgressionPlotData(game_name, show_everything=show_everything)
+            plot_data = visualization_data.EmpireProgressionPlotData(game_name)
             plot_data.initialize()
             plot_data.update_with_new_gamestate()
             plot = visualization_mpl.MatplotLibVisualization(plot_data)

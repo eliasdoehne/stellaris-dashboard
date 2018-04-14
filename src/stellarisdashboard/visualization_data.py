@@ -1,6 +1,6 @@
 import enum
 import logging
-from typing import List, Dict, Callable, Any, Tuple, Iterable
+from typing import List, Dict, Callable, Any, Tuple, Iterable, Set
 
 import dataclasses
 import time
@@ -175,7 +175,7 @@ def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotDat
             game = session.query(models.Game).filter_by(game_name=game_name).first()
         if not game:
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name, show_everything=False)
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name)
         _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
@@ -211,7 +211,7 @@ def show_military_info(country_data: models.CountryData):
 class EmpireProgressionPlotData:
     DEFAULT_VAL = float("nan")
 
-    def __init__(self, game_name, show_everything=config.CONFIG.show_everything):
+    def __init__(self, game_name):
         self.game_name = game_name
         self.dates = None
         self.player_country = None
@@ -231,7 +231,7 @@ class EmpireProgressionPlotData:
         self.empire_food_budget = None
         self.empire_research_output = None
         self.empire_research_allocation = None
-        self.show_everything = show_everything
+        self.show_everything = config.CONFIG.show_everything
 
     def initialize(self):
         self.dates: List[float] = []
@@ -341,6 +341,8 @@ class EmpireProgressionPlotData:
         for country_data in gs.country_data:
             if self.player_country is None and country_data.country.is_player:
                 self.player_country = country_data.country.country_name
+            if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
+                continue
             self._extract_pop_count(country_data)
             self._extract_planet_count(country_data)
             self._extract_system_count(country_data)
@@ -552,10 +554,13 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
 
 
 class GalaxyMapData:
-    def __init__(self, game_id):
+    UNCLAIMED = "Unclaimed Systems"
+
+    def __init__(self, game_id: str):
         self.game_id = game_id
-        self.galaxy_graph = None
-        self.system_cells = None
+        self.galaxy_graph: nx.Graph = None
+        self._session = None
+        self._game_state_model = None
 
     def initialize_galaxy_graph(self):
         start_time = time.clock()
@@ -566,40 +571,65 @@ class GalaxyMapData:
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
                     name=system.original_name,
-                    country="Unclaimed Systems",
+                    country=GalaxyMapData.UNCLAIMED,
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
             for hl in session.query(models.HyperLane).all():
                 sys_one, sys_two = hl.system_one.system_id_in_game, hl.system_two.system_id_in_game
-                self.galaxy_graph.add_edge(sys_one, sys_two)
+                self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
         logger.debug(f"Initialized networkx graph in {time.clock()-start_time} seconds.")
 
     def get_graph_for_date(self, time_days):
         start_time = time.clock()
-        owner_dict = self._get_system_ids_by_owner(time_days)
-        for name, nodes in owner_dict.items():
+        systems_by_owner = self._get_system_ids_by_owner(time_days)
+        owner_by_system = {}
+        for country, nodes in systems_by_owner.items():
             for node in nodes:
-                self.galaxy_graph.node[node]["country"] = name
+                owner_by_system[node] = country
+                self.galaxy_graph.nodes[node]["country"] = country
+
+        for edge in self.galaxy_graph.edges:
+            i, j = edge
+            i_country = owner_by_system.get(i, self.UNCLAIMED)
+            j_country = owner_by_system.get(j, self.UNCLAIMED)
+            if i_country == j_country:
+                self.galaxy_graph.edges[edge]["country"] = i_country
+            else:
+                self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
         logger.debug(f"Updated networkx graph in {time.clock()-start_time} seconds.")
         return self.galaxy_graph
 
     def _get_system_ids_by_owner(self, time_days):
-        result = {}
-        with models.get_db_session(self.game_id) as session:
-            attitudes = {}
-            for system in session.query(models.System).all():
-                owner_id = system.get_owner_country_id_at(time_days)
-                country = session.query(models.Country).filter_by(country_id=owner_id).one_or_none()
-                if country is not None and owner_id not in attitudes:
-                    country_data = country.get_country_data_for_date(time_days)
-                    if country_data is not None:
-                        attitudes[owner_id] = country_data.attitude_towards_player
-                if country is None or attitudes.get(owner_id) == models.Attitude.unknown:
-                    name = "Unclaimed Systems"
-                else:
-                    name = country.get_country_name_for_date(time_days)
+        owned_systems = set()
+        systems_by_owner = {GalaxyMapData.UNCLAIMED: set()}
+        with models.get_db_session(self.game_id) as self._session:
+            owners = self._session.query(models.SystemOwnership).filter(
+                models.SystemOwnership.start_date_days < time_days,
+                models.SystemOwnership.end_date_days >= time_days,
+            ).all()
+            for ownership in owners:
+                system_id = ownership.system.system_id_in_game
+                name = self._get_country_name_from_id(ownership, time_days)
+                owned_systems.add(system_id)
+                if name not in systems_by_owner:
+                    systems_by_owner[name] = set()
+                systems_by_owner[name].add(system_id)
+        systems_by_owner[GalaxyMapData.UNCLAIMED] |= set(self.galaxy_graph.nodes) - owned_systems
+        self._game_state_model = None
+        return systems_by_owner
 
-                if name not in result:
-                    result[name] = set()
-                result[name].add(system.system_id_in_game)
-        return result
+    def _get_country_name_from_id(self, ownership, time_days):
+        start_time = time.clock()
+        country = ownership.country
+        if country is None:
+            logger.warning(f"Ownership {ownership} has no country!")
+            name = GalaxyMapData.UNCLAIMED
+        elif config.CONFIG.show_everything:
+            name = country.country_name
+        elif country.first_player_contact_date is None or country.first_player_contact_date > time_days:
+            name = GalaxyMapData.UNCLAIMED
+        else:
+            name = country.country_name
+        if time.clock() - start_time > 0.01:
+            print(f"Getting country took longer than usual: {time.clock() - start_time} s")
+        return name

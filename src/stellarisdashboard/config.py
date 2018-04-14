@@ -12,9 +12,9 @@ LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 def initialize_logger():
     # Add a stream handler for stdout output
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     root_logger.addHandler(ch)
@@ -28,11 +28,20 @@ logger = logging.getLogger(__name__)
 class Config:
     save_file_path: pathlib.Path = None
     base_output_path: pathlib.Path = None
-    threads: int = max(1, mp.cpu_count() // 2 - 1)
+
+    # These are the default values
+    cpu_count = mp.cpu_count()
+    if cpu_count < 4:
+        threads = 1
+    elif cpu_count == 4:
+        threads = 2
+    else:
+        threads = max(1, mp.cpu_count() // 2 - 1)
     port: int = 28053
     colormap: str = "viridis"
-    log_level: str = "DEBUG"
+    log_level: str = "INFO"
     show_everything: bool = False
+    only_show_default_empires: bool = True
 
     debug_mode: bool = False
     debug_save_name_filter: str = ""
