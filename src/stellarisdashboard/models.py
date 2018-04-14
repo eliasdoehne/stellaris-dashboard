@@ -295,6 +295,7 @@ class LeaderAchievementType(enum.Enum):
     passed_edict = 6
     embraced_tradition = 7
     achieved_ascension = 8
+    reformed_government = 9
 
     special_event = 99
 
@@ -402,11 +403,14 @@ class SystemOwnership(Base):
     system_id = Column(ForeignKey(System.system_id), index=True)
     owner_country_id = Column(ForeignKey("countrytable.country_id"), index=True)
 
-    start_date_days = Column(Integer)
-    end_date_days = Column(Integer)
+    start_date_days = Column(Integer, index=True)
+    end_date_days = Column(Integer, index=True)
 
     system = relationship("System", back_populates="ownership")
     country = relationship("Country", back_populates="owned_systems")
+
+    def __str__(self):
+        return f"SystemOwnership of {self.system.original_name}: {self.start_date_days} - {self.end_date_days} -- {self.country.country_name}"
 
 
 class HyperLane(Base):
@@ -493,6 +497,8 @@ class Country(Base):
     is_player = Column(Boolean)
     country_name = Column(String(80))
     country_id_in_game = Column(Integer)
+    first_player_contact_date = Column(Integer)
+    country_type = Column(String(50))
 
     game = relationship("Game", back_populates="countries")
     governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
@@ -500,27 +506,13 @@ class Country(Base):
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
+    leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
 
-    def get_country_name_for_date(self, date_in_days):
+    def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
-        most_recent_name = "Unclaimed Systems"
-        most_recent_name_end = -1
-        for government in self.governments:
-            if most_recent_name_end <= government.start_date_days <= date_in_days:
-                most_recent_name = government.gov_name
-                most_recent_name_end = government.end_date_days
-        return most_recent_name
-
-    def get_country_data_for_date(self, date_in_days) -> "CountryData":
-        # could be slow, but fine for now
-        most_recent_data = None
-        most_recent_data_date = -1
-        for country_data in self.country_data:
-            assert isinstance(country_data, CountryData)
-            if most_recent_data_date <= country_data.game_state.date <= date_in_days:
-                most_recent_data = country_data
-                most_recent_data_date = country_data.game_state.date
-        return most_recent_data
+        for gov in self.governments:
+            if gov.start_date_days <= date_in_days <= gov.end_date_days:
+                return gov
 
 
 class Government(Base):
@@ -549,6 +541,33 @@ class Government(Base):
     civic_5 = Column(String(80))
 
     country = relationship("Country", back_populates="governments")
+
+    @property
+    def civics(self):
+        civics = {self.civic_1, self.civic_2, self.civic_3, self.civic_4, self.civic_5}
+        return civics - {None}
+
+    @property
+    def ethics(self):
+        civics = {self.ethics_1, self.ethics_2, self.ethics_3, self.ethics_4, self.ethics_5}
+        return civics - {None}
+
+    def get_reform_description_dict(self, old_gov: "Government") -> Dict[str, str]:
+        reform_dict = {}
+        if old_gov.gov_type != self.gov_type:
+            ogt = game_info.convert_id_to_name(old_gov.gov_type, remove_prefix="gov")
+            ngt = game_info.convert_id_to_name(self.gov_type, remove_prefix="gov")
+            reform_dict["Type"] = [f"Reformed from {ogt} to {ngt}"]
+        new_civics = self.civics - old_gov.civics
+        removed_civics = old_gov.civics - self.civics
+        reform_dict["Removed Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
+        reform_dict["Adopted Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics)
+
+        new_ethics = self.ethics - old_gov.ethics
+        removed_ethics = old_gov.ethics - self.ethics
+        reform_dict["Abandoned Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
+        reform_dict["Embraced Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
+        return {k: v for k, v in reform_dict.items() if v}
 
 
 class CountryData(Base):
@@ -731,13 +750,22 @@ class CombatVictory(Base):
     def __repr__(self):
         return f"CombatVictory(combat_victory_id={self.combat_victory_id}, war_participant_id={self.war_participant_id}, date={self.date}, inflicted_war_exhaustion={self.inflicted_war_exhaustion}, combat_type={self.combat_type})"
 
+    def __str__(self):
+        country_name = self.war_participant.country.country_name
+        if self.combat_type == CombatType.ships:
+            return f"{days_to_date(self.date)}: {country_name} fleet combat victory in the {self.system} system. War exhaustion {self.inflicted_war_exhaustion}"
+        if self.combat_type == CombatType.armies:
+            verb = "defended against" if self.attacker_victory else "succeeded in"
+            return f"{days_to_date(self.date)}: {country_name} {verb} planetary invasion of {self.planet}. War exhaustion {self.inflicted_war_exhaustion}"
+        return f"Combat victory of {country_name} of type {self.combat_type} at planet {self.planet} in the {self.system} system"
+
 
 class Leader(Base):
     __tablename__ = "leadertable"
 
     leader_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-
+    country_id = Column(ForeignKey(Country.country_id))
     leader_id_in_game = Column(Integer)
 
     leader_name = Column(String(80))
@@ -752,6 +780,7 @@ class Leader(Base):
     last_date = Column(Integer)  # estimated death / dismissal
 
     game = relationship("Game", back_populates="leaders")
+    country = relationship("Country", back_populates="leaders")
     species = relationship("Species")
     achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
 
@@ -780,7 +809,8 @@ class LeaderAchievement(Base):
         elif self.achievement_type == LeaderAchievementType.negotiated_peace_treaty:
             achievement_text = f"{end_date}: Negotiated peace in the {self.achievement_description}"
         elif self.achievement_type == LeaderAchievementType.passed_edict:
-            achievement_text = f'{end_date}: Passed edict "{self.achievement_description}"'
+            name = game_info.convert_id_to_name(self.achievement_description)
+            achievement_text = f'{start_date} - {end_date}: Maintained edict "{name}"'
         elif self.achievement_type == LeaderAchievementType.embraced_tradition:
             tradition = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tr")
             achievement_text = f"{end_date}: Embraced tradition \"{tradition}\""
@@ -788,10 +818,20 @@ class LeaderAchievement(Base):
             perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="ap")
             achievement_text = f"{end_date}: Ascension: {perk}"
         elif self.achievement_type == LeaderAchievementType.researched_technology:
-            perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tech")
-            achievement_text = f"{end_date}: Researched \"{perk}\""
+            tech = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tech")
+            achievement_text = f"{end_date}: Researched \"{tech}\""
         elif self.achievement_type == LeaderAchievementType.was_faction_leader:
-            achievement_text = f"{start_date} - {end_date}: Leader of the \"{self.achievement_description}\" faction."
+            achievement_text = f"{start_date} - {end_date}: Leader of the \"{self.achievement_description}\" faction"
+        elif self.achievement_type == LeaderAchievementType.reformed_government:
+            old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
+            new_gov = self.leader.country.get_government_for_date(self.start_date_days + 1)
+            reform_dict = new_gov.get_reform_description_dict(old_gov)
+            reform_lines = []
+            for cat, reforms in reform_dict.items():
+                reform_lines.append(f"{cat}: " + ", ".join(reforms))
+            ref = ". ".join(reform_lines)
+            achievement_text = f"{start_date}: Government reform: \n{ref}"
+            print(achievement_text)
         else:
             achievement_text = f"{start_date} - {end_date}: {self.achievement_description}"
         return achievement_text
