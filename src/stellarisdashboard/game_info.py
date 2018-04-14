@@ -258,10 +258,16 @@ ASCENSION_PERKS = {
 }
 
 LOWERCASE_WORDS = {"the", "in", "of", "for", "is", "over", "under"}
+WORD_REPLACEMENT = {
+    "Ai": "AI",
+    "Ftl": "FTL",
+    "Tb": "Tile Blocker",
+}
 
 
 def convert_id_to_name(object_id: str, remove_prefix="") -> str:
     words = [word for word in object_id.split("_") if word != remove_prefix]
     words = [word.capitalize() if word not in LOWERCASE_WORDS else word
              for word in words]
+    words = [WORD_REPLACEMENT.get(word, word) for word in words]
     return " ".join(words)
