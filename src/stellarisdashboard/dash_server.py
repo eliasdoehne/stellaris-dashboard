@@ -40,7 +40,7 @@ def history_page(game_name):
         matches = list(models.get_game_names_matching(game_name))
         if not matches:
             logger.warning(f"Could not find a game matching {game_name}")
-            return "404"
+            return render_template("404_page.html", game_not_found=True, game_name=game_name)
         game_name = matches[0]
     country = games_dict[game_name]
     with models.get_db_session(game_name) as session:
@@ -59,7 +59,7 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
 
 CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append({'label': "Galaxy", 'value': "Galaxy"})
-DEFAULT_SELECTED_CATEGORY = "Galaxy"  # CATEGORY_TABS[0]["value"]
+DEFAULT_SELECTED_CATEGORY = "Economy"
 
 timeline_app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
@@ -78,9 +78,11 @@ timeline_app.layout = html.Div([
         dcc.Slider(
             id='dateslider',
             min=0,
-            max=100,  # todo make dynamic
-            step=0.125,
-            value=50,
+            max=100,
+            step=0.001,
+            value=100,
+            updatemode='drag',
+            marks={i: '{}%'.format(i) for i in range(0, 110, 10)},
         ),
     ], style={
         'width': '100%',
@@ -98,8 +100,9 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     return go.Layout(**layout)
 
 
-@timeline_app.callback(Output('tab-content', 'children'), [Input('tabs', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
-def update_content(tab_value, search, date):
+@timeline_app.callback(Output('tab-content', 'children'),
+                       [Input('tabs', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
+def update_content(tab_value, search, date_fraction):
     game_id = parse.parse_qs(parse.urlparse(search).query).get("game_name", [None])[0]
     if game_id is None:
         game_id = ""
@@ -116,7 +119,6 @@ def update_content(tab_value, search, date):
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
     with models.get_db_session(game_id) as session:
         current_date = get_most_recent_date(session)
-    current_date
 
     children = [html.H1(f"{available_games[game_id]} ({game_id})")]
     if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
@@ -132,31 +134,37 @@ def update_content(tab_value, search, date):
                 figure=figure,
             ))
     else:
-        children.append(get_galaxy(game_id, date))
+        slider_date = 0.01 * date_fraction * current_date
+        children.append(html.H2(f"Galactic Records for {models.days_to_date(slider_date)}"))
+        children.append(get_galaxy(game_id, slider_date))
     return children
 
 
 def get_galaxy(game_id, date):
     # adapted from https://plot.ly/python/network-graphs/
     galaxy = visualization_data.get_galaxy_data(game_id)
-    graph = galaxy.get_graph_for_date(360 * date)
-    edge_trace = go.Scatter(
-        x=[],
-        y=[],
-        line=go.Line(width=0.5, color='#888'),
-        hoverinfo='none',
-        mode='lines',
-        name="Hyperlane Network",
-    )
+    graph = galaxy.get_graph_for_date(date)
+    edge_traces = {}
     for edge in graph.edges:
-        x0, y0 = graph.node[edge[0]]['pos']
-        x1, y1 = graph.node[edge[1]]['pos']
-        edge_trace['x'] += [x0, x1, None]
-        edge_trace['y'] += [y0, y1, None]
+        country = graph.edges[edge]["country"]
+        if country not in edge_traces:
+            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 3
+            edge_traces[country] = go.Scatter(
+                x=[],
+                y=[],
+                line=go.Line(width=width, color=get_country_color(country)),
+                hoverinfo='none',
+                mode='lines',
+                showlegend=False,
+            )
+        x0, y0 = graph.nodes[edge[0]]['pos']
+        x1, y1 = graph.nodes[edge[1]]['pos']
+        edge_traces[country]['x'] += [x0, x1, None]
+        edge_traces[country]['y'] += [y0, y1, None]
 
     node_traces = {}
     for node in graph.nodes:
-        country = graph.node[node]["country"]
+        country = graph.nodes[node]["country"]
         if country not in node_traces:
             node_traces[country] = go.Scatter(
                 x=[], y=[],
@@ -165,36 +173,69 @@ def get_galaxy(game_id, date):
                 hoverinfo='text',
                 marker=go.Marker(
                     color=[],
-                    size=8,
+                    size=4,
                     line=dict(width=0.5)),
                 name=country,
             )
-        if country == "Unclaimed Systems":
-            color = "white"
+        if country == visualization_data.GalaxyMapData.UNCLAIMED:
+            color = "rgba(255,255,255,0.5)"
         else:
-            random.seed(country)
-            r, g, b = [random.randint(20, 235) for _ in range(3)]
-            color = f"rgb({r},{g},{b})"
+            color = get_country_color(country)
         node_traces[country]['marker']['color'].append(color)
-        x, y = graph.node[node]['pos']
+        x, y = graph.nodes[node]['pos']
         node_traces[country]['x'].append(x)
         node_traces[country]['y'].append(y)
-        node_traces[country]['text'].append(graph.node[node]["name"])
+        country_str = f" ({country})" if country != visualization_data.GalaxyMapData.UNCLAIMED else ""
+        node_traces[country]['text'].append(f'{graph.nodes[node]["name"]}{country_str}')
 
     layout = go.Layout(
-        height=1024,
-        width=1024,
-        xaxis=go.XAxis(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=go.YAxis(showgrid=False, zeroline=False, showticklabels=False),
+        width=900,
+        xaxis=go.XAxis(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False
+        ),
+        yaxis=go.YAxis(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            scaleanchor='x',
+            scaleratio=1,
+        ),
+        margin=dict(
+            t=0, b=0, l=0, r=0,
+        ),
+        legend=dict(
+            orientation="v",
+            x=1.0,
+            y=1.0,
+        ),
         hovermode='closest',
     )
 
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=go.Data([edge_trace] + list(node_traces.values())),
+            data=go.Data(list(edge_traces.values()) + list(node_traces.values())),
             layout=layout,
-        ))
+        ),
+    )
+
+
+def get_country_color(country_name: str) -> str:
+    random.seed(country_name)
+    r, g, b = [random.randint(20, 235) for _ in range(3)]
+    color = f"rgba({r},{g},{b},1.0)"
+    return color
+
+
+def get_most_recent_date(session):
+    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
+    if most_recent_gs is None:
+        most_recent_date = 0
+    else:
+        most_recent_date = most_recent_gs.date
+    return most_recent_date
 
 
 def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
@@ -298,33 +339,36 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
     return plot_list
 
 
-def get_most_recent_date(session):
-    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
-    if most_recent_gs is None:
-        most_recent_date = 0
-    else:
-        most_recent_date = most_recent_gs.date
-    return most_recent_date
-
-
 def get_leader_dicts(session, most_recent_date):
     rulers = []
     scientists = []
     governors = []
     admirals = []
     generals = []
+    assigned_ids = set()
     for leader in session.query(models.Leader).order_by(models.Leader.date_hired).all():
+        base_ruler_id = "_".join(leader.leader_name.split()).lower()
+        ruler_id = base_ruler_id
+        id_offset = 1
+        while ruler_id in assigned_ids:
+            id_offset += 1
+            ruler_id = f"{base_ruler_id}_{id_offset}"
+        species = "Unknown"
+        if leader.species is not None:
+            species = leader.species.species_name
         leader_dict = dict(
             name=leader.leader_name,
+            id=f"{ruler_id}",
             in_game_id=leader.leader_id_in_game,
             birthday=models.days_to_date(leader.date_born),
             date_hired=models.days_to_date(leader.date_hired),
             status=f"active (as of {models.days_to_date(most_recent_date)})",
-            species=leader.species.species_name,
+            species=species,
+            achievements=[str(a) for a in leader.achievements]
         )
         if leader.last_date < most_recent_date - 720:
+            random.seed(leader.leader_name)
             leader_dict["status"] = f"dismissed or deceased around {models.days_to_date(leader.last_date + random.randint(0, 30))}"
-        leader_dict["achievements"] = [str(a) for a in leader.achievements]
         if leader.leader_class == models.LeaderClass.scientist:
             leader_dict["class"] = "Scientist"
             scientists.append(leader_dict)
@@ -369,26 +413,15 @@ def get_war_dicts(session, current_date):
         ]
 
         victories = sorted([we for wp in war.participants for we in wp.victories], key=lambda we: we.date)
-        war_event_list = []
-        for vic in victories:
-            country_name = vic.war_participant.country.country_name
-            if vic.combat_type == models.CombatType.ships:
-                war_event_list.append(
-                    f"{models.days_to_date(vic.date)}: {country_name} fleet combat victory in the {vic.system} system. War exhaustion {vic.inflicted_war_exhaustion}"
-                )
-            elif vic.combat_type == models.CombatType.armies:
-                verb = "defended against" if vic.attacker_victory else "succeeded in"
-                war_event_list.append(
-                    f"{models.days_to_date(vic.date)}: {country_name} {verb} planetary invasion of {vic.planet}. War exhaustion {vic.inflicted_war_exhaustion}"
-                )
+        war_id = "_".join(war.name.split()).lower()
         wars.append(dict(
             name=war.name,
+            id=war_id,
             start=start,
             end=end,
             attackers=attackers,
             defenders=defenders,
-            combat=war_event_list,
-
+            combat=[str(vic) for vic in victories],
         ))
 
     return wars
