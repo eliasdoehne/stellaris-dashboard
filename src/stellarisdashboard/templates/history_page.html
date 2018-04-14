@@ -1,16 +1,27 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<a name="index"></a>
-<a href="/">Return to Index</a>
 <h1>{{country}}</h1>
 
 <a href="#wars">Wars</a>
-<a href="#leaders">Leaders</a>
 
+<ul>
+    {% for war in wars %}
+    <li>{{ war["start"] }} - {{ war["end"] }}:  <a href=#{{war["id"]}}>{{war["name"]}}</a></li>
+    {% endfor %}
+</ul>
+<a href="#leaders">Leaders</a>
+<ul>
+    {% for leader in leaders %}
+    <li><a href=#{{leader["id"]}}>{{leader["class"]}} {{leader["name"]}}</a></li>
+    {% endfor %}
+</ul>
+
+<hr>
 <a name="wars"></a>
 <h2>Wars</h2>
 {% for war in wars %}
+<a name={{war["id"]}}></a>
 <h3>{{ war["name"] }} ({{ war["start"] }} - {{ war["end"] }}) </h3>
 <h4>Attackers:</h4>
 <ul>
@@ -33,9 +44,11 @@
 {% endfor %}
 <a href="#index">Back to top</a>
 
+<hr>
 <a name="leaders"></a>
 <h2>Leaders</h2>
 {% for leader in leaders %}
+<a name={{leader["id"]}}></a>
 <h4>{{leader["class"]}} {{leader["name"]}}</h4>
 <h5>Basic Information:</h5>
 <ul class="basicLeaderInfoList">
