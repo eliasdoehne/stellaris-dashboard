@@ -111,7 +111,16 @@ class CombatType(enum.Enum):
     armies = 1
 
     other = 99
+
     # TODO are there other types of war events?
+
+    def __str__(self):
+        if self == CombatType.ships:
+            return "Fleet combat"
+        elif self == CombatType.armies:
+            return "Planetary invasion"
+        else:
+            return "Other engagement"
 
 
 @enum.unique
@@ -708,6 +717,7 @@ class War(Base):
     outcome = Column(Enum(WarOutcome))
 
     game = relationship("Game", back_populates="wars")
+    combat = relationship("Combat", back_populates="war", cascade="all,delete,delete-orphan")
     participants = relationship("WarParticipant", back_populates="war", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
@@ -725,39 +735,72 @@ class WarParticipant(Base):
 
     war = relationship("War", back_populates="participants")
     country = relationship("Country", back_populates="war_participation")
-    victories = relationship("CombatVictory", back_populates="war_participant")
+    combat_participation = relationship("CombatParticipant", back_populates="war_participant")
 
     def __repr__(self):
         return f"WarParticipant(war_id={self.war_id}, country_id={self.country_id}, is_attacker={self.is_attacker})"
 
 
-class CombatVictory(Base):
-    __tablename__ = 'combatvictorytable'
-    combat_victory_id = Column(Integer, primary_key=True)
+class Combat(Base):
+    __tablename__ = "combattable"
+    combat_id = Column(Integer, primary_key=True)
+
+    system_id = Column(ForeignKey(System.system_id))
+    war_id = Column(ForeignKey(War.war_id))
 
     date = Column(Integer, index=True)
-    war_participant_id = Column(ForeignKey(WarParticipant.warparticipant_id), index=True)
-    inflicted_war_exhaustion = Column(Float)
-    combat_type = Column(Enum(CombatType))
 
     attacker_victory = Column(Boolean)
+    attacker_war_exhaustion = Column(Float)
+    defender_war_exhaustion = Column(Float)
 
-    system = Column(String(80))
-    planet = Column(String(80))
+    planet = Column(String(50))
 
-    war_participant = relationship("WarParticipant", back_populates="victories")
+    combat_type = Column(Enum(CombatType))
 
-    def __repr__(self):
-        return f"CombatVictory(combat_victory_id={self.combat_victory_id}, war_participant_id={self.war_participant_id}, date={self.date}, inflicted_war_exhaustion={self.inflicted_war_exhaustion}, combat_type={self.combat_type})"
+    system = relationship("System")
+    war = relationship("War", back_populates="combat")
+    attackers = relationship("CombatParticipant", primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)")
+    defenders = relationship("CombatParticipant", primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)")
 
     def __str__(self):
-        country_name = self.war_participant.country.country_name
-        if self.combat_type == CombatType.ships:
-            return f"{days_to_date(self.date)}: {country_name} fleet combat victory in the {self.system} system. War exhaustion {self.inflicted_war_exhaustion}"
-        if self.combat_type == CombatType.armies:
-            verb = "defended against" if self.attacker_victory else "succeeded in"
-            return f"{days_to_date(self.date)}: {country_name} {verb} planetary invasion of {self.planet}. War exhaustion {self.inflicted_war_exhaustion}"
-        return f"Combat victory of {country_name} of type {self.combat_type} at planet {self.planet} in the {self.system} system"
+        loc = ""
+        if self.planet:
+            loc += f'of planet "{self.planet}" '
+        if self.system:
+            loc += f'in the "{self.system.original_name}" system'
+        result = f"{days_to_date(self.date)}: {str(self.combat_type)} {loc}. "
+
+        defenders = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.defenders)
+        if self.defender_war_exhaustion > 0:
+            defenders += f" ({self.defender_war_exhaustion} exhaustion)"
+
+        attackers = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.attackers)
+        if self.attacker_war_exhaustion > 0:
+            attackers += f" ({self.attacker_war_exhaustion} exhaustion)"
+
+        if self.attacker_victory:
+            result += f"{attackers} defeated {defenders}"
+        else:
+            result += f"{attackers} were defeated by {defenders}"
+
+        return result
+
+
+class CombatParticipant(Base):
+    __tablename__ = 'combatparticipant'
+    combat_participant_id = Column(Integer, primary_key=True)
+
+    combat_id = Column(ForeignKey(Combat.combat_id), index=True)
+    war_participant_id = Column(ForeignKey(WarParticipant.warparticipant_id), index=True)
+
+    is_attacker = Column(Boolean)
+
+    war_participant = relationship("WarParticipant", back_populates="combat_participation")
+    combat = relationship("Combat")
+
+    def __repr__(self):
+        return f"CombatParticipant(combat_id={self.combat_id}, war_participant_id={self.war_participant_id}, is_attacker={self.is_attacker})"
 
 
 class Leader(Base):

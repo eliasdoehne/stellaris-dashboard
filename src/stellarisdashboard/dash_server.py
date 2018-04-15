@@ -412,7 +412,7 @@ def get_war_dicts(session, current_date):
             if not wp.is_attacker
         ]
 
-        victories = sorted([we for wp in war.participants for we in wp.victories], key=lambda we: we.date)
+        combats = sorted([combat for combat in war.combat], key=lambda combat: combat.date)
         war_id = "_".join(war.name.split()).lower()
         wars.append(dict(
             name=war.name,
@@ -421,7 +421,7 @@ def get_war_dicts(session, current_date):
             end=end,
             attackers=attackers,
             defenders=defenders,
-            combat=[str(vic) for vic in victories],
+            combat=[str(combat) for combat in combats],
         ))
 
     return wars

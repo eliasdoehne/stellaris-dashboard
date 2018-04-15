@@ -740,26 +740,21 @@ class TimelineExtractor:
         if not isinstance(battles, list):
             battles = [battles]
         for b_dict in battles:
+            if not isinstance(b_dict, dict):
+                continue
             battle_attackers = b_dict.get("attackers")
             battle_defenders = b_dict.get("defenders")
             if not battle_attackers or not battle_defenders:
                 continue
-            if not isinstance(b_dict, dict):
+            if b_dict.get("attacker_victory") not in {"yes", "no"}:
                 continue
             attacker_victory = b_dict.get("attacker_victory") == "yes"
-            if attacker_victory:
-                victorious_parties = battle_attackers
-                exhaustion = b_dict.get("defender_war_exhaustion", 0.0)
-            elif b_dict.get("attacker_victory") == "no":
-                attacker_victory = False
-                victorious_parties = battle_defenders
-                exhaustion = b_dict.get("attacker_war_exhaustion", 0.0)
-            else:
-                continue
-            system_name = ""
-            system = b_dict.get("system")
-            if system in self._gamestate_dict["galactic_object"]:
-                system_name = self._gamestate_dict["galactic_object"][system].get("name", "")
+
+            system_id_in_game = b_dict.get("system")
+            system = self._session.query(models.System).filter_by(
+                system_id_in_game=system_id_in_game
+            ).one_or_none()
+
             planet_name = ""
             planet = b_dict.get("planet")
             if planet in self._gamestate_dict["planet"]:
@@ -768,14 +763,42 @@ class TimelineExtractor:
             combat_type = models.CombatType.__members__.get(b_dict.get("type"), models.CombatType.other)
 
             date_str = b_dict.get("date")
-            if date_str == "1.01.01":
+            date_in_days = models.date_to_days(date_str)
+            if date_in_days < 0:
                 date_in_days = self._date_in_days
-            else:
-                date_in_days = models.date_to_days(date_str)
 
-            for winner_country_id in victorious_parties:
-                db_country = self._session.query(models.Country).filter_by(game=self.game, country_id_in_game=winner_country_id).one_or_none()
+            attacker_exhaustion = b_dict.get("attacker_war_exhaustion", 0.0)
+            defender_exhaustion = b_dict.get("defender_war_exhaustion", 0.0)
+            if defender_exhaustion + attacker_exhaustion == 0:
+                continue
+            combat = self._session.query(models.Combat).filter_by(
+                war=war,
+                system=system,
+                planet=planet_name,
+                combat_type=combat_type,
+                attacker_victory=attacker_victory,
+                attacker_war_exhaustion=attacker_exhaustion,
+                defender_war_exhaustion=defender_exhaustion,
+            ).order_by(models.Combat.date.desc()).first()
+
+            if combat is not None:
+                continue
+
+            combat = models.Combat(
+                war=war,
+                date=date_in_days,
+                attacker_war_exhaustion=attacker_exhaustion,
+                defender_war_exhaustion=defender_exhaustion,
+                system=system, planet=planet_name,
+                combat_type=combat_type,
+                attacker_victory=attacker_victory,
+            )
+            self._session.add(combat)
+
+            for country_id in itertools.chain(battle_attackers, battle_defenders):
+                db_country = self._session.query(models.Country).filter_by(country_id_in_game=country_id).one_or_none()
                 if db_country is None:
+                    logger.warning(f"Could not find country with ID {country_id} when processing battle {b_dict}")
                     continue
                 war_participant = self._session.query(models.WarParticipant).filter_by(
                     war=war,
@@ -784,27 +807,9 @@ class TimelineExtractor:
                 if war_participant is None:
                     logger.info(f"Could not find War participant matching country {db_country.country_name} and war {war.name}.")
                     continue
-                existing_cv = self._session.query(models.CombatVictory).order_by(models.CombatVictory.date.desc()).filter_by(
-                    war_participant=war_participant,
-                    combat_type=combat_type,
-                    attacker_victory=attacker_victory,
-                    system=system_name,
-                    planet=planet_name,
-                ).first()
-                if existing_cv is None:
-                    self._session.add(models.CombatVictory(
-                        war_participant=war_participant,
-                        date=date_in_days,
-                        inflicted_war_exhaustion=exhaustion,
-                        attacker_victory=attacker_victory,
-                        combat_type=combat_type,
-                        system=system_name,
-                        planet=planet_name,
-                    ))
-                else:
-                    if exhaustion > existing_cv.inflicted_war_exhaustion:
-                        existing_cv.date = date_in_days
-                        existing_cv.inflicted_war_exhaustion = exhaustion
+                self._session.add(models.CombatParticipant(
+                    combat=combat, war_participant=war_participant, is_attacker=country_id in battle_attackers,
+                ))
 
     def _extract_player_leaders(self, country: models.Country, country_dict):
         player_owned_leaders = country_dict.get("owned_leaders", [])
@@ -1048,16 +1053,19 @@ class TimelineExtractor:
             self._session.add(matching_achievement)
 
     def _extract_system_ownership(self):
+        logger.info(f"{self._logger_str} Processing system ownership")
         starbases = self._gamestate_dict.get("starbases", {})
         if not isinstance(starbases, dict):
             return
         for starbase_dict in starbases.values():
             if not isinstance(starbase_dict, dict):
                 continue
-            owner_id = starbase_dict.get("owner", -1)
-            system_id = starbase_dict.get("system", -1)
-            system = self._session.query(models.System).filter_by(system_id_in_game=system_id).one_or_none()
-            country = self._session.query(models.Country).filter_by(country_id_in_game=owner_id).one_or_none()
+            country_id_in_game = starbase_dict.get("owner")
+            system_id_in_game = starbase_dict.get("system")
+            if system_id_in_game is None or country_id_in_game is None:
+                continue
+            system = self._session.query(models.System).filter_by(system_id_in_game=system_id_in_game).one_or_none()
+            country = self._session.query(models.Country).filter_by(country_id_in_game=country_id_in_game).one_or_none()
             if system is None or country is None:
                 logger.warning(f"Cannot establish ownership for system {system} and country {country}")
                 continue
