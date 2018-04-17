@@ -289,6 +289,37 @@ class EmpireProgressionPlotData:
         self.empire_research_output = dict(physics=[], society=[], engineering=[])
         self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
 
+    def update_with_new_gamestate(self):
+        date_in_days = 360.0 * self.dates[-1] if self.dates else -1
+        for gs in models.get_gamestates_since(self.game_name, date_in_days):
+            self.process_gamestate(gs)
+
+    def process_gamestate(self, gs: models.GameState):
+        self.dates.append(gs.date / 360.0)  # store date in years for visualization
+        for country_data in gs.country_data:
+            if self.player_country is None and country_data.country.is_player:
+                self.player_country = country_data.country.country_name
+            if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
+                continue
+            self._extract_pop_count(country_data)
+            self._extract_planet_count(country_data)
+            self._extract_system_count(country_data)
+            self._extract_tech_count(country_data)
+            self._extract_exploration_progress(country_data)
+            self._extract_military_strength(country_data)
+            self._extract_fleet_size(country_data)
+            if country_data.country.is_player:
+                self._extract_player_empire_demographics(country_data)
+                self._extract_player_empire_politics(country_data)
+                self._extract_player_empire_research(country_data)
+        self._extract_player_empire_budget_allocations(gs)
+
+        # Pad every dict with the default value if no real value was added, to keep them consistent with the dates list
+        for data_dict in [self.pop_count, self.owned_planets, self.tech_count, self.survey_count, self.military_power, self.fleet_size]:
+            for key in data_dict:
+                if len(data_dict[key]) < len(self.dates):
+                    data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
+
     def _extract_player_empire_budget_allocations(self, gs: models.GameState):
         # For some reason, some budget values have to be halved...
         # ENERGY
@@ -330,37 +361,6 @@ class EmpireProgressionPlotData:
         self.empire_food_budget["trade_expenses"].append(gs.food_spending_trade)
         self.empire_food_budget["enclave_trade_expenses"].append(gs.food_spending_enclaves)
         self.empire_food_budget["sector_consumption"].append(-gs.food_spending_sectors)
-
-    def update_with_new_gamestate(self):
-        date_in_days = 360.0 * self.dates[-1] if self.dates else -1
-        for gs in models.get_gamestates_since(self.game_name, date_in_days):
-            self.process_gamestate(gs)
-
-    def process_gamestate(self, gs: models.GameState):
-        self.dates.append(gs.date / 360.0)  # store date in years for visualization
-        for country_data in gs.country_data:
-            if self.player_country is None and country_data.country.is_player:
-                self.player_country = country_data.country.country_name
-            if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
-                continue
-            self._extract_pop_count(country_data)
-            self._extract_planet_count(country_data)
-            self._extract_system_count(country_data)
-            self._extract_tech_count(country_data)
-            self._extract_exploration_progress(country_data)
-            self._extract_military_strength(country_data)
-            self._extract_fleet_size(country_data)
-            if country_data.country.is_player:
-                self._extract_player_empire_demographics(country_data)
-                self._extract_player_empire_politics(country_data)
-                self._extract_player_empire_research(country_data)
-        self._extract_player_empire_budget_allocations(gs)
-
-        # Pad every dict with the default value if no real value was added, to keep them consistent with the dates list
-        for data_dict in [self.pop_count, self.owned_planets, self.tech_count, self.survey_count, self.military_power, self.fleet_size]:
-            for key in data_dict:
-                if len(data_dict[key]) < len(self.dates):
-                    data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
 
     def compress_plot_list(self, full_data: List[float]) -> Tuple[List[float], List[float]]:
         """
@@ -553,17 +553,30 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
     return _GALAXY_DATA[game_name]
 
 
+SystemID = int
+
+
+@dataclasses.dataclass
+class SystemOwnership:
+    country: str
+    system_id: SystemID
+    start: int
+    end: int
+
+
 class GalaxyMapData:
     UNCLAIMED = "Unclaimed Systems"
 
     def __init__(self, game_id: str):
         self.game_id = game_id
         self.galaxy_graph: nx.Graph = None
-        self._session = None
         self._game_state_model = None
+        self._cache_valid_date = -1
+        self._owner_cache: Dict[SystemID, List[SystemOwnership]] = None
 
     def initialize_galaxy_graph(self):
         start_time = time.clock()
+        self._owner_cache = {}
         self.galaxy_graph = nx.Graph()
         with models.get_db_session(self.game_id) as session:
             for system in session.query(models.System).all():
@@ -581,6 +594,9 @@ class GalaxyMapData:
 
     def get_graph_for_date(self, time_days):
         start_time = time.clock()
+        if time_days > self._cache_valid_date:
+            self._update_cache()
+            logger.info(f"Updated Cache in {time.clock()-start_time} seconds.")
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
         for country, nodes in systems_by_owner.items():
@@ -596,30 +612,66 @@ class GalaxyMapData:
                 self.galaxy_graph.edges[edge]["country"] = i_country
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
-        logger.debug(f"Updated networkx graph in {time.clock()-start_time} seconds.")
+        logger.info(f"Updated networkx graph in {time.clock()-start_time} seconds.")
         return self.galaxy_graph
 
     def _get_system_ids_by_owner(self, time_days):
         owned_systems = set()
         systems_by_owner = {GalaxyMapData.UNCLAIMED: set()}
-        with models.get_db_session(self.game_id) as self._session:
-            owners = self._session.query(models.SystemOwnership).filter(
-                models.SystemOwnership.start_date_days < time_days,
-                models.SystemOwnership.end_date_days >= time_days,
-            ).all()
-            for ownership in owners:
-                system_id = ownership.system.system_id_in_game
-                name = self._get_country_name_from_id(ownership, time_days)
+        for system_id, ownership_list in self._owner_cache.items():
+            for ownership in ownership_list:
+                if not ownership.start <= time_days <= ownership.end:
+                    continue
                 owned_systems.add(system_id)
-                if name not in systems_by_owner:
-                    systems_by_owner[name] = set()
-                systems_by_owner[name].add(system_id)
+                if ownership.country not in systems_by_owner:
+                    systems_by_owner[ownership.country] = set()
+                systems_by_owner[ownership.country].add(system_id)
         systems_by_owner[GalaxyMapData.UNCLAIMED] |= set(self.galaxy_graph.nodes) - owned_systems
         self._game_state_model = None
         return systems_by_owner
 
+    def _update_cache(self):
+        logger.info("Updating Cache")
+        with models.get_db_session(self.game_id) as session:
+            owners = session.query(models.SystemOwnership).filter(
+                models.SystemOwnership.end_date_days >= self._cache_valid_date,
+            ).order_by(models.SystemOwnership.start_date_days).all()
+            for ownership in owners:
+                self._cache_valid_date = max(self._cache_valid_date, ownership.end_date_days)
+                system_id = ownership.system.system_id_in_game
+                name = self._get_country_name_from_id(ownership, ownership.start_date_days)
+                if self._owner_cache.get(system_id):
+                    most_recent = self._owner_cache[system_id][-1]
+                    if (most_recent.country == name
+                            and most_recent.system_id == system_id
+                            and most_recent.start == ownership.start_date_days):
+                        most_recent.end_date_days = ownership.end_date_days
+                        continue
+                    if most_recent.end < ownership.start_date_days:
+                        # System was unclaimed in the meantime!
+                        self._owner_cache[system_id].append(SystemOwnership(
+                            country=self.UNCLAIMED,
+                            system_id=system_id,
+                            start=most_recent.end,
+                            end=ownership.start_date_days,
+                        ))
+                elif ownership.start_date_days > 0:
+                    self._owner_cache[system_id] = [SystemOwnership(
+                        country=self.UNCLAIMED,
+                        system_id=system_id,
+                        start=0,
+                        end=ownership.start_date_days,
+                    )]
+                else:
+                    self._owner_cache[system_id] = []
+                self._owner_cache[system_id].append(SystemOwnership(
+                    country=name,
+                    system_id=system_id,
+                    start=ownership.start_date_days,
+                    end=ownership.end_date_days,
+                ))
+
     def _get_country_name_from_id(self, ownership, time_days):
-        start_time = time.clock()
         country = ownership.country
         if country is None:
             logger.warning(f"Ownership {ownership} has no country!")
@@ -630,6 +682,4 @@ class GalaxyMapData:
             name = GalaxyMapData.UNCLAIMED
         else:
             name = country.country_name
-        if time.clock() - start_time > 0.01:
-            print(f"Getting country took longer than usual: {time.clock() - start_time} s")
         return name
