@@ -50,11 +50,18 @@ def history_page(game_name):
     return render_template("history_page.html", country=country, wars=wars, leaders=leaders)
 
 
+STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
+STELLARIS_LIGHT_BG_COLOR = 'rgba(43,59,52,1)'
+STELLARIS_FONT_COLOR = 'rgba(217,217,217,1)'
+STELLARIS_GOLD_FONT_COLOR = 'rgba(217,217,217,1)'
 DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis=dict(
         type="linear",
     ),
     height=640,
+    plot_bgcolor=STELLARIS_DARK_BG_COLOR,
+    paper_bgcolor=STELLARIS_LIGHT_BG_COLOR,
+    font={'color': STELLARIS_FONT_COLOR},
 )
 
 CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
@@ -79,9 +86,9 @@ timeline_app.layout = html.Div([
             id='dateslider',
             min=0,
             max=100,
-            step=0.001,
+            step=0.01,
             value=100,
-            updatemode='drag',
+            # updatemode='drag',
             marks={i: '{}%'.format(i) for i in range(0, 110, 10)},
         ),
     ], style={
@@ -90,7 +97,9 @@ timeline_app.layout = html.Div([
         'margin-left': 'auto',
         'margin-right': 'auto'
     }),
-])
+], style={
+    "background-color": STELLARIS_LIGHT_BG_COLOR
+})
 
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
@@ -190,6 +199,7 @@ def get_galaxy(game_id, date):
 
     layout = go.Layout(
         width=900,
+        height=900,
         xaxis=go.XAxis(
             showgrid=False,
             zeroline=False,
@@ -211,6 +221,9 @@ def get_galaxy(game_id, date):
             y=1.0,
         ),
         hovermode='closest',
+        plot_bgcolor=STELLARIS_DARK_BG_COLOR,
+        paper_bgcolor=STELLARIS_LIGHT_BG_COLOR,
+        font={'color': STELLARIS_FONT_COLOR},
     )
 
     return dcc.Graph(
