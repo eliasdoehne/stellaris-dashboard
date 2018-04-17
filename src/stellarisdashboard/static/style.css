@@ -11,6 +11,10 @@ h1, h2, h3, h4, h5, h6 {
     text-align: center;
 }
 
+h4, h5, h6 {
+    text-align: left;
+}
+
 p {
     color: rgba(217, 217, 217, 1);
     font-family: verdana;
@@ -31,7 +35,7 @@ a.button {
     background-color: rgba(43, 59, 52, 1);
     display: inline;
     text-decoration: none;
-    padding: 0.02cm;
+    padding: 0.2cm;
 }
 
 li.eventtext {
@@ -44,20 +48,36 @@ li.eventtext {
 li.game {
     color: rgba(195, 133, 33, 1);
     list-style-type: none;
-    margin: 0.5cm;
-    padding: 0.5cm;
+    width: 60%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
     text-align: center;
 
     border: 1px solid rgba(195, 133, 33, 1);
 }
 
-li.toc-war-item {
+li.toc-item {
     color: rgba(195, 133, 33, 1);
     list-style-type: none;
 }
 
 div.war-box {
     background-color: rgba(43, 59, 52, 1);
-    margin: 0.5cm;
+    width: 90%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
+}
+
+div.toc {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
+}
+
+div.leader-box {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.5cm auto;
     padding: 0.25cm;
 }
