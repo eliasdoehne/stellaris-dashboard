@@ -1,12 +1,11 @@
 <!doctype html>
 <title>Stellaris Dashboard</title>
-<!--<link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">-->
+<link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
 <div class=page>
-    <h1>Stellaris Dashboard</h1>
     <div class=metanav>
         <a name="index"></a>
-        <a href="/">Return to Index</a>
+        <a class="button" href="/">Return to game list</a>
         {% block body %}{% endblock %}
-        <a href="/">Return to Index</a>
+        <a class="button" href="/">Return to game list</a>
     </div>
 </div>

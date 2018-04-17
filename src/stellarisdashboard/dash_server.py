@@ -47,7 +47,7 @@ def history_page(game_name):
         date = get_most_recent_date(session)
         wars = get_war_dicts(session, date)
         leaders = get_leader_dicts(session, date)
-    return render_template("history_page.html", country=country, wars=wars, leaders=leaders)
+    return render_template("history_page.html", game_name=game_name, country=country, wars=wars, leaders=leaders)
 
 
 STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'

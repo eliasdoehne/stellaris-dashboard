@@ -1,18 +1,21 @@
 {% extends "layout.html" %}
 {% block body %}
-<ul class=entries>
-    <h2>Index Page</h2>
-    <p>Select your game:</p>
-    {% for game in games %}
-    <li><h3>{{ game["country"] }} ({{ game["game_name"] }})</h3>
-        <a href={{url_for("/timeline", game_name=game["game_name"])}}>Timeline Graphs</a>
-        <a href={{url_for("history_page", game_name=game["game_name"])}}>History Ledger</a>
-    </li>
-    {% endfor %}
-</ul>
+<h1>Stellaris Dashboard</h1>
+<div class="gamelist">
+    <ul class=entries>
+        <h2>Index Page</h2>
+        <p>Select your game:</p>
+        {% for game in games %}
+        <li class="game"><h3>{{ game["country"] }} ({{ game["game_name"] }})</h3>
+            <a class="button" href={{url_for("/timeline", game_name=game["game_name"])}}>Timeline Graphs</a>
+            <a class="button" href={{url_for("history_page", game_name=game["game_name"])}}>History Ledger</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
 <p>
-    Hi! If you found this page, you might be using an older version of the stellaris dashboard mod. Get the current version at
-    <a href=https://github.com/eliasdoehne/stellaris-dashboard>Github.</a>
+    If you found this page in the in-game browser, you might be using an older version of the stellaris dashboard mod.
+    You can get the current version on <a href=https://github.com/eliasdoehne/stellaris-dashboard>Github.</a>
 </p>
 {% endblock %}
 

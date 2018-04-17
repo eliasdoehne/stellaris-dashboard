@@ -1,19 +1,20 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<h1>{{country}}</h1>
+<a class="button" href={{url_for("/timeline", game_name=game_name)}}>Go to {{country}} Timeline</a>
+<h1> History Ledger of {{country}}</h1>
 
+<h2>Contents</h2>
 <a href="#wars">Wars</a>
-
 <ul>
     {% for war in wars %}
-    <li>{{ war["start"] }} - {{ war["end"] }}:  <a href=#{{war["id"]}}>{{war["name"]}}</a></li>
+    <li class="toc-war-item"><a href=#{{war["id"]}}>{{ war["start"] }} - {{ war["end"] }}: {{war["name"]}}</a></li>
     {% endfor %}
 </ul>
 <a href="#leaders">Leaders</a>
 <ul>
     {% for leader in leaders %}
-    <li><a href=#{{leader["id"]}}>{{leader["class"]}} {{leader["name"]}}</a></li>
+    <li class="toc-leader-item"><a href=#{{leader["id"]}}>{{leader["class"]}} {{leader["name"]}}</a></li>
     {% endfor %}
 </ul>
 
@@ -21,49 +22,53 @@
 <a name="wars"></a>
 <h2>Wars</h2>
 {% for war in wars %}
-<a name={{war["id"]}}></a>
-<h3>{{ war["name"] }} ({{ war["start"] }} - {{ war["end"] }}) </h3>
-<h4>Attackers:</h4>
-<ul>
-    {% for country in war["attackers"] %}
-    <li>{{country}}</li>
-    {% endfor %}
-</ul>
-<h4>Defenders:</h4>
-<ul>
-    {% for country in war["defenders"] %}
-    <li>{{country}}</li>
-    {% endfor %}
-</ul>
-<h4>Combat Log: </h4>
-<ul>
-    {% for engagement in war["combat"] %}
-    <li>{{engagement}}</li>
-    {% endfor %}
-</ul>
+<div class="war-box">
+    <a name={{war["id"]}}></a>
+    <h3 class="war-header">{{ war["name"] }} ({{ war["start"] }} - {{ war["end"] }}) </h3>
+    <h4>Attackers:</h4>
+    <ul>
+        {% for country in war["attackers"] %}
+        <li class="eventtext">{{country}}</li>
+        {% endfor %}
+    </ul>
+    <h4>Defenders:</h4>
+    <ul>
+        {% for country in war["defenders"] %}
+        <li class="eventtext">{{country}}</li>
+        {% endfor %}
+    </ul>
+    <h4>Combat Log: </h4>
+    <ul>
+        {% for engagement in war["combat"] %}
+        <li class="eventtext">{{engagement}}</li>
+        {% endfor %}
+    </ul>
+</div>
 {% endfor %}
-<a href="#index">Back to top</a>
+<a class="button" href="#index">Back to top</a>
 
 <hr>
 <a name="leaders"></a>
 <h2>Leaders</h2>
 {% for leader in leaders %}
 <a name={{leader["id"]}}></a>
-<h4>{{leader["class"]}} {{leader["name"]}}</h4>
-<h5>Basic Information:</h5>
-<ul class="basicLeaderInfoList">
-    <li>Species: {{leader["species"]}}</li>
-    <li>Born: {{leader["birthday"]}}</li>
-    <li>Hired: {{leader["date_hired"]}}</li>
-    <li>Status: {{leader["status"]}}</li>
-</ul>
-<h5>Achievements:</h5>
-<ul class="achievementList">
-    {% for achievement in leader["achievements"] %}
-    <li> {{achievement}}</li>
-    {% endfor %}
-</ul>
+<div class="war-box">
+    <h4 class="leader-header">{{leader["class"]}} {{leader["name"]}}</h4>
+    <h5>Basic Information:</h5>
+    <ul class="basicLeaderInfoList">
+        <li class="eventtext">Species: {{leader["species"]}}</li>
+        <li class="eventtext">Born: {{leader["birthday"]}}</li>
+        <li class="eventtext">Hired: {{leader["date_hired"]}}</li>
+        <li class="eventtext">Status: {{leader["status"]}}</li>
+    </ul>
+    <h5>Achievements:</h5>
+    <ul class="achievementList">
+        {% for achievement in leader["achievements"] %}
+        <li class="eventtext"> {{achievement}}</li>
+        {% endfor %}
+    </ul>
+</div>
 {% endfor %}
-<a href="#index">Back to top</a>
+<a class="button" href="#index">Back to top</a>
 
 {% endblock %}
