@@ -4,8 +4,14 @@
 <div class=page>
     <div class=metanav>
         <a name="index"></a>
-        <a class="button" href="/">Return to game list</a>
+        <a class="button" href="/">Go to Game Selection</a>
+        {%if show_old_version_notice%}
+        <p>
+            You may be using an old version of the stellaris dashboard program.
+            You can get the current version on <a href=https://github.com/eliasdoehne/stellaris-dashboard>Github.</a>
+        </p>
+        {%endif%}
         {% block body %}{% endblock %}
-        <a class="button" href="/">Return to game list</a>
+        <a class="button" href="/">Go to Game Selection</a>
     </div>
 </div>

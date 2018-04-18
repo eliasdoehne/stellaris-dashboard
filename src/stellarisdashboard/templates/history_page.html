@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<a class="button" href={{url_for("/timeline", game_name=game_name)}}>Go to {{country}} Timeline</a>
+<a class="button" href={{url_for("/timeline", game_name=game_name)}}>Go to Timeline</a>
 <h1> History Ledger of {{country}}</h1>
 
 <div class="toc">
@@ -55,7 +55,7 @@
 {% for leader in leaders %}
 <a name={{leader["id"]}}></a>
 <div class="leader-box">
-    <h4 class="leader-header">{{leader["class"]}} {{leader["name"]}}</h4>
+    <h3 class="leader-header">{{leader["class"]}} {{leader["name"]}}</h3>
     <h5>Basic Information:</h5>
     <ul class="basicLeaderInfoList">
         <li class="eventtext">Species: {{leader["species"]}}</li>
