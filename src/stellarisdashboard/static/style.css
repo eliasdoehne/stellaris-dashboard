@@ -36,6 +36,8 @@ a.button {
     display: inline;
     text-decoration: none;
     padding: 0.2cm;
+
+    border: 1px solid rgba(195, 133, 33, 1);
 }
 
 li.eventtext {

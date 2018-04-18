@@ -90,7 +90,7 @@ FLEET_SIZE_GRAPH = PlotSpecification(
 )
 EMPIRE_DEMOGRAPHICS_GRAPH = PlotSpecification(
     plot_id='empire-demographics-graph',
-    title="Species in your Empire",
+    title="Species Demographics",
     plot_data_function=lambda pd: pd.species_distribution,
     yrange=(0, 100.0),
     style=PlotStyle.stacked,
@@ -645,7 +645,7 @@ class GalaxyMapData:
                     if (most_recent.country == name
                             and most_recent.system_id == system_id
                             and most_recent.start == ownership.start_date_days):
-                        most_recent.end_date_days = ownership.end_date_days
+                        self._owner_cache[system_id][-1].end_date_days = ownership.end_date_days
                         continue
                     if most_recent.end < ownership.start_date_days:
                         # System was unclaimed in the meantime!

@@ -28,26 +28,41 @@ COLOR_ENGINEERING = 'rgba(190,150,30,0.5)'
 
 
 @flask_app.route("/")
-def index_page():
+@flask_app.route("/checkversion/<version>/")
+def index_page(version=None):
+    show_old_version_notice = False
+    if version is not None:
+        show_old_version_notice = version != "v0.1.0"
     games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
-    return render_template("index.html", games=games)
+    return render_template("index.html", games=games, show_old_version_notice=show_old_version_notice)
 
 
 @flask_app.route("/history/<game_name>")
-def history_page(game_name):
+@flask_app.route("/checkversion/<version>/history/<game_name>")
+def history_page(game_name, version=None):
+    show_old_version_notice = False
+    if version is not None:
+        show_old_version_notice = version != "v0.1.0"
+
+    matches = models.get_known_games(game_name)
+    if not matches:
+        logger.warning(f"Could not find a game matching {game_name}")
+        return render_template("404_page.html", game_not_found=True, game_name=game_name)
     games_dict = models.get_available_games_dict()
-    if game_name not in games_dict:
-        matches = list(models.get_game_names_matching(game_name))
-        if not matches:
-            logger.warning(f"Could not find a game matching {game_name}")
-            return render_template("404_page.html", game_not_found=True, game_name=game_name)
-        game_name = matches[0]
+    game_name = matches[0]
     country = games_dict[game_name]
     with models.get_db_session(game_name) as session:
         date = get_most_recent_date(session)
         wars = get_war_dicts(session, date)
         leaders = get_leader_dicts(session, date)
-    return render_template("history_page.html", game_name=game_name, country=country, wars=wars, leaders=leaders)
+    return render_template(
+        "history_page.html",
+        game_name=game_name,
+        country=country,
+        wars=wars,
+        leaders=leaders,
+        show_old_version_notice=show_old_version_notice,
+    )
 
 
 STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
@@ -59,10 +74,32 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
         type="linear",
     ),
     height=640,
-    plot_bgcolor=STELLARIS_DARK_BG_COLOR,
-    paper_bgcolor=STELLARIS_LIGHT_BG_COLOR,
+    plot_bgcolor=STELLARIS_LIGHT_BG_COLOR,
+    paper_bgcolor=STELLARIS_DARK_BG_COLOR,
     font={'color': STELLARIS_FONT_COLOR},
 )
+
+# SOME CSS ATTRIBUTES
+BUTTON_STYLE = {
+    "color": "rgba(195, 133, 33, 1)",
+    "font-family": "verdana",
+    "font-size": "20px",
+    "-webkit-appearance": "button",
+    "-moz-appearance": "button",
+    "appearance": "button",
+    "background-color": "rgba(43, 59, 52, 1)",
+    "display": "inline",
+    "text-decoration": "none",
+    "padding": "0.1cm",
+    "margin": "0.1cm",
+}
+HEADER_STYLE = {
+    "font-family": "verdana",
+    "color": "rgba(217, 217, 217, 1)",
+    "margin-top": "20px",
+    "margin-bottom": "10px",
+    "text-align": "center",
+}
 
 CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append({'label': "Galaxy", 'value': "Galaxy"})
@@ -70,7 +107,6 @@ DEFAULT_SELECTED_CATEGORY = "Economy"
 
 timeline_app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
-    html.A("Return to index", id='index-link', href="/"),
     html.Div([
         dcc.Tabs(
             tabs=CATEGORY_TABS,
@@ -98,7 +134,11 @@ timeline_app.layout = html.Div([
         'margin-right': 'auto'
     }),
 ], style={
-    "background-color": STELLARIS_LIGHT_BG_COLOR
+    "width": "100%",
+    "height": "100%",
+    "padding": 0,
+    "margin": 0,
+    "background-color": STELLARIS_DARK_BG_COLOR,
 })
 
 
@@ -115,21 +155,31 @@ def update_content(tab_value, search, date_fraction):
     game_id = parse.parse_qs(parse.urlparse(search).query).get("game_name", [None])[0]
     if game_id is None:
         game_id = ""
-    available_games = models.get_available_games_dict()
-    if game_id not in available_games:
-        for g in available_games:
-            if g.startswith(game_id):
-                logger.info(f"Found game {g} matching prefix {game_id}!")
-                game_id = g
-                break
-        else:
-            logger.warning(f"Game {game_id} does not match any known game!")
-            return []
+    matches = models.get_known_games(game_id)
+    if not matches:
+        logger.warning(f"Could not find a game matching {game_id}")
+        return render_template("404_page.html", game_not_found=True, game_name=game_id)
+
+    games_dict = models.get_available_games_dict()
+    game_id = matches[0]
+    if game_id not in games_dict:
+        logger.warning(f"Game ID {game_id} does not match any known game!")
+        return []
+
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
     with models.get_db_session(game_id) as session:
         current_date = get_most_recent_date(session)
 
-    children = [html.H1(f"{available_games[game_id]} ({game_id})")]
+    children = [
+        html.Div(
+            [html.A("Go to Game Selection", id='index-link', href="/", style=BUTTON_STYLE),
+             html.A(f'Go to Event Ledger', id='ledger-link', href=flask.url_for("history_page", game_name=game_id), style=BUTTON_STYLE)],
+            style={
+                "text-align": "center",
+            },
+        ),
+        html.H1(f"{games_dict[game_id]} ({game_id})", style=HEADER_STYLE),
+    ]
     if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
         plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
         for plot_spec in plots:
@@ -137,14 +187,14 @@ def update_content(tab_value, search, date_fraction):
             figure_layout = get_figure_layout(plot_spec)
             figure = go.Figure(data=figure_data, layout=figure_layout)
 
-            children.append(html.H2(f"{plot_spec.title}"))
+            children.append(html.H2(f"{plot_spec.title}", style=HEADER_STYLE))
             children.append(dcc.Graph(
                 id=f"{plot_spec.plot_id}",
                 figure=figure,
             ))
     else:
         slider_date = 0.01 * date_fraction * current_date
-        children.append(html.H2(f"Galactic Records for {models.days_to_date(slider_date)}"))
+        children.append(html.H2(f"Galactic Records for {models.days_to_date(slider_date)}", style=HEADER_STYLE))
         children.append(get_galaxy(game_id, slider_date))
     return children
 
@@ -198,8 +248,7 @@ def get_galaxy(game_id, date):
         node_traces[country]['text'].append(f'{graph.nodes[node]["name"]}{country_str}')
 
     layout = go.Layout(
-        width=900,
-        height=900,
+        width=1200,
         xaxis=go.XAxis(
             showgrid=False,
             zeroline=False,
@@ -381,7 +430,7 @@ def get_leader_dicts(session, most_recent_date):
         )
         if leader.last_date < most_recent_date - 720:
             random.seed(leader.leader_name)
-            leader_dict["status"] = f"dismissed or deceased around {models.days_to_date(leader.last_date + random.randint(0, 30))}"
+            leader_dict["status"] = f"dismissed or died around {models.days_to_date(leader.last_date + random.randint(0, 30))}"
         if leader.leader_class == models.LeaderClass.scientist:
             leader_dict["class"] = "Scientist"
             scientists.append(leader_dict)
