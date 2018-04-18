@@ -3,7 +3,7 @@ import enum
 import pathlib
 import threading
 import logging
-from typing import Dict
+from typing import Dict, List
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -306,6 +306,11 @@ class LeaderAchievementType(enum.Enum):
     achieved_ascension = 8
     reformed_government = 9
 
+    # Governors:
+    governed_sector = 10
+    built_megastructure = 11
+    colonized_planet = 12
+
     special_event = 99
 
 
@@ -325,21 +330,22 @@ def days_to_date(days: float) -> str:
     return f"{year}.{month}.{day}"
 
 
-def get_known_games():
-    return [fname.stem for fname in DB_PATH.glob("*.db")]
+def get_last_modified_time(path: pathlib.Path):
+    return path.stat().st_mtime
 
 
-def get_game_names_matching(game_name_prefix):
-    for fname in DB_PATH.glob(f"{game_name_prefix}*"):
-        yield fname.stem
+def get_known_games(game_name_prefix=""):
+    files = sorted(DB_PATH.glob(f"{game_name_prefix}*.db"),
+                   key=get_last_modified_time, reverse=True)
+    return [fname.stem for fname in files]
 
 
 def get_available_games_dict() -> Dict[str, str]:
     """ Returns a dictionary mapping game id to the name of the game's player country. """
     games = {}
-    for game_name in sorted(get_known_games()):
+    for game_name in get_known_games():
         with get_db_session(game_name) as session:
-            game = session.query(Game).order_by(Game.game_name).one_or_none()
+            game = session.query(Game).one_or_none()
             if game is None:
                 continue
             games[game_name] = game.player_country_name
@@ -809,7 +815,7 @@ class Leader(Base):
     leader_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     country_id = Column(ForeignKey(Country.country_id))
-    leader_id_in_game = Column(Integer)
+    leader_id_in_game = Column(Integer, index=True)
 
     leader_name = Column(String(80))
 
@@ -839,7 +845,7 @@ class LeaderAchievement(Base):
 
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer, index=True)
-    achievement_type = Column(Enum(LeaderAchievementType))
+    achievement_type = Column(Enum(LeaderAchievementType), index=True)
     achievement_description = Column(String(80))
 
     leader = relationship("Leader", back_populates="achievements")
@@ -865,6 +871,12 @@ class LeaderAchievement(Base):
             achievement_text = f"{end_date}: Researched \"{tech}\""
         elif self.achievement_type == LeaderAchievementType.was_faction_leader:
             achievement_text = f"{start_date} - {end_date}: Leader of the \"{self.achievement_description}\" faction"
+        elif self.achievement_type == LeaderAchievementType.governed_sector:
+            achievement_text = f'{start_date} - {end_date}: Governed "{self.achievement_description}" sector.'
+        elif self.achievement_type == LeaderAchievementType.built_megastructure:
+            achievement_text = f'{start_date}: Construction of "{self.achievement_description}" megastructure.'
+        elif self.achievement_type == LeaderAchievementType.colonized_planet:
+            achievement_text = f'{start_date} - {end_date}: Colonization of planet "{self.achievement_description}".'
         elif self.achievement_type == LeaderAchievementType.reformed_government:
             old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
             new_gov = self.leader.country.get_government_for_date(self.start_date_days + 1)
@@ -874,7 +886,6 @@ class LeaderAchievement(Base):
                 reform_lines.append(f"{cat}: " + ", ".join(reforms))
             ref = ". ".join(reform_lines)
             achievement_text = f"{start_date}: Government reform: \n{ref}"
-            print(achievement_text)
         else:
             achievement_text = f"{start_date} - {end_date}: {self.achievement_description}"
         return achievement_text
