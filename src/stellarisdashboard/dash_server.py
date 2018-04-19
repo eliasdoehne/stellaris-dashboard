@@ -66,6 +66,7 @@ def history_page(game_name, version=None):
 
 
 STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
+GALAXY_BG_COLOR = 'rgba(10,13,11,1)'
 STELLARIS_LIGHT_BG_COLOR = 'rgba(43,59,52,1)'
 STELLARIS_FONT_COLOR = 'rgba(217,217,217,1)'
 STELLARIS_GOLD_FONT_COLOR = 'rgba(217,217,217,1)'
@@ -249,6 +250,7 @@ def get_galaxy(game_id, date):
 
     layout = go.Layout(
         width=1200,
+        height=800,
         xaxis=go.XAxis(
             showgrid=False,
             zeroline=False,
@@ -258,8 +260,8 @@ def get_galaxy(game_id, date):
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            scaleanchor='x',
-            scaleratio=1,
+            # scaleanchor='x',
+            # scaleratio=0.9,
         ),
         margin=dict(
             t=0, b=0, l=0, r=0,
@@ -270,7 +272,7 @@ def get_galaxy(game_id, date):
             y=1.0,
         ),
         hovermode='closest',
-        plot_bgcolor=STELLARIS_DARK_BG_COLOR,
+        plot_bgcolor=GALAXY_BG_COLOR,
         paper_bgcolor=STELLARIS_LIGHT_BG_COLOR,
         font={'color': STELLARIS_FONT_COLOR},
     )
@@ -408,7 +410,9 @@ def get_leader_dicts(session, most_recent_date):
     admirals = []
     generals = []
     assigned_ids = set()
-    for leader in session.query(models.Leader).order_by(models.Leader.date_hired).all():
+    for leader in session.query(models.Leader).order_by(
+            models.Leader.is_active.desc(), models.Leader.date_hired
+    ).all():
         base_ruler_id = "_".join(leader.leader_name.split()).lower()
         ruler_id = base_ruler_id
         id_offset = 1
@@ -418,19 +422,24 @@ def get_leader_dicts(session, most_recent_date):
         species = "Unknown"
         if leader.species is not None:
             species = leader.species.species_name
+
+        status = f"active, as of {models.days_to_date(most_recent_date)}"
+        if not leader.is_active:
+            random.seed(leader.leader_name)
+            last_date = leader.last_date + random.randint(0, 30)
+            age = (last_date - leader.date_born) // 360
+            status = f"dismissed or died around {models.days_to_date(last_date)} (Age {age})"
+
         leader_dict = dict(
             name=leader.leader_name,
             id=f"{ruler_id}",
             in_game_id=leader.leader_id_in_game,
             birthday=models.days_to_date(leader.date_born),
             date_hired=models.days_to_date(leader.date_hired),
-            status=f"active (as of {models.days_to_date(most_recent_date)})",
+            status=status,
             species=species,
             achievements=[str(a) for a in leader.achievements]
         )
-        if leader.last_date < most_recent_date - 720:
-            random.seed(leader.leader_name)
-            leader_dict["status"] = f"dismissed or died around {models.days_to_date(leader.last_date + random.randint(0, 30))}"
         if leader.leader_class == models.LeaderClass.scientist:
             leader_dict["class"] = "Scientist"
             scientists.append(leader_dict)
@@ -447,13 +456,11 @@ def get_leader_dicts(session, most_recent_date):
             leader_dict["class"] = "Ruler"
             rulers.append(leader_dict)
 
-    leaders = (
-            rulers
-            + scientists
-            + governors
-            + admirals
-            + generals
-    )
+    leaders = (rulers
+               + scientists
+               + governors
+               + admirals
+               + generals)
     return leaders
 
 
@@ -464,6 +471,10 @@ def get_war_dicts(session, current_date):
         end = models.days_to_date(current_date)
         if war.end_date_days:
             end = models.days_to_date(war.end_date_days)
+
+        if (not any(wp.country.first_player_contact_date < current_date for wp in war.participants)
+                and not config.Config.show_everything):
+            continue
 
         attackers = [
             f'{wp.country.country_name}: "{wp.war_goal}" war goal' for wp in war.participants
