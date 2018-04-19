@@ -3,7 +3,9 @@ import logging
 import random
 from typing import Dict, Any, List
 
-from stellarisdashboard import models, game_info
+import time
+
+from stellarisdashboard import models, game_info, config
 
 logger = logging.getLogger(__name__)
 
@@ -176,16 +178,17 @@ class TimelineExtractor:
         self._add_ruler_leader_achievements(player_country_dict)
         self._add_scientist_tech_achievements(player_country_dict)
         self._add_governor_achievements(player_country_dict)
-        self._extract_system_ownership()
+        if config.CONFIG.extract_system_ownership:
+            self._extract_system_ownership()
 
     def _extract_country_government(self, country_model: models.Country, country_dict):
-        prev_gov = self._session.query(models.Government).order_by(
-            models.Government.end_date_days.desc()
-        ).filter_by(
+        prev_gov = self._session.query(models.Government).filter_by(
             country=country_model,
+        ).order_by(
+            models.Government.end_date_days.desc()
         ).first()
 
-        gov_name = country_dict.get("name", "Unnamed")
+        gov_name = country_dict.get("name", "Unnamed Country")
 
         ethics_list = country_dict.get("ethos", {}).get("ethic", [])
         if not isinstance(ethics_list, list):
@@ -204,26 +207,14 @@ class TimelineExtractor:
         if prev_gov is not None:
             prev_gov.end_date_days = self._date_in_days - 1
             self._session.add(prev_gov)
-            previous_ethics = [
-                prev_gov.ethics_1,
-                prev_gov.ethics_2,
-                prev_gov.ethics_3,
-                prev_gov.ethics_4,
-                prev_gov.ethics_5,
-            ]
-            previous_ethics = {c for c in previous_ethics if c is not None}
-            previous_civics = [
-                prev_gov.civic_1,
-                prev_gov.civic_2,
-                prev_gov.civic_3,
-                prev_gov.civic_4,
-                prev_gov.civic_5,
-            ]
-            previous_civics = {c for c in previous_civics if c is not None}
+            previous_ethics = [prev_gov.ethics_1, prev_gov.ethics_2, prev_gov.ethics_3, prev_gov.ethics_4, prev_gov.ethics_5]
+            previous_ethics = set(previous_ethics) - {None}
+            previous_civics = [prev_gov.civic_1, prev_gov.civic_2, prev_gov.civic_3, prev_gov.civic_4, prev_gov.civic_5]
+            previous_civics = set(previous_civics) - {None}
             gov_was_reformed = ((ethics != previous_ethics)
-                                and (civics != previous_civics)
-                                and (gov_name != prev_gov.gov_name)
-                                and (gov_type != prev_gov.gov_type))
+                                or (civics != previous_civics)
+                                or (gov_name != prev_gov.gov_name)
+                                or (gov_type != prev_gov.gov_type))
             # nothing has changed...
             if not gov_was_reformed:
                 return
@@ -233,8 +224,8 @@ class TimelineExtractor:
 
         gov = models.Government(
             country=country_model,
-            start_date_days=self._date_in_days,
-            end_date_days=self._date_in_days,
+            start_date_days=self._date_in_days - 1,
+            end_date_days=self._date_in_days + 1,
             gov_name=gov_name,
             gov_type=gov_type,
             authority=authority,
@@ -242,14 +233,16 @@ class TimelineExtractor:
             **civics,
         )
         self._session.add(gov)
-        if gov_was_reformed:
-            self._session.add(models.LeaderAchievement(
-                leader=self._get_current_ruler(),
-                achievement_type=models.LeaderAchievementType.reformed_government,
-                start_date_days=self._date_in_days,
-                end_date_days=self._date_in_days,
-                achievement_description="",
-            ))
+        if gov_was_reformed and country_model.country_id_in_game == self._player_country:
+            ruler = self._get_current_ruler()
+            if ruler is not None:
+                self._session.add(models.LeaderAchievement(
+                    leader=ruler,
+                    achievement_type=models.LeaderAchievementType.reformed_government,
+                    start_date_days=self._date_in_days,
+                    end_date_days=self._date_in_days,
+                    achievement_description="",
+                ))
 
     def _count_starbases(self):
         self._country_starbases_dict = {}
@@ -814,8 +807,15 @@ class TimelineExtractor:
 
     def _extract_player_leaders(self, country: models.Country, country_dict):
         player_owned_leaders = country_dict.get("owned_leaders", [])
+        if not isinstance(player_owned_leaders, list):  # if there is only one
+            player_owned_leaders = [player_owned_leaders]
         logger.info(f"{self._logger_str} Processing Leaders")
         leaders = self._gamestate_dict["leaders"]
+        active_leaders = set(player_owned_leaders)
+        for leader in self._session.query(models.Leader).filter_by(is_active=True).all():
+            if leader.leader_id_in_game not in active_leaders:
+                leader.is_active = False
+                self._session.add(leader)
         for leader_id in player_owned_leaders:
             leader_dict = leaders.get(leader_id)
             if not isinstance(leader_dict, dict):
@@ -856,6 +856,7 @@ class TimelineExtractor:
             gender=leader_gender,
             date_hired=date_hired,
             date_born=date_born,
+            is_active=True,
         )
         self._session.add(leader)
         return leader
@@ -1105,7 +1106,6 @@ class TimelineExtractor:
         p_name = planet_dict.get("name")
         if "colonizer_pop" in planet_dict:
             a = self._session.query(models.LeaderAchievement).filter_by(
-                leader=governor,
                 achievement_type=models.LeaderAchievementType.colonized_planet,
                 achievement_description=p_name,
             ).one_or_none()
@@ -1120,7 +1120,6 @@ class TimelineExtractor:
         elif "colonize_date" in planet_dict:
             colonize_date = models.date_to_days(planet_dict["colonize_date"])
             a = self._session.query(models.LeaderAchievement).filter_by(
-                leader=governor,
                 achievement_type=models.LeaderAchievementType.colonized_planet,
                 achievement_description=p_name,
             ).one_or_none()
@@ -1161,6 +1160,7 @@ class TimelineExtractor:
 
     def _extract_system_ownership(self):
         logger.info(f"{self._logger_str} Processing system ownership")
+        start = time.clock()
         starbases = self._gamestate_dict.get("starbases", {})
         if not isinstance(starbases, dict):
             return
@@ -1174,7 +1174,7 @@ class TimelineExtractor:
             system = self._session.query(models.System).filter_by(system_id_in_game=system_id_in_game).one_or_none()
             country = self._session.query(models.Country).filter_by(country_id_in_game=country_id_in_game).one_or_none()
             if system is None or country is None:
-                logger.warning(f"Cannot establish ownership for system {system} and country {country}")
+                logger.warning(f"Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}")
                 continue
             ownership = self._session.query(models.SystemOwnership).filter_by(
                 system=system
@@ -1192,6 +1192,7 @@ class TimelineExtractor:
             if ownership is not None:
                 ownership.end_date_days = self._date_in_days
             self._session.add(ownership)
+        logger.info(f"{self._logger_str} Processed system ownership in {time.clock()-start}s")
 
     def _initialize_enclave_trade_info(self):
         trade_level_1 = [10, 20]
