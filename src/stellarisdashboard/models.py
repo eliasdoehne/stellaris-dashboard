@@ -852,7 +852,7 @@ class Leader(Base):
     date_hired = Column(Integer)  # The date when this leader was first encountered
     date_born = Column(Integer)  # estimated birthday
     last_date = Column(Integer)  # estimated death / dismissal
-    is_active = Column(Integer)
+    is_active = Column(Boolean, index=True)
 
     game = relationship("Game", back_populates="leaders")
     country = relationship("Country", back_populates="leaders")
