@@ -1,11 +1,10 @@
+import logging
+import multiprocessing as mp  # only to get the cpu count
 import pathlib
-from typing import Optional
+import platform
+import sys
 
 import dataclasses
-import logging
-import platform
-import multiprocessing as mp  # only to get the cpu count
-import sys
 
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 
@@ -15,45 +14,10 @@ def initialize_logger():
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     root_logger.addHandler(ch)
-
-
-LAST_UPDATED_GAME_FILE = "last_updated_game.txt"
-LAST_UPDATED_GAME = None
-
-
-def get_last_updated_game() -> Optional[str]:
-    global LAST_UPDATED_GAME
-    if LAST_UPDATED_GAME is not None:
-        return LAST_UPDATED_GAME
-    game_name = None
-    last_update_file = CONFIG.base_output_path / "db" / LAST_UPDATED_GAME_FILE
-    if last_update_file.exists():
-        with open(last_update_file, "r") as f:
-            game_name = f.readline().strip()
-            game_db_file = (CONFIG.base_output_path / "db" / f"{game_name}.db")
-            if game_name and game_db_file.exists():
-                LAST_UPDATED_GAME = game_name
-                logger.info(f"Initialized last updated game as {game_name} from file.")
-            else:
-                game_name = None
-    return game_name
-
-
-def set_last_updated_game(game_name: str):
-    global LAST_UPDATED_GAME
-    if game_name != LAST_UPDATED_GAME:
-        LAST_UPDATED_GAME = game_name
-        last_update_file = CONFIG.base_output_path / "db" / LAST_UPDATED_GAME_FILE
-        if not last_update_file.parent.exists():
-            last_update_file.parent.mkdir()
-        with open(last_update_file, "w") as f:
-            f.write(game_name)
-            logger.info(f"Updated last updated game as {game_name} in file...")
-    return game_name
 
 
 initialize_logger()
@@ -64,16 +28,40 @@ logger = logging.getLogger(__name__)
 class Config:
     save_file_path: pathlib.Path = None
     base_output_path: pathlib.Path = None
-    threads: int = max(1, mp.cpu_count() // 2 - 1)
+
+    # These are the default values
+    cpu_count = mp.cpu_count()
+    if cpu_count < 4:
+        threads = 1
+    elif cpu_count == 4:
+        threads = 2
+    else:
+        threads = max(1, mp.cpu_count() // 2 - 1)
     port: int = 28053
     colormap: str = "viridis"
     log_level: str = "INFO"
-    show_everything: bool = False
 
+    show_everything: bool = False
+    only_show_default_empires: bool = True
+    extract_system_ownership: bool = True
     debug_mode: bool = False
+    debug_only_last_save_file: bool = False
+
     debug_save_name_filter: str = ""
     debug_only_every_nth_save: int = 1
-    debug_only_last_save_file: bool = False
+
+    BOOL_KEYS = {
+        "show_everything",
+        "only_show_default_empires",
+        "extract_system_ownership",
+        "debug_mode",
+        "debug_only_last_save_file",
+    }
+    INT_KEYS = {
+        "threads",
+        "port",
+        "debug_only_every_nth_save",
+    }
 
     def is_valid(self):
         return all([
@@ -144,16 +132,14 @@ def _apply_config_ini():
             value = value.strip()
             if not key or not value:
                 logger.warning(f"Ignoring bad configuration option {key} with value {value}.")
-            if key == "threads":
-                value = int(value)
-            elif key == "port":
+            if key in Config.INT_KEYS:
                 value = int(value)
             elif key in {"save_file_path", "base_output_path"}:
                 if value.startswith("$HOME/"):
                     value = pathlib.Path.home() / value[len("$HOME/"):]
                 else:
                     value = pathlib.Path(value)
-            elif key == "show_everything":
+            elif key in Config.BOOL_KEYS:
                 if value.lower() == "false":
                     value = False
                 else:
@@ -166,6 +152,10 @@ def _apply_config_ini():
         CONFIG.base_output_path.mkdir()
         (CONFIG.base_output_path / "db").mkdir()
         (CONFIG.base_output_path / "output").mkdir()
+    update_log_level()
+
+
+def update_log_level():
     level = LOG_LEVELS.get(CONFIG.log_level, logging.INFO)
     root_logger = logging.getLogger()
     root_logger.setLevel(level)

@@ -1,0 +1,85 @@
+
+body {
+    background-color: rgba(33, 43, 39, 1);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: verdana;
+    color: rgba(217, 217, 217, 1);
+    margin-top: 10px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+h4, h5, h6 {
+    text-align: left;
+}
+
+p {
+    color: rgba(217, 217, 217, 1);
+    font-family: verdana;
+    font-size: 20px;
+}
+
+a {
+    color: rgba(195, 133, 33, 1);
+    font-family: verdana;
+    font-size: 20px;
+}
+
+a.button {
+    -webkit-appearance: button;
+    -moz-appearance: button;
+    appearance: button;
+
+    background-color: rgba(43, 59, 52, 1);
+    display: inline;
+    text-decoration: none;
+    padding: 0.2cm;
+
+    border: 1px solid rgba(195, 133, 33, 1);
+}
+
+li.eventtext {
+    color: rgba(217, 217, 217, 1);
+    list-style-type: none;
+    margin: auto;
+    padding: 0.01cm;
+}
+
+li.game {
+    color: rgba(195, 133, 33, 1);
+    list-style-type: none;
+    width: 60%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
+    text-align: center;
+
+    border: 1px solid rgba(195, 133, 33, 1);
+}
+
+li.toc-item {
+    color: rgba(195, 133, 33, 1);
+    list-style-type: none;
+}
+
+div.war-box {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
+}
+
+div.toc {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
+}
+
+div.leader-box {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.5cm auto;
+    padding: 0.25cm;
+}

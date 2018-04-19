@@ -1,7 +1,6 @@
 import logging
 import multiprocessing as mp
 import threading
-import time
 
 from stellarisdashboard import cli, dash_server, config
 
@@ -12,29 +11,13 @@ def main():
     threads = config.CONFIG.threads
     polling_interval = 0.5
     stop_event = threading.Event()
-    t_save_monitor = threading.Thread(target=cli.f_monitor_saves,
-                                      args=(threads, polling_interval),
-                                      kwargs=dict(stop_event=stop_event))
-    t_save_monitor.start()
-    t_dash = threading.Thread(target=dash_server.start_server, args=(), daemon=True)
-    t_dash.start()
-    while True:
-        try:
-            # update the selected game when a save game from a different game is detected.
-            # This is a workaround since the game selection dropdown
-            # from dash does not seem to work in the in-game browser.
-            game_id = config.get_last_updated_game()
-            if game_id is not None and game_id != dash_server.SELECTED_GAME_NAME:
-                config.set_last_updated_game(game_id)
-                logger.info("Updating selected game in dash web interface:")
-                logger.info(f"{dash_server.SELECTED_GAME_NAME} -> {game_id}")
-                dash_server.update_selected_game(game_id)
-            time.sleep(3)
-        except KeyboardInterrupt:
-            logger.info("Received keyboard interrupt, shutting down...")
-            stop_event.set()
-            t_save_monitor.join()
-            break
+    t_server = threading.Thread(target=dash_server.start_server, daemon=True)
+    try:
+        t_server.start()
+        cli.f_monitor_saves(threads, polling_interval, stop_event=stop_event)
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt, shutting down...")
+        stop_event.set()
 
 
 if __name__ == '__main__':
