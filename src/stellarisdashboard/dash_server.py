@@ -34,15 +34,24 @@ def index_page(version=None):
     if version is not None:
         show_old_version_notice = version != "v0.1.0"
     games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
-    return render_template("index.html", games=games, show_old_version_notice=show_old_version_notice)
+    return render_template(
+        "index.html",
+        games=games,
+        show_old_version_notice=show_old_version_notice,
+        version=version,
+    )
 
 
+@flask_app.route("/history")
 @flask_app.route("/history/<game_name>")
+@flask_app.route("/checkversion/<version>/history")
 @flask_app.route("/checkversion/<version>/history/<game_name>")
-def history_page(game_name, version=None):
+def history_page(game_name=None, version=None):
     show_old_version_notice = False
     if version is not None:
         show_old_version_notice = version != "v0.1.0"
+    if game_name is None:
+        game_name = ""
 
     matches = models.get_known_games(game_name)
     if not matches:
@@ -62,6 +71,7 @@ def history_page(game_name, version=None):
         wars=wars,
         leaders=leaders,
         show_old_version_notice=show_old_version_notice,
+        version=version,
     )
 
 
