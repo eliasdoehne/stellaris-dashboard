@@ -61,6 +61,22 @@ class GovernmentAuthority(enum.Enum):
         auth_str = auth_str.split("auth_")[-1]
         return cls.__members__.get(auth_str, cls.other)
 
+    def __str__(self):
+        if self == self.democratic:
+            return "Democracy"
+        elif self == self.oligarchic:
+            return "Oligarchy"
+        elif self == self.dictatorial:
+            return "Dictatorship"
+        elif self == self.imperial:
+            return "Imperium"
+        elif self == self.hive_mind:
+            return "Hive Mind"
+        elif self == self.machine_intelligence:
+            return "Machine Intelligence"
+        else:
+            return "Other"
+
 
 @enum.unique
 class Attitude(enum.Enum):
@@ -569,10 +585,16 @@ class Government(Base):
 
     def get_reform_description_dict(self, old_gov: "Government") -> Dict[str, str]:
         reform_dict = {}
+        if old_gov.authority != self.authority:
+            old_authority = str(old_gov.authority)
+            new_authority = str(self.authority)
+            reform_dict["Authority"] = [f"From {old_authority} to {new_authority}"]
+
         if old_gov.gov_type != self.gov_type:
             ogt = game_info.convert_id_to_name(old_gov.gov_type, remove_prefix="gov")
             ngt = game_info.convert_id_to_name(self.gov_type, remove_prefix="gov")
-            reform_dict["Type"] = [f"Reformed from {ogt} to {ngt}"]
+            reform_dict["Type"] = [f"From {ogt} to {ngt}"]
+
         new_civics = self.civics - old_gov.civics
         removed_civics = old_gov.civics - self.civics
         reform_dict["Removed Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
@@ -583,6 +605,9 @@ class Government(Base):
         reform_dict["Abandoned Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
         reform_dict["Embraced Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
         return {k: v for k, v in reform_dict.items() if v}
+
+    def __str__(self):
+        return f"{self.authority} {self.gov_type} {self.civics} {self.ethics}"
 
 
 class CountryData(Base):
@@ -827,6 +852,7 @@ class Leader(Base):
     date_hired = Column(Integer)  # The date when this leader was first encountered
     date_born = Column(Integer)  # estimated birthday
     last_date = Column(Integer)  # estimated death / dismissal
+    is_active = Column(Integer)
 
     game = relationship("Game", back_populates="leaders")
     country = relationship("Country", back_populates="leaders")
@@ -854,32 +880,32 @@ class LeaderAchievement(Base):
         start_date = days_to_date(self.start_date_days)
         end_date = days_to_date(self.end_date_days)
         if self.achievement_type == LeaderAchievementType.was_ruler:
-            achievement_text = f"{start_date} - {end_date}: Ruled the {self.achievement_description} with agenda \"{self.leader.leader_agenda}\""
+            achievement_text = f'{start_date} - {end_date}: Ruled the {self.achievement_description} with "{self.leader.leader_agenda}" agenda'
         elif self.achievement_type == LeaderAchievementType.negotiated_peace_treaty:
             achievement_text = f"{end_date}: Negotiated peace in the {self.achievement_description}"
         elif self.achievement_type == LeaderAchievementType.passed_edict:
             name = game_info.convert_id_to_name(self.achievement_description)
-            achievement_text = f'{start_date} - {end_date}: Maintained edict "{name}"'
+            achievement_text = f'{start_date} - {end_date}: Issued "{name}" edict'
         elif self.achievement_type == LeaderAchievementType.embraced_tradition:
             tradition = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tr")
-            achievement_text = f"{end_date}: Embraced tradition \"{tradition}\""
+            achievement_text = f'{end_date}: Embraced "{tradition}" tradition'
         elif self.achievement_type == LeaderAchievementType.achieved_ascension:
             perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="ap")
-            achievement_text = f"{end_date}: Ascension: {perk}"
+            achievement_text = f'{end_date}: "{perk}" ascension.'
         elif self.achievement_type == LeaderAchievementType.researched_technology:
             tech = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tech")
-            achievement_text = f"{end_date}: Researched \"{tech}\""
+            achievement_text = f'{end_date}: Researched "{tech}" technology'
         elif self.achievement_type == LeaderAchievementType.was_faction_leader:
-            achievement_text = f"{start_date} - {end_date}: Leader of the \"{self.achievement_description}\" faction"
+            achievement_text = f'{start_date} - {end_date}: Leader of the "{self.achievement_description}" faction'
         elif self.achievement_type == LeaderAchievementType.governed_sector:
             achievement_text = f'{start_date} - {end_date}: Governed "{self.achievement_description}" sector.'
         elif self.achievement_type == LeaderAchievementType.built_megastructure:
-            achievement_text = f'{start_date}: Construction of "{self.achievement_description}" megastructure.'
+            achievement_text = f'{start_date}: Finished construction of "{self.achievement_description}".'
         elif self.achievement_type == LeaderAchievementType.colonized_planet:
             achievement_text = f'{start_date} - {end_date}: Colonization of planet "{self.achievement_description}".'
         elif self.achievement_type == LeaderAchievementType.reformed_government:
             old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
-            new_gov = self.leader.country.get_government_for_date(self.start_date_days + 1)
+            new_gov = self.leader.country.get_government_for_date(self.start_date_days)
             reform_dict = new_gov.get_reform_description_dict(old_gov)
             reform_lines = []
             for cat, reforms in reform_dict.items():
