@@ -632,6 +632,9 @@ class GalaxyMapData:
 
     def _update_cache(self):
         logger.info("Updating Cache")
+        # would be nicer to properly update the cache, but for now it is simpler to just rebuild it when we request a new date.
+        self._owner_cache = {}
+        self._cache_valid_date = -1
         with models.get_db_session(self.game_id) as session:
             owners = session.query(models.SystemOwnership).filter(
                 models.SystemOwnership.end_date_days >= self._cache_valid_date,
@@ -640,8 +643,8 @@ class GalaxyMapData:
                 self._cache_valid_date = max(self._cache_valid_date, ownership.end_date_days)
                 system_id = ownership.system.system_id_in_game
                 name = self._get_country_name_from_id(ownership, ownership.start_date_days)
-                if self._owner_cache.get(system_id):
-                    most_recent = self._owner_cache[system_id][-1]
+                most_recent = self._owner_cache.get(system_id, [None])[-1]
+                if most_recent is not None:
                     if (most_recent.country == name
                             and most_recent.system_id == system_id
                             and most_recent.start == ownership.start_date_days):
