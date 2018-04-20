@@ -111,6 +111,10 @@ HEADER_STYLE = {
     "margin-bottom": "10px",
     "text-align": "center",
 }
+TEXT_STYLE = {
+    "font-family": "verdana",
+    "color": "rgba(217, 217, 217, 1)",
+}
 
 CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append({'label': "Galaxy", 'value': "Galaxy"})
@@ -205,8 +209,8 @@ def update_content(tab_value, search, date_fraction):
             ))
     else:
         slider_date = 0.01 * date_fraction * current_date
-        children.append(html.H2(f"Galactic Records for {models.days_to_date(slider_date)}", style=HEADER_STYLE))
         children.append(get_galaxy(game_id, slider_date))
+        children.append(html.P(f"Galactic Records for {models.days_to_date(slider_date)}", style=TEXT_STYLE))
     return children
 
 
@@ -260,7 +264,7 @@ def get_galaxy(game_id, date):
 
     layout = go.Layout(
         width=1200,
-        height=800,
+        height=600,
         xaxis=go.XAxis(
             showgrid=False,
             zeroline=False,
@@ -270,8 +274,8 @@ def get_galaxy(game_id, date):
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            # scaleanchor='x',
-            # scaleratio=0.9,
+            scaleanchor='x',
+            scaleratio=0.9,
         ),
         margin=dict(
             t=0, b=0, l=0, r=0,
