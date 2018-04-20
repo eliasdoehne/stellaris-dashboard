@@ -1201,13 +1201,11 @@ class TimelineExtractor:
             if ownership is None or ownership.country != country:
                 ownership = models.SystemOwnership(
                     start_date_days=self._date_in_days,
-                    end_date_days=self._date_in_days,
+                    end_date_days=self._date_in_days + 1,
                     country=country,
                     system=system,
                 )
-            if ownership is not None:
-                ownership.end_date_days = self._date_in_days
-            self._session.add(ownership)
+                self._session.add(ownership)
         logger.info(f"{self._logger_str} Processed system ownership in {time.clock()-start}s")
 
     def _initialize_enclave_trade_info(self):

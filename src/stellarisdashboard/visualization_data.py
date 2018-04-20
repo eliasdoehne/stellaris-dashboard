@@ -590,13 +590,13 @@ class GalaxyMapData:
             for hl in session.query(models.HyperLane).all():
                 sys_one, sys_two = hl.system_one.system_id_in_game, hl.system_two.system_id_in_game
                 self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
-        logger.debug(f"Initialized networkx graph in {time.clock()-start_time} seconds.")
+        logger.debug(f"Initialized galaxy graph in {time.clock()-start_time} seconds.")
 
     def get_graph_for_date(self, time_days):
         start_time = time.clock()
         if time_days > self._cache_valid_date:
             self._update_cache()
-            logger.info(f"Updated Cache in {time.clock()-start_time} seconds.")
+            logger.debug(f"Updated System Ownership Cache in {time.clock()-start_time} seconds.")
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
         for country, nodes in systems_by_owner.items():
@@ -636,37 +636,20 @@ class GalaxyMapData:
         self._owner_cache = {}
         self._cache_valid_date = -1
         with models.get_db_session(self.game_id) as session:
-            owners = session.query(models.SystemOwnership).filter(
-                models.SystemOwnership.end_date_days >= self._cache_valid_date,
-            ).order_by(models.SystemOwnership.start_date_days).all()
-            for ownership in owners:
+            ownerships = session.query(models.SystemOwnership).order_by(models.SystemOwnership.start_date_days).all()
+            for ownership in ownerships:
                 self._cache_valid_date = max(self._cache_valid_date, ownership.end_date_days)
                 system_id = ownership.system.system_id_in_game
                 name = self._get_country_name_from_id(ownership, ownership.start_date_days)
-                most_recent = self._owner_cache.get(system_id, [None])[-1]
-                if most_recent is not None:
-                    if (most_recent.country == name
-                            and most_recent.system_id == system_id
-                            and most_recent.start == ownership.start_date_days):
-                        self._owner_cache[system_id][-1].end_date_days = ownership.end_date_days
-                        continue
-                    if most_recent.end < ownership.start_date_days:
-                        # System was unclaimed in the meantime!
+                if system_id not in self._owner_cache:
+                    self._owner_cache[system_id] = []
+                    if ownership.start_date_days > 0:
                         self._owner_cache[system_id].append(SystemOwnership(
                             country=self.UNCLAIMED,
                             system_id=system_id,
-                            start=most_recent.end,
+                            start=0,
                             end=ownership.start_date_days,
                         ))
-                elif ownership.start_date_days > 0:
-                    self._owner_cache[system_id] = [SystemOwnership(
-                        country=self.UNCLAIMED,
-                        system_id=system_id,
-                        start=0,
-                        end=ownership.start_date_days,
-                    )]
-                else:
-                    self._owner_cache[system_id] = []
                 self._owner_cache[system_id].append(SystemOwnership(
                     country=name,
                     system_id=system_id,
