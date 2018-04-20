@@ -76,7 +76,7 @@ def history_page(game_name=None, version=None):
 
 
 STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
-GALAXY_BG_COLOR = 'rgba(10,13,11,1)'
+GALAXY_BG_COLOR = 'rgba(0,0,0,1)'
 STELLARIS_LIGHT_BG_COLOR = 'rgba(43,59,52,1)'
 STELLARIS_FONT_COLOR = 'rgba(217,217,217,1)'
 STELLARIS_GOLD_FONT_COLOR = 'rgba(217,217,217,1)'
@@ -130,6 +130,7 @@ timeline_app.layout = html.Div([
         ),
         html.Div(id='tab-content', style={
             'width': '100%',
+            'height': '100%',
             'margin-left': 'auto',
             'margin-right': 'auto'
         }),
@@ -222,12 +223,13 @@ def get_galaxy(game_id, date):
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
         if country not in edge_traces:
-            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 3
+            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 8
             edge_traces[country] = go.Scatter(
                 x=[],
                 y=[],
+                text=[],
                 line=go.Line(width=width, color=get_country_color(country)),
-                hoverinfo='none',
+                hoverinfo='text',
                 mode='lines',
                 showlegend=False,
             )
@@ -235,11 +237,13 @@ def get_galaxy(game_id, date):
         x1, y1 = graph.nodes[edge[1]]['pos']
         edge_traces[country]['x'] += [x0, x1, None]
         edge_traces[country]['y'] += [y0, y1, None]
+        edge_traces[country]['text'].append(country)
 
     node_traces = {}
     for node in graph.nodes:
         country = graph.nodes[node]["country"]
         if country not in node_traces:
+            node_size = 10 if country != visualization_data.GalaxyMapData.UNCLAIMED else 4
             node_traces[country] = go.Scatter(
                 x=[], y=[],
                 text=[],
@@ -247,7 +251,7 @@ def get_galaxy(game_id, date):
                 hoverinfo='text',
                 marker=go.Marker(
                     color=[],
-                    size=4,
+                    size=node_size,
                     line=dict(width=0.5)),
                 name=country,
             )
@@ -263,8 +267,6 @@ def get_galaxy(game_id, date):
         node_traces[country]['text'].append(f'{graph.nodes[node]["name"]}{country_str}')
 
     layout = go.Layout(
-        width=1200,
-        height=600,
         xaxis=go.XAxis(
             showgrid=False,
             zeroline=False,
@@ -300,10 +302,12 @@ def get_galaxy(game_id, date):
     )
 
 
-def get_country_color(country_name: str) -> str:
+def get_country_color(country_name: str, alpha: float = 1.0) -> str:
+    alpha = min(alpha, 1)
+    alpha = max(alpha, 0)
     random.seed(country_name)
-    r, g, b = [random.randint(20, 235) for _ in range(3)]
-    color = f"rgba({r},{g},{b},1.0)"
+    r, g, b = [random.randint(20, 255) for _ in range(3)]
+    color = f"rgba({r},{g},{b},{alpha})"
     return color
 
 
