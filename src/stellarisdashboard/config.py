@@ -41,6 +41,8 @@ class Config:
     colormap: str = "viridis"
     log_level: str = "INFO"
 
+    check_version = True
+
     show_everything: bool = False
     only_show_default_empires: bool = True
     extract_system_ownership: bool = True
@@ -76,6 +78,9 @@ class Config:
             f"  save_file_path: {self.save_file_path}",
             f"  base_output_path: {self.base_output_path}",
             f"  threads: {self.threads}",
+            f"  show_everything: {self.show_everything}",
+            f"  only_show_default_empires: {self.only_show_default_empires}",
+            f"  extract_system_ownership: {self.extract_system_ownership}",
         ]
         return "\n".join(lines)
 
@@ -164,3 +169,4 @@ def update_log_level():
 _apply_config_ini()
 if not CONFIG.is_valid():
     raise ValueError(f"Configuration is missing some options: \n{CONFIG}")
+print(CONFIG)
