@@ -1,7 +1,6 @@
 import logging
 import multiprocessing as mp
 import threading
-import traceback
 
 import click
 import sqlalchemy
@@ -30,6 +29,7 @@ def visualize(game_name, showeverything):
 
 
 def f_visualize_mpl(game_name_prefix: str, show_everything=False):
+    config.CONFIG.show_everything = show_everything
     matching_games = models.get_known_games(game_name_prefix)
     if not matching_games:
         logger.warning(f"No game matching {game_name_prefix} was found in the database!")
