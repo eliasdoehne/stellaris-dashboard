@@ -234,7 +234,7 @@ class TimelineExtractor:
         )
         self._session.add(gov)
         if gov_was_reformed and country_model.country_id_in_game == self._player_country:
-            ruler = self._get_current_ruler()
+            ruler = self._get_current_ruler(country_dict)
             if ruler is not None:
                 self._session.add(models.LeaderAchievement(
                     leader=ruler,
@@ -814,6 +814,12 @@ class TimelineExtractor:
         active_leaders = set(player_owned_leaders)
         for leader in self._session.query(models.Leader).filter_by(is_active=True).all():
             if leader.leader_id_in_game not in active_leaders:
+                is_inactive = True
+            else:
+                current_leader_name = self.get_leader_name(leaders.get(leader.leader_id_in_game))
+                is_inactive = current_leader_name != leader.leader_name
+
+            if is_inactive:
                 leader.is_active = False
                 self._session.add(leader)
         for leader_id in player_owned_leaders:
@@ -832,9 +838,7 @@ class TimelineExtractor:
             leader_class = models.LeaderClass.__members__.get(leader_dict.get("class"), models.LeaderClass.unknown)
         leader_gender = models.LeaderGender.__members__.get(leader_dict.get("gender"), models.LeaderGender.other)
         leader_agenda = models.AGENDA_STR_TO_ENUM.get(leader_dict.get("agenda"), models.LeaderAgenda.other)
-        first_name = leader_dict['name']['first_name']
-        last_name = leader_dict['name'].get('second_name', "")
-        leader_name = f"{first_name} {last_name}".strip()
+        leader_name = self.get_leader_name(leader_dict)
 
         date_hired = min(
             self._date_in_days,
@@ -860,6 +864,12 @@ class TimelineExtractor:
         )
         self._session.add(leader)
         return leader
+
+    def get_leader_name(self, leader_dict):
+        first_name = leader_dict['name']['first_name']
+        last_name = leader_dict['name'].get('second_name', "")
+        leader_name = f"{first_name} {last_name}".strip()
+        return leader_name
 
     def _add_scientist_tech_achievements(self, player_country_dict):
         tech_status_dict = player_country_dict.get("tech_status")
@@ -902,19 +912,22 @@ class TimelineExtractor:
                 ))
 
     def _add_ruler_leader_achievements(self, player_country_dict):
-        ruler = self._get_current_ruler()
-        self._extract_ruler_was_ruler_achievement(ruler, player_country_dict)
-        self._extract_ruler_tradition_achievements(ruler, player_country_dict)
-        self._extract_ruler_ascension_achievements(ruler, player_country_dict)
-        self._extract_ruler_edict_achievements(ruler, player_country_dict)
-        self._extract_ruler_negotiated_peace_achievements_and_settle_matching_wars(ruler, player_country_dict)
+        ruler = self._get_current_ruler(player_country_dict)
+        if ruler is not None:
+            self._extract_ruler_was_ruler_achievement(ruler, player_country_dict)
+            self._extract_ruler_tradition_achievements(ruler, player_country_dict)
+            self._extract_ruler_ascension_achievements(ruler, player_country_dict)
+            self._extract_ruler_edict_achievements(ruler, player_country_dict)
+            self._extract_ruler_negotiated_peace_achievements_and_settle_matching_wars(ruler, player_country_dict)
 
-    def _get_current_ruler(self):
-        ruler_id = self._gamestate_dict.get("country").get(self._player_country).get("ruler", -1)
+    def _get_current_ruler(self, country_dict):
+        ruler_id = country_dict.get("ruler", -1)
         if ruler_id < 0:
             logger.warning(f"Could not find leader id for ruler!")
             return None
-        leader = self._session.query(models.Leader).filter_by(leader_id_in_game=ruler_id).one_or_none()
+        leader = self._session.query(models.Leader).filter_by(
+            leader_id_in_game=ruler_id, is_active=True
+        ).one_or_none()
         if leader is None:
             logger.warning(f"Could not find leader matching leader id {ruler_id}")
         return leader
