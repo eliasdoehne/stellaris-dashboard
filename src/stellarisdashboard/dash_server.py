@@ -508,7 +508,11 @@ def get_war_dicts(session, current_date):
             end=end,
             attackers=attackers,
             defenders=defenders,
-            combat=[str(combat) for combat in combats],
+            combat=[
+                str(combat) for combat in combats
+                if combat.attacker_war_exhaustion + combat.defender_war_exhaustion > 0.01
+                   or combat.combat_type == models.CombatType.armies
+            ],
         ))
 
     return wars
