@@ -19,7 +19,7 @@ So far, the dashboard shows information about:
   - Population: number of pops, species demographics
   - Factions: size, support and happiness of each faction
   - Military: fleet strength
-  - An interactive, historical galaxy map to show who owned which system 
+  - Galactic History: Interactive, historical map that shows the past state of the galaxy in the
 
 ## Event Ledger
 
@@ -27,14 +27,14 @@ The dashboard now also contains a textual ledger listing many historical events:
 
 https://imgur.com/a/t6858co
 
-Currently, this is a list of Wars with detailed combat logs, and for each of your leaders, a biography is generated that shows their lifetime achievements, including:
+Currently, this is a list of wars with detailed combat logs, and for each of your leaders, a biography is generated that shows their lifetime achievements, including:
 
   - Government reforms
   - Ruler mandates and political activities (faction leadership)
   - Passed edicts, researched technologies, embraced traditions and ascension perks
   - Planet colonizations
 
-There is a lot more that can be done with this
+There is a lot more that can be done with this in the future!
 
 ## How it works
 
@@ -44,62 +44,51 @@ To maintain your immersion, only information which is reasonable for you to have
 
 Since with this configuration option, the dashboard allows you to see data like fleet strength of every empire, it is a huge competitive advantage. **For this reason, the dashboard completely ignores Multiplayer and Ironman games.**
 
-Also note that it does not always handle reloading of older save games very well, and may fail to overwrite data if no new save file is generated. Or you may end up with data that is a mix of all your save-reloading cycles. And it may completely break the event ledger. Getting all the details and edge cases right for this scenario is far more work than I can or want to deal with, so I recommend treating the playthrough like Ironman mode: Just see what happens... :-)
+Also be aware that the program might not handle reloading of older save games very well. If you rename planets, leaders etc, there might also be issues like duplicate entries or similar problems. I recommend treating the playthrough like Ironman mode: Just see what happens... :-)
 
 The program should be fairly stable, but if something weird happens, first try to restart it! If you run into problems that don't go away after restarting, please let me know here on github or [contact me on reddit](https://www.reddit.com/u/blubblubblob).
 
-# Installation and Use
-
-## Prerequisites
-
-The Stellaris dashboard requires Python 3.6 or later, which you can download and install for your platform (Windows, Mac or Linux) from https://www.python.org/. 
-
-
-## Installation
+# Installation
 
 ### Windows
   1. Install Python 3.6 or later from https://www.python.org/. 
   ***Make sure to check the "Add Python 3.6 to PATH" option in the first step of the python installer!***
-  1. Download the latest release at the [release page](https://github.com/eliasdoehne/stellaris-dashboard/releases)  (Click on "Download Source Code (zip)")
+  1. Download the latest release at the [releases page on github](https://github.com/eliasdoehne/stellaris-dashboard/releases)  (Click on "Download Source Code (zip)")
   2. Extract the archive in a location of your choice.
   3. Run the `install.bat` file in the extracted folder by double-clicking it. At this point, Windows may show you a security warning [like this](https://imgur.com/6PIZCmA). If so, click on "More Information" to unlock the "Run anyway" button.
-  3. To use the interactive in-game dashboard, install the "Stellaris Dashboard Integration" mod. Do **either** of the following:
+  3. To use the interactive in-game dashboard, install the "Stellaris Dashboard Integration" mod. Do either of the following:
      1. Subscribe to the browser mod [in the Steam Workshop](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772) (maintained independently by Steam/reddit user 8igualdos0s)
      2. Or manually install it, it is included in the `mod` folder 
   4. To start the program, run the `stellarisdashboard.bat` file. A similar Windows security warning as before may appear.
-  5. Start Stellars and enable the "Stellaris Dashboard Integration" mod in the game launcher. 
+  5. Activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz)
   6. Play the game!
-
       
 If you want to use the advanced commands from the command line interface (CLI) described below, you will  have to:
   1. Open a command line and navigate to the extracted folder
   2. Activate the virtual environment that is automatically created by `install.bat` using the command `env\Scripts\activate`
   3. Run your CLI command, i.e. execute `python -m stellarisdashboard.cli <your-command-here>`.
   
-### Linux / Mac
+### Linux 
 Ensure that you are using python 3.6 or later when running the commands below. You probably have other python versions installed on your system already.
  
-
-  1. Download the latest release at https://github.com/eliasdoehne/stellaris-dashboard/releases
-  1. Open a terminal in the extracted folder.
-  2. (Optional but recommended) Create a virtual environment by running `python3.6 -m venv env`, and activate it by running `source env/bin/activate` whenever you want to use the dashboard. This avoids interference with any other python programs.
-  3. Open a terminal in the downloaded directory and run `pip3.6 install -e .` to install the program and all dependencies using pip. The `-e` flag tells pip to link to the existing python code instead of copying it to another location, which makes editing your `config.ini` file easier.
-  3. To use the interactive in-game dashboard, install the "Stellaris Dashboard Integration" mod. Do **either** of the following:
+  1. Download the latest release at the [releases page on github](https://github.com/eliasdoehne/stellaris-dashboard/releases)  (Click on "Download Source Code")
+  1. Extract the archive and open a terminal in the extracted folder.
+  2. (Optional but recommended) Run `python3.6 -m venv env` to create a virtual environment, and activate it by running `source env/bin/activate` whenever you want to use the dashboard. This avoids interference with other python programs you may have installed.
+  3. Run `pip3.6 install -e .` to install the program and all dependencies using pip. The `-e` flag tells pip to link to the existing python code instead of copying it to another location, which makes editing your `config.ini` file easier.
+  3. To use the interactive in-game dashboard, install the "Stellaris Dashboard Integration" mod. Do either of the following:
      1. Subscribe to the browser mod [in the Steam Workshop](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772) (maintained independently by Steam/reddit user 8igualdos0s)
      2. Or manually install it, it is included in the `mod` folder.
-  4. Activate the mod in the Stellaris Launcher
-  5. Run the program by activating your virtual environment if you made one (`source env/bin/activate`) and run `stellarisdashboard`
-  6. Play the game
+  4. Activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz)
+  5. To start the program, run `stellarisdashboard` (Remember to first activate your virtual environment if you made one! (run `source env/bin/activate`))
+  6. Play the game!
 
-Note: You may have to use `python -m pip` instead of `pip` if you use Windows and follow the detailed instructions yourself. In this case, just replace `pip` with `python -m pip` wherever necessary.
-If this is the case, then you probably also have to use `python -m stellarisdashboard` and `python -m stellarisdashboard.cli` instead of `stellarisdashboard` and `stellarisdashboardcli`.
+These instructions should also work on Mac OS X, although I cannot test this or help with any problems. 
 
 # Instructions
 
-If you just want the basics, run the `stellarisdashboard` command while you play the game and it should do everything for you: If you installed the program in step 3 above, run `stellarisdashboard` in your command line to launch the dashboard in default configuration or `stellarisdashboardcli` to execute specific commands, which are described below.
+If you just want the basics, run the `stellarisdashboard` command while you play the game and it should do everything for you.
 
-While `stellarisdashboard`  is running, you can open the in-game browser with the help button in the lower right corner of the game UI, or by pressing the shortcut Alt-B. Then, there should be a big button with the galaxy icon in the top right corner of the browser window. Clicking this button (or the shortcut "T") should open the dashboard. Alternatively, you can use your regular web browser to view the dashboard at [the default address](http://127.0.0.1/28053) without installing the mod.
-
+While `stellarisdashboard`  is running, you can open the in-game browser with the [help button in the lower right corner of the game UI](https://imgur.com/zWPmrbr), or by pressing the shortcut Alt-B. Then, there should be three buttons in the top right corner of the browser window. Clicking these buttons should let you navigate to the various features of the dashboard. Alternatively, you can use your regular web browser to view the dashboard at [http://127.0.0.1:28053/](http://127.0.0.1:28053/) without installing the mod.
 
 ## Command Line Interface
 
@@ -170,6 +159,22 @@ Thanks to [this project](https://github.com/omiddavoodi/StellarisInGameLedger) b
 approach of modding the in-game browser.
 
 Also thanks to reddit and Steam user 8igualdos0s for maintaining a copy of the browser mod [in the Steam Workshop.](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772)
+
+The Python code is released under the MIT license:
+
+MIT License
+
+Copyright (c) 2018 Elias Doehne
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
