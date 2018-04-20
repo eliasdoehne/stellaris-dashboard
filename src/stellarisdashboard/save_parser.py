@@ -46,13 +46,9 @@ class SavePathMonitor:
         :return:
         """
         new_files = self.valid_save_files()
-        if config.CONFIG.debug_mode:
-            if new_files and config.CONFIG.debug_only_last_save_file:
-                new_files = [new_files[-1]]
-            if config.CONFIG.debug_save_name_filter:
-                new_files = [f for (i, f) in enumerate(new_files) if f.stem.find(config.CONFIG.debug_save_name_filter) >= 0]
-            if config.CONFIG.debug_only_every_nth_save > 1:
-                new_files = [f for (i, f) in enumerate(new_files) if i % config.CONFIG.debug_only_every_nth_save == 0]
+        if new_files:
+            if config.CONFIG.save_name_filter:
+                new_files = [f for (i, f) in enumerate(new_files) if f.stem.find(config.CONFIG.save_name_filter) >= 0]
         self.processed_saves.update(new_files)
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])

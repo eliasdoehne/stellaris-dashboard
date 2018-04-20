@@ -46,23 +46,21 @@ class Config:
     show_everything: bool = False
     only_show_default_empires: bool = True
     extract_system_ownership: bool = True
-    debug_mode: bool = False
-    debug_only_last_save_file: bool = False
 
-    debug_save_name_filter: str = ""
-    debug_only_every_nth_save: int = 1
+    debug_mode: bool = False
+    save_name_filter: str = ""
+    read_only_every_nth_save: int = 1
 
     BOOL_KEYS = {
         "show_everything",
         "only_show_default_empires",
         "extract_system_ownership",
         "debug_mode",
-        "debug_only_last_save_file",
     }
     INT_KEYS = {
         "threads",
         "port",
-        "debug_only_every_nth_save",
+        "read_only_every_nth_save",
     }
 
     def is_valid(self):
@@ -132,9 +130,9 @@ def _apply_config_ini():
         if config_lines:
             logger.info("Applying configuration from config.ini file...")
         for key, value in config_lines:
-            logger.info(f"Applying parameter {key} -> {value}")
             key = key.strip()
             value = value.strip()
+            logger.info(f'Applying parameter {key} -> "{value}"')
             if not key or not value:
                 logger.warning(f"Ignoring bad configuration option {key} with value {value}.")
             if key in Config.INT_KEYS:
