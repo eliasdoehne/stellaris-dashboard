@@ -1130,6 +1130,9 @@ class TimelineExtractor:
                     achievement_type=models.LeaderAchievementType.colonized_planet,
                     achievement_description=p_name,
                 ))
+            else:
+                a.end_date_days = self._date_in_days
+                self._session.add(a)
         elif "colonize_date" in planet_dict:
             colonize_date = models.date_to_days(planet_dict["colonize_date"])
             a = self._session.query(models.LeaderAchievement).filter_by(
