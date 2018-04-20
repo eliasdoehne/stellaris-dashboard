@@ -797,10 +797,11 @@ class Combat(Base):
     def __str__(self):
         loc = ""
         if self.planet:
-            loc += f'of planet "{self.planet}" '
+            loc += f'planet "{self.planet}"'
         if self.system:
-            loc += f'in the "{self.system.original_name}" system'
-        result = f"{days_to_date(self.date)}: {str(self.combat_type)} {loc}. "
+            if loc:
+                loc += " in the "
+            loc += f'"{self.system.original_name}" system'
 
         defenders = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.defenders)
         if self.defender_war_exhaustion > 0:
@@ -810,10 +811,24 @@ class Combat(Base):
         if self.attacker_war_exhaustion > 0:
             attackers += f" ({self.attacker_war_exhaustion} exhaustion)"
 
-        if self.attacker_victory:
-            result += f"{attackers} defeated {defenders}"
+        if self.combat_type == CombatType.armies:
+            result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
+            if self.attacker_victory:
+                result += f"{attackers} succeeded in invasion of {loc} against {defenders}"
+            else:
+                result += f"{defenders} defended against invasion of {loc} against {attackers}"
+        elif self.combat_type == CombatType.ships:
+            result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
+            if self.attacker_victory:
+                result += f"{attackers} defeated {defenders} in the {loc}"
+            else:
+                result += f"{attackers} were defeated by {defenders} in the {loc}"
         else:
-            result += f"{attackers} were defeated by {defenders}"
+            result = f"{days_to_date(self.date)}: {str(self.combat_type)} {loc}: "
+            if self.attacker_victory:
+                result += f"{attackers} defeated {defenders}"
+            else:
+                result += f"{attackers} were defeated by {defenders}"
 
         return result
 
@@ -888,7 +903,7 @@ class LeaderAchievement(Base):
             achievement_text = f'{start_date} - {end_date}: Issued "{name}" edict'
         elif self.achievement_type == LeaderAchievementType.embraced_tradition:
             tradition = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tr")
-            achievement_text = f'{end_date}: Embraced "{tradition}" tradition'
+            achievement_text = f'{end_date}: Adopted "{tradition}" tradition'
         elif self.achievement_type == LeaderAchievementType.achieved_ascension:
             perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="ap")
             achievement_text = f'{end_date}: "{perk}" ascension.'
