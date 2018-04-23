@@ -51,6 +51,8 @@ The program should be fairly stable, but if something weird happens, first try t
 # Installation
 
 ### Windows
+You can also follow my [video tutorial](https://youtu.be/gXpkyL_7jNE?t=379) for the installation in Windows.
+
   1. Install Python 3.6 or later from https://www.python.org/. 
   ***Make sure to check the "Add Python 3.6 to PATH" option in the first step of the python installer!***
   1. Download the latest release at the [releases page on github](https://github.com/eliasdoehne/stellaris-dashboard/releases)  (Click on "Download Source Code (zip)")
