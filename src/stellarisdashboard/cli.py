@@ -23,7 +23,7 @@ threads_help_string = 'The number of threads that run in parallel when reading s
 
 @cli.command()
 @click.option('--game-name', default="", type=click.STRING, help=game_name_help_string)
-@click.option('--showeverything', is_flag=True, help=game_name_help_string)
+@click.option('--showeverything', is_flag=True, help=showeverything_help_string)
 def visualize(game_name, showeverything):
     f_visualize_mpl(game_name, show_everything=showeverything)
 
@@ -44,6 +44,38 @@ def f_visualize_mpl(game_name_prefix: str, show_everything=False):
             plot.make_plots()
         except sqlalchemy.orm.exc.NoResultFound as e:
             logger.error(f'No game matching "{game_name}" was found in the database!')
+
+
+@cli.command()
+@click.option('--game-name', default="", type=click.STRING, help=game_name_help_string)
+@click.option('--showeverything', is_flag=True, help=showeverything_help_string)
+def visualize_game_comparison(game_name, showeverything):
+    f_visualize_mpl_comparison(game_name, show_everything=showeverything)
+
+
+def f_visualize_mpl_comparison(game_name_prefix: str, show_everything=True):
+    config.CONFIG.show_everything = show_everything
+    matching_games = models.get_known_games(game_name_prefix)
+    if not matching_games:
+        logger.warning(f"No game matching {game_name_prefix} was found in the database!")
+        return
+    match_games_string = ', '.join(matching_games)
+    logger.info(f"Found matching games {match_games_string} for prefix \"{game_name_prefix}\"")
+    plot = visualization_mpl.MatplotLibComparativeVisualization(
+        comparison_id=game_name_prefix,
+
+    )
+    for game_name in matching_games:
+        try:
+            plot_data = visualization_data.EmpireProgressionPlotData(game_name)
+            plot_data.initialize()
+            plot_data.update_with_new_gamestate()
+
+            plot.add_data(plot_data)
+
+        except sqlalchemy.orm.exc.NoResultFound as e:
+            logger.error(f'No game matching "{game_name}" was found in the database!')
+    plot.make_plots()
 
 
 @cli.command()

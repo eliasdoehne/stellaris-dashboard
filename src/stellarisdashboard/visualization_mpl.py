@@ -3,6 +3,8 @@ import math
 from typing import List
 
 import pathlib
+
+import itertools
 from matplotlib import pyplot as plt
 
 from stellarisdashboard import models, visualization_data, config
@@ -129,3 +131,96 @@ class MatplotLibVisualization:
 
     def _get_path(self, plot_id: str) -> pathlib.Path:
         return config.CONFIG.base_output_path / f"./output/{self.plot_data.game_name}/{self.plot_data.game_name}_{plot_id}.png"
+
+
+class MatplotLibComparativeVisualization:
+    """ Make a static visualization using matplotlib. """
+    COLOR_MAP = plt.get_cmap(name=config.CONFIG.colormap)
+    LINE_STYLES = ['-', '--', '-.', ':']
+
+    def __init__(self, comparison_id: str):
+        self.fig = None
+        self.axes = None
+        self.comparison_id = comparison_id
+        self.plot_data: List[visualization_data.EmpireProgressionPlotData] = []
+
+    def add_data(self, pd: visualization_data.EmpireProgressionPlotData):
+        self.plot_data.append(pd)
+
+    def make_plots(self):
+        for category, plot_specifications in visualization_data.THEMATICALLY_GROUPED_PLOTS.items():
+            plot_specifications = [ps for ps in plot_specifications if ps.style == visualization_data.PlotStyle.line]
+            if not plot_specifications:
+                continue
+            self._initialize_axes(category, plot_specifications)
+            for plot_spec, ax in zip(plot_specifications, self.axes):
+                self._make_line_plots(ax, plot_spec)
+            self.save_plot(plot_id=category)
+
+    def _initialize_axes(self, category: str, plot_specifications: List[visualization_data.PlotSpecification]):
+        num_plots = len(plot_specifications)
+        cols = int(math.sqrt(num_plots))
+        rows = int(math.ceil(num_plots / cols))
+        figsize = (16 * cols, 9 * rows)
+        self.fig, self.axes = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
+        self.axes = self.axes.flatten()
+
+        player_countries = ", ".join(sorted(pd.player_country for pd in self.plot_data))
+        min_date = min(
+            pd.dates[0] for pd in self.plot_data
+        )
+        max_date = max(
+            pd.dates[-1] for pd in self.plot_data
+        )
+
+        title_lines = [
+            f"Game comparison {player_countries}",
+            f"{category}",
+            f"{models.days_to_date(360 * min_date)} - {models.days_to_date(360 * max_date)}"
+        ]
+        self.fig.suptitle("\n".join(title_lines))
+        for ax in self.axes:
+            ax.set_xlim((min_date, max_date))
+            ax.set_xlabel(f"Time (Years)")
+
+    def _make_line_plots(self, ax, plot_spec: visualization_data.PlotSpecification):
+        ax.set_title(plot_spec.title)
+        for game_index, (pd, style) in enumerate(zip(self.plot_data, itertools.cycle(MatplotLibComparativeVisualization.LINE_STYLES))):
+            for i, (key, x, y) in enumerate(pd.data_sorted_by_last_value(plot_spec)):
+                if y:
+                    plot_kwargs = self._get_country_plot_kwargs(
+                        plot_data=pd,
+                        linestyle=style,
+                        country_name=key,
+                        game_index=game_index,
+                    )
+                    ax.plot(x, y, **plot_kwargs)
+        ax.legend()
+
+    def _get_country_plot_kwargs(
+            self, plot_data: visualization_data.EmpireProgressionPlotData,
+            linestyle: str,
+            country_name: str,
+            game_index: int,
+    ):
+        linewidth = 0.25
+        color_index = game_index / max(1, len(self.plot_data) - 1)
+        c = MatplotLibVisualization.COLOR_MAP(color_index)
+        alpha = 0.5
+        label = None
+        if country_name == plot_data.player_country:
+            linewidth = 2
+            label = f"{country_name} (Game {game_index})"
+            alpha = 1.0
+        return dict(label=label, c=c, linewidth=linewidth, alpha=alpha, linestyle=linestyle)
+
+    def save_plot(self, plot_id):
+        plot_filename = self._get_path(plot_id)
+        if not plot_filename.parent.exists():
+            plot_filename.parent.mkdir()
+        logger.info(f"Saving graph to {plot_filename}")
+        plt.savefig(str(plot_filename), dpi=250)
+        plt.close("all")
+
+    def _get_path(self, plot_id: str) -> pathlib.Path:
+        return config.CONFIG.base_output_path / f"./output/{self.comparison_id}/{self.comparison_id}_{plot_id}.png"
