@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import List
+from typing import List, Dict
 
 import pathlib
 
@@ -142,10 +142,10 @@ class MatplotLibComparativeVisualization:
         self.fig = None
         self.axes = None
         self.comparison_id = comparison_id
-        self.plot_data: List[visualization_data.EmpireProgressionPlotData] = []
+        self.plot_data: Dict[str, visualization_data.EmpireProgressionPlotData] = {}
 
-    def add_data(self, pd: visualization_data.EmpireProgressionPlotData):
-        self.plot_data.append(pd)
+    def add_data(self, game_name: str, pd: visualization_data.EmpireProgressionPlotData):
+        self.plot_data[game_name] = pd
 
     def make_plots(self):
         for category, plot_specifications in visualization_data.THEMATICALLY_GROUPED_PLOTS.items():
@@ -165,12 +165,12 @@ class MatplotLibComparativeVisualization:
         self.fig, self.axes = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
         self.axes = self.axes.flatten()
 
-        player_countries = ", ".join(sorted(pd.player_country for pd in self.plot_data))
+        player_countries = ", ".join(sorted(pd.player_country for pd in self.plot_data.values()))
         min_date = min(
-            pd.dates[0] for pd in self.plot_data
+            pd.dates[0] for pd in self.plot_data.values()
         )
         max_date = max(
-            pd.dates[-1] for pd in self.plot_data
+            pd.dates[-1] for pd in self.plot_data.values()
         )
 
         title_lines = [
@@ -185,7 +185,8 @@ class MatplotLibComparativeVisualization:
 
     def _make_line_plots(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
-        for game_index, (pd, style) in enumerate(zip(self.plot_data, itertools.cycle(MatplotLibComparativeVisualization.LINE_STYLES))):
+        for game_index, (game_name, style) in enumerate(zip(self.plot_data.keys(), itertools.cycle(MatplotLibComparativeVisualization.LINE_STYLES))):
+            pd = self.plot_data[game_name]
             for i, (key, x, y) in enumerate(pd.data_sorted_by_last_value(plot_spec)):
                 if y:
                     plot_kwargs = self._get_country_plot_kwargs(
@@ -193,6 +194,7 @@ class MatplotLibComparativeVisualization:
                         linestyle=style,
                         country_name=key,
                         game_index=game_index,
+                        game_name=game_name,
                     )
                     ax.plot(x, y, **plot_kwargs)
         ax.legend()
@@ -202,6 +204,7 @@ class MatplotLibComparativeVisualization:
             linestyle: str,
             country_name: str,
             game_index: int,
+            game_name: str,
     ):
         linewidth = 0.25
         color_index = game_index / max(1, len(self.plot_data) - 1)
@@ -210,7 +213,7 @@ class MatplotLibComparativeVisualization:
         label = None
         if country_name == plot_data.player_country:
             linewidth = 2
-            label = f"{country_name} (Game {game_index})"
+            label = f"{game_name} ({country_name})"
             alpha = 1.0
         return dict(label=label, c=c, linewidth=linewidth, alpha=alpha, linestyle=linestyle)
 
@@ -223,4 +226,4 @@ class MatplotLibComparativeVisualization:
         plt.close("all")
 
     def _get_path(self, plot_id: str) -> pathlib.Path:
-        return config.CONFIG.base_output_path / f"./output/{self.comparison_id}/{self.comparison_id}_{plot_id}.png"
+        return config.CONFIG.base_output_path / f"./output/comparison_{self.comparison_id}/comp_{self.comparison_id}_{plot_id}.png"

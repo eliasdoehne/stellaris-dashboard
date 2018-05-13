@@ -71,7 +71,7 @@ def f_visualize_mpl_comparison(game_name_prefix: str, show_everything=True):
             plot_data.initialize()
             plot_data.update_with_new_gamestate()
 
-            plot.add_data(plot_data)
+            plot.add_data(game_name, plot_data)
 
         except sqlalchemy.orm.exc.NoResultFound as e:
             logger.error(f'No game matching "{game_name}" was found in the database!')
