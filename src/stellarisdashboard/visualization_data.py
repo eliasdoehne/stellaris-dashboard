@@ -1,5 +1,6 @@
 import enum
 import logging
+import random
 from typing import List, Dict, Callable, Any, Tuple, Iterable, Set
 
 import dataclasses
@@ -9,6 +10,10 @@ from stellarisdashboard import models, config
 import networkx as nx
 
 logger = logging.getLogger(__name__)
+
+COLOR_PHYSICS = (30, 100, 170)
+COLOR_SOCIETY = (60, 150, 90)
+COLOR_ENGINEERING = (190, 150, 30)
 
 
 @enum.unique
@@ -51,6 +56,18 @@ SYSTEM_COUNT_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.controlled_systems,
     style=PlotStyle.line,
 )
+NET_MINERAL_INCOME_GRAPH = PlotSpecification(
+    plot_id='net-mineral-income-graph',
+    title="Net Mineral Income (Warning: Might be inaccurate!)",
+    plot_data_function=lambda pd: pd.net_mineral_income,
+    style=PlotStyle.line,
+)
+NET_ENERGY_INCOME_GRAPH = PlotSpecification(
+    plot_id='net-energy-income-graph',
+    title="Net Energy Income (Warning: Might be inaccurate!)",
+    plot_data_function=lambda pd: pd.net_energy_income,
+    style=PlotStyle.line,
+)
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='tech-count-graph',
     title="Researched Technologies",
@@ -69,6 +86,12 @@ RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     title="Research Output",
     plot_data_function=lambda pd: pd.empire_research_output,
     style=PlotStyle.stacked,
+)
+TOTAL_RESEARCH_OUTPUT_GRAPH = PlotSpecification(
+    plot_id='empire-research-output-comparison-graph',
+    title="Total Research Output",
+    plot_data_function=lambda pd: pd.total_research_output,
+    style=PlotStyle.line,
 )
 SURVEY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='survey-count-graph',
@@ -140,6 +163,8 @@ THEMATICALLY_GROUPED_PLOTS = {
     "Economy": [
         PLANET_COUNT_GRAPH,
         SYSTEM_COUNT_GRAPH,
+        NET_ENERGY_INCOME_GRAPH,
+        NET_MINERAL_INCOME_GRAPH,
         EMPIRE_ENERGY_ECONOMY_GRAPH,
         EMPIRE_MINERAL_ECONOMY_GRAPH,
         EMPIRE_FOOD_ECONOMY_GRAPH,
@@ -155,6 +180,7 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
     "Science": [
         TECHNOLOGY_PROGRESS_GRAPH,
+        TOTAL_RESEARCH_OUTPUT_GRAPH,
         SURVEY_PROGRESS_GRAPH,
         RESEARCH_OUTPUT_GRAPH,
         RESEARCH_ALLOCATION_GRAPH,
@@ -208,6 +234,19 @@ def show_military_info(country_data: models.CountryData):
             or country_data.has_federation_with_player)
 
 
+def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0):
+    if key_str == "physics":
+        r, g, b = COLOR_PHYSICS
+    elif key_str == "society":
+        r, g, b = COLOR_SOCIETY
+    elif key_str == "engineering":
+        r, g, b = COLOR_ENGINEERING
+    else:
+        random.seed(key_str)
+        r, g, b = [random.uniform(range_min, range_max) for _ in range(3)]
+    return r, g, b
+
+
 class EmpireProgressionPlotData:
     DEFAULT_VAL = float("nan")
 
@@ -218,6 +257,10 @@ class EmpireProgressionPlotData:
         self.pop_count = None
         self.owned_planets = None
         self.controlled_systems = None
+        self.net_mineral_income = None
+        self.net_energy_income = None
+
+        self.total_research_output = None
         self.tech_count = None
         self.survey_count = None
         self.military_power = None
@@ -233,13 +276,19 @@ class EmpireProgressionPlotData:
         self.empire_research_allocation = None
         self.show_everything = config.CONFIG.show_everything
 
+        self.data_dicts = []
+
     def initialize(self):
         self.dates: List[float] = []
         self.player_country: str = None
         self.pop_count: Dict[str, List[int]] = {}
         self.owned_planets: Dict[str, List[int]] = {}
         self.controlled_systems: Dict[str, List[int]] = {}
+        self.net_mineral_income: Dict[str, List[float]] = {}
+        self.net_energy_income: Dict[str, List[float]] = {}
+
         self.tech_count: Dict[str, List[int]] = {}
+        self.total_research_output: Dict[str, List[int]] = {}
         self.survey_count: Dict[str, List[int]] = {}
         self.military_power: Dict[str, List[float]] = {}
         self.fleet_size: Dict[str, List[float]] = {}
@@ -288,6 +337,18 @@ class EmpireProgressionPlotData:
         )
         self.empire_research_output = dict(physics=[], society=[], engineering=[])
         self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
+        self.data_dicts = [
+            self.pop_count,
+            self.owned_planets,
+            self.tech_count,
+            self.total_research_output,
+            self.survey_count,
+            self.military_power,
+            self.fleet_size,
+            self.controlled_systems,
+            self.net_mineral_income,
+            self.net_energy_income,
+        ]
 
     def update_with_new_gamestate(self):
         date_in_days = 360.0 * self.dates[-1] if self.dates else -1
@@ -304,7 +365,10 @@ class EmpireProgressionPlotData:
             self._extract_pop_count(country_data)
             self._extract_planet_count(country_data)
             self._extract_system_count(country_data)
+            self._extract_energy_income(country_data)
+            self._extract_mineral_income(country_data)
             self._extract_tech_count(country_data)
+            self._extract_research_output(country_data)
             self._extract_exploration_progress(country_data)
             self._extract_military_strength(country_data)
             self._extract_fleet_size(country_data)
@@ -315,9 +379,9 @@ class EmpireProgressionPlotData:
         self._extract_player_empire_budget_allocations(gs)
 
         # Pad every dict with the default value if no real value was added, to keep them consistent with the dates list
-        for data_dict in [self.pop_count, self.owned_planets, self.tech_count, self.survey_count, self.military_power, self.fleet_size]:
+        for data_dict in self.data_dicts:
             for key in data_dict:
-                if len(data_dict[key]) < len(self.dates):
+                while len(data_dict[key]) < len(self.dates):
                     data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
 
     def _extract_player_empire_budget_allocations(self, gs: models.GameState):
@@ -399,12 +463,33 @@ class EmpireProgressionPlotData:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.controlled_systems, country_data.country.country_name, new_val)
 
+    def _extract_energy_income(self, country_data: models.CountryData):
+        if self.show_everything or show_economic_info(country_data):
+            new_val = country_data.energy_income - country_data.energy_spending
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.net_energy_income, country_data.country.country_name, new_val)
+
+    def _extract_mineral_income(self, country_data: models.CountryData):
+        if self.show_everything or show_economic_info(country_data):
+            new_val = country_data.mineral_income - country_data.mineral_spending
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.net_mineral_income, country_data.country.country_name, new_val)
+
     def _extract_tech_count(self, country_data: models.CountryData):
         if self.show_everything or show_tech_info(country_data):
             new_val = country_data.tech_progress
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.tech_count, country_data.country.country_name, new_val)
+
+    def _extract_research_output(self, country_data: models.CountryData):
+        if self.show_everything or show_tech_info(country_data):
+            new_val = country_data.society_research + country_data.physics_research + country_data.engineering_research
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.total_research_output, country_data.country.country_name, new_val)
 
     def _extract_exploration_progress(self, country_data: models.CountryData):
         if self.show_everything or show_tech_info(country_data):
@@ -506,6 +591,9 @@ class EmpireProgressionPlotData:
     def _add_new_value_to_data_dict(self, data_dict, key, new_val):
         if key not in data_dict:
             data_dict[key] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
+        if len(data_dict[key]) >= len(self.dates):
+            logger.info(f"Ignoring duplicate value for {key}.")
+            return
         data_dict[key].append(new_val)
 
 

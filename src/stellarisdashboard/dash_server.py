@@ -22,10 +22,6 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-COLOR_PHYSICS = 'rgba(30,100,170,0.5)'
-COLOR_SOCIETY = 'rgba(60,150,90,0.5)'
-COLOR_ENGINEERING = 'rgba(190,150,30,0.5)'
-
 
 @flask_app.route("/")
 @flask_app.route("/checkversion/<version>/")
@@ -385,6 +381,7 @@ def get_galaxy(game_id, date):
             x=1.0,
             y=1.0,
         ),
+        height=720,
         hovermode='closest',
         plot_bgcolor=GALAXY_BG_COLOR,
         paper_bgcolor=STELLARIS_LIGHT_BG_COLOR,
@@ -504,16 +501,8 @@ def get_war_dicts(session, current_date):
 def get_country_color(country_name: str, alpha: float = 1.0) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
-
-    if country_name == "physics":
-        return COLOR_PHYSICS
-    elif country_name == "society":
-        return COLOR_SOCIETY
-    elif country_name == "engineering":
-        return COLOR_ENGINEERING
-
-    random.seed(country_name)
-    r, g, b = [random.randint(20, 255) for _ in range(3)]
+    r, g, b = visualization_data.get_color_vals(country_name)
+    r, g, b = r * 255, g * 255, b * 255
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 

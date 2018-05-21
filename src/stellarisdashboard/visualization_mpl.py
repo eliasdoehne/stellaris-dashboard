@@ -1,11 +1,12 @@
 import logging
 import math
-from typing import List, Dict
+from typing import List, Dict, Set
 
 import pathlib
 
 import itertools
 from matplotlib import pyplot as plt
+import matplotlib.lines
 
 from stellarisdashboard import models, visualization_data, config
 
@@ -143,9 +144,13 @@ class MatplotLibComparativeVisualization:
         self.axes = None
         self.comparison_id = comparison_id
         self.plot_data: Dict[str, visualization_data.EmpireProgressionPlotData] = {}
+        self.countries: Set[str] = set()
+        self.countries_in_legend: Set[str] = set()
+        self.games_in_legend: Set[str] = set()
 
     def add_data(self, game_name: str, pd: visualization_data.EmpireProgressionPlotData):
         self.plot_data[game_name] = pd
+        self.countries |= pd.owned_planets.keys()
 
     def make_plots(self):
         for category, plot_specifications in visualization_data.THEMATICALLY_GROUPED_PLOTS.items():
@@ -154,6 +159,7 @@ class MatplotLibComparativeVisualization:
                 continue
             self._initialize_axes(category, plot_specifications)
             for plot_spec, ax in zip(plot_specifications, self.axes):
+                self.countries_in_legend = set()
                 self._make_line_plots(ax, plot_spec)
             self.save_plot(plot_id=category)
 
@@ -185,36 +191,35 @@ class MatplotLibComparativeVisualization:
 
     def _make_line_plots(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
+        game_handles = []
         for game_index, (game_name, style) in enumerate(zip(self.plot_data.keys(), itertools.cycle(MatplotLibComparativeVisualization.LINE_STYLES))):
             pd = self.plot_data[game_name]
-            for i, (key, x, y) in enumerate(pd.data_sorted_by_last_value(plot_spec)):
+            for i, (key, x, y) in enumerate(pd.iterate_data(plot_spec)):
                 if y:
                     plot_kwargs = self._get_country_plot_kwargs(
-                        plot_data=pd,
                         linestyle=style,
                         country_name=key,
-                        game_index=game_index,
                         game_name=game_name,
                     )
                     ax.plot(x, y, **plot_kwargs)
-        ax.legend()
+            game_handles.append(matplotlib.lines.Line2D([], [], linestyle=style, color='grey', label=game_name))
+        ax.legend(loc=2, prop={'size': 6})
+        self.fig.legend(handles=game_handles, loc=8)
 
     def _get_country_plot_kwargs(
-            self, plot_data: visualization_data.EmpireProgressionPlotData,
-            linestyle: str,
+            self, linestyle: str,
             country_name: str,
-            game_index: int,
             game_name: str,
     ):
-        linewidth = 0.25
-        color_index = game_index / max(1, len(self.plot_data) - 1)
-        c = MatplotLibVisualization.COLOR_MAP(color_index)
-        alpha = 0.5
+        linewidth = 0.75
+        alpha = 1
         label = None
-        if country_name == plot_data.player_country:
-            linewidth = 2
-            label = f"{game_name} ({country_name})"
-            alpha = 1.0
+        c = visualization_data.get_color_vals(country_name, range_min=0, range_max=0.9)
+        if country_name not in self.countries_in_legend:
+            self.countries_in_legend.add(country_name)
+            label = f"{country_name}"
+        if game_name not in self.games_in_legend:
+            self.games_in_legend.add(game_name)
         return dict(label=label, c=c, linewidth=linewidth, alpha=alpha, linestyle=linestyle)
 
     def save_plot(self, plot_id):
