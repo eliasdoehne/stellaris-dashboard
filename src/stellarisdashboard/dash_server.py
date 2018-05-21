@@ -145,6 +145,7 @@ timeline_app.layout = html.Div([
         ),
     ], style={
         'width': '100%',
+        "height": "100%",
         'fontFamily': 'Sans-Serif',
         'margin-left': 'auto',
         'margin-right': 'auto'
@@ -160,8 +161,12 @@ timeline_app.layout = html.Div([
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
-    if plot_spec.style == visualization_data.PlotStyle.stacked:
-        layout["yaxis"] = {}
+    # if plot_spec.style == visualization_data.PlotStyle.stacked:
+    #     layout["yaxis"] = {}
+    if plot_spec.style == visualization_data.PlotStyle.line:
+        layout["hovermode"] = "closest"
+    else:
+        layout["hovermode"] = "compare"
     return go.Layout(**layout)
 
 
@@ -213,6 +218,99 @@ def update_content(tab_value, search, date_fraction):
         children.append(get_galaxy(game_id, slider_date))
         children.append(html.P(f"Galactic Records for {models.days_to_date(slider_date)}", style=TEXT_STYLE))
     return children
+
+
+def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
+    if plot_spec.style == visualization_data.PlotStyle.line:
+        plot_list = _get_line_plot_data(plot_data, plot_spec)
+    elif plot_spec.style == visualization_data.PlotStyle.stacked:
+        plot_list = _get_stacked_plot_data(plot_data, plot_spec)
+    elif plot_spec.style == visualization_data.PlotStyle.budget:
+        plot_list = _get_budget_plot_data(plot_data, plot_spec)
+    else:
+        logger.warning(f"Unknown Plot type {plot_spec}")
+        plot_list = []
+    return plot_list
+
+
+def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+    plot_list = []
+    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+        if not any(y_values):
+            continue
+        line = dict(
+            x=x_values,
+            y=y_values,
+            name=key,
+            text=[f"{val:.2f} - {key}" for val in y_values],
+            line={"color": get_country_color(key, 0.75)},
+        )
+        plot_list.append(line)
+    return plot_list
+
+
+def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+    y_previous = None
+    plot_list = []
+    for key, x_values, y_values in plot_data.iterate_data(plot_spec):
+        if not any(y_values):
+            continue
+        line = {'x': x_values, 'name': key, "fill": "tonexty", "hoverinfo": "x+text"}
+        if y_previous is None:
+            y_previous = [0.0 for _ in x_values]
+        y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
+        line["y"] = y_previous[:]  # make a copy
+        if line["y"]:
+            line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
+            line["line"] = {"color": get_country_color(key, 0.75)}
+            line["fillcolor"] = get_country_color(key, 0.3)
+            plot_list.append(line)
+    return plot_list
+
+
+def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+    net_gain = None
+    y_previous_pos, y_previous_neg = None, None
+    pos_initiated = False
+    plot_list = []
+    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+        if not any(y_values):
+            continue
+        if net_gain is None:
+            net_gain = [0.0 for _ in x_values]
+            y_previous_pos = [0.0 for _ in x_values]
+            y_previous_neg = [0.0 for _ in x_values]
+        fill_mode = "tozeroy"
+        if all(y <= 0 for y in y_values):
+            y_previous = y_previous_neg
+        elif all(y >= 0 for y in y_values):
+            y_previous = y_previous_pos
+            if pos_initiated:
+                fill_mode = "tonexty"
+            pos_initiated = True
+        else:
+            logger.warning("Not a real budget Graph!")
+            break
+        line = {'x': x_values, 'name': key, "hoverinfo": "x+text"}
+        for i, y in enumerate(y_values):
+            y_previous[i] += y
+            net_gain[i] += y
+        line["y"] = y_previous[:]
+        line["fill"] = fill_mode
+        line["line"] = {"color": get_country_color(key, 1.0)}
+        line["fillcolor"] = get_country_color(key, 0.3)
+        line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
+        plot_list.append(line)
+    if plot_list:
+        plot_list.append({
+            'x': plot_list[0]["x"],
+            'y': net_gain,
+            'name': 'Net gain',
+            'line': {'color': 'rgba(0,0,0,1)'},
+            'text': [f'{val:.2f} - net gain' for val in net_gain],
+            'hoverinfo': 'x+text',
+        })
+    return plot_list
 
 
 def get_galaxy(game_id, date):
@@ -276,8 +374,8 @@ def get_galaxy(game_id, date):
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            scaleanchor='x',
             scaleratio=0.9,
+            scaleanchor='x',
         ),
         margin=dict(
             t=0, b=0, l=0, r=0,
@@ -300,125 +398,6 @@ def get_galaxy(game_id, date):
             layout=layout,
         ),
     )
-
-
-def get_country_color(country_name: str, alpha: float = 1.0) -> str:
-    alpha = min(alpha, 1)
-    alpha = max(alpha, 0)
-    random.seed(country_name)
-    r, g, b = [random.randint(20, 255) for _ in range(3)]
-    color = f"rgba({r},{g},{b},{alpha})"
-    return color
-
-
-def get_most_recent_date(session):
-    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
-    if most_recent_gs is None:
-        most_recent_date = 0
-    else:
-        most_recent_date = most_recent_gs.date
-    return most_recent_date
-
-
-def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
-    start = time.time()
-    plot_data = visualization_data.get_current_execution_plot_data(game_id)
-    plot_list = get_plot_lines(plot_data, plot_spec)
-    end = time.time()
-    logger.info(f"Update took {end - start} seconds!")
-    return plot_list
-
-
-def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
-    if plot_spec.style == visualization_data.PlotStyle.line:
-        plot_list = _get_line_plot_data(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.stacked:
-        plot_list = _get_stacked_plot_data(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.budget:
-        plot_list = _get_budget_plot_data(plot_data, plot_spec)
-    else:
-        logger.warning(f"Unknown Plot type {plot_spec}")
-        plot_list = []
-    return sorted(plot_list, key=lambda p: p["y"][-1])
-
-
-def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
-    plot_list = []
-    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
-        if not any(y_values):
-            continue
-        line = {'x': x_values, 'y': y_values, 'name': key, "text": [f"{val:.2f} - {key}" for val in y_values]}
-        plot_list.append(line)
-    return plot_list
-
-
-def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
-    y_previous = None
-    plot_list = []
-    for key, x_values, y_values in plot_data.iterate_data(plot_spec):
-        if not any(y_values):
-            continue
-        line = {'x': x_values, 'name': key, "fill": "tonexty", "hoverinfo": "x+text"}
-        if y_previous is None:
-            y_previous = [0.0 for _ in x_values]
-        y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
-        line["y"] = y_previous[:]  # make a copy
-        if line["y"]:
-            line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
-            if key == "physics":
-                line["line"] = {"color": COLOR_PHYSICS}
-                line["fillcolor"] = COLOR_PHYSICS
-            elif key == "society":
-                line["line"] = {"color": COLOR_SOCIETY}
-                line["fillcolor"] = COLOR_SOCIETY
-            elif key == "engineering":
-                line["line"] = {"color": COLOR_ENGINEERING}
-                line["fillcolor"] = COLOR_ENGINEERING
-            plot_list.append(line)
-    return plot_list
-
-
-def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
-    net_gain = None
-    y_previous_pos, y_previous_neg = None, None
-    pos_initiated = False
-    plot_list = []
-    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
-        if not any(y_values):
-            continue
-        if net_gain is None:
-            net_gain = [0.0 for _ in x_values]
-            y_previous_pos = [0.0 for _ in x_values]
-            y_previous_neg = [0.0 for _ in x_values]
-        fill_mode = "tozeroy"
-        if all(y <= 0 for y in y_values):
-            y_previous = y_previous_neg
-        elif all(y >= 0 for y in y_values):
-            y_previous = y_previous_pos
-            if pos_initiated:
-                fill_mode = "tonexty"
-            pos_initiated = True
-        else:
-            logger.warning("Not a real budget Graph!")
-            break
-        line = {'x': x_values, 'name': key, "hoverinfo": "x+text"}
-        for i, y in enumerate(y_values):
-            y_previous[i] += y
-            net_gain[i] += y
-        line["y"] = y_previous[:]
-        line["fill"] = fill_mode
-        line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
-        plot_list.append(line)
-    if plot_list:
-        plot_list.append({
-            'x': plot_list[0]["x"],
-            'y': net_gain,
-            'name': 'Net gain',
-            'line': {'color': 'rgba(0,0,0,1)'},
-            'text': [f'{val:.2f} - net gain' for val in net_gain],
-            'hoverinfo': 'x+text',
-        })
-    return plot_list
 
 
 def get_leader_dicts(session, most_recent_date):
@@ -520,6 +499,41 @@ def get_war_dicts(session, current_date):
         ))
 
     return wars
+
+
+def get_country_color(country_name: str, alpha: float = 1.0) -> str:
+    alpha = min(alpha, 1)
+    alpha = max(alpha, 0)
+
+    if country_name == "physics":
+        return COLOR_PHYSICS
+    elif country_name == "society":
+        return COLOR_SOCIETY
+    elif country_name == "engineering":
+        return COLOR_ENGINEERING
+
+    random.seed(country_name)
+    r, g, b = [random.randint(20, 255) for _ in range(3)]
+    color = f"rgba({r},{g},{b},{alpha})"
+    return color
+
+
+def get_most_recent_date(session):
+    most_recent_gs = session.query(models.GameState).order_by(models.GameState.date.desc()).first()
+    if most_recent_gs is None:
+        most_recent_date = 0
+    else:
+        most_recent_date = most_recent_gs.date
+    return most_recent_date
+
+
+def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
+    start = time.time()
+    plot_data = visualization_data.get_current_execution_plot_data(game_id)
+    plot_list = get_plot_lines(plot_data, plot_spec)
+    end = time.time()
+    logger.info(f"Update took {end - start} seconds!")
+    return plot_list
 
 
 def start_server():

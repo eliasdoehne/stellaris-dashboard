@@ -362,34 +362,6 @@ class EmpireProgressionPlotData:
         self.empire_food_budget["enclave_trade_expenses"].append(gs.food_spending_enclaves)
         self.empire_food_budget["sector_consumption"].append(-gs.food_spending_sectors)
 
-    def compress_plot_list(self, full_data: List[float]) -> Tuple[List[float], List[float]]:
-        """
-        Given a list of values that will be graphed, return a new list without all the redundant ones.
-        :param full_data:
-        :return:
-        """
-        dates = []
-        plot_list = []
-        for value, date in zip(full_data, self.dates):
-            if value is EmpireProgressionPlotData.DEFAULT_VAL:
-                if not plot_list:
-                    continue
-                elif plot_list[-1] is not value:
-                    dates.append(date)
-                    plot_list.append(value)
-            elif not plot_list or plot_list[-1] != value:
-                # always append if the list is empty or if the value is new
-                dates.append(date)
-                plot_list.append(value)
-            elif plot_list[-1] == value:
-                # if the value is equal to the previous one, we still want to represent every interval by two datapoints
-                if len(plot_list) > 1 and plot_list[-2] == plot_list[-1]:
-                    dates[-1] = date
-                else:
-                    dates.append(date)
-                    plot_list.append(value)
-        return dates, plot_list
-
     def iterate_data(self, plot_spec: PlotSpecification) -> Iterable[Tuple[str, List[float], List[float]]]:
         data_dict = plot_spec.plot_data_function(self)
         for key, data in data_dict.items():
@@ -399,14 +371,8 @@ class EmpireProgressionPlotData:
                 key = "Droid"
             elif key == "ROBOT_POP_SPECIES_3":
                 key = "Synth"
-            if plot_spec.style == PlotStyle.line:
-                # For line plots, we can compress the entries, as each line is independent
-                x, y = self.compress_plot_list(data)
-            else:
-                # other plots need to add data points to each other => return everything
-                x, y = self.dates, data
-            if y:
-                yield key, x, y
+            if data:
+                yield key, self.dates, data
 
     def data_sorted_by_last_value(self, plot_spec: PlotSpecification) -> List[Tuple[str, List[float], List[float]]]:
         unsorted_data = list(self.iterate_data(plot_spec))
