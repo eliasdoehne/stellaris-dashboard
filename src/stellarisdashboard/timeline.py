@@ -617,13 +617,16 @@ class TimelineExtractor:
         pop_data = self._gamestate_dict["pop"]
 
         for planet_id in country_dict.get("owned_planets", []):
-            planet_data = self._gamestate_dict["planet"][planet_id]
-            for pop_id in planet_data.get("pop", []):
-                if pop_id not in pop_data:
+            tiles = self._gamestate_dict["planet"][planet_id].get("tiles", [])
+            for tile_data in tiles.values():
+                pop_id = tile_data.get("pop")
+                if pop_id is None:
+                    continue
+                elif pop_id not in pop_data:
                     logger.warning(f"{self._logger_str} Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     continue
                 this_pop = pop_data[pop_id]
-                if this_pop["growth_state"] != 1:
+                if this_pop["growth_state"] != "grown":
                     continue
                 species_id = this_pop["species_index"]
                 species_dict = self._gamestate_dict["species"][species_id]

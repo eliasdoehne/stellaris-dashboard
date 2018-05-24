@@ -557,6 +557,8 @@ class EmpireProgressionPlotData:
                 faction_support_dict[f] = 0
 
         pop_count = self.pop_count[country_data.country.country_name][-1]
+        if not pop_count:
+            return
         # then add them to the data dictionary.
         for f in faction_sizes:
             if f not in self.faction_size_distribution:
