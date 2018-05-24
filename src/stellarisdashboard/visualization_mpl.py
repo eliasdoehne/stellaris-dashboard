@@ -42,7 +42,7 @@ class MatplotLibVisualization:
         ax.set_title(plot_spec.title)
         for i, (key, x, y) in enumerate(self.plot_data.data_sorted_by_last_value(plot_spec)):
             if y:
-                plot_kwargs = self._get_country_plot_kwargs(key, i, len(plot_spec.plot_data_function(self.plot_data)))
+                plot_kwargs = self._get_country_plot_kwargs(key)
                 ax.plot(x, y, **plot_kwargs)
         ax.legend()
 
@@ -59,7 +59,7 @@ class MatplotLibVisualization:
             colors.append(MatplotLibVisualization.COLOR_MAP(color_index))
         if stacked:
             ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.75)
-        ax.legend(loc='upper left')
+        ax.legend(loc='upper left', prop={'size': 6})
 
     def _budget_plot(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
@@ -111,10 +111,9 @@ class MatplotLibVisualization:
             ax.set_xlim((self.plot_data.dates[0], self.plot_data.dates[-1]))
             ax.set_xlabel(f"Time (Years)")
 
-    def _get_country_plot_kwargs(self, country_name: str, i: int, num_lines: int):
+    def _get_country_plot_kwargs(self, country_name: str):
         linewidth = 1
-        color_index = i / max(1, num_lines - 1)
-        c = MatplotLibVisualization.COLOR_MAP(color_index)
+        c = visualization_data.get_color_vals(country_name, range_min=0, range_max=0.9)
         label = f"{country_name}"
         if country_name == self.plot_data.player_country:
             linewidth = 2
