@@ -22,19 +22,20 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
+VERSION_ID = "v0.1.3"
 
 @flask_app.route("/")
 @flask_app.route("/checkversion/<version>/")
 def index_page(version=None):
     show_old_version_notice = False
     if version is not None:
-        show_old_version_notice = version != "v0.1.0"
+        show_old_version_notice = version != VERSION_ID
     games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
     return render_template(
         "index.html",
         games=games,
         show_old_version_notice=show_old_version_notice,
-        version=version,
+        version=VERSION_ID,
     )
 
 
@@ -45,7 +46,7 @@ def index_page(version=None):
 def history_page(game_name=None, version=None):
     show_old_version_notice = False
     if version is not None:
-        show_old_version_notice = version != "v0.1.0"
+        show_old_version_notice = version != VERSION_ID
     if game_name is None:
         game_name = ""
 
@@ -67,7 +68,7 @@ def history_page(game_name=None, version=None):
         wars=wars,
         leaders=leaders,
         show_old_version_notice=show_old_version_notice,
-        version=version,
+        version=VERSION_ID,
     )
 
 
