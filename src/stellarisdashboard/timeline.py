@@ -626,6 +626,8 @@ class TimelineExtractor:
                     logger.warning(f"{self._logger_str} Reference to non-existing pop with id {pop_id} on planet {planet_id}")
                     continue
                 this_pop = pop_data[pop_id]
+                if not isinstance(this_pop, dict):
+                    continue  # might be "none"
                 if this_pop["growth_state"] != "grown":
                     continue
                 species_id = this_pop["species_index"]
