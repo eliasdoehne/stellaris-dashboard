@@ -106,6 +106,8 @@ class TimelineExtractor:
             for hl_data in system_data.get("hyperlane", []):
                 neighbor = hl_data.get("to")
                 # use frozenset to avoid antiparallel duplicates
+                if neighbor == system_id_in_game:
+                    continue  # This can happen in Stellaris 2.1
                 hyperlanes.add(frozenset([system_id_in_game, neighbor]))
         for hl in hyperlanes:
             a, b = hl
