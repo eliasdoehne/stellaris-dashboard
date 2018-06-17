@@ -696,7 +696,7 @@ class GalaxyMapData:
             for ownership in ownerships:
                 self._cache_valid_date = max(self._cache_valid_date, ownership.end_date_days)
                 system_id = ownership.system.system_id_in_game
-                name = self._get_country_name_from_id(ownership, ownership.start_date_days)
+                name = self._get_country_name_from_id(ownership, ownership.end_date_days)
                 if system_id not in self._owner_cache:
                     self._owner_cache[system_id] = []
                     if ownership.start_date_days > 0:
@@ -713,15 +713,13 @@ class GalaxyMapData:
                     end=ownership.end_date_days,
                 ))
 
-    def _get_country_name_from_id(self, ownership, time_days):
+    def _get_country_name_from_id(self, ownership: models.SystemOwnership, time_days):
         country = ownership.country
         if country is None:
-            logger.warning(f"Ownership {ownership} has no country!")
-            name = GalaxyMapData.UNCLAIMED
-        elif config.CONFIG.show_everything:
-            name = country.country_name
-        elif country.first_player_contact_date is None or country.first_player_contact_date > time_days:
-            name = GalaxyMapData.UNCLAIMED
-        else:
-            name = country.country_name
-        return name
+            logger.warning(f"{ownership} has no country!")
+            return GalaxyMapData.UNCLAIMED
+        if config.CONFIG.show_everything:
+            return country.country_name
+        if country.first_player_contact_date is None or country.first_player_contact_date > time_days:
+            return GalaxyMapData.UNCLAIMED
+        return country.country_name
