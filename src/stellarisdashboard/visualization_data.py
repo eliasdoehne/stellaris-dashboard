@@ -11,9 +11,9 @@ import networkx as nx
 
 logger = logging.getLogger(__name__)
 
-COLOR_PHYSICS = (30, 100, 170)
-COLOR_SOCIETY = (60, 150, 90)
-COLOR_ENGINEERING = (190, 150, 30)
+COLOR_PHYSICS = (0.12, 0.4, 0.66)
+COLOR_SOCIETY = (0.23, 0.59, 0.35)
+COLOR_ENGINEERING = (0.75, 0.59, 0.12)
 
 
 @enum.unique
@@ -58,13 +58,13 @@ SYSTEM_COUNT_GRAPH = PlotSpecification(
 )
 NET_MINERAL_INCOME_GRAPH = PlotSpecification(
     plot_id='net-mineral-income-graph',
-    title="Net Mineral Income (Warning: Might be inaccurate!)",
+    title="Net Mineral Income",
     plot_data_function=lambda pd: pd.net_mineral_income,
     style=PlotStyle.line,
 )
 NET_ENERGY_INCOME_GRAPH = PlotSpecification(
     plot_id='net-energy-income-graph',
-    title="Net Energy Income (Warning: Might be inaccurate!)",
+    title="Net Energy Income",
     plot_data_function=lambda pd: pd.net_energy_income,
     style=PlotStyle.line,
 )
@@ -160,14 +160,16 @@ EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
 # This specifies how the plots should be laid out in tabs by the plotly frontend
 # and how they should be split to different images by matplotlib
 THEMATICALLY_GROUPED_PLOTS = {
+    "Budget": [
+        EMPIRE_ENERGY_ECONOMY_GRAPH,
+        EMPIRE_MINERAL_ECONOMY_GRAPH,
+        EMPIRE_FOOD_ECONOMY_GRAPH,
+    ],
     "Economy": [
         PLANET_COUNT_GRAPH,
         SYSTEM_COUNT_GRAPH,
         NET_ENERGY_INCOME_GRAPH,
         NET_MINERAL_INCOME_GRAPH,
-        EMPIRE_ENERGY_ECONOMY_GRAPH,
-        EMPIRE_MINERAL_ECONOMY_GRAPH,
-        EMPIRE_FOOD_ECONOMY_GRAPH,
     ],
     "Population": [
         POP_COUNT_GRAPH,
@@ -187,7 +189,7 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
     "Military": [
         FLEET_SIZE_GRAPH,
-        MILITARY_POWER_GRAPH
+        MILITARY_POWER_GRAPH,
     ],
 }
 
@@ -234,12 +236,12 @@ def show_military_info(country_data: models.CountryData):
             or country_data.has_federation_with_player)
 
 
-def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0):
-    if key_str == "physics":
+def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0) -> Tuple[float, float, float]:
+    if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
-    elif key_str == "society":
+    elif key_str.lower() == "society":
         r, g, b = COLOR_SOCIETY
-    elif key_str == "engineering":
+    elif key_str.lower() == "engineering":
         r, g, b = COLOR_ENGINEERING
     else:
         random.seed(key_str)

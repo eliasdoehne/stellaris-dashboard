@@ -24,12 +24,17 @@ timeline_app.scripts.config.serve_locally = True
 
 VERSION_ID = "v0.1.4"
 
+
+def is_old_version(requested_version: str) -> bool:
+    return requested_version != VERSION_ID
+
+
 @flask_app.route("/")
 @flask_app.route("/checkversion/<version>/")
 def index_page(version=None):
     show_old_version_notice = False
     if version is not None:
-        show_old_version_notice = version != VERSION_ID
+        show_old_version_notice = is_old_version(version)
     games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
     return render_template(
         "index.html",
@@ -46,7 +51,7 @@ def index_page(version=None):
 def history_page(game_name=None, version=None):
     show_old_version_notice = False
     if version is not None:
-        show_old_version_notice = version != VERSION_ID
+        show_old_version_notice = is_old_version(version)
     if game_name is None:
         game_name = ""
 
@@ -240,7 +245,7 @@ def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
             y=y_values,
             name=key,
             text=[f"{val:.2f} - {key}" for val in y_values],
-            line={"color": get_country_color(key, 0.75)},
+            line={"color": get_country_color(key, 1.0)},
         )
         plot_list.append(line)
     return plot_list
@@ -259,8 +264,8 @@ def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotDa
         line["y"] = y_previous[:]  # make a copy
         if line["y"]:
             line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
-            line["line"] = {"color": get_country_color(key, 0.75)}
-            line["fillcolor"] = get_country_color(key, 0.3)
+            line["line"] = {"color": get_country_color(key, 1.0)}
+            line["fillcolor"] = get_country_color(key, 0.75)
             plot_list.append(line)
     return plot_list
 
@@ -303,7 +308,7 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
             'x': plot_list[0]["x"],
             'y': net_gain,
             'name': 'Net gain',
-            'line': {'color': 'rgba(0,0,0,1)'},
+            'line': {'color': 'rgba(255,255,255,1)'},
             'text': [f'{val:.2f} - net gain' for val in net_gain],
             'hoverinfo': 'x+text',
         })

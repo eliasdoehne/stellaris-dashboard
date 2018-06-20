@@ -44,7 +44,7 @@ class MatplotLibVisualization:
             if y:
                 plot_kwargs = self._get_country_plot_kwargs(key)
                 ax.plot(x, y, **plot_kwargs)
-        ax.legend()
+        ax.legend(loc='upper left')
 
     def _stacked_plot(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
@@ -55,8 +55,11 @@ class MatplotLibVisualization:
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
-            color_index = i / max(1, len(data) - 1)
-            colors.append(MatplotLibVisualization.COLOR_MAP(color_index))
+            if key in ["physics", "society", "engineering"]:
+                colors.append(visualization_data.get_color_vals(key))
+            else:
+                color_index = i / max(1, len(data) - 1)
+                colors.append(MatplotLibVisualization.COLOR_MAP(color_index))
         if stacked:
             ax.stackplot(self.plot_data.dates, stacked, labels=labels, colors=colors, alpha=0.75)
         ax.legend(loc='upper left', prop={'size': 6})
