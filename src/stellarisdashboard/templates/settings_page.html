@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<a class="button" href={{url_for("/timeline", game_name=game_name)}}>Go to Timeline</a>
+<h1>Settings</h1>
+
+<form class="settingsform" action="/action_page.php">
+    <div class="settings">
+        {% for key, setting in current_settings.items() %}
+        {% if setting["type"] == "bool" %}
+        {{ setting["name"] }} <input type="checkbox" title="{{ setting["description"] }}" name={{key}} value={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>
+        {% endif %}
+        {% if setting["type"] == "int" %}
+        {{ setting["name"] }} <input type="number" title="{{ setting["description"] }}" name={{key}} min="1" max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
+        {% endif %}
+        {% if setting["type"] == "options" %}
+        {{ setting["name"] }} <input type="number" title="{{ setting["description"] }}" name={{key}} min="1" max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
+        {% endif %}
+        {% if setting["type"] == "str" %}
+        {{ setting["name"] }} <input type="text" title="{{ setting["description"] }}" name={{key}} value={{setting["value"]}}> <br>
+        {% endif %}
+        {% endfor %}
+        <input class="button" type="submit" value="Apply Settings">
+    </div>
+</form>
+
+<p>
+    Note: You can also change the default paths for the dashboard output folder and the Stellaris
+    save files by editing the file <code>src/stellarisdashboard/default_paths.py.</code>
+</p>
+{% endblock %}

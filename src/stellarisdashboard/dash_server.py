@@ -77,6 +77,70 @@ def history_page(game_name=None, version=None):
     )
 
 
+@flask_app.route("/settings/")
+@flask_app.route("/settings")
+def settings_page():
+    t_int = "int"
+    t_bool = "bool"
+    t_str = "str"
+    t_opt = "options"
+
+    def convert_bool(val):
+        return "true" if val else "false"
+
+    current_settings = {
+        "check_version": {
+            "type": t_bool,
+            "value": convert_bool(config.CONFIG.check_version),
+            "name": "Check version:",
+            "description": "Check if new versions of the dashboard are available. This only works if you subscribe to the mod in the Steam workshop.",
+        },
+        "extract_system_ownership": {
+            "type": t_bool,
+            "value": convert_bool(config.CONFIG.extract_system_ownership),
+            "name": "Extract system ownership:",
+            "description": "Extracting ownership of systems can be a bit slow. Disable if you experience performance issues.",
+        },
+        "show_everything": {
+            "type": t_bool,
+            "value": convert_bool(config.CONFIG.show_everything),
+            "name": "Show all empires:",
+            "description": "Cheat mode: Show data for all empires.",
+        },
+        "only_show_default_empires": {
+            "type": t_bool,
+            "value": convert_bool(config.CONFIG.only_show_default_empires),
+            "name": "Only show default empires:",
+            "description": "Only show normal empires. Use with Show everything to exclude fallen empires and similar.",
+        },
+        "save_name_filter": {
+            "type": t_str,
+            "value": config.CONFIG.save_name_filter,
+            "name": "Save filter:",
+            "description": "Save files whose file names do not contain this string are ignored. You can use it to only read yearly autosaves, by setting the value to \"01.sav\"",
+        },
+        "cpu_count": {
+            "type": t_int,
+            "value": config.CONFIG.threads,
+            "max": config.CPU_COUNT,
+            "name": "CPU count:",
+            "description": "Maximal number of CPU cores used for reading save files.",
+        },
+        "port": {
+            "type": t_int,
+            "value": config.CONFIG.port,
+            "max": 65535,
+            "name": "Port:",
+            "description": "The port used by the dashboard to serve the visualizations. You probably don't need to change this.",
+        },
+    }
+    return render_template(
+        "settings_page.html",
+        # current_settings=config.CONFIG.asdict(),
+        current_settings=current_settings,
+    )
+
+
 STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
 GALAXY_BG_COLOR = 'rgba(0,0,0,1)'
 STELLARIS_LIGHT_BG_COLOR = 'rgba(43,59,52,1)'

@@ -83,3 +83,8 @@ div.leader-box {
     margin: 0.5cm auto;
     padding: 0.25cm;
 }
+
+
+div.settings {
+    color: rgba(195, 133, 33, 1);
+}

@@ -6,7 +6,10 @@ import sys
 
 import dataclasses
 
+from stellarisdashboard import default_paths
+
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
+CPU_COUNT = mp.cpu_count()
 
 
 def initialize_logger():
@@ -30,13 +33,12 @@ class Config:
     base_output_path: pathlib.Path = None
 
     # These are the default values
-    cpu_count = mp.cpu_count()
-    if cpu_count < 4:
+    if CPU_COUNT < 4:
         threads = 1
-    elif cpu_count == 4:
+    elif CPU_COUNT == 4:
         threads = 2
     else:
-        threads = max(1, mp.cpu_count() // 2 - 1)
+        threads = max(1, CPU_COUNT // 2 - 1)
     port: int = 28053
     colormap: str = "viridis"
     log_level: str = "INFO"
@@ -85,18 +87,18 @@ class Config:
 
 def _get_default_save_path():
     if platform.system() == "Linux":
-        return pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
+        return pathlib.Path.home() / default_paths.linux_save_path  # ".local/share/Paradox Interactive/Stellaris/save games/"
     elif platform.system() == "Windows":
-        return pathlib.Path.home() / "Documents\Paradox Interactive\Stellaris\save games"
+        return pathlib.Path.home() / default_paths.win_save_path
     return None
 
 
 def _get_default_base_output_path():
     system = platform.system()
     if system == "Linux":
-        return pathlib.Path.home() / "Documents/stellaristimeline/"
+        return pathlib.Path.home() / default_paths.linux_output_path
     elif system == "Windows":
-        return pathlib.Path.home() / "Documents/stellaristimeline"
+        return pathlib.Path.home() / default_paths.win_output_path
     return None
 
 
