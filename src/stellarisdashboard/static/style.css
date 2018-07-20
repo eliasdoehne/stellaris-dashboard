@@ -15,7 +15,7 @@ h4, h5, h6 {
     text-align: left;
 }
 
-p {
+p, span.settingname {
     color: rgba(217, 217, 217, 1);
     font-family: verdana;
     font-size: 20px;
@@ -27,10 +27,20 @@ a {
     font-size: 20px;
 }
 
-a.button {
+input {
+    color: rgba(0, 0, 0, 1);
+    font-family: verdana;
+    font-size: 20px;
+}
+
+a.button, input.button {
     -webkit-appearance: button;
     -moz-appearance: button;
     appearance: button;
+
+    color: rgba(195, 133, 33, 1);
+    font-family: verdana;
+    font-size: 20px;
 
     background-color: rgba(43, 59, 52, 1);
     display: inline;
@@ -84,7 +94,32 @@ div.leader-box {
     padding: 0.25cm;
 }
 
+form.settingsform {
+    padding: 0.25cm;
+}
 
 div.settings {
+    width: 80%;
     color: rgba(195, 133, 33, 1);
+    padding: 0.25cm;
+    margin: 0.25cm auto;
+}
+
+div.setting {
+    padding: 0.1cm;
+
+    align-self: flex-start;
+
+    display: flex;
+    flex-direction: row;
+}
+
+span.settingname {
+    align-self: flex-start;
+    flex: 2 0 60%;
+}
+
+span.settinginput {
+    align-self: center;
+    flex: 1 0 40%;
 }

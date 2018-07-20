@@ -10,7 +10,7 @@ import dash_html_components as html
 import flask
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
-from flask import render_template
+from flask import render_template, request, redirect
 
 from stellarisdashboard import config, models, visualization_data
 
@@ -92,45 +92,45 @@ def settings_page():
         "check_version": {
             "type": t_bool,
             "value": convert_bool(config.CONFIG.check_version),
-            "name": "Check version:",
+            "name": "Check for new versions",
             "description": "Check if new versions of the dashboard are available. This only works if you subscribe to the mod in the Steam workshop.",
         },
         "extract_system_ownership": {
             "type": t_bool,
             "value": convert_bool(config.CONFIG.extract_system_ownership),
-            "name": "Extract system ownership:",
+            "name": "Extract system ownership",
             "description": "Extracting ownership of systems can be a bit slow. Disable if you experience performance issues.",
         },
         "show_everything": {
             "type": t_bool,
             "value": convert_bool(config.CONFIG.show_everything),
-            "name": "Show all empires:",
+            "name": "Cheat mode: Show all empires",
             "description": "Cheat mode: Show data for all empires.",
         },
         "only_show_default_empires": {
             "type": t_bool,
             "value": convert_bool(config.CONFIG.only_show_default_empires),
-            "name": "Only show default empires:",
-            "description": "Only show normal empires. Use with Show everything to exclude fallen empires and similar.",
+            "name": "Only show default empires",
+            "description": 'Only show normal empires. Use it to exclude fallen empires and similar.',
         },
         "save_name_filter": {
             "type": t_str,
             "value": config.CONFIG.save_name_filter,
-            "name": "Save filter:",
+            "name": "Save file name filter",
             "description": "Save files whose file names do not contain this string are ignored. You can use it to only read yearly autosaves, by setting the value to \"01.sav\"",
         },
         "cpu_count": {
             "type": t_int,
             "value": config.CONFIG.threads,
             "max": config.CPU_COUNT,
-            "name": "CPU count:",
+            "name": "Number of CPU cores",
             "description": "Maximal number of CPU cores used for reading save files.",
         },
         "port": {
             "type": t_int,
             "value": config.CONFIG.port,
             "max": 65535,
-            "name": "Port:",
+            "name": "Port",
             "description": "The port used by the dashboard to serve the visualizations. You probably don't need to change this.",
         },
     }
@@ -140,6 +140,12 @@ def settings_page():
         current_settings=current_settings,
     )
 
+
+@flask_app.route("/applysettings/", methods=["POST", "GET"])
+def apply_settings():
+    print(request)
+    print(request.form)
+    return redirect("/")
 
 STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
 GALAXY_BG_COLOR = 'rgba(0,0,0,1)'
