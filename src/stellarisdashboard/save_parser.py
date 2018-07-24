@@ -45,6 +45,8 @@ class SavePathMonitor:
 
         :return:
         """
+        if config.CONFIG.save_name_filter:
+            logger.info(f'Filtering save files by name: "{config.CONFIG.save_name_filter}"')
         new_files = self.valid_save_files()
         if new_files:
             if config.CONFIG.save_name_filter:
@@ -52,7 +54,7 @@ class SavePathMonitor:
         self.processed_saves.update(new_files)
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
-            logger.debug(f"Found {len(new_files)} new files: {new_files_str}...")
+            logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
         if self.threads > 1 and len(new_files) > 1:
             game_ids = [f.parent.stem for f in new_files]
             with concurrent.futures.ProcessPoolExecutor(max_workers=self.threads) as executor:

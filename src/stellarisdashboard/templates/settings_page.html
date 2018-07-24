@@ -11,7 +11,7 @@
             <span class="settingname"> {{ setting["name"] }}: </span>
             <span class="settinginput">
             {% if setting["type"] == "bool" %}
-            <input type="checkbox" title="{{ setting["description"] }}" name={{key}} value={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>
+            <input type="checkbox" title="{{ setting["description"] }}" name={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>
             {% endif %}
             {% if setting["type"] == "int" %}
             <input type="number" title="{{ setting["description"] }}" name={{key}} min="1" max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>

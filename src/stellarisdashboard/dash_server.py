@@ -83,7 +83,6 @@ def settings_page():
     t_int = "int"
     t_bool = "bool"
     t_str = "str"
-    t_opt = "options"
 
     def convert_bool(val):
         return "true" if val else "false"
@@ -119,7 +118,7 @@ def settings_page():
             "name": "Save file name filter",
             "description": "Save files whose file names do not contain this string are ignored. You can use it to only read yearly autosaves, by setting the value to \"01.sav\"",
         },
-        "cpu_count": {
+        "threads": {
             "type": t_int,
             "value": config.CONFIG.threads,
             "max": config.CPU_COUNT,
@@ -134,32 +133,46 @@ def settings_page():
             "description": "The port used by the dashboard to serve the visualizations. You probably don't need to change this.",
         },
     }
+
+    for key, val in config.CONFIG.get_dict().items():
+        if key in current_settings:
+            if key in config.Config.BOOL_KEYS:
+                val = convert_bool(val)
+            if key in config.Config.INT_KEYS:
+                val = int(val)
+            current_settings[key]["value"] = val
     return render_template(
         "settings_page.html",
-        # current_settings=config.CONFIG.asdict(),
         current_settings=current_settings,
     )
 
 
 @flask_app.route("/applysettings/", methods=["POST", "GET"])
 def apply_settings():
-    print(request)
-    print(request.form)
+    settings = request.form.to_dict(flat=True)
+    for key in settings:
+        if key in config.Config.BOOL_KEYS:
+            settings[key] = key in settings  # only checked items are included in form data
+        if key in config.Config.INT_KEYS:
+            settings[key] = int(settings[key])
+    config.CONFIG.apply_dict(settings)
+    config.CONFIG.write_to_file()
+    print(config.CONFIG)
     return redirect("/")
 
-STELLARIS_DARK_BG_COLOR = 'rgba(33,43,39,1)'
-GALAXY_BG_COLOR = 'rgba(0,0,0,1)'
-STELLARIS_LIGHT_BG_COLOR = 'rgba(43,59,52,1)'
-STELLARIS_FONT_COLOR = 'rgba(217,217,217,1)'
-STELLARIS_GOLD_FONT_COLOR = 'rgba(217,217,217,1)'
+
+DARK_THEME_BACKGROUND = 'rgba(33,43,39,1)'
+DARK_THEME_GALAXY_BACKGROUND = 'rgba(0,0,0,1)'
+BACKGROUND_PLOT_DARK = 'rgba(43,59,52,1)'
+DARK_THEME_TEXT_COLOR = 'rgba(217,217,217,1)'
 DEFAULT_PLOT_LAYOUT = go.Layout(
     yaxis=dict(
         type="linear",
     ),
     height=640,
-    plot_bgcolor=STELLARIS_LIGHT_BG_COLOR,
-    paper_bgcolor=STELLARIS_DARK_BG_COLOR,
-    font={'color': STELLARIS_FONT_COLOR},
+    plot_bgcolor=BACKGROUND_PLOT_DARK,
+    paper_bgcolor=DARK_THEME_BACKGROUND,
+    font={'color': DARK_THEME_TEXT_COLOR},
 )
 
 # SOME CSS ATTRIBUTES
@@ -227,7 +240,7 @@ timeline_app.layout = html.Div([
     "height": "100%",
     "padding": 0,
     "margin": 0,
-    "background-color": STELLARIS_DARK_BG_COLOR,
+    "background-color": DARK_THEME_BACKGROUND,
 })
 
 
@@ -459,9 +472,9 @@ def get_galaxy(game_id, date):
         ),
         height=720,
         hovermode='closest',
-        plot_bgcolor=GALAXY_BG_COLOR,
-        paper_bgcolor=STELLARIS_LIGHT_BG_COLOR,
-        font={'color': STELLARIS_FONT_COLOR},
+        plot_bgcolor=DARK_THEME_GALAXY_BACKGROUND,
+        paper_bgcolor=BACKGROUND_PLOT_DARK,
+        font={'color': DARK_THEME_TEXT_COLOR},
     )
 
     return dcc.Graph(
