@@ -59,7 +59,7 @@ You can also follow my [video tutorial](https://youtu.be/gXpkyL_7jNE?t=379) for 
   2. Extract the archive in a location of your choice.
   3. Run the `install.bat` file in the extracted folder by double-clicking it. At this point, Windows may show you a security warning [like this](https://imgur.com/6PIZCmA). If so, click on "More Information" to unlock the "Run anyway" button.
   3. To use the interactive in-game dashboard, install the "Stellaris Dashboard Integration" mod. Do either of the following:
-     1. Subscribe to the browser mod [in the Steam Workshop](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772) (maintained independently by Steam/reddit user 8igualdos0s)
+     1. Subscribe to the browser mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202)
      2. Or manually install it, it is included in the `mod` folder 
   4. To start the program, run the `stellarisdashboard.bat` file. A similar Windows security warning as before may appear.
   5. Activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz)
@@ -78,7 +78,7 @@ Ensure that you are using python 3.6 or later when running the commands below. Y
   2. (Optional but recommended) Run `python3.6 -m venv env` to create a virtual environment, and activate it by running `source env/bin/activate` whenever you want to use the dashboard. This avoids interference with other python programs you may have installed.
   3. Run `pip3.6 install -e .` to install the program and all dependencies using pip. The `-e` flag tells pip to link to the existing python code instead of copying it to another location, which makes editing your `config.ini` file easier.
   3. To use the interactive in-game dashboard, install the "Stellaris Dashboard Integration" mod. Do either of the following:
-     1. Subscribe to the browser mod [in the Steam Workshop](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772) (maintained independently by Steam/reddit user 8igualdos0s)
+     1. Subscribe to the browser mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202)
      2. Or manually install it, it is included in the `mod` folder.
   4. Activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz)
   5. To start the program, run `stellarisdashboard` (Remember to first activate your virtual environment if you made one! (run `source env/bin/activate`))
@@ -88,9 +88,9 @@ These instructions should also work on Mac OS X, although I cannot test this or 
 
 # Instructions
 
-If you just want the basics, run the program while you play the game, either with `stellarisdashboard.bat` on Windows, or by running `stellarisdashboard` in a command line.
+If you just want the basics, run the program while you play the game, either with `stellarisdashboard.bat` on Windows, or by running `stellarisdashboard` in a command line in linux or OSX.
 
-While `stellarisdashboard` is running, you can open the in-game browser with the [help button in the bottom right corner of the game UI](https://imgur.com/zWPmrbr), or with the shortcut Alt-B. Then, there should be several buttons in the top right corner of the browser window. Click these to navigate to the various features of the dashboard. Alternatively, you can use any web browser to view the dashboard at [http://127.0.0.1:28053/](http://127.0.0.1:28053/) without installing the mod.
+While the dashboard program is running, you can open the in-game browser with the [help button in the bottom right corner of the game UI](https://imgur.com/zWPmrbr), or with the shortcut Alt-B. Then, there should be several buttons in the top right corner of the browser window. Click these to navigate to the various features of the dashboard. Alternatively, you can use any web browser to view the dashboard at [http://127.0.0.1:28053/](http://127.0.0.1:28053/) without installing the mod.
 
 ## Command Line Interface
 
@@ -159,7 +159,7 @@ If you want to compile the Cython extensions and run the (currently minimal) uni
 Thanks to [this project](https://github.com/omiddavoodi/StellarisInGameLedger) by reddit user Ariestinak, which inspired the 
 approach of modding the in-game browser.
 
-Also thanks to reddit and Steam user 8igualdos0s for maintaining a copy of the browser mod [in the Steam Workshop.](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772)
+Also many thanks to reddit and Steam user 8igualdos0s for maintaining a copy of the browser mod [in the Steam Workshop.](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772)
 
 The Python code is released under the MIT license:
 
