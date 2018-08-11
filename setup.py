@@ -56,6 +56,7 @@ setup(
         "networkx",
         "plotly",
         'sqlalchemy',
+        'pyyaml',
     ],
     entry_points={
         "console_scripts": [
