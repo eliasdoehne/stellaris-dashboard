@@ -47,7 +47,7 @@ setup(
     install_requires=[
         "click",
         "dash",
-        "dash-core-components==0.21.0rc1",
+        "dash-core-components",
         "dash-html-components",
         "dash-renderer",
         "flask",
