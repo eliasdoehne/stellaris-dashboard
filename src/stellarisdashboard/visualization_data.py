@@ -243,6 +243,8 @@ def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0)
         r, g, b = COLOR_SOCIETY
     elif key_str.lower() == "engineering":
         r, g, b = COLOR_ENGINEERING
+    elif key_str == GalaxyMapData.UNCLAIMED:
+        r, g, b = 255, 255, 255
     else:
         random.seed(key_str)
         r, g, b = [random.uniform(range_min, range_max) for _ in range(3)]
