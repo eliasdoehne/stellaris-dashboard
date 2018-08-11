@@ -163,9 +163,11 @@ def apply_settings():
 
 DARK_THEME_BACKGROUND = 'rgba(33,43,39,1)'
 DARK_THEME_GALAXY_BACKGROUND = 'rgba(0,0,0,1)'
+DARK_THEME_BACKGROUND_DARK = 'rgba(20,25,25,1)'
 BACKGROUND_PLOT_DARK = 'rgba(43,59,52,1)'
 DARK_THEME_TEXT_COLOR = 'rgba(217,217,217,1)'
-DEFAULT_PLOT_LAYOUT = go.Layout(
+DARK_THEME_TEXT_HIGHLIGHT_COLOR = 'rgba(195, 133, 33, 1)'
+DEFAULT_PLOT_LAYOUT = dict(
     yaxis=dict(
         type="linear",
     ),
@@ -177,13 +179,13 @@ DEFAULT_PLOT_LAYOUT = go.Layout(
 
 # SOME CSS ATTRIBUTES
 BUTTON_STYLE = {
-    "color": "rgba(195, 133, 33, 1)",
+    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
     "font-family": "verdana",
     "font-size": "20px",
     "-webkit-appearance": "button",
     "-moz-appearance": "button",
     "appearance": "button",
-    "background-color": "rgba(43, 59, 52, 1)",
+    "background-color": BACKGROUND_PLOT_DARK,
     "display": "inline",
     "text-decoration": "none",
     "padding": "0.1cm",
@@ -191,7 +193,7 @@ BUTTON_STYLE = {
 }
 HEADER_STYLE = {
     "font-family": "verdana",
-    "color": "rgba(217, 217, 217, 1)",
+    "color": DARK_THEME_TEXT_COLOR,
     "margin-top": "20px",
     "margin-bottom": "10px",
     "text-align": "center",
@@ -201,17 +203,48 @@ TEXT_STYLE = {
     "color": "rgba(217, 217, 217, 1)",
 }
 
-CATEGORY_TABS = [{'label': category, 'value': category} for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
-CATEGORY_TABS.append({'label': "Galaxy", 'value': "Galaxy"})
-DEFAULT_SELECTED_CATEGORY = "Economy"
+SELECTED_TAB_STYLE = {
+    'width': 'inherit',
+    'boxShadow': 'none',
+    'borderLeft': 'thin lightgrey solid',
+    'borderRight': 'thin lightgrey solid',
+    'borderTop': '2px #0074D9 solid',
+    'background': DARK_THEME_BACKGROUND,
+    'color': DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+}
+TAB_CONTAINER_STYLE = {
+    'width': 'inherit',
+    'boxShadow': 'inset 0px -1px 0px 0px lightgrey',
+    'background': DARK_THEME_BACKGROUND
+}
+TAB_STYLE = {
+    'width': 'inherit',
+    'border': 'none',
+    'boxShadow': 'inset 0px -1px 0px 0px lightgrey',
+    'background': DARK_THEME_BACKGROUND_DARK,
+    'color': DARK_THEME_TEXT_COLOR,
+}
+
+CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
+CATEGORY_TABS.append("Galaxy")
+
+DEFAULT_SELECTED_CATEGORY = "Budget"
 
 timeline_app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     html.Div([
         dcc.Tabs(
-            tabs=CATEGORY_TABS,
+            id='tabs-container',
+            style=TAB_CONTAINER_STYLE,
+            parent_style=TAB_CONTAINER_STYLE,
+            children=[dcc.Tab(
+                id=tab_label,
+                label=tab_label,
+                value=tab_label,
+                style=TAB_STYLE,
+                selected_style=SELECTED_TAB_STYLE,
+            ) for tab_label in CATEGORY_TABS],
             value=DEFAULT_SELECTED_CATEGORY,
-            id='tabs',
         ),
         html.Div(id='tab-content', style={
             'width': '100%',
@@ -246,17 +279,15 @@ timeline_app.layout = html.Div([
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
-    # if plot_spec.style == visualization_data.PlotStyle.stacked:
-    #     layout["yaxis"] = {}
     if plot_spec.style == visualization_data.PlotStyle.line:
         layout["hovermode"] = "closest"
     else:
-        layout["hovermode"] = "compare"
+        layout["hovermode"] = "x"
     return go.Layout(**layout)
 
 
 @timeline_app.callback(Output('tab-content', 'children'),
-                       [Input('tabs', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
+                       [Input('tabs-container', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
 def update_content(tab_value, search, date_fraction):
     game_id = parse.parse_qs(parse.urlparse(search).query).get("game_name", [None])[0]
     if game_id is None:
@@ -402,65 +433,70 @@ def get_galaxy(game_id, date):
     # adapted from https://plot.ly/python/network-graphs/
     galaxy = visualization_data.get_galaxy_data(game_id)
     graph = galaxy.get_graph_for_date(date)
-    edge_traces = {}
+    edge_traces_data = {}
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
-        if country not in edge_traces:
+        if country not in edge_traces_data:
             width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 8
-            edge_traces[country] = go.Scatter(
+            edge_traces_data[country] = dict(
                 x=[],
                 y=[],
                 text=[],
-                line=go.Line(width=width, color=get_country_color(country)),
+                line=go.scatter.Line(width=width, color=get_country_color(country)),
                 hoverinfo='text',
                 mode='lines',
                 showlegend=False,
             )
         x0, y0 = graph.nodes[edge[0]]['pos']
         x1, y1 = graph.nodes[edge[1]]['pos']
-        edge_traces[country]['x'] += [x0, x1, None]
-        edge_traces[country]['y'] += [y0, y1, None]
-        edge_traces[country]['text'].append(country)
+        # insert None to prevent dash from rendering a single lingle
+        edge_traces_data[country]['x'] += [x0, x1, None]
+        edge_traces_data[country]['y'] += [y0, y1, None]
+        edge_traces_data[country]['text'] += [country]
+    edge_traces = {country: go.Scatter(**edge_traces_data[country]) for country in edge_traces_data}
 
-    node_traces = {}
+    node_traces_data = {}
     for node in graph.nodes:
         country = graph.nodes[node]["country"]
-        if country not in node_traces:
+        if country not in node_traces_data:
             node_size = 10 if country != visualization_data.GalaxyMapData.UNCLAIMED else 4
-            node_traces[country] = go.Scatter(
+            node_traces_data[country] = dict(
                 x=[], y=[],
                 text=[],
                 mode='markers',
                 hoverinfo='text',
-                marker=go.Marker(
+                marker=dict(
                     color=[],
                     size=node_size,
                     line=dict(width=0.5)),
                 name=country,
             )
-        if country == visualization_data.GalaxyMapData.UNCLAIMED:
-            color = "rgba(255,255,255,0.5)"
-        else:
-            color = get_country_color(country)
-        node_traces[country]['marker']['color'].append(color)
+        color = get_country_color(country)
+        node_traces_data[country]['marker']['color'].append(color)
         x, y = graph.nodes[node]['pos']
-        node_traces[country]['x'].append(x)
-        node_traces[country]['y'].append(y)
+        node_traces_data[country]['x'].append(x)
+        node_traces_data[country]['y'].append(y)
         country_str = f" ({country})" if country != visualization_data.GalaxyMapData.UNCLAIMED else ""
-        node_traces[country]['text'].append(f'{graph.nodes[node]["name"]}{country_str}')
+        node_traces_data[country]['text'].append(f'{graph.nodes[node]["name"]}{country_str}')
+
+    for country in node_traces_data:
+        # convert markers first:
+        node_traces_data[country]["marker"] = go.scatter.Marker(**node_traces_data[country]["marker"])
+
+    node_traces = {country: go.Scatter(**node_traces_data[country]) for country in node_traces_data}
 
     layout = go.Layout(
-        xaxis=go.XAxis(
-            showgrid=False,
-            zeroline=False,
-            showticklabels=False
-        ),
-        yaxis=go.YAxis(
+        xaxis=go.layout.XAxis(
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            scaleratio=0.9,
-            scaleanchor='x',
+            fixedrange=True,
+        ),
+        yaxis=go.layout.YAxis(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            fixedrange=True,
         ),
         margin=dict(
             t=0, b=0, l=0, r=0,
@@ -475,12 +511,13 @@ def get_galaxy(game_id, date):
         plot_bgcolor=DARK_THEME_GALAXY_BACKGROUND,
         paper_bgcolor=BACKGROUND_PLOT_DARK,
         font={'color': DARK_THEME_TEXT_COLOR},
+
     )
 
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=go.Data(list(edge_traces.values()) + list(node_traces.values())),
+            data=(list(edge_traces.values()) + list(node_traces.values())),
             layout=layout,
         ),
     )
