@@ -98,7 +98,7 @@ def settings_page():
             "type": t_bool,
             "value": convert_bool(config.CONFIG.extract_system_ownership),
             "name": "Extract system ownership",
-            "description": "Extracting ownership of systems can be a bit slow. Disable if you experience performance issues.",
+            "description": "Extracting ownership of systems can be a bit slow. Disable if you experience performance issues. If this setting is used, the galaxy view won't work properly.",
         },
         "show_everything": {
             "type": t_bool,
@@ -125,13 +125,6 @@ def settings_page():
             "name": "Number of CPU cores",
             "description": "Maximal number of CPU cores used for reading save files.",
         },
-        "port": {
-            "type": t_int,
-            "value": config.CONFIG.port,
-            "max": 65535,
-            "name": "Port",
-            "description": "The port used by the dashboard to serve the visualizations. You probably don't need to change this.",
-        },
     }
 
     for key, val in config.CONFIG.get_dict().items():
@@ -157,6 +150,7 @@ def apply_settings():
             settings[key] = int(settings[key])
     config.CONFIG.apply_dict(settings)
     config.CONFIG.write_to_file()
+    print("Updated configuration:")
     print(config.CONFIG)
     return redirect("/")
 
@@ -233,17 +227,22 @@ DEFAULT_SELECTED_CATEGORY = "Budget"
 timeline_app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     html.Div([
+        html.Div([
+            html.A("Go to Game Selection", id='index-link', href="/", style=BUTTON_STYLE),
+            html.A(f'Dashboard Settings', id='settings-link', href="/settings/", style=BUTTON_STYLE),
+            html.A(f'Go to Event Ledger', id='ledger-link', href="/", style=BUTTON_STYLE),
+        ]),
+        html.H1(children="Unknown Game", id="game-name-header", style=HEADER_STYLE),
         dcc.Tabs(
             id='tabs-container',
             style=TAB_CONTAINER_STYLE,
             parent_style=TAB_CONTAINER_STYLE,
-            children=[dcc.Tab(
-                id=tab_label,
-                label=tab_label,
-                value=tab_label,
-                style=TAB_STYLE,
-                selected_style=SELECTED_TAB_STYLE,
-            ) for tab_label in CATEGORY_TABS],
+            children=[dcc.Tab(id=tab_label,
+                              label=tab_label,
+                              value=tab_label,
+                              style=TAB_STYLE,
+                              selected_style=SELECTED_TAB_STYLE)
+                      for tab_label in CATEGORY_TABS],
             value=DEFAULT_SELECTED_CATEGORY,
         ),
         html.Div(id='tab-content', style={
@@ -286,13 +285,29 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     return go.Layout(**layout)
 
 
+@timeline_app.callback(Output('ledger-link', 'href'),
+                       [Input('tabs-container', 'value'), Input('url', 'search')])
+def update_ledger_link(tab_value, search):
+    game_id, _ = _get_game_ids_matching_url(search)
+    return flask.url_for("history_page", game_name=game_id)
+
+
+@timeline_app.callback(Output('game-name-header', 'children'),
+                       [Input('tabs-container', 'value'), Input('url', 'search')])
+def update_game_header(tab_value, search):
+    game_id, matches = _get_game_ids_matching_url(search)
+    if not matches:
+        logger.warning(f"Could not find a game matching {game_id}")
+        return "Unknown Game"
+    game_id = matches[0]
+    games_dict = models.get_available_games_dict()
+    return f"{games_dict[game_id]} ({game_id})"
+
+
 @timeline_app.callback(Output('tab-content', 'children'),
                        [Input('tabs-container', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
 def update_content(tab_value, search, date_fraction):
-    game_id = parse.parse_qs(parse.urlparse(search).query).get("game_name", [None])[0]
-    if game_id is None:
-        game_id = ""
-    matches = models.get_known_games(game_id)
+    game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
@@ -307,16 +322,7 @@ def update_content(tab_value, search, date_fraction):
     with models.get_db_session(game_id) as session:
         current_date = get_most_recent_date(session)
 
-    children = [
-        html.Div(
-            [html.A("Go to Game Selection", id='index-link', href="/", style=BUTTON_STYLE),
-             html.A(f'Go to Event Ledger', id='ledger-link', href=flask.url_for("history_page", game_name=game_id), style=BUTTON_STYLE)],
-            style={
-                "text-align": "center",
-            },
-        ),
-        html.H1(f"{games_dict[game_id]} ({game_id})", style=HEADER_STYLE),
-    ]
+    children = []
     if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
         plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
         for plot_spec in plots:
@@ -334,6 +340,14 @@ def update_content(tab_value, search, date_fraction):
         children.append(get_galaxy(game_id, slider_date))
         children.append(html.P(f"Galactic Records for {models.days_to_date(slider_date)}", style=TEXT_STYLE))
     return children
+
+
+def _get_game_ids_matching_url(url):
+    game_id = parse.parse_qs(parse.urlparse(url).query).get("game_name", [None])[0]
+    if game_id is None:
+        game_id = ""
+    matches = models.get_known_games(game_id)
+    return game_id, sorted(matches)
 
 
 def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
