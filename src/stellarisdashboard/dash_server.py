@@ -347,7 +347,7 @@ def _get_game_ids_matching_url(url):
     if game_id is None:
         game_id = ""
     matches = models.get_known_games(game_id)
-    return game_id, sorted(matches)
+    return game_id, matches
 
 
 def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
