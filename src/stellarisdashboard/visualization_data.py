@@ -1,13 +1,13 @@
 import enum
 import logging
 import random
-from typing import List, Dict, Callable, Any, Tuple, Iterable, Set
+import time
+from typing import List, Dict, Callable, Any, Tuple, Iterable
 
 import dataclasses
-import time
+import networkx as nx
 
 from stellarisdashboard import models, config
-import networkx as nx
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +278,9 @@ class EmpireProgressionPlotData:
         self.empire_food_budget = None
         self.empire_research_output = None
         self.empire_research_allocation = None
+
         self.show_everything = config.CONFIG.show_everything
+        self.only_show_default_empires = config.CONFIG.only_show_default_empires
 
         self.data_dicts = []
 
@@ -355,6 +357,13 @@ class EmpireProgressionPlotData:
         ]
 
     def update_with_new_gamestate(self):
+        if (self.show_everything != config.CONFIG.show_everything
+                or self.only_show_default_empires != config.CONFIG.only_show_default_empires):
+            # reset everything due to changed setting: This forces the program to redraw all plots with the appropriate data:
+            self.initialize()
+            self.show_everything = config.CONFIG.show_everything
+            self.only_show_default_empires = config.CONFIG.only_show_default_empires
+
         date_in_days = 360.0 * self.dates[-1] if self.dates else -1
         for gs in models.get_gamestates_since(self.game_name, date_in_days):
             self.process_gamestate(gs)
