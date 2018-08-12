@@ -1,8 +1,8 @@
 import contextlib
 import enum
+import logging
 import pathlib
 import threading
-import logging
 from typing import Dict, List
 
 import sqlalchemy
@@ -346,11 +346,11 @@ def days_to_date(days: float) -> str:
     return f"{year}.{month}.{day}"
 
 
-def get_last_modified_time(path: pathlib.Path):
+def get_last_modified_time(path: pathlib.Path) -> int:
     return path.stat().st_mtime
 
 
-def get_known_games(game_name_prefix=""):
+def get_known_games(game_name_prefix: str = "") -> List[str]:
     files = sorted(DB_PATH.glob(f"{game_name_prefix}*.db"),
                    key=get_last_modified_time, reverse=True)
     return [fname.stem for fname in files]
