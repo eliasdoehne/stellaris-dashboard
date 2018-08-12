@@ -1,7 +1,6 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<a class="button" href={{url_for("/timeline", game_name=game_name)}}>Go to Timeline</a>
 <h1>Settings</h1>
 
 <form class="settingsform" action="/applysettings/" method="POST">
@@ -31,6 +30,6 @@
 </form>
 
 <p>
-    Note: You can change the default paths for the dashboard output and Stellaris save files by editing the file <code>src/stellarisdashboard/default_paths.py.</code>
+    You can also change the default paths for the dashboard output and Stellaris save files by editing the file <code>src/stellarisdashboard/default_paths.py.</code>
 </p>
 {% endblock %}

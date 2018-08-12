@@ -107,8 +107,11 @@ div.settings {
 
 div.setting {
     padding: 0.1cm;
+    margin: 0.1cm;
 
     align-self: flex-start;
+
+    background-color: rgba(43, 59, 52, 1);
 
     display: flex;
     flex-direction: row;
@@ -120,6 +123,6 @@ span.settingname {
 }
 
 span.settinginput {
-    align-self: center;
-    flex: 1 0 40%;
+    align-self: flex-end;
+    flex: 1 0 20%;
 }
