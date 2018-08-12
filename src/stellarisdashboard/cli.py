@@ -79,23 +79,20 @@ def f_visualize_mpl_comparison(game_name_prefix: str, show_everything=True):
 
 
 @cli.command()
-@click.option('--threads', type=click.INT)
 @click.option('--save-path', type=click.Path(exists=True, file_okay=False))
 @click.option('--polling-interval', type=click.FLOAT, default=0.5)
-def monitor_saves(threads, save_path, polling_interval):
-    f_monitor_saves(threads, polling_interval, save_path=save_path)
+def monitor_saves(save_path, polling_interval):
+    f_monitor_saves(polling_interval, save_path=save_path)
 
 
-def f_monitor_saves(threads=None, polling_interval=None, save_path=None, stop_event: threading.Event = None):
+def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading.Event = None):
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     if polling_interval is None:
         polling_interval = 0.5
-    if threads is None:
-        threads = config.CONFIG.threads
     if stop_event is None:
         stop_event = threading.Event()
-    save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
+    save_reader = save_parser.SavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
 
@@ -127,12 +124,13 @@ def parse_saves(threads, save_path, game_name):
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
 
-def f_parse_saves(threads=None, save_path=None, game_name_prefix=None):
-    if threads is None:
-        threads = config.CONFIG.threads
+def f_parse_saves(threads=None, save_path=None, game_name_prefix=None) -> None:
+    if threads is not None:
+        # since this is usually used when the game is not running, let the user override the thread count
+        config.CONFIG.threads = threads
     if save_path is None:
         save_path = config.CONFIG.save_file_path
-    save_reader = save_parser.SavePathMonitor(save_path, threads=threads)
+    save_reader = save_parser.SavePathMonitor(save_path)
     if game_name_prefix is not None:
         save_reader.apply_matching_prefix(game_name_prefix)
     tle = timeline.TimelineExtractor()

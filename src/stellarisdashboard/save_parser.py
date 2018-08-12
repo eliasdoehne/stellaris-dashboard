@@ -29,12 +29,9 @@ class SavePathMonitor:
     as gamestate dictionaries.
     """
 
-    def __init__(self, save_parent_dir, threads=None, game_name_prefix: str = ""):
+    def __init__(self, save_parent_dir, game_name_prefix: str = ""):
         self.processed_saves: Set[pathlib.Path] = set()
         self.save_parent_dir = pathlib.Path(save_parent_dir)
-        if threads is None:
-            threads = config.CONFIG.threads
-        self.threads = threads
         self.game_name_prefix = game_name_prefix
         self.work_pool = None
 
@@ -55,9 +52,9 @@ class SavePathMonitor:
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
-        if self.threads > 1 and len(new_files) > 1:
+        if config.CONFIG.threads > 1 and len(new_files) > 1:
             game_ids = [f.parent.stem for f in new_files]
-            with concurrent.futures.ProcessPoolExecutor(max_workers=self.threads) as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
                 for game_name, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
                     yield game_name, result
         else:
