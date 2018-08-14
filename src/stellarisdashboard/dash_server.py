@@ -22,7 +22,7 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.1.4"
+VERSION_ID = "v0.1.5"
 
 
 def is_old_version(requested_version: str) -> bool:
