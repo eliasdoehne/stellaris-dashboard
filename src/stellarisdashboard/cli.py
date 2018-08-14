@@ -132,7 +132,7 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix=None) -> None:
         save_path = config.CONFIG.save_file_path
     save_reader = save_parser.SavePathMonitor(save_path)
     if game_name_prefix is not None:
-        save_reader.apply_matching_prefix(game_name_prefix)
+        save_reader.apply_game_name_filter(game_name_prefix)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.get_new_game_states():
         tle.process_gamestate(game_name, gamestate_dict)

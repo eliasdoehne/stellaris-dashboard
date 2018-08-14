@@ -42,12 +42,10 @@ class SavePathMonitor:
 
         :return:
         """
-        if config.CONFIG.save_name_filter:
-            logger.info(f'Filtering save files by name: "{config.CONFIG.save_name_filter}"')
         new_files = self.valid_save_files()
-        if new_files:
-            if config.CONFIG.save_name_filter:
-                new_files = [f for (i, f) in enumerate(new_files) if f.stem.find(config.CONFIG.save_name_filter) >= 0]
+        new_files = self._apply_filename_filter(new_files)
+        if not new_files:
+            return
         self.processed_saves.update(new_files)
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
@@ -61,15 +59,26 @@ class SavePathMonitor:
             for save_file in new_files:
                 yield save_file.parent.stem, parse_save(save_file)
 
+    @staticmethod
+    def _apply_filename_filter(new_files):
+        if new_files:
+            unfiltered_count = len(new_files)
+            filter_string = config.CONFIG.save_name_filter
+            if filter_string:
+                new_files = [f for (i, f) in enumerate(new_files) if f.stem.lower().find(filter_string.lower()) >= 0]
+            if filter_string:
+                logger.info(f'Applying filename filter: "{config.CONFIG.save_name_filter}", reduced from {unfiltered_count} to {len(new_files)} files.')
+        return new_files
+
     def mark_all_existing_saves_processed(self):
         """ Ensure that no existing files are re-parsed. """
         self.processed_saves |= set(self.valid_save_files())
 
-    def apply_matching_prefix(self, game_name_prefix: str):
+    def apply_game_name_filter(self, game_name_prefix: str):
         self.mark_all_existing_saves_processed()
         whitelisted = set()
         for fname in self.processed_saves:
-            if fname.parent.stem.startswith(game_name_prefix.lower()):
+            if fname.parent.stem.lower().startswith(game_name_prefix.lower()):
                 whitelisted.add(fname)
         self.processed_saves -= whitelisted
 
