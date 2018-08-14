@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<a class="button" href={{url_for("/timeline", game_name=game_name)}}>Go to Timeline</a>
+<a class="button" href={{url_for("/timeline/", game_name=game_name)}}>Go to Timeline</a>
 <h1> History Ledger of {{country}}</h1>
 
 <div class="toc">

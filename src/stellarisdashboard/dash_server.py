@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 flask_app = flask.Flask(__name__)
 flask_app.logger.setLevel(logging.DEBUG)
-timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=False, url_base_pathname="/timeline")
+timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=False, url_base_pathname="/timeline/")
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
