@@ -80,74 +80,72 @@ def history_page(game_name=None, version=None):
 @flask_app.route("/settings/")
 @flask_app.route("/settings")
 def settings_page():
+    def _convert_python_bool_to_lowercase(py_bool):
+        return "true" if py_bool else "false"
+
     t_int = "int"
     t_bool = "bool"
     t_str = "str"
-
-    def convert_bool(val):
-        return "true" if val else "false"
-
-    current_settings = {
+    current_settings = config.CONFIG.get_adjustable_settings_dict()
+    settings_with_descriptions = {
         "check_version": {
             "type": t_bool,
-            "value": convert_bool(config.CONFIG.check_version),
+            "value": _convert_python_bool_to_lowercase(current_settings["check_version"]),
             "name": "Check for new versions",
             "description": "Check if new versions of the dashboard are available. This only works if you subscribe to the mod in the Steam workshop.",
         },
         "extract_system_ownership": {
             "type": t_bool,
-            "value": convert_bool(config.CONFIG.extract_system_ownership),
+            "value": _convert_python_bool_to_lowercase(current_settings["extract_system_ownership"]),
             "name": "Extract system ownership",
-            "description": "Extracting ownership of systems can be a bit slow. Disable if you experience performance issues. If this setting is used, the galaxy view won't work properly.",
+            "description": "Extracting ownership of systems can be slow. If this setting is used, the galaxy view won't work properly.",
         },
         "show_everything": {
             "type": t_bool,
-            "value": convert_bool(config.CONFIG.show_everything),
+            "value": _convert_python_bool_to_lowercase(current_settings["show_everything"]),
             "name": "Cheat mode: Show all empires",
             "description": "Cheat mode: Show data for all empires.",
         },
         "only_show_default_empires": {
             "type": t_bool,
-            "value": convert_bool(config.CONFIG.only_show_default_empires),
+            "value": _convert_python_bool_to_lowercase(current_settings["only_show_default_empires"]),
             "name": "Only show default empires",
             "description": 'Only show normal empires. Use it to exclude fallen empires and similar.',
         },
         "save_name_filter": {
             "type": t_str,
-            "value": config.CONFIG.save_name_filter,
+            "value": current_settings["save_name_filter"],
             "name": "Save file name filter",
             "description": "Save files whose file names do not contain this string are ignored. You can use it to only read yearly autosaves, by setting the value to \"01.sav\"",
         },
         "threads": {
             "type": t_int,
-            "value": config.CONFIG.threads,
+            "value": current_settings["threads"],
             "max": config.CPU_COUNT,
             "name": "Number of CPU cores",
             "description": "Maximal number of CPU cores used for reading save files.",
         },
     }
 
-    for key, val in config.CONFIG.get_dict().items():
-        if key in current_settings:
-            if key in config.Config.BOOL_KEYS:
-                val = convert_bool(val)
-            if key in config.Config.INT_KEYS:
-                val = int(val)
-            current_settings[key]["value"] = val
     return render_template(
         "settings_page.html",
-        current_settings=current_settings,
+        current_settings=settings_with_descriptions,
     )
 
 
 @flask_app.route("/applysettings/", methods=["POST", "GET"])
 def apply_settings():
+    previous_settings = config.CONFIG.get_adjustable_settings_dict()
     settings = request.form.to_dict(flat=True)
+    print(settings)
     for key in settings:
         if key in config.Config.BOOL_KEYS:
             settings[key] = key in settings  # only checked items are included in form data
         if key in config.Config.INT_KEYS:
             settings[key] = int(settings[key])
+    for key in previous_settings:
+        if key in config.Config.BOOL_KEYS and key not in settings:
+            settings[key] = False
     config.CONFIG.apply_dict(settings)
     config.CONFIG.write_to_file()
     print("Updated configuration:")
@@ -661,7 +659,7 @@ def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecificatio
     plot_data = visualization_data.get_current_execution_plot_data(game_id)
     plot_list = get_plot_lines(plot_data, plot_spec)
     end = time.time()
-    logger.info(f"Update took {end - start} seconds!")
+    logger.debug(f"Update took {end - start} seconds!")
     return plot_list
 
 

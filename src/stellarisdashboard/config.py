@@ -125,6 +125,15 @@ class Config:
                 continue
             self.__setattr__(key, val)
 
+    def write_to_file(self):
+        fname = _get_settings_file_path()
+        if fname.exists() and not fname.is_file():
+            raise ValueError("Settings file {fname} is not a file!")
+        logger.info(f"Writing settings to {fname}")
+        with open(fname, "w") as f:
+            settings_dict = self.get_dict()
+            yaml.dump(settings_dict, f)
+
     def get_dict(self):
         result = dict(**DEFAULT_SETTINGS)
         for key, val in self.__dict__.items():
@@ -132,24 +141,25 @@ class Config:
                 result[key] = val
         return result
 
-    def write_to_file(self):
-        fname = _get_settings_file_path()
-        if fname.exists() and not fname.is_file():
-            raise ValueError("Settings file {fname} is not a file!")
-        logger.info(f"Writing settings to {fname}")
-        with open(fname, "w") as f:
-            settings_dict = self.get_dict()  # {k: v for (k, v) in self.get_dict().items() if k not in Config.PATH_KEYS}
-            yaml.dump(settings_dict, f)
+    def get_adjustable_settings_dict(self):
+        return {
+            "check_version": self.check_version,
+            "extract_system_ownership": self.extract_system_ownership,
+            "show_everything": self.show_everything,
+            "only_show_default_empires": self.only_show_default_empires,
+            "save_name_filter": self.save_name_filter,
+            "threads": self.threads,
+        }
 
     def __str__(self):
         lines = [
             "Configuration:",
-            f"  save_file_path: {self.save_file_path}",
-            f"  base_output_path: {self.base_output_path}",
-            f"  threads: {self.threads}",
-            f"  show_everything: {self.show_everything}",
-            f"  only_show_default_empires: {self.only_show_default_empires}",
-            f"  extract_system_ownership: {self.extract_system_ownership}",
+            f"  save_file_path: {repr(self.save_file_path)}",
+            f"  base_output_path: {repr(self.base_output_path)}",
+            f"  threads: {repr(self.threads)}",
+            f"  show_everything: {repr(self.show_everything)}",
+            f"  only_show_default_empires: {repr(self.only_show_default_empires)}",
+            f"  extract_system_ownership: {repr(self.extract_system_ownership)}",
         ]
         return "\n".join(lines)
 

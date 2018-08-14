@@ -28,14 +28,16 @@ class PlotStyle(enum.Enum):
 class PlotSpecification:
     """
     This class is used to define all the different visualizations in a way that is
-    independent of the frontend, so that they are defined in a single place for
-    both the matplotlib and plotly frontends.
+    independent of the frontend, so that they can be defined in a single place for
+    both matplotlib and plotly.
     """
     plot_id: str
     title: str
+
+    # this function specifies how the corresponding value can be obtained from the EmpireProgressionPlotData instance:
     plot_data_function: Callable[["EmpireProgressionPlotData"], Any]
     style: PlotStyle
-    yrange: float = None
+    yrange: Tuple[float, float] = None
 
 
 POP_COUNT_GRAPH = PlotSpecification(
@@ -158,7 +160,7 @@ EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
     style=PlotStyle.budget,
 )
 # This specifies how the plots should be laid out in tabs by the plotly frontend
-# and how they should be split to different images by matplotlib
+# and how they should be split to different image files by matplotlib
 THEMATICALLY_GROUPED_PLOTS = {
     "Budget": [
         EMPIRE_ENERGY_ECONOMY_GRAPH,
@@ -279,10 +281,10 @@ class EmpireProgressionPlotData:
         self.empire_research_output = None
         self.empire_research_allocation = None
 
-        self.show_everything = config.CONFIG.show_everything
-        self.only_show_default_empires = config.CONFIG.only_show_default_empires
+        self.data_dicts: List[Dict[str, List[float]]] = None
 
-        self.data_dicts = []
+        self.show_everything: bool = None
+        self.only_show_default_empires: bool = None
 
     def initialize(self):
         self.dates: List[float] = []
@@ -356,10 +358,14 @@ class EmpireProgressionPlotData:
             self.net_energy_income,
         ]
 
+        self.show_everything = config.CONFIG.show_everything
+        self.only_show_default_empires = config.CONFIG.only_show_default_empires
+
     def update_with_new_gamestate(self):
         if (self.show_everything != config.CONFIG.show_everything
                 or self.only_show_default_empires != config.CONFIG.only_show_default_empires):
             # reset everything due to changed setting: This forces the program to redraw all plots with the appropriate data:
+            logger.info("Detected changed visibility settings: Reassembling plot data")
             self.initialize()
             self.show_everything = config.CONFIG.show_everything
             self.only_show_default_empires = config.CONFIG.only_show_default_empires
@@ -371,24 +377,28 @@ class EmpireProgressionPlotData:
     def process_gamestate(self, gs: models.GameState):
         self.dates.append(gs.date / 360.0)  # store date in years for visualization
         for country_data in gs.country_data:
-            if self.player_country is None and country_data.country.is_player:
-                self.player_country = country_data.country.country_name
-            if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
-                continue
-            self._extract_pop_count(country_data)
-            self._extract_planet_count(country_data)
-            self._extract_system_count(country_data)
-            self._extract_energy_income(country_data)
-            self._extract_mineral_income(country_data)
-            self._extract_tech_count(country_data)
-            self._extract_research_output(country_data)
-            self._extract_exploration_progress(country_data)
-            self._extract_military_strength(country_data)
-            self._extract_fleet_size(country_data)
-            if country_data.country.is_player:
-                self._extract_player_empire_demographics(country_data)
-                self._extract_player_empire_politics(country_data)
-                self._extract_player_empire_research(country_data)
+            try:
+                if self.player_country is None and country_data.country.is_player:
+                    self.player_country = country_data.country.country_name
+                if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
+                    continue
+                self._extract_pop_count(country_data)
+                self._extract_planet_count(country_data)
+                self._extract_system_count(country_data)
+                self._extract_energy_income(country_data)
+                self._extract_mineral_income(country_data)
+                self._extract_tech_count(country_data)
+                self._extract_research_output(country_data)
+                self._extract_exploration_progress(country_data)
+                self._extract_military_strength(country_data)
+                self._extract_fleet_size(country_data)
+                if country_data.country.is_player:
+                    self._extract_player_empire_demographics(country_data)
+                    self._extract_player_empire_politics(country_data)
+                    self._extract_player_empire_research(country_data)
+            except Exception as e:
+                print(e)
+                print(country_data.country.country_name)
         self._extract_player_empire_budget_allocations(gs)
 
         # Pad every dict with the default value if no real value was added, to keep them consistent with the dates list
@@ -442,6 +452,7 @@ class EmpireProgressionPlotData:
     def iterate_data(self, plot_spec: PlotSpecification) -> Iterable[Tuple[str, List[float], List[float]]]:
         data_dict = plot_spec.plot_data_function(self)
         for key, data in data_dict.items():
+            # substitute some special values: (robots from the limbo event chain)
             if key == "ROBOT_POP_SPECIES_1":
                 key = "Robot"
             elif key == "ROBOT_POP_SPECIES_2":
