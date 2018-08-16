@@ -5,7 +5,7 @@ import pathlib
 import time
 import zipfile
 from collections import namedtuple
-from typing import Any, Dict, Tuple, Set, Iterable
+from typing import Any, Dict, Tuple, Set, Iterable, List
 
 logger = logging.getLogger(__name__)
 try:
@@ -53,14 +53,14 @@ class SavePathMonitor:
         if config.CONFIG.threads > 1 and len(new_files) > 1:
             game_ids = [f.parent.stem for f in new_files]
             with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
-                for game_name, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
-                    yield game_name, result
+                for game_id, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
+                    yield game_id, result
         else:
             for save_file in new_files:
                 yield save_file.parent.stem, parse_save(save_file)
 
     @staticmethod
-    def _apply_filename_filter(new_files):
+    def _apply_filename_filter(new_files: List[pathlib.Path]) -> List[pathlib.Path]:
         if new_files:
             unfiltered_count = len(new_files)
             filter_string = config.CONFIG.save_name_filter
@@ -70,11 +70,11 @@ class SavePathMonitor:
                 logger.info(f'Applying filename filter: "{config.CONFIG.save_name_filter}", reduced from {unfiltered_count} to {len(new_files)} files.')
         return new_files
 
-    def mark_all_existing_saves_processed(self):
+    def mark_all_existing_saves_processed(self) -> None:
         """ Ensure that no existing files are re-parsed. """
         self.processed_saves |= set(self.valid_save_files())
 
-    def apply_game_name_filter(self, game_name_prefix: str):
+    def apply_game_name_filter(self, game_name_prefix: str) -> None:
         self.mark_all_existing_saves_processed()
         whitelisted = set()
         for fname in self.processed_saves:
@@ -82,7 +82,7 @@ class SavePathMonitor:
                 whitelisted.add(fname)
         self.processed_saves -= whitelisted
 
-    def valid_save_files(self):
+    def valid_save_files(self) -> List[pathlib.Path]:
         return sorted(save_file for save_file in self.save_parent_dir.glob("**/*.sav")
                       if save_file not in self.processed_saves
                       and "ironman" not in str(save_file)
