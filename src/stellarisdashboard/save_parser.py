@@ -6,6 +6,7 @@ import time
 import zipfile
 from collections import namedtuple
 from typing import Any, Dict, Tuple, Set, Iterable, List
+import time
 
 logger = logging.getLogger(__name__)
 try:
@@ -34,6 +35,7 @@ class SavePathMonitor:
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
         self.work_pool = None
+        self._last_checked_time = 0
 
     def get_new_game_states(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
         """
@@ -46,7 +48,6 @@ class SavePathMonitor:
         new_files = self._apply_filename_filter(new_files)
         if not new_files:
             return
-        self.processed_saves.update(new_files)
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
@@ -58,6 +59,7 @@ class SavePathMonitor:
         else:
             for save_file in new_files:
                 yield save_file.parent.stem, parse_save(save_file)
+        self.processed_saves.update(f for f in new_files if f.stem != "ironman")
 
     @staticmethod
     def _apply_filename_filter(new_files: List[pathlib.Path]) -> List[pathlib.Path]:
@@ -73,6 +75,7 @@ class SavePathMonitor:
     def mark_all_existing_saves_processed(self) -> None:
         """ Ensure that no existing files are re-parsed. """
         self.processed_saves |= set(self.valid_save_files())
+        self._last_checked_time = time.time()
 
     def apply_game_name_filter(self, game_name_prefix: str) -> None:
         self.mark_all_existing_saves_processed()
@@ -83,11 +86,14 @@ class SavePathMonitor:
         self.processed_saves -= whitelisted
 
     def valid_save_files(self) -> List[pathlib.Path]:
-        return sorted(save_file for save_file in self.save_parent_dir.glob("**/*.sav")
-                      if save_file not in self.processed_saves
-                      and "ironman" not in str(save_file)
-                      and not str(save_file.parent.stem).startswith("mp")
-                      and str(save_file.parent.stem).startswith(self.game_name_prefix))
+        prefiltered_files = (save_file for save_file in self.save_parent_dir.glob("**/*.sav")
+                             if save_file not in self.processed_saves
+                             and not str(save_file.parent.stem).startswith("mp")
+                             and str(save_file.parent.stem).startswith(self.game_name_prefix))
+        modified_files = sorted(f for f in prefiltered_files
+                                if f.stat().st_mtime > self._last_checked_time)
+        self._last_checked_time = time.time()
+        return modified_files
 
 
 class TokenType(enum.Enum):

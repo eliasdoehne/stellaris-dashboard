@@ -58,6 +58,7 @@ def _get_default_base_output_path():
 DEFAULT_SETTINGS = dict(
     threads=_get_default_thread_count(),
     port=28053,
+    polling_interval=0.5,
     check_version=True,
     colormap="viridis",
     log_level="INFO",
@@ -79,6 +80,8 @@ class Config:
     port: int = None
     colormap: str = None
     log_level: str = None
+
+    polling_interval: float = None
 
     check_version: bool = None
     debug_mode = None
@@ -104,12 +107,15 @@ class Config:
         "read_only_every_nth_save",
         "threads",
     }
+    FLOAT_KEYS = {
+        "polling_interval",
+    }
     STR_KEYS = {
         "colormap",
         "save_name_filter",
         "log_level",
     }
-    ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | STR_KEYS
+    ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS
 
     def apply_dict(self, settings_dict):
         logger.info("Updating settings")

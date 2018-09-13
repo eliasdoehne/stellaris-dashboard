@@ -89,7 +89,7 @@ def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     if polling_interval is None:
-        polling_interval = 0.5
+        polling_interval = config.CONFIG.polling_interval
     if stop_event is None:
         stop_event = threading.Event()
     save_reader = save_parser.SavePathMonitor(save_path)
