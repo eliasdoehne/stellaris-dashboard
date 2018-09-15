@@ -284,15 +284,15 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
 
 
 @timeline_app.callback(Output('ledger-link', 'href'),
-                       [Input('tabs-container', 'value'), Input('url', 'search')])
-def update_ledger_link(tab_value, search):
+                       [Input('url', 'search')])
+def update_ledger_link(search):
     game_id, _ = _get_game_ids_matching_url(search)
     return flask.url_for("history_page", game_name=game_id)
 
 
 @timeline_app.callback(Output('game-name-header', 'children'),
-                       [Input('tabs-container', 'value'), Input('url', 'search')])
-def update_game_header(tab_value, search):
+                       [Input('url', 'search')])
+def update_game_header( search):
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
