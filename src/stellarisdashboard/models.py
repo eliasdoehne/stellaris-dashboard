@@ -301,6 +301,35 @@ AGENDA_STR_TO_ENUM = dict(
 
 
 @enum.unique
+class HistoricalEventType(enum.Enum):
+    # expansion:
+    planet_colonization = enum.auto()
+    discovered_new_system = enum.auto()  # plan: record here when new systems are detected, e.g. precursor homeworlds
+    megastructure_construction = enum.auto()
+    sector_creation = enum.auto()
+
+    # related to internal politics:
+    government_reform = enum.auto()
+    species_rights_reform = enum.auto()  # TODO this would be cool!
+    capital_relocation = enum.auto()  # TODO
+    planetary_unrest = enum.auto()
+
+    # diplomacy and war:
+    opened_borders = enum.auto()
+    first_contact = enum.auto()
+    non_aggression_pact = enum.auto()
+    defensive_pact = enum.auto()
+    formed_federation = enum.auto()
+
+    closed_borders = enum.auto()
+    insult = enum.auto()
+    rivalry_declaration = enum.auto()
+    sent_war_declaration = enum.auto()
+    received_war_declaration = enum.auto()
+    peace = enum.auto()
+
+
+@enum.unique
 class LeaderAchievementType(enum.Enum):
     # All leaders:
     was_faction_leader = 5
@@ -410,6 +439,8 @@ class System(Base):
     # this could probably be done better....
     hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
     hyperlanes_two = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_two_id])
+
+    historical_events = relationship("HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan")
 
     def get_owner_country_id_at(self, time_in_days: int) -> int:
         if not self.ownership:
@@ -538,6 +569,7 @@ class Country(Base):
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
     leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
+    historical_events = relationship("HistoricalEvent", back_populates="country", cascade="all,delete,delete-orphan")
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -547,6 +579,10 @@ class Country(Base):
 
 
 class Government(Base):
+    """
+    Representation of a country's government, as specified by the country name, the government type (flavor text, e.g. "executive committee"),
+    the governing authority (e.g. "Democracy"), the date range, as well as the governing ethics and civics.
+    """
     __tablename__ = 'govtable'
     gov_id = Column(Integer, primary_key=True)
 
@@ -612,8 +648,10 @@ class Government(Base):
 
 class CountryData(Base):
     """
-    Contains the state of the country at a specific moment, specifically basic data about economy, science and military.
-    Children objects contain data about demographics and political factions.
+    Contains the state of the country at a specific moment, specifically basic data about economy, science and military,
+    as well as diplomatic attitudes towards the player counter.
+
+    Child objects contain data about demographics and political factions.
     """
     __tablename__ = 'countrydatatable'
     country_data_id = Column(Integer, primary_key=True)
@@ -872,11 +910,68 @@ class Leader(Base):
     game = relationship("Game", back_populates="leaders")
     country = relationship("Country", back_populates="leaders")
     species = relationship("Species")
+    historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
     achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
         return f"Leader(leader_id_in_game={self.leader_id_in_game}, leader_name={self.leader_name}, leader_class={self.leader_class}, gender={self.gender}, leader_agenda={self.leader_agenda}, date_hired={days_to_date(self.date_hired)}, date_born={days_to_date(self.date_born)})"
 
+
+class ColonizedPlanet(Base):
+    __tablename__ = "colonizedplanettable"
+    planet_id = Column(Integer, primary_key=True)
+
+    planet_id_in_game = Column(Integer)
+    system_id = Column(ForeignKey(System.system_id))
+    original_country_id = Column(ForeignKey(Country.country_id))
+    planet_name = Column(String(50))
+
+    historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
+    system = relationship("System")
+
+class HistoricalEvent(Base):
+    """
+    This class represents arbitrary historical events for the text ledger.
+    The event_type specifies which event is encoded, depending on which
+    certain columns may or may not be null.
+    """
+    __tablename__ = "historicaleventtable"
+    historical_event_id = Column(Integer, primary_key=True)
+
+    event_type = Column(Enum(HistoricalEventType), index=True)
+
+    # Any of the following columns may be undefined, depending on the event type.
+    country_id = Column(ForeignKey(Country.country_id), nullable=True)
+    war_id = Column(ForeignKey(War.war_id), nullable=True)
+    leader_id = Column(ForeignKey(Leader.leader_id), nullable=True)
+    system_id = Column(ForeignKey(System.system_id), nullable=True)
+    planet_id = Column(ForeignKey(ColonizedPlanet.planet_id), nullable=True)
+
+    start_date_days = Column(Integer, index=True)
+    end_date_days = Column(Integer)
+
+    war = relationship("War")
+    country = relationship("Country", back_populates="historical_events")
+    leader = relationship("Leader", back_populates="historical_events")
+    system = relationship("System", back_populates="historical_events")
+    planet = relationship("Planet", back_populates="historical_events")
+
+    def __str__(self):
+        start_date = days_to_date(self.start_date_days)
+        end_date = days_to_date(self.end_date_days)
+        if self.event_type == HistoricalEventType.government_reform:
+            old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
+            new_gov = self.leader.country.get_government_for_date(self.start_date_days)
+            reform_dict = new_gov.get_reform_description_dict(old_gov)
+            reform_lines = []
+            for cat, reforms in reform_dict.items():
+                reform_lines.append(f"{cat}: " + ", ".join(reforms))
+            ref = ". ".join(reform_lines)
+            text = f"{start_date}: Government reform: \n{ref}"
+        else:
+            text = f"{start_date} - {end_date}: {str(self.event_type)}"
+
+        return text
 
 class LeaderAchievement(Base):
     __tablename__ = "leaderachievementtable"
