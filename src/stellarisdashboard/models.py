@@ -302,11 +302,23 @@ AGENDA_STR_TO_ENUM = dict(
 
 @enum.unique
 class HistoricalEventType(enum.Enum):
+    # tied to a specific leader:
+    ruled_empire = enum.auto()
+    governed_sector = enum.auto()
+    faction_leader = enum.auto()
+
+    # civilizational advancement:
+    researched_technology = enum.auto()
+    tradition = enum.auto()
+    ascension_perk = enum.auto()
+    edict = enum.auto()
+
     # expansion:
-    planet_colonization = enum.auto()
-    discovered_new_system = enum.auto()  # plan: record here when new systems are detected, e.g. precursor homeworlds
+    colonization = enum.auto()
+    discovered_new_system = enum.auto()  # TODO: for when new systems are detected, e.g. precursor homeworlds
+    habitat_ringworld_construction = enum.auto()
     megastructure_construction = enum.auto()
-    sector_creation = enum.auto()
+    sector_creation = enum.auto()  # TODO?
 
     # related to internal politics:
     government_reform = enum.auto()
@@ -315,11 +327,11 @@ class HistoricalEventType(enum.Enum):
     planetary_unrest = enum.auto()
 
     # diplomacy and war:
-    opened_borders = enum.auto()
-    first_contact = enum.auto()
+    opened_borders = enum.auto()  # TODO
+    first_contact = enum.auto()  # TODO
     non_aggression_pact = enum.auto()
     defensive_pact = enum.auto()
-    formed_federation = enum.auto()
+    formed_federation = enum.auto()  # TODO
 
     closed_borders = enum.auto()
     insult = enum.auto()
@@ -746,6 +758,7 @@ class PoliticalFaction(Base):
 
     country = relationship("Country", back_populates="political_factions")
     faction_support = relationship("FactionSupport", back_populates="faction")
+    historical_events = relationship("HistoricalEvent", back_populates="faction", cascade="all,delete,delete-orphan")
 
     def __repr__(self):
         return f"PoliticalFaction(faction_id={self.faction_id}, country_id={self.country_id}, faction_name={self.faction_name})"
@@ -921,13 +934,21 @@ class ColonizedPlanet(Base):
     __tablename__ = "colonizedplanettable"
     planet_id = Column(Integer, primary_key=True)
 
-    planet_id_in_game = Column(Integer)
-    system_id = Column(ForeignKey(System.system_id))
-    original_country_id = Column(ForeignKey(Country.country_id))
     planet_name = Column(String(50))
+    planet_id_in_game = Column(Integer, index=True)
+    system_id = Column(ForeignKey(System.system_id))
+    colonization_completed = Column(Boolean)
 
     historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
     system = relationship("System")
+
+
+class HistoricalEventDescription(Base):
+    __tablename__ = "historicaleventdescriptiontable"
+    historical_event_description_id = Column(Integer, primary_key=True)
+
+    text = Column(String(80), index=True)
+
 
 class HistoricalEvent(Base):
     """
@@ -939,13 +960,15 @@ class HistoricalEvent(Base):
     historical_event_id = Column(Integer, primary_key=True)
 
     event_type = Column(Enum(HistoricalEventType), index=True)
+    country_id = Column(ForeignKey(Country.country_id), index=True)
 
     # Any of the following columns may be undefined, depending on the event type.
-    country_id = Column(ForeignKey(Country.country_id), nullable=True)
     war_id = Column(ForeignKey(War.war_id), nullable=True)
-    leader_id = Column(ForeignKey(Leader.leader_id), nullable=True)
+    leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)
     system_id = Column(ForeignKey(System.system_id), nullable=True)
-    planet_id = Column(ForeignKey(ColonizedPlanet.planet_id), nullable=True)
+    planet_id = Column(ForeignKey(ColonizedPlanet.planet_id), nullable=True, index=True)
+    faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
+    description_id = Column(ForeignKey(HistoricalEventDescription.historical_event_description_id), nullable=True)
 
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer)
@@ -954,7 +977,9 @@ class HistoricalEvent(Base):
     country = relationship("Country", back_populates="historical_events")
     leader = relationship("Leader", back_populates="historical_events")
     system = relationship("System", back_populates="historical_events")
-    planet = relationship("Planet", back_populates="historical_events")
+    planet = relationship("ColonizedPlanet", back_populates="historical_events")
+    faction = relationship("PoliticalFaction", back_populates="historical_events")
+    description = relationship("HistoricalEventDescription")
 
     def __str__(self):
         start_date = days_to_date(self.start_date_days)
@@ -972,6 +997,7 @@ class HistoricalEvent(Base):
             text = f"{start_date} - {end_date}: {str(self.event_type)}"
 
         return text
+
 
 class LeaderAchievement(Base):
     __tablename__ = "leaderachievementtable"
