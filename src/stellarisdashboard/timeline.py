@@ -10,6 +10,7 @@ from stellarisdashboard import models, game_info, config
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyArgumentList
 class TimelineExtractor:
     """ Process data from parsed save file dictionaries and add it to the database. """
 
@@ -284,6 +285,10 @@ class TimelineExtractor:
         )
         self._session.add(country_data)
         return country_data
+
+    def _extract_colonized_planets(self, country_dict):
+        for planet_id in country_dict.get("owned_planets", []):
+            pass
 
     def _extract_diplomacy_toward_player(self, country_dict):
         relations_manager = country_dict.get("relations_manager", [])
@@ -1094,12 +1099,13 @@ class TimelineExtractor:
             planets = self._gamestate_dict.get("galactic_object").get(system_id).get("planet", [])
             if not isinstance(planets, list):
                 planets = [planets]
-
-            for p in planets:
-                planet_dict = self._gamestate_dict.get("planet", {}).get(p)
+            for planet_id in planets:
+                planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
+                self._add_historical_event_colonization(system_id, planet_id, planet_dict, governor)
                 self._add_governor_megastructure_achievement(system_id, planet_dict, governor)
                 self._add_governor_colonization_achievement(system_id, planet_dict, governor)
 
+    # TODO Currently, this function only handles planet-like megastructures. Sentry array, science nexus etc might be handled as stations?
     def _add_governor_megastructure_achievement(self, system_id, planet_dict, governor):
         pc = planet_dict.get("planet_class")
         p_name = planet_dict.get("name")
@@ -1121,6 +1127,38 @@ class TimelineExtractor:
                 achievement_type=models.LeaderAchievementType.built_megastructure,
                 achievement_description=p_name,
             ))
+
+    def _add_historical_event_colonization(self, system_id, planet_id, planet_dict, governor):
+        p_name = planet_dict.get("name")
+
+        event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.planet_colonization,
+            achievement_description=p_name,
+        ).one_or_none()
+        if event is None:
+            system_model = self._session.query(models.System).filter_by(
+                system_id_in_game=system_id
+            ).one_or_none()
+            planet_model = self._session.query(models.ColonizedPlanet).filter_by(
+                system=system_model,
+                planet_id_in_game=planet_id
+            ).one_or_none()
+            if system_model is None or planet_model is None:
+                raise ValueError("Make sure to add all systems & colonized planets before historical events are processed!")
+            event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.planet_colonization,
+                leader=governor,
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+                planet=planet_model,
+            )
+            self._session.add(event)
+        elif "colonizer_pop" in planet_dict:
+            event.end_date_days = self._date_in_days
+        if "colonize_date" in planet_dict:
+            colonize_date = models.date_to_days(planet_dict["colonize_date"])
+            event.end_date_days = colonize_date
+        self._session.add(event)
 
     def _add_governor_colonization_achievement(self, system_id, planet_dict, governor):
         p_name = planet_dict.get("name")
