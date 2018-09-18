@@ -12,10 +12,10 @@
         <li class="toc-item"><a href=#{{war["id"]}}>{{ war["start"] }} - {{ war["end"] }}: {{war["name"]}}</a></li>
         {% endfor %}
     </ul>
-    <a href="#leaders">Leaders</a>
+    <a href="#leaders">Countries</a>
     <ul>
-        {% for leader in leaders %}
-        <li class="toc-item"><a href=#{{leader["id"]}}>{{leader["class"]}} {{leader["name"]}}</a></li>
+        {% for country in events %}
+        <li class="toc-item"><a href=#country_{{country.id}}>{{country.country_name}}</a></li>
         {% endfor %}
     </ul>
 </div>
@@ -50,23 +50,31 @@
 <a class="button" href="#index">Return to Table of Contents</a>
 
 <hr>
-<a name="leaders"></a>
-<h2>Leaders</h2>
-{% for leader in leaders %}
-<a name={{leader["id"]}}></a>
+<a name="events"></a>
+<h2>Events</h2>
+{% for (country, events) in events.items() %}
+<a name=country_{{country.id}}></a>
 <div class="leader-box">
-    <h3 class="leader-header">{{leader["class"]}} {{leader["name"]}}</h3>
-    <h5>Basic Information:</h5>
-    <ul class="basicLeaderInfoList">
-        <li class="eventtext">Species: {{leader["species"]}}</li>
-        <li class="eventtext">Born: {{leader["birthday"]}}</li>
-        <li class="eventtext">Hired: {{leader["date_hired"]}}</li>
-        <li class="eventtext">Status: {{leader["status"]}}</li>
-    </ul>
-    <h5>Achievements:</h5>
+    <h3 class="leader-header">{{country.country_name}}</h3>
     <ul class="achievementList">
-        {% for achievement in leader["achievements"] %}
-        <li class="eventtext"> {{achievement}}</li>
+        {% for event in events %}
+        {% if event["event_type"] == "ruled_empire" %}
+        <li class="eventtext"> {{event["start_date"]}} - {{event["end_date"]}}:
+            <a class="textlink" href={{url_for("leader", leader_id=event["leader"].leader_id)}}>{{event["leader"].get_name()}}</a>
+            ruled the <a class="textlink" href={{url_for("country", country_id=event["country"].country_id)}}>{{event["country"].country_name}}</a> </li>
+        {% endif %}
+        {% if event["event_type"] == "colonization" %}
+        <li class="eventtext"> {{event["start_date"]}} - {{event["end_date"]}}:
+            Colonization of planet "{{event["planet"].get_name()}}" in the
+            <a class="textlink" href={{url_for("system", system_id=event["system"].system_id)}}>{{event["system"].get_name()}} system</a>
+            {% if "leader" in event%} under <a class="textlink" href={{url_for("leader", leader_id=event["leader"].leader_id)}}>Governor {{event["leader"].leader_name}}</a> {% endif %}
+        </li>
+        {% endif %}
+        {% if event["event_type"] == "researched_technology" %}
+        <li class="eventtext"> {{event["start_date"]}}:
+            <a class="textlink" href={{url_for("leader", leader_id=event["leader"].leader_id)}}>Scientist {{event["leader"].leader_name}}</a> researched the {{event["description"]}} technology.
+        </li>
+        {% endif %}
         {% endfor %}
     </ul>
 </div>

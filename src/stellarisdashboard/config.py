@@ -92,6 +92,9 @@ class Config:
     save_name_filter: str = None
     read_only_every_nth_save: int = None
 
+    allow_backdating = True
+    only_read_player_history = False
+
     PATH_KEYS = {
         "base_output_path",
         "save_file_path",

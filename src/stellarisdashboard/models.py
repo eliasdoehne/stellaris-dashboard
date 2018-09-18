@@ -300,7 +300,6 @@ AGENDA_STR_TO_ENUM = dict(
 )
 
 
-@enum.unique
 class HistoricalEventType(enum.Enum):
     # tied to a specific leader:
     ruled_empire = enum.auto()
@@ -339,6 +338,37 @@ class HistoricalEventType(enum.Enum):
     sent_war_declaration = enum.auto()
     received_war_declaration = enum.auto()
     peace = enum.auto()
+
+
+HISTORICAL_EVENT_TYPE_TO_STR_MAP = {
+    HistoricalEventType.ruled_empire: "ruled_empire",
+    HistoricalEventType.governed_sector: "governed_sector",
+    HistoricalEventType.faction_leader: "faction_leader",
+    HistoricalEventType.researched_technology: "researched_technology",
+    HistoricalEventType.tradition: "tradition",
+    HistoricalEventType.ascension_perk: "ascension_perk",
+    HistoricalEventType.edict: "edict",
+    HistoricalEventType.colonization: "colonization",
+    HistoricalEventType.discovered_new_system: "discovered_new_system",
+    HistoricalEventType.habitat_ringworld_construction: "habitat_ringworld_construction",
+    HistoricalEventType.megastructure_construction: "megastructure_construction",
+    HistoricalEventType.sector_creation: "sector_creation",
+    HistoricalEventType.government_reform: "government_reform",
+    HistoricalEventType.species_rights_reform: "species_rights_reform",
+    HistoricalEventType.capital_relocation: "capital_relocation",
+    HistoricalEventType.planetary_unrest: "planetary_unrest",
+    HistoricalEventType.opened_borders: "opened_borders",
+    HistoricalEventType.first_contact: "first_contact",
+    HistoricalEventType.non_aggression_pact: "non_aggression_pact",
+    HistoricalEventType.defensive_pact: "defensive_pact",
+    HistoricalEventType.formed_federation: "formed_federation",
+    HistoricalEventType.closed_borders: "closed_borders",
+    HistoricalEventType.insult: "insult",
+    HistoricalEventType.rivalry_declaration: "rivalry_declaration",
+    HistoricalEventType.sent_war_declaration: "sent_war_declaration",
+    HistoricalEventType.received_war_declaration: "received_war_declaration",
+    HistoricalEventType.peace: "peace",
+}
 
 
 @enum.unique
@@ -466,6 +496,11 @@ class System(Base):
                 most_recent_owner = ownership.country.country_id
         return most_recent_owner
 
+    def get_name(self):
+        if self.original_name.startswith("NAME_"):
+            return game_info.convert_id_to_name(self.original_name, remove_prefix="NAME")
+        return self.original_name
+
     def __str__(self):
         return f'System "{self.original_name}" @ {self.coordinate_x}, {self.coordinate_y}'
 
@@ -588,6 +623,9 @@ class Country(Base):
         for gov in self.governments:
             if gov.start_date_days <= date_in_days <= gov.end_date_days:
                 return gov
+
+    def __repr__(self):
+        return f"<Country {self.country_id_in_game} {self.country_name}, {self.country_type}>"
 
 
 class Government(Base):
@@ -926,6 +964,10 @@ class Leader(Base):
     historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
     achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
 
+    def get_name(self):
+        result = f"{self.leader_class.name} {self.leader_name}"
+        return result[0].upper() + result[1:]
+
     def __repr__(self):
         return f"Leader(leader_id_in_game={self.leader_id_in_game}, leader_name={self.leader_name}, leader_class={self.leader_class}, gender={self.gender}, leader_agenda={self.leader_agenda}, date_hired={days_to_date(self.date_hired)}, date_born={days_to_date(self.date_born)})"
 
@@ -941,6 +983,11 @@ class ColonizedPlanet(Base):
 
     historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
     system = relationship("System")
+
+    def get_name(self):
+        if self.planet_name.startswith("NAME_"):
+            return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
+        return self.planet_name
 
 
 class HistoricalEventDescription(Base):
@@ -997,6 +1044,20 @@ class HistoricalEvent(Base):
             text = f"{start_date} - {end_date}: {str(self.event_type)}"
 
         return text
+
+    def get_description(self):
+        if self.event_type == HistoricalEventType.tradition:
+            return game_info.convert_id_to_name(self.description.text, remove_prefix="tr")
+        elif self.event_type == HistoricalEventType.researched_technology:
+            return game_info.convert_id_to_name(self.description.text, remove_prefix="tech")
+        elif self.event_type == HistoricalEventType.edict:
+            return game_info.convert_id_to_name(self.description.text)
+        elif self.event_type == HistoricalEventType.ascension_perk:
+            return game_info.convert_id_to_name(self.description.text, remove_prefix="ap")
+        elif self.description:
+            return game_info.convert_id_to_name(self.description.text)
+        else:
+            return None
 
 
 class LeaderAchievement(Base):

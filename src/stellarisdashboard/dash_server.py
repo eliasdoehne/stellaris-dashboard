@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template, request, redirect
 
-from stellarisdashboard import config, models, visualization_data
+from stellarisdashboard import config, models, visualization_data, game_info
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +66,32 @@ def history_page(game_name=None, version=None):
         date = get_most_recent_date(session)
         wars = get_war_dicts(session, date)
         leaders = get_leader_dicts(session, date)
+        events = get_event_dicts(session)
     return render_template(
         "history_page.html",
         game_name=game_name,
         country=country,
         wars=wars,
-        leaders=leaders,
+        leaders=[],
+        events=events,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
     )
+
+
+@flask_app.route("/leader/<leader_id>")
+def leader(leader_id=None):
+    return f"Hello Leader {leader_id}"
+
+
+@flask_app.route("/country/<country_id>")
+def country(country_id=None):
+    return f"Hello Country {country_id}"
+
+
+@flask_app.route("/system/<system_id>")
+def system(system_id=None):
+    return f"Hello System {system_id}"
 
 
 @flask_app.route("/settings/")
@@ -292,7 +309,7 @@ def update_ledger_link(search):
 
 @timeline_app.callback(Output('game-name-header', 'children'),
                        [Input('url', 'search')])
-def update_game_header( search):
+def update_game_header(search):
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
@@ -533,6 +550,46 @@ def get_galaxy(game_id, date):
             layout=layout,
         ),
     )
+
+
+def get_event_dicts(
+        session,
+        war_filter=None,
+        leader_filter=None,
+        system_filter=None,
+        planet_filter=None,
+        faction_filter=None,
+        type_filter=None,
+):
+    events = {}
+    for country in session.query(models.Country).order_by(models.Country.country_id.asc()):
+        country_name = country.country_name
+        events[country] = []
+        for event in (session.query(models.HistoricalEvent)
+                .order_by(models.HistoricalEvent.start_date_days.asc())
+                .filter_by(country=country).all()):
+            assert isinstance(event, models.HistoricalEvent)
+            event_dict = dict(
+                country=event.country,
+                start_date=models.days_to_date(event.start_date_days),
+                end_date=models.days_to_date(event.end_date_days),
+                event_type=models.HISTORICAL_EVENT_TYPE_TO_STR_MAP[event.event_type],
+                war=event.war,
+                leader=event.leader,
+                system=event.system,
+                planet=event.planet,
+                faction=event.faction,
+                description=event.get_description(),
+            )
+
+            event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
+            print(event_dict)
+            events[country].append(
+                event_dict
+            )
+        if not events[country]:
+            del events[country]
+    return events
 
 
 def get_leader_dicts(session, most_recent_date):

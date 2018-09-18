@@ -1,7 +1,7 @@
 import itertools
 import logging
 import random
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 import time
 
@@ -52,11 +52,14 @@ class TimelineExtractor:
         self._date_in_days = None
         self._logger_str = None
 
+        self.random_instance = random.Random()
+
         self._new_models = []
         self._enclave_trade_modifiers = None
         self._initialize_enclave_trade_info()
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
+        self.random_instance.seed(game_name)
         date_str = gamestate_dict["date"]
         self._logger_str = f"{game_name} {date_str}:"
         logger.info(f"Processing {game_name}, {date_str}")
@@ -174,6 +177,8 @@ class TimelineExtractor:
                 debug_name = country_data_dict.get('name', 'Unnamed Country')
                 logger.info(f"{self._logger_str} Extracting country info: {debug_name}")
 
+            if config.CONFIG.only_read_player_history and not country_model.is_player:
+                continue
             self._extract_country_leaders(country_model, country_data_dict)
             self._history_add_or_update_colony_and_sector_events(country_model, country_data_dict)
             self._extract_pop_info_from_planets(country_data_dict, country_data_model)
@@ -923,11 +928,16 @@ class TimelineExtractor:
                 )
                 self._session.add(matching_description)
             if matching_achievement is None:
+                start_date = self._date_in_days
+                if start_date < 100:
+                    start_date, _ = self._back_date_event(
+                        start_date, avg_years_to_backdate=50, avg_duration_days=0, key=f"{country_model.country_name}{tech_name}",
+                    )
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.researched_technology,
                     country=country_model,
                     leader=leader,
-                    start_date_days=self._date_in_days,  # Todo might be cool to know the start date of the tech
+                    start_date_days=start_date,  # Todo might be cool to know the start date of the tech
                     end_date_days=self._date_in_days,
                     description=matching_description,
                 ))
@@ -1220,11 +1230,16 @@ class TimelineExtractor:
             planet=planet_model
         ).one_or_none()
         if event is None:
+            start_date = self._date_in_days
+            if self._date_in_days < 100:
+                key = "f{country_model.country_name}{planet_model.planet_name}"
+                start_date, _ = self._back_date_event(start_date, avg_years_to_backdate=2000, avg_duration_days=0, key=key)
+                end_date_days = 0
             event = models.HistoricalEvent(
                 event_type=models.HistoricalEventType.colonization,
                 leader=governor,
                 country=country_model,
-                start_date_days=min(self._date_in_days, end_date_days),
+                start_date_days=min(start_date, end_date_days),
                 end_date_days=end_date_days,
                 planet=planet_model,
                 system=system_model,
@@ -1233,7 +1248,7 @@ class TimelineExtractor:
             event.end_date_days = end_date_days
         self._session.add(event)
 
-    # TODO Currently, this function only handles planet-like megastructures. Sentry array, science nexus etc might be stations?
+    # TODO Currently, this function only handles planet-like megastructures. Construction sites, sentry arrays, science nexus etc might be stations?
     def _history_add_or_update_habitat_ringworld_construction_event(self, country_model: models.Country, system_id: int, planet_id: int, governor: models.Leader):
         planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
         planet_class = planet_dict.get("planet_class")
@@ -1265,12 +1280,9 @@ class TimelineExtractor:
         ).one_or_none()
         if event is None:
             start_date = end_date = self._date_in_days  # TODO: change this when tracking the construction sites in the future
-            if country_model.country_type != "default":
-                # backdate the Fallen empire megastructures...
-                r = random.Random()
-                r.seed(country_model.country_id_in_game)
-                start_date = int(-270_000 * (1 + r.normalvariate(0, 0.25)))  # ...by at least 750 years, plus random offset
-                end_date = start_date + r.randint(800, 5000)
+            if country_model.country_type != "default":  # backdate the Fallen empire megastructures...
+                start_date, end_date = self._back_date_event(start_date, avg_years_to_backdate=750, avg_duration_days=2500,
+                                                             key=f"{country_model.country_name}{p_name}")
             logger.info(f"{self._logger_str}New Megastructure {models.days_to_date(self._date_in_days)}")
             self._session.add(models.HistoricalEvent(
                 event_type=models.HistoricalEventType.habitat_ringworld_construction,
@@ -1420,6 +1432,14 @@ class TimelineExtractor:
             "enclave_food_energy_trade_3_rig": dict(zip(trade_energy_for_food, trade_level_3)),
             "enclave_food_energy_trade_3_xur": dict(zip(trade_energy_for_food, trade_level_3)),
         }
+
+    def _back_date_event(self, original_date_days: int, avg_years_to_backdate: int, avg_duration_days, key: str) -> Tuple[int, int]:
+        if not config.CONFIG.allow_backdating:
+            return original_date_days, original_date_days
+        self.random_instance.seed(key)
+        start_date = original_date_days - int(360 * avg_years_to_backdate * (1 + self.random_instance.variate(0, 0.25)))  # ...by at least 750 years, plus random offset
+        end_date = start_date + avg_duration_days * (0.8 + 0.4 * self.random_instance.random())
+        return start_date, end_date
 
     def _reset_state(self):
         logger.info(f"{self._logger_str} Resetting timeline state")

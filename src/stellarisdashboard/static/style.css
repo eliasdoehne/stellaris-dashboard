@@ -1,6 +1,7 @@
 
 body {
     background-color: rgba(33, 43, 39, 1);
+    font-size: 16px;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -48,6 +49,11 @@ a.button, input.button {
     padding: 0.2cm;
 
     border: 1px solid rgba(195, 133, 33, 1);
+}
+
+a.textlink {
+    color: rgba(195, 133, 33, 1);
+    font-size: 16px;
 }
 
 li.eventtext {
