@@ -92,34 +92,42 @@ class TimelineExtractor:
 
     def _extract_galaxy_data(self):
         logger.info(f"{self._logger_str} Extracting galaxy data...")
-        hyperlanes = set()
-        for system_id_in_game, system_data in self._gamestate_dict.get("galactic_object", {}).items():
-            original_system_name = system_data.get("name")
-            coordinate_x = system_data.get("coordinate", {}).get("x", 0)
-            coordinate_y = system_data.get("coordinate", {}).get("y", 0)
-            self._session.add(models.System(
-                game=self.game,
-                system_id_in_game=system_id_in_game,
-                original_name=original_system_name,
-                coordinate_x=coordinate_x,
-                coordinate_y=coordinate_y,
-            ))
-            for hl_data in system_data.get("hyperlane", []):
-                neighbor = hl_data.get("to")
-                # use frozenset to avoid antiparallel duplicates
-                if neighbor == system_id_in_game:
-                    continue  # This can happen in Stellaris 2.1
-                hyperlanes.add(frozenset([system_id_in_game, neighbor]))
-        for hl in hyperlanes:
-            a, b = hl
-            one = self._session.query(models.System).filter_by(system_id_in_game=a, ).one_or_none()
-            two = self._session.query(models.System).filter_by(system_id_in_game=b, ).one_or_none()
-            if one is None or two is None:
-                logger.warning(f"Could not find systems with IDs {a}, {b}")
+        for system_id_in_game in self._gamestate_dict.get("galactic_object", {}):
+            self._add_single_system(system_id_in_game)
+
+    def _add_single_system(self, system_id: int) -> models.System:
+        """ This is separated into a method since it is occasionally necessary to add individual systems after the initial scan of the galaxy. """
+        system_data = self._gamestate_dict.get("galactic_object", {}).get(system_id)
+        if system_data is None:
+            logger.warn(f"{self._logger_str}Found no data for system with ID {system_id}!")
+            return
+        original_system_name = system_data.get("name")
+        coordinate_x = system_data.get("coordinate", {}).get("x", 0)
+        coordinate_y = system_data.get("coordinate", {}).get("y", 0)
+        system_model = models.System(
+            game=self.game,
+            system_id_in_game=system_id,
+            original_name=original_system_name,
+            coordinate_x=coordinate_x,
+            coordinate_y=coordinate_y,
+        )
+        self._session.add(system_model)
+
+        for hl_data in system_data.get("hyperlane", []):
+            neighbor_id = hl_data.get("to")
+            if neighbor_id == system_id:
+                continue  # This can happen in Stellaris 2.1
+            neighbor_model = self._session.query(models.System).filter_by(
+                system_id_in_game=neighbor_id
+            ).one_or_none()
+            if neighbor_model is None:
+                continue  # assume that the hyperlane will be created when adding the neighbor system to DB later
+
             self._session.add(models.HyperLane(
-                system_one=one,
-                system_two=two,
+                system_one=system_model,
+                system_two=neighbor_model,
             ))
+        return system_model
 
     def _process_gamestate(self):
         self._extract_player_trade_agreements()
@@ -167,7 +175,7 @@ class TimelineExtractor:
                 logger.info(f"{self._logger_str} Extracting country info: {debug_name}")
 
             self._extract_country_leaders(country_model, country_data_dict)
-            self._add_colony_events(country_model, country_data_dict)
+            self._history_add_or_update_colony_and_sector_events(country_model, country_data_dict)
             self._extract_pop_info_from_planets(country_data_dict, country_data_model)
             self._extract_factions_and_faction_leaders(country_model, country_data_model)
             self._add_ruler_leader_achievements(country_model, country_data_dict)
@@ -229,16 +237,15 @@ class TimelineExtractor:
             **civics,
         )
         self._session.add(gov)
-        if gov_was_reformed and country_model.country_id_in_game == self._player_country:
+        if gov_was_reformed:
             ruler = self._get_current_ruler(country_dict)
-            if ruler is not None:
-                self._session.add(models.LeaderAchievement(
-                    leader=ruler,
-                    achievement_type=models.LeaderAchievementType.reformed_government,
-                    start_date_days=self._date_in_days,
-                    end_date_days=self._date_in_days,
-                    achievement_description="",
-                ))
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.government_reform,
+                country=country_model,
+                leader=ruler,  # might be none, but probably very unlikely (?)
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+            ))
 
     def _count_starbases(self):
         self._country_starbases_dict = {}
@@ -929,9 +936,9 @@ class TimelineExtractor:
         ruler = self._get_current_ruler(country_dict)
         if ruler is not None:
             self._history_add_or_update_ruler(ruler, country_model)
-            self._history_extract_ruler_tradition_achievements(ruler, country_model, country_dict)
-            self._extract_ruler_ascension_achievements(ruler, country_model, country_dict)
-            self._extract_ruler_edict_achievements(ruler, country_model, country_dict)
+            self._history_extract_tradition_events(ruler, country_model, country_dict)
+            self._history_extract_ascension_events(ruler, country_model, country_dict)
+            self._history_extract_edict_events(ruler, country_model, country_dict)
             self._extract_peace_events_and_settle_matching_wars(ruler, country_model, country_dict)
 
     def _get_current_ruler(self, country_dict):
@@ -971,7 +978,7 @@ class TimelineExtractor:
             most_recent_ruler_event.end_date_days = self._date_in_days - 1
         self._session.add(most_recent_ruler_event)
 
-    def _history_extract_ruler_tradition_achievements(self, ruler: models.Leader, country_model: models.Country, country_dict):
+    def _history_extract_tradition_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
         for tradition in country_dict.get("traditions", []):
             matching_description = self._session.query(models.HistoricalEventDescription).filter_by(
                 text=tradition
@@ -998,7 +1005,7 @@ class TimelineExtractor:
                     description=matching_description,
                 ))
 
-    def _extract_ruler_ascension_achievements(self, ruler: models.Leader, country_model: models.Country, country_dict):
+    def _history_extract_ascension_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
         for ascension_perk in country_dict.get("ascension_perks", []):
             matching_description = self._session.query(models.HistoricalEventDescription).filter_by(
                 text=ascension_perk
@@ -1025,7 +1032,7 @@ class TimelineExtractor:
                     description=matching_description,
                 ))
 
-    def _extract_ruler_edict_achievements(self, ruler: models.Leader, country_model: models.Country, country_dict):
+    def _history_extract_edict_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
         edict_list = country_dict.get("edicts", [])
         if not isinstance(edict_list, list):
             edict_list = [edict_list]
@@ -1082,6 +1089,7 @@ class TimelineExtractor:
             if end_date:
                 end_date_days = models.date_to_days(end_date)
                 matching_war.end_date_days = end_date_days
+                print(f"Logging Peace Event {end_date}")
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.peace,
                     war=matching_war,
@@ -1100,7 +1108,7 @@ class TimelineExtractor:
                     matching_war.outcome = models.WarOutcome.status_quo
             self._session.add(matching_war)
 
-    def _add_colony_events(self, country_model, country_dict):
+    def _history_add_or_update_colony_and_sector_events(self, country_model, country_dict):
         sector_dict = country_dict.get("sectors", [])
         for sector_id, sector_info in sector_dict.items():  # processing all colonies by sector allows reading the responsible sector governor
             governor_id = sector_info.get("leader")
@@ -1160,58 +1168,36 @@ class TimelineExtractor:
             if not isinstance(planets, list):
                 planets = [planets]
             for planet_id in planets:
-                planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
-                self._add_historical_event_colonization(country_model, system_id, planet_id, governor)
-                self._add_governor_megastructure_achievement(system_id, planet_dict, governor)
+                self._history_add_or_update_colonization_events(country_model, system_id, planet_id, governor)
+                self._history_add_or_update_habitat_ringworld_construction_event(country_model, system_id, planet_id, governor)
 
-    # TODO Currently, this function only handles planet-like megastructures. Sentry array, science nexus etc might be stations?
-    def _add_governor_megastructure_achievement(self, system_id, planet_dict, governor):
-        pc = planet_dict.get("planet_class")
-        p_name = planet_dict.get("name")
-        if pc not in {"pc_habitat", "pc_ringworld_habitable"}:
-            return
-        if pc == "pc_ringworld_habitable":
-            sys_name = self._gamestate_dict["galactic_object"].get(system_id).get("name", "Unknown system")
-            p_name = f"{sys_name} Ringworld"
-        a = self._session.query(models.LeaderAchievement).filter_by(
-            leader=governor,
-            achievement_type=models.LeaderAchievementType.built_megastructure,
-            achievement_description=p_name,
-        ).one_or_none()
-        if a is None:
-            self._session.add(models.LeaderAchievement(
-                leader=governor,
-                start_date_days=self._date_in_days,
-                end_date_days=self._date_in_days,
-                achievement_type=models.LeaderAchievementType.built_megastructure,
-                achievement_description=p_name,
-            ))
-
-    def _add_historical_event_colonization(self, country_model: models.Country, system_id: int, planet_id: int, governor: models.Leader):
+    def _history_add_or_update_colonization_events(self, country_model: models.Country, system_id: int, planet_id: int, governor: models.Leader):
         planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
-        system_model = self._session.query(models.System).filter_by(
-            system_id_in_game=system_id
-        ).one_or_none()
-        if system_model is None:
-            logger.warn(f"{self._logger_str}Unable to log colonization event, missing system {system_id}")
+
+        if "colonize_date" in planet_dict or "pop" in planet_dict:
+            # I think one of these occurs once the colonization is finished
+            colonization_completed = True
+        elif "colonizer_pop" in planet_dict:
+            # while colonization still in progress
+            colonization_completed = False
+        else:
+            # planet is not colonized at all
             return
+
         end_date = planet_dict.get("colonize_date")
         if not end_date:
             end_date_days = self._date_in_days
         else:
             end_date_days = models.date_to_days(end_date)
 
-        if "colonizer_pop" in planet_dict:
-            colonization_completed = False  # continually update the end date while colonization still in progress
-        elif "colonize_date" in planet_dict:
-            # I think only occurs once the colonization is finished
-            colonization_completed = True
-        elif planet_dict.get("pop"):
-            colonization_completed = True
-        else:
-            return  # planet is not colonized
+        system_model = self._session.query(models.System).filter_by(
+            system_id_in_game=system_id
+        ).one_or_none()
+        if system_model is None:
+            logger.info(f"{self._logger_str}Detected new system {system_id}!")
+            system_model = self._add_single_system(system_id)
+
         planet_model = self._session.query(models.ColonizedPlanet).filter_by(
-            system=system_model,
             planet_id_in_game=planet_id
         ).one_or_none()
         if planet_model is None:
@@ -1223,11 +1209,12 @@ class TimelineExtractor:
             )
             self._session.add(planet_model)
         elif planet_model.colonization_completed:
-            return  # abort early if the planet is already added and known to be fully colonized
+            # abort early if the planet is already added and known to be fully colonized
+            return
         elif colonization_completed:
+            # set the planet's colonization flag and allow updating the event one last time
             planet_model.colonization_completed = colonization_completed
             self._session.add(planet_model)
-            return
         event = self._session.query(models.HistoricalEvent).filter_by(
             event_type=models.HistoricalEventType.colonization,
             planet=planet_model
@@ -1242,8 +1229,58 @@ class TimelineExtractor:
                 planet=planet_model,
                 system=system_model,
             )
-            self._session.add(event)
+        else:
+            event.end_date_days = end_date_days
         self._session.add(event)
+
+    # TODO Currently, this function only handles planet-like megastructures. Sentry array, science nexus etc might be stations?
+    def _history_add_or_update_habitat_ringworld_construction_event(self, country_model: models.Country, system_id: int, planet_id: int, governor: models.Leader):
+        planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
+        planet_class = planet_dict.get("planet_class")
+        if planet_class == "pc_ringworld_habitable":
+            sys_name = self._gamestate_dict["galactic_object"].get(system_id).get("name", "Unknown system")
+            p_name = f"{sys_name} Ringworld"
+        elif planet_class in "pc_habitat":
+            p_name = planet_dict.get("name")
+        else:
+            return
+
+        system_model = self._session.query(models.System).filter_by(
+            system_id_in_game=system_id,
+        ).one_or_none()
+        if system_model is None:
+            system_model = self._add_single_system(system_id)
+
+        description = self._session.query(models.HistoricalEventDescription).filter_by(
+            text=p_name,
+        ).one_or_none()
+        if description is None:
+            description = models.HistoricalEventDescription(text=p_name)
+            self._session.add(description)
+
+        event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.habitat_ringworld_construction,
+            system=system_model,
+            description=description,
+        ).one_or_none()
+        if event is None:
+            start_date = end_date = self._date_in_days  # TODO: change this when tracking the construction sites in the future
+            if country_model.country_type != "default":
+                # backdate the Fallen empire megastructures...
+                r = random.Random()
+                r.seed(country_model.country_id_in_game)
+                start_date = int(-270_000 * (1 + r.normalvariate(0, 0.25)))  # ...by at least 750 years, plus random offset
+                end_date = start_date + r.randint(800, 5000)
+            logger.info(f"{self._logger_str}New Megastructure {models.days_to_date(self._date_in_days)}")
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.habitat_ringworld_construction,
+                country=country_model,
+                leader=governor,
+                start_date_days=start_date,
+                end_date_days=end_date,
+                system=system_model,
+                description=description,
+            ))
 
     def _add_or_update_faction_leader_event(self,
                                             country_model: models.Country,
@@ -1293,7 +1330,10 @@ class TimelineExtractor:
                 continue
             system = self._session.query(models.System).filter_by(system_id_in_game=system_id_in_game).one_or_none()
             country = self._session.query(models.Country).filter_by(country_id_in_game=country_id_in_game).one_or_none()
-            if system is None or country is None:
+            if system is None:
+                logger.info(f"{self._logger_str}Detected new system {system_id_in_game}!")
+                system = self._add_single_system(system_id_in_game)
+            if country is None:
                 logger.warning(f"Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}")
                 continue
             ownership = self._session.query(models.SystemOwnership).filter_by(
