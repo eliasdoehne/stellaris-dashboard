@@ -124,15 +124,13 @@ def parse_saves(threads, save_path, game_name):
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
 
-def f_parse_saves(threads=None, save_path=None, game_name_prefix=None) -> None:
+def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
     if threads is not None:
         # since this is usually used when the game is not running, let the user override the thread count
         config.CONFIG.threads = threads
     if save_path is None:
         save_path = config.CONFIG.save_file_path
-    save_reader = save_parser.SavePathMonitor(save_path)
-    if game_name_prefix is not None:
-        save_reader.apply_game_name_filter(game_name_prefix)
+    save_reader = save_parser.SavePathMonitor(save_path, game_name_prefix=game_name_prefix)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.get_new_game_states():
         tle.process_gamestate(game_name, gamestate_dict)

@@ -1,12 +1,12 @@
 import concurrent.futures
 import enum
+import itertools
 import logging
 import pathlib
 import time
 import zipfile
 from collections import namedtuple
-from typing import Any, Dict, Tuple, Set, Iterable, List
-import time
+from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator
 
 logger = logging.getLogger(__name__)
 try:
@@ -22,6 +22,17 @@ FilePosition = namedtuple("FilePosition", "line col")
 
 
 class StellarisFileFormatError(Exception): pass
+
+
+T = TypeVar("T")
+
+
+def split_into_chunks(iterable: Iterator[T], chunksize: int) -> Iterator[List[T]]:
+    while iterable:
+        chunk = list(itertools.islice(iterable, chunksize))
+        if not chunk:
+            break
+        yield chunk
 
 
 class SavePathMonitor:
@@ -52,10 +63,18 @@ class SavePathMonitor:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
         if config.CONFIG.threads > 1 and len(new_files) > 1:
-            game_ids = [f.parent.stem for f in new_files]
-            with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
-                for game_id, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
-                    yield game_id, result
+            all_game_ids = [f.parent.stem for f in new_files]
+            chunksize = min(16, 2 * config.CONFIG.threads)
+            for chunk in split_into_chunks(zip(all_game_ids, new_files), chunksize):
+                chunk_game_ids, chunk_files = zip(*chunk)
+                with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
+                    futures = [executor.submit(parse_save, save_file) for save_file in chunk_files]
+                    for i, (game_id, future) in enumerate(zip(chunk_game_ids, futures)):
+                        result = future.result()
+                        yield game_id, result
+                        futures[i] = None
+                        del result
+                        del future._result
         else:
             for save_file in new_files:
                 yield save_file.parent.stem, parse_save(save_file)
@@ -76,14 +95,6 @@ class SavePathMonitor:
         """ Ensure that no existing files are re-parsed. """
         self.processed_saves |= set(self.valid_save_files())
         self._last_checked_time = time.time()
-
-    def apply_game_name_filter(self, game_name_prefix: str) -> None:
-        self.mark_all_existing_saves_processed()
-        whitelisted = set()
-        for fname in self.processed_saves:
-            if fname.parent.stem.lower().startswith(game_name_prefix.lower()):
-                whitelisted.add(fname)
-        self.processed_saves -= whitelisted
 
     def valid_save_files(self) -> List[pathlib.Path]:
         prefiltered_files = (save_file for save_file in self.save_parent_dir.glob("**/*.sav")
