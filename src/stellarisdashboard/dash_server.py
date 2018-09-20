@@ -68,6 +68,7 @@ def history_page(
     country_id = request.args.get("country", None)
     leader_id = request.args.get("leader", None)
     system_id = request.args.get("system", None)
+    min_date = request.args.get("min_date", float("-inf"))
     is_filtered_page = any([country_id, leader_id, system_id])
     page_title = "Global Event Ledger"
     with models.get_db_session(game_id) as session:
@@ -80,7 +81,12 @@ def history_page(
         events, preformatted_links = get_event_and_link_dicts(
             session,
             game_id,
-            event_filter=EventFilter(country_filter=country_id, leader_filter=leader_id, system_filter=system_id),
+            event_filter=EventFilter(
+                min_date=min_date,
+                country_filter=country_id,
+                leader_filter=leader_id,
+                system_filter=system_id
+            ),
         )
     return render_template(
         "history_page.html",
@@ -90,6 +96,7 @@ def history_page(
         wars=wars,
         events=events,
         links=preformatted_links,
+        is_filtered_page=is_filtered_page,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
     )
@@ -315,7 +322,7 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
                        [Input('url', 'search')])
 def update_ledger_link(search):
     game_id, _ = _get_game_ids_matching_url(search)
-    return flask.url_for("history_page", game_name=game_id)
+    return flask.url_for("history_page", game_id=game_id)
 
 
 @timeline_app.callback(Output('game-name-header', 'children'),
@@ -575,8 +582,8 @@ class EventFilter:
                  planet_filter=None,
                  faction_filter=None,
                  ):
-        self.min_date = min_date
-        self.max_date = max_date
+        self.min_date = float(min_date)
+        self.max_date = float(max_date)
         self.country_filter = int(country_filter) if country_filter is not None else country_filter
         self.type_filter = type_filter
         self.war_filter = int(war_filter) if war_filter is not None else war_filter
@@ -591,6 +598,7 @@ class EventFilter:
             self.country_filter is None or self.country_filter == event.country_id,
             self.type_filter is None or self.type_filter == event.event_type,
         ])
+
         if self.war_filter is not None:
             result &= event.war_id == self.war_filter
         if self.leader_filter is not None:
@@ -604,6 +612,22 @@ class EventFilter:
         return result
 
 
+"""
+opened_borders = enum.auto()  # TODO
+first_contact = enum.auto()  # TODO
+non_aggression_pact = enum.auto()
+defensive_pact = enum.auto()
+formed_federation = enum.auto()  # TODO
+
+closed_borders = enum.auto()
+insult = enum.auto()
+rivalry_declaration = enum.auto()
+sent_war_declaration = enum.auto()
+received_war_declaration = enum.auto()
+peace = enum.auto()
+"""
+
+
 def get_event_and_link_dicts(
         session,
         game_id,
@@ -611,12 +635,15 @@ def get_event_and_link_dicts(
 ):
     events = {}
     preformatted_links = {}
-    for country in session.query(models.Country).order_by(models.Country.country_id.asc()):
-        events[country] = []
-        preformatted_links[country] = preformat_history_url(country.country_name, game_id, country=country.country_id)
-        for event in (session.query(models.HistoricalEvent)
-                .order_by(models.HistoricalEvent.start_date_days.asc())
-                .filter_by(country=country).all()):
+    for country_model in session.query(models.Country).order_by(models.Country.country_id.asc()):
+        events[country_model] = []
+        preformatted_links[country_model] = preformat_history_url(country_model.country_name, game_id, country=country_model.country_id)
+
+        event_list = session.query(models.HistoricalEvent).order_by(
+            models.HistoricalEvent.start_date_days.asc()
+        ).filter_by(country=country_model).all()
+
+        for event in event_list:
             if event_filter and not event_filter.include_event(event):
                 continue
 
@@ -630,10 +657,11 @@ def get_event_and_link_dicts(
                 system=event.system,
                 planet=event.planet,
                 faction=event.faction,
+                target_country=event.target_country,
                 description=event.get_description(),
             )
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
-            events[country].append(
+            events[country_model].append(
                 event_dict
             )
             if event.leader:
@@ -644,9 +672,16 @@ def get_event_and_link_dicts(
                 preformatted_links[event.system] = preformat_history_url(event.system.original_name,
                                                                          game_id,
                                                                          system=event.system.system_id)
+            if event.target_country:
+                preformatted_links[event.target_country] = preformat_history_url(event.target_country.country_name,
+                                                                                 game_id,
+                                                                                 country=event.target_country.country_id)
+            if not config.CONFIG.allow_backdating and event.start_date_days < 0:
+                event_dict["start_date"] = models.days_to_date(0)
+                event_dict["end_date"] = models.days_to_date(0)
 
-        if not events[country]:
-            del events[country]
+        if not events[country_model]:
+            del events[country_model]
     return events, preformatted_links
 
 
@@ -661,7 +696,6 @@ def get_war_dicts(session, current_date):
         end = models.days_to_date(current_date)
         if war.end_date_days:
             end = models.days_to_date(war.end_date_days)
-
         if (not any(wp.country.first_player_contact_date < current_date for wp in war.participants)
                 and not config.Config.show_everything):
             continue

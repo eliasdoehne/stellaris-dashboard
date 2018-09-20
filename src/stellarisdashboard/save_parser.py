@@ -43,6 +43,7 @@ class SavePathMonitor:
 
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
         self.processed_saves: Set[pathlib.Path] = set()
+        self.num_processed_saves: int = 0
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
         self.work_pool = None
@@ -62,6 +63,13 @@ class SavePathMonitor:
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
+            if (config.CONFIG.read_only_every_nth_save is not None) and (config.CONFIG.read_only_every_nth_save > 1):
+                num_files = len(new_files)
+                new_files = [f for (i, f) in enumerate(new_files) if (i + self.num_processed_saves) % config.CONFIG.read_only_every_nth_save == 0]
+                self.num_processed_saves += num_files
+                self.num_processed_saves %= config.CONFIG.read_only_every_nth_save
+                logger.info(f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}...")
+
         if config.CONFIG.threads > 1 and len(new_files) > 1:
             all_game_ids = [f.parent.stem for f in new_files]
             chunksize = min(16, 2 * config.CONFIG.threads)

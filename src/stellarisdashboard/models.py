@@ -231,6 +231,19 @@ class LeaderClass(enum.Enum):
 
     unknown = 99
 
+    def __str__(self):
+        if self == LeaderClass.ruler:
+            return "ruler"
+        elif self == LeaderClass.governor:
+            return "Governor"
+        elif self == LeaderClass.scientist:
+            return "Scientist"
+        elif self == LeaderClass.admiral:
+            return "Admiral"
+        elif self == LeaderClass.general:
+            return "General"
+        return "Leader"
+
 
 @enum.unique
 class LeaderGender(enum.Enum):
@@ -305,6 +318,8 @@ class HistoricalEventType(enum.Enum):
     ruled_empire = enum.auto()
     governed_sector = enum.auto()
     faction_leader = enum.auto()
+    leader_recruited = enum.auto()  # TODO
+    leader_died = enum.auto()  # TODO
 
     # civilizational advancement:
     researched_technology = enum.auto()
@@ -414,7 +429,7 @@ def days_to_date(days: float) -> str:
     year = 2200 + year_offset
     month = 1 + month_offset
     day = days - 30 * month_offset + 1
-    return f"{year}.{month}.{day}"
+    return f"{year:04}.{month:02}.{day:02}"
 
 
 def get_last_modified_time(path: pathlib.Path) -> int:
@@ -616,7 +631,7 @@ class Country(Base):
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
     leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
-    historical_events = relationship("HistoricalEvent", back_populates="country", cascade="all,delete,delete-orphan")
+    historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -671,25 +686,26 @@ class Government(Base):
 
     def get_reform_description_dict(self, old_gov: "Government") -> Dict[str, str]:
         reform_dict = {}
-        if old_gov.authority != self.authority:
-            old_authority = str(old_gov.authority)
-            new_authority = str(self.authority)
-            reform_dict["Authority"] = [f"From {old_authority} to {new_authority}"]
 
         if old_gov.gov_type != self.gov_type:
             ogt = game_info.convert_id_to_name(old_gov.gov_type, remove_prefix="gov")
             ngt = game_info.convert_id_to_name(self.gov_type, remove_prefix="gov")
-            reform_dict["Type"] = [f"From {ogt} to {ngt}"]
+            reform_dict["Type changed"] = [f'from "{ogt}" to "{ngt}"']
+
+        if old_gov.authority != self.authority:
+            old_authority = str(old_gov.authority)
+            new_authority = str(self.authority)
+            reform_dict["Authority changed"] = [f'from "{old_authority}" to "{new_authority}"']
 
         new_civics = self.civics - old_gov.civics
         removed_civics = old_gov.civics - self.civics
-        reform_dict["Removed Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
-        reform_dict["Adopted Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics)
+        reform_dict["Removed civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
+        reform_dict["Adopted civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics)
 
         new_ethics = self.ethics - old_gov.ethics
         removed_ethics = old_gov.ethics - self.ethics
-        reform_dict["Abandoned Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
-        reform_dict["Embraced Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
+        reform_dict["Abandoned ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
+        reform_dict["Embraced ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
         return {k: v for k, v in reform_dict.items() if v}
 
     def __str__(self):
@@ -1013,15 +1029,17 @@ class HistoricalEvent(Base):
     war_id = Column(ForeignKey(War.war_id), nullable=True)
     leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)
     system_id = Column(ForeignKey(System.system_id), nullable=True)
-    planet_id = Column(ForeignKey(ColonizedPlanet.planet_id), nullable=True, index=True)
+    planet_id = Column(ForeignKey(ColonizedPlanet.planet_id), nullable=True)
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
     description_id = Column(ForeignKey(HistoricalEventDescription.historical_event_description_id), nullable=True)
+    target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
 
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer)
 
     war = relationship("War")
-    country = relationship("Country", back_populates="historical_events")
+    country = relationship("Country", back_populates="historical_events", foreign_keys=[country_id])
+    target_country = relationship("Country", foreign_keys=[target_country_id])
     leader = relationship("Leader", back_populates="historical_events")
     system = relationship("System", back_populates="historical_events")
     planet = relationship("ColonizedPlanet", back_populates="historical_events")
@@ -1031,18 +1049,7 @@ class HistoricalEvent(Base):
     def __str__(self):
         start_date = days_to_date(self.start_date_days)
         end_date = days_to_date(self.end_date_days)
-        if self.event_type == HistoricalEventType.government_reform:
-            old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
-            new_gov = self.leader.country.get_government_for_date(self.start_date_days)
-            reform_dict = new_gov.get_reform_description_dict(old_gov)
-            reform_lines = []
-            for cat, reforms in reform_dict.items():
-                reform_lines.append(f"{cat}: " + ", ".join(reforms))
-            ref = ". ".join(reform_lines)
-            text = f"{start_date}: Government reform: \n{ref}"
-        else:
-            text = f"{start_date} - {end_date}: {str(self.event_type)}"
-
+        text = f"{start_date} - {end_date}: {str(self.event_type)}"
         return text
 
     def get_description(self):
@@ -1054,6 +1061,13 @@ class HistoricalEvent(Base):
             return game_info.convert_id_to_name(self.description.text)
         elif self.event_type == HistoricalEventType.ascension_perk:
             return game_info.convert_id_to_name(self.description.text, remove_prefix="ap")
+        elif self.event_type == HistoricalEventType.government_reform:
+            old_gov = self.country.get_government_for_date(self.start_date_days - 1)
+            new_gov = self.country.get_government_for_date(self.start_date_days)
+            reform_dict = new_gov.get_reform_description_dict(old_gov)
+            reform_lines = [f"{cat} " + ", ".join(reforms) + "." for (cat, reforms) in reform_dict.items()]
+            ref = " ".join(reform_lines)
+            return ref
         elif self.description:
             return game_info.convert_id_to_name(self.description.text)
         else:
@@ -1100,15 +1114,20 @@ class LeaderAchievement(Base):
             achievement_text = f'{start_date}: Finished construction of "{self.achievement_description}".'
         elif self.achievement_type == LeaderAchievementType.colonized_planet:
             achievement_text = f'{start_date} - {end_date}: Colonization of planet "{self.achievement_description}".'
+
+
         elif self.achievement_type == LeaderAchievementType.reformed_government:
             old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
             new_gov = self.leader.country.get_government_for_date(self.start_date_days)
             reform_dict = new_gov.get_reform_description_dict(old_gov)
             reform_lines = []
             for cat, reforms in reform_dict.items():
-                reform_lines.append(f"{cat}: " + ", ".join(reforms))
-            ref = ". ".join(reform_lines)
+                reform_lines.append(cat + ", ".join(reforms))
+            ref = " ".join(reform_lines)
             achievement_text = f"{start_date}: Government reform: \n{ref}"
+
+
+
         else:
             achievement_text = f"{start_date} - {end_date}: {self.achievement_description}"
         return achievement_text

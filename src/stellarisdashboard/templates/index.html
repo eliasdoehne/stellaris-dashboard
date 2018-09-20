@@ -6,7 +6,7 @@
         {% for game in games %}
         <li class="game"><h3>{{ game["country"] }} ({{ game["game_name"] }})</h3>
             <a class="button" href={{url_for("/timeline/", game_name=game["game_name"])}}>Timeline Graphs</a>
-            <a class="button" href={{url_for("history_page", game_name=game["game_name"])}}>Event Ledger</a>
+            <a class="button" href={{url_for("history_page", game_id=game["game_name"])}}>Event Ledger</a>
         </li>
         {% endfor %}
     </ul>
