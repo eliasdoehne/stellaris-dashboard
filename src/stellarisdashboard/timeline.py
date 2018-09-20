@@ -1193,6 +1193,7 @@ class TimelineExtractor:
         else:
             # planet is not colonized at all
             return
+        planet_name = planet_dict.get("name")
 
         end_date = planet_dict.get("colonize_date")
         if not end_date:
@@ -1212,7 +1213,7 @@ class TimelineExtractor:
         ).one_or_none()
         if planet_model is None:
             planet_model = models.ColonizedPlanet(
-                planet_name=planet_dict.get("name"),
+                planet_name=planet_name,
                 planet_id_in_game=planet_id,
                 system=system_model,
                 colonization_completed=colonization_completed,
@@ -1232,9 +1233,11 @@ class TimelineExtractor:
         if event is None:
             start_date = self._date_in_days
             if self._date_in_days < 100:
-                key = "f{country_model.country_name}{planet_model.planet_name}"
-                start_date, _ = self._back_date_event(start_date, avg_years_to_backdate=2000, avg_duration_days=0, key=key)
-                end_date_days = 0
+                start_date, end_date_days = self._back_date_event(start_date, avg_years_to_backdate=2000, avg_duration_days=1600 * 360, key=f"{planet_name}")
+                end_date_days = min(end_date_days, 0)
+                if country_model.is_player:
+                    end_date_days = 0
+                governor = None
             event = models.HistoricalEvent(
                 event_type=models.HistoricalEventType.colonization,
                 leader=governor,
@@ -1437,7 +1440,7 @@ class TimelineExtractor:
         if not config.CONFIG.allow_backdating:
             return original_date_days, original_date_days
         self.random_instance.seed(key)
-        start_date = original_date_days - int(360 * avg_years_to_backdate * (1 + self.random_instance.variate(0, 0.25)))  # ...by at least 750 years, plus random offset
+        start_date = original_date_days - int(360 * avg_years_to_backdate * (1 + self.random_instance.normalvariate(0, 0.25)))  # ...by at least 750 years, plus random offset
         end_date = start_date + avg_duration_days * (0.8 + 0.4 * self.random_instance.random())
         return start_date, end_date
 

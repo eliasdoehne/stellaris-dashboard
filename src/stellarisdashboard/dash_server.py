@@ -1,5 +1,4 @@
 import logging
-import random
 import time
 from typing import Dict, Any, List
 from urllib import parse
@@ -12,7 +11,7 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template, request, redirect
 
-from stellarisdashboard import config, models, visualization_data, game_info
+from stellarisdashboard import config, models, visualization_data
 
 logger = logging.getLogger(__name__)
 
@@ -45,43 +44,55 @@ def index_page(version=None):
 
 
 @flask_app.route("/history")
-@flask_app.route("/history/<game_name>")
+@flask_app.route("/history/<game_id>")
 @flask_app.route("/checkversion/<version>/history")
-@flask_app.route("/checkversion/<version>/history/<game_name>")
-def history_page(game_name=None, version=None):
+@flask_app.route("/checkversion/<version>/history/<game_id>")
+def history_page(
+        game_id=None,
+        version=None,
+):
     show_old_version_notice = False
     if version is not None:
         show_old_version_notice = is_old_version(version)
-    if game_name is None:
-        game_name = ""
+    if game_id is None:
+        game_id = ""
 
-    matches = models.get_known_games(game_name)
+    matches = models.get_known_games(game_id)
     if not matches:
-        logger.warning(f"Could not find a game matching {game_name}")
-        return render_template("404_page.html", game_not_found=True, game_name=game_name)
+        logger.warning(f"Could not find a game matching {game_id}")
+        return render_template("404_page.html", game_not_found=True, game_name=game_id)
     games_dict = models.get_available_games_dict()
-    game_name = matches[0]
-    country = games_dict[game_name]
-    with models.get_db_session(game_name) as session:
+    game_id = matches[0]
+    country = games_dict[game_id]
+
+    country_id = request.args.get("country", None)
+    leader_id = request.args.get("leader", None)
+    system_id = request.args.get("system", None)
+    is_filtered_page = any([country_id, leader_id, system_id])
+    page_title = "Global Event Ledger"
+    with models.get_db_session(game_id) as session:
+        if is_filtered_page:
+            page_title = f"History {country_id} {leader_id} {system_id}"
         date = get_most_recent_date(session)
-        wars = get_war_dicts(session, date)
-        leaders = get_leader_dicts(session, date)
-        events = get_event_dicts(session)
+        wars = []
+        if not is_filtered_page:
+            wars = get_war_dicts(session, date)
+        events, preformatted_links = get_event_and_link_dicts(
+            session,
+            game_id,
+            event_filter=EventFilter(country_filter=country_id, leader_filter=leader_id, system_filter=system_id),
+        )
     return render_template(
         "history_page.html",
-        game_name=game_name,
+        page_title=page_title,
+        game_name=game_id,
         country=country,
         wars=wars,
-        leaders=[],
         events=events,
+        links=preformatted_links,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
     )
-
-
-@flask_app.route("/leader/<leader_id>")
-def leader(leader_id=None):
-    return f"Hello Leader {leader_id}"
 
 
 @flask_app.route("/country/<country_id>")
@@ -552,23 +563,63 @@ def get_galaxy(game_id, date):
     )
 
 
-def get_event_dicts(
+class EventFilter:
+    def __init__(self,
+                 min_date=float("-inf"),
+                 max_date=float("inf"),
+                 country_filter=None,
+                 type_filter=None,
+                 war_filter=None,
+                 leader_filter=None,
+                 system_filter=None,
+                 planet_filter=None,
+                 faction_filter=None,
+                 ):
+        self.min_date = min_date
+        self.max_date = max_date
+        self.country_filter = int(country_filter) if country_filter is not None else country_filter
+        self.type_filter = type_filter
+        self.war_filter = int(war_filter) if war_filter is not None else war_filter
+        self.leader_filter = int(leader_filter) if leader_filter is not None else leader_filter
+        self.system_filter = int(system_filter) if system_filter is not None else system_filter
+        self.planet_filter = int(planet_filter) if planet_filter is not None else planet_filter
+        self.faction_filter = int(faction_filter) if faction_filter is not None else faction_filter
+
+    def include_event(self, event: models.HistoricalEvent) -> bool:
+        result = all([
+            self.min_date <= event.start_date_days <= self.max_date,
+            self.country_filter is None or self.country_filter == event.country_id,
+            self.type_filter is None or self.type_filter == event.event_type,
+        ])
+        if self.war_filter is not None:
+            result &= event.war_id == self.war_filter
+        if self.leader_filter is not None:
+            result &= event.leader_id == self.leader_filter
+        if self.system_filter is not None:
+            result &= event.system_id == self.system_filter
+        if self.planet_filter is not None:
+            result &= event.planet_id == self.planet_filter
+        if self.faction_filter is not None:
+            result &= event.faction_id == self.faction_filter
+        return result
+
+
+def get_event_and_link_dicts(
         session,
-        war_filter=None,
-        leader_filter=None,
-        system_filter=None,
-        planet_filter=None,
-        faction_filter=None,
-        type_filter=None,
+        game_id,
+        event_filter: EventFilter = None,
 ):
     events = {}
+    preformatted_links = {}
     for country in session.query(models.Country).order_by(models.Country.country_id.asc()):
-        country_name = country.country_name
         events[country] = []
+        preformatted_links[country] = preformat_history_url(country.country_name, game_id, country=country.country_id)
         for event in (session.query(models.HistoricalEvent)
                 .order_by(models.HistoricalEvent.start_date_days.asc())
                 .filter_by(country=country).all()):
-            assert isinstance(event, models.HistoricalEvent)
+            if event_filter and not event_filter.include_event(event):
+                continue
+
             event_dict = dict(
                 country=event.country,
                 start_date=models.days_to_date(event.start_date_days),
@@ -581,76 +632,26 @@ def get_event_dicts(
                 faction=event.faction,
                 description=event.get_description(),
             )
-
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
-            print(event_dict)
             events[country].append(
                 event_dict
             )
+            if event.leader:
+                preformatted_links[event.leader] = preformat_history_url(event.leader.leader_name,
+                                                                         game_id,
+                                                                         leader=event.leader.leader_id)
+            if event.system:
+                preformatted_links[event.system] = preformat_history_url(event.system.original_name,
+                                                                         game_id,
+                                                                         system=event.system.system_id)
+
         if not events[country]:
             del events[country]
-    return events
+    return events, preformatted_links
 
 
-def get_leader_dicts(session, most_recent_date):
-    rulers = []
-    scientists = []
-    governors = []
-    admirals = []
-    generals = []
-    assigned_ids = set()
-    for leader in session.query(models.Leader).order_by(
-            models.Leader.is_active.desc(), models.Leader.date_hired
-    ).all():
-        base_ruler_id = "_".join(leader.leader_name.split()).lower()
-        ruler_id = base_ruler_id
-        id_offset = 1
-        while ruler_id in assigned_ids:
-            id_offset += 1
-            ruler_id = f"{base_ruler_id}_{id_offset}"
-        species = "Unknown"
-        if leader.species is not None:
-            species = leader.species.species_name
-
-        status = f"active, as of {models.days_to_date(most_recent_date)}"
-        if not leader.is_active:
-            random.seed(leader.leader_name)
-            last_date = leader.last_date + random.randint(0, 30)
-            age = (last_date - leader.date_born) // 360
-            status = f"dismissed or died around {models.days_to_date(last_date)} (Age {age})"
-
-        leader_dict = dict(
-            name=leader.leader_name,
-            id=f"{ruler_id}",
-            in_game_id=leader.leader_id_in_game,
-            birthday=models.days_to_date(leader.date_born),
-            date_hired=models.days_to_date(leader.date_hired),
-            status=status,
-            species=species,
-            achievements=[str(a) for a in leader.achievements]
-        )
-        if leader.leader_class == models.LeaderClass.scientist:
-            leader_dict["class"] = "Scientist"
-            scientists.append(leader_dict)
-        elif leader.leader_class == models.LeaderClass.governor:
-            leader_dict["class"] = "Governor"
-            governors.append(leader_dict)
-        elif leader.leader_class == models.LeaderClass.admiral:
-            leader_dict["class"] = "Admiral"
-            admirals.append(leader_dict)
-        elif leader.leader_class == models.LeaderClass.general:
-            leader_dict["class"] = "General"
-            generals.append(leader_dict)
-        elif leader.leader_class == models.LeaderClass.ruler:
-            leader_dict["class"] = "Ruler"
-            rulers.append(leader_dict)
-
-    leaders = (rulers
-               + scientists
-               + governors
-               + admirals
-               + generals)
-    return leaders
+def preformat_history_url(text, game_id, **kwargs):
+    return f'<a class="textlink" href={flask.url_for("history_page", game_id=game_id, **kwargs)}>{text}</a>'
 
 
 def get_war_dicts(session, current_date):

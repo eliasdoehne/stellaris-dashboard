@@ -2,25 +2,29 @@
 {% block body %}
 
 <a class="button" href={{url_for("/timeline/", game_name=game_name)}}>Go to Timeline</a>
-<h1> History Ledger of {{country}}</h1>
+<h1> {{page_title}} </h1>
 
 <div class="toc">
+    <a class="button" href={{url_for("history_page", game_id=game_name)}}>Go to full event ledger</a>
     <h2>Contents</h2>
+    {% if wars %}
     <a href="#wars">Wars</a>
     <ul>
         {% for war in wars %}
         <li class="toc-item"><a href=#{{war["id"]}}>{{ war["start"] }} - {{ war["end"] }}: {{war["name"]}}</a></li>
         {% endfor %}
     </ul>
+    {% endif %}
     <a href="#leaders">Countries</a>
     <ul>
         {% for country in events %}
-        <li class="toc-item"><a href=#country_{{country.id}}>{{country.country_name}}</a></li>
+        <li class="toc-item"><a href=#country_{{ country.country_id }}>{{country.country_name}}</a></li>
         {% endfor %}
     </ul>
 </div>
 
 <hr>
+{% if wars %}
 <a name="wars"></a>
 <h2>Wars</h2>
 {% for war in wars %}
@@ -48,37 +52,36 @@
 </div>
 {% endfor %}
 <a class="button" href="#index">Return to Table of Contents</a>
+{% endif %}
 
 <hr>
 <a name="events"></a>
-<h2>Events</h2>
+<h2>History</h2>
 {% for (country, events) in events.items() %}
-<a name=country_{{country.id}}></a>
-<div class="leader-box">
-    <h3 class="leader-header">{{country.country_name}}</h3>
-    <ul class="achievementList">
-        {% for event in events %}
-        {% if event["event_type"] == "ruled_empire" %}
-        <li class="eventtext"> {{event["start_date"]}} - {{event["end_date"]}}:
-            <a class="textlink" href={{url_for("leader", leader_id=event["leader"].leader_id)}}>{{event["leader"].get_name()}}</a>
-            ruled the <a class="textlink" href={{url_for("country", country_id=event["country"].country_id)}}>{{event["country"].country_name}}</a> </li>
-        {% endif %}
-        {% if event["event_type"] == "colonization" %}
-        <li class="eventtext"> {{event["start_date"]}} - {{event["end_date"]}}:
-            Colonization of planet "{{event["planet"].get_name()}}" in the
-            <a class="textlink" href={{url_for("system", system_id=event["system"].system_id)}}>{{event["system"].get_name()}} system</a>
-            {% if "leader" in event%} under <a class="textlink" href={{url_for("leader", leader_id=event["leader"].leader_id)}}>Governor {{event["leader"].leader_name}}</a> {% endif %}
-        </li>
-        {% endif %}
-        {% if event["event_type"] == "researched_technology" %}
-        <li class="eventtext"> {{event["start_date"]}}:
-            <a class="textlink" href={{url_for("leader", leader_id=event["leader"].leader_id)}}>Scientist {{event["leader"].leader_name}}</a> researched the {{event["description"]}} technology.
-        </li>
-        {% endif %}
-        {% endfor %}
-    </ul>
-</div>
+    <a name=country_{{country.country_id}}></a>
+    <div class="leader-box">
+        <h3 class="leader-header">{{country.country_name}}</h3>
+        <ul class="achievementList">
+            {% for event in events %}
+                {% if event["event_type"] == "ruled_empire" %}
+                    <li class="eventtext"> {{event["start_date"]}} - {{event["end_date"]}}:
+                        {{links[event["leader"]]|safe}} ruled the {{links[event["country"]]|safe}}
+                {% endif %}
+                {% if event["event_type"] == "colonization" %}
+                    <li class="eventtext"> {{event["start_date"]}} - {{event["end_date"]}}:
+                        Colonization of planet "{{event["planet"].get_name()}}" in the {{links[event["system"]]|safe}}
+                        system{% if "leader" in event%} under Governor {{links[event["leader"]]|safe}}{% endif %}.
+                    </li>
+                {% endif %}
+                {% if event["event_type"] == "researched_technology" %}
+                    <li class="eventtext"> {{event["start_date"]}}:
+                        Scientist {{links[event["leader"]]|safe}} researched the {{event["description"]}} technology.
+                    </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+    <a class="button" href="#index">Return to Table of Contents</a>
 {% endfor %}
-<a class="button" href="#index">Return to Table of Contents</a>
 
 {% endblock %}
