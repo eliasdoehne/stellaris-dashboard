@@ -11,7 +11,7 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template, request, redirect
 
-from stellarisdashboard import config, models, visualization_data
+from stellarisdashboard import config, models, visualization_data, game_info
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def history_page(
         wars = []
         if not is_filtered_page:
             wars = get_war_dicts(session, date)
-        events, preformatted_links = get_event_and_link_dicts(
+        events, country_details, preformatted_links = get_event_and_link_dicts(
             session,
             game_id,
             event_filter=EventFilter(
@@ -95,6 +95,7 @@ def history_page(
         country=country,
         wars=wars,
         events=events,
+        country_details=country_details,
         links=preformatted_links,
         is_filtered_page=is_filtered_page,
         show_old_version_notice=show_old_version_notice,
@@ -623,7 +624,7 @@ closed_borders = enum.auto()
 insult = enum.auto()
 rivalry_declaration = enum.auto()
 sent_war_declaration = enum.auto()
-received_war_declaration = enum.auto()
+war = enum.auto()
 peace = enum.auto()
 """
 
@@ -635,9 +636,20 @@ def get_event_and_link_dicts(
 ):
     events = {}
     preformatted_links = {}
+    country_details = {}
     for country_model in session.query(models.Country).order_by(models.Country.country_id.asc()):
         events[country_model] = []
         preformatted_links[country_model] = preformat_history_url(country_model.country_name, game_id, country=country_model.country_id)
+
+        gov = country_model.get_current_government()
+        if gov is not None:
+            country_details[country_model] = dict(
+                country_type=game_info.convert_id_to_name(country_model.country_type),
+                type=game_info.convert_id_to_name(gov.gov_type, remove_prefix="gov"),
+                authority=gov.authority,
+                ethics=", ".join([game_info.convert_id_to_name(e, remove_prefix="ethic") for e in sorted(gov.ethics)]),
+                civics=", ".join([game_info.convert_id_to_name(c, remove_prefix="civic") for c in sorted(gov.civics)]),
+            )
 
         event_list = session.query(models.HistoricalEvent).order_by(
             models.HistoricalEvent.start_date_days.asc()
@@ -682,7 +694,7 @@ def get_event_and_link_dicts(
 
         if not events[country_model]:
             del events[country_model]
-    return events, preformatted_links
+    return events, country_details, preformatted_links
 
 
 def preformat_history_url(text, game_id, **kwargs):

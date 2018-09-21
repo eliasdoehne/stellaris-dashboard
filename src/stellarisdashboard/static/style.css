@@ -115,19 +115,38 @@ span.settinginput {
     flex: 1 0 20%;
 }
 
+div.countrydetails {
+    display: flex;
+    flex-direction: row;
+}
+
+span.countrydetailskey {
+    align-self: flex-start;
+    text-align: right;
+    min-width: 210px;
+    margin-right: 20px;
+    flex: 0 1 auto;
+}
+
+span.countrydetailsvalue {
+    align-self: flex-end;
+    flex: 0 1 auto;
+}
+
+ul.event_list {
+    list-style: none;
+}
+
 li.eventitem {
     color: rgba(217, 217, 217, 1);
     margin: auto;
 }
 
+
 div.eventdescription {
     padding: 0.01cm;
     display: flex;
     flex-direction: row;
-}
-
-ul.event_list {
-    list-style: none;
 }
 
 span.dateblock {

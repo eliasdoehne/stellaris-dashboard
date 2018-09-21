@@ -3,7 +3,7 @@ import enum
 import logging
 import pathlib
 import threading
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -318,7 +318,7 @@ class HistoricalEventType(enum.Enum):
     ruled_empire = enum.auto()
     governed_sector = enum.auto()
     faction_leader = enum.auto()
-    leader_recruited = enum.auto()  # TODO
+    leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
 
     # civilizational advancement:
@@ -329,7 +329,7 @@ class HistoricalEventType(enum.Enum):
 
     # expansion:
     colonization = enum.auto()
-    discovered_new_system = enum.auto()  # TODO: for when new systems are detected, e.g. precursor homeworlds
+    discovered_new_system = enum.auto()
     habitat_ringworld_construction = enum.auto()
     megastructure_construction = enum.auto()
     sector_creation = enum.auto()  # TODO?
@@ -341,17 +341,15 @@ class HistoricalEventType(enum.Enum):
     planetary_unrest = enum.auto()
 
     # diplomacy and war:
-    opened_borders = enum.auto()  # TODO
-    first_contact = enum.auto()  # TODO
+    first_contact = enum.auto()
     non_aggression_pact = enum.auto()
     defensive_pact = enum.auto()
-    formed_federation = enum.auto()  # TODO
+    formed_federation = enum.auto()
 
     closed_borders = enum.auto()
-    insult = enum.auto()
     rivalry_declaration = enum.auto()
-    sent_war_declaration = enum.auto()
-    received_war_declaration = enum.auto()
+
+    war = enum.auto()
     peace = enum.auto()
 
 
@@ -359,6 +357,8 @@ HISTORICAL_EVENT_TYPE_TO_STR_MAP = {
     HistoricalEventType.ruled_empire: "ruled_empire",
     HistoricalEventType.governed_sector: "governed_sector",
     HistoricalEventType.faction_leader: "faction_leader",
+    HistoricalEventType.leader_recruited: "leader_recruited",
+    HistoricalEventType.leader_died: "leader_died",
     HistoricalEventType.researched_technology: "researched_technology",
     HistoricalEventType.tradition: "tradition",
     HistoricalEventType.ascension_perk: "ascension_perk",
@@ -372,48 +372,15 @@ HISTORICAL_EVENT_TYPE_TO_STR_MAP = {
     HistoricalEventType.species_rights_reform: "species_rights_reform",
     HistoricalEventType.capital_relocation: "capital_relocation",
     HistoricalEventType.planetary_unrest: "planetary_unrest",
-    HistoricalEventType.opened_borders: "opened_borders",
     HistoricalEventType.first_contact: "first_contact",
     HistoricalEventType.non_aggression_pact: "non_aggression_pact",
     HistoricalEventType.defensive_pact: "defensive_pact",
     HistoricalEventType.formed_federation: "formed_federation",
     HistoricalEventType.closed_borders: "closed_borders",
-    HistoricalEventType.insult: "insult",
     HistoricalEventType.rivalry_declaration: "rivalry_declaration",
-    HistoricalEventType.sent_war_declaration: "sent_war_declaration",
-    HistoricalEventType.received_war_declaration: "received_war_declaration",
+    HistoricalEventType.war: "war",
     HistoricalEventType.peace: "peace",
 }
-
-
-@enum.unique
-class LeaderAchievementType(enum.Enum):
-    # All leaders:
-    was_faction_leader = 5
-
-    # Scientists:
-    researched_technology = 0
-
-    # Admirals:
-    won_fleet_battle = 1
-
-    # Generals:
-    won_planet_invasion = 2
-
-    # Rulers:
-    was_ruler = 3
-    negotiated_peace_treaty = 4
-    passed_edict = 6
-    embraced_tradition = 7
-    achieved_ascension = 8
-    reformed_government = 9
-
-    # Governors:
-    governed_sector = 10
-    built_megastructure = 11
-    colonized_planet = 12
-
-    special_event = 99
 
 
 def date_to_days(date_str: str) -> float:
@@ -638,6 +605,11 @@ class Country(Base):
         for gov in self.governments:
             if gov.start_date_days <= date_in_days <= gov.end_date_days:
                 return gov
+
+    def get_current_government(self) -> Union["Government", None]:
+        if not self.governments:
+            return None
+        return max(self.governments, key=lambda gov: gov.end_date_days)
 
     def __repr__(self):
         return f"<Country {self.country_id_in_game} {self.country_name}, {self.country_type}>"
@@ -978,7 +950,6 @@ class Leader(Base):
     country = relationship("Country", back_populates="leaders")
     species = relationship("Species")
     historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
-    achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
 
     def get_name(self):
         result = f"{self.leader_class.name} {self.leader_name}"
@@ -1072,62 +1043,3 @@ class HistoricalEvent(Base):
             return game_info.convert_id_to_name(self.description.text)
         else:
             return None
-
-
-class LeaderAchievement(Base):
-    __tablename__ = "leaderachievementtable"
-
-    leader_achievement_id = Column(Integer, primary_key=True)
-    leader_id = Column(ForeignKey(Leader.leader_id))
-
-    start_date_days = Column(Integer, index=True)
-    end_date_days = Column(Integer, index=True)
-    achievement_type = Column(Enum(LeaderAchievementType), index=True)
-    achievement_description = Column(String(80))
-
-    leader = relationship("Leader", back_populates="achievements")
-
-    def __str__(self):
-        start_date = days_to_date(self.start_date_days)
-        end_date = days_to_date(self.end_date_days)
-        if self.achievement_type == LeaderAchievementType.was_ruler:
-            achievement_text = f'{start_date} - {end_date}: Ruled the {self.achievement_description} with "{self.leader.leader_agenda}" agenda'
-        elif self.achievement_type == LeaderAchievementType.negotiated_peace_treaty:
-            achievement_text = f"{end_date}: Negotiated peace in the {self.achievement_description}"
-        elif self.achievement_type == LeaderAchievementType.passed_edict:
-            name = game_info.convert_id_to_name(self.achievement_description)
-            achievement_text = f'{start_date} - {end_date}: Issued "{name}" edict'
-        elif self.achievement_type == LeaderAchievementType.embraced_tradition:
-            tradition = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tr")
-            achievement_text = f'{end_date}: Adopted "{tradition}" tradition'
-        elif self.achievement_type == LeaderAchievementType.achieved_ascension:
-            perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="ap")
-            achievement_text = f'{end_date}: "{perk}" ascension.'
-        elif self.achievement_type == LeaderAchievementType.researched_technology:
-            tech = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tech")
-            achievement_text = f'{end_date}: Researched "{tech}" technology'
-        elif self.achievement_type == LeaderAchievementType.was_faction_leader:
-            achievement_text = f'{start_date} - {end_date}: Leader of the "{self.achievement_description}" faction'
-        elif self.achievement_type == LeaderAchievementType.governed_sector:
-            achievement_text = f'{start_date} - {end_date}: Governed "{self.achievement_description}" sector.'
-        elif self.achievement_type == LeaderAchievementType.built_megastructure:
-            achievement_text = f'{start_date}: Finished construction of "{self.achievement_description}".'
-        elif self.achievement_type == LeaderAchievementType.colonized_planet:
-            achievement_text = f'{start_date} - {end_date}: Colonization of planet "{self.achievement_description}".'
-
-
-        elif self.achievement_type == LeaderAchievementType.reformed_government:
-            old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
-            new_gov = self.leader.country.get_government_for_date(self.start_date_days)
-            reform_dict = new_gov.get_reform_description_dict(old_gov)
-            reform_lines = []
-            for cat, reforms in reform_dict.items():
-                reform_lines.append(cat + ", ".join(reforms))
-            ref = " ".join(reform_lines)
-            achievement_text = f"{start_date}: Government reform: \n{ref}"
-
-
-
-        else:
-            achievement_text = f"{start_date} - {end_date}: {self.achievement_description}"
-        return achievement_text
