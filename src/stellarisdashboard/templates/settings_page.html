@@ -7,7 +7,7 @@
     <div class="settings">
         {% for key, setting in current_settings.items() %}
         <div class="setting">
-            <span class="settingname"> {{ setting["name"] }}: </span>
+            <span class="settingname"  title="{{ setting["description"] }}"> {{ setting["name"] }}: </span>
             <span class="settinginput">
             {% if setting["type"] == "bool" %}
             <input type="checkbox" title="{{ setting["description"] }}" name={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>

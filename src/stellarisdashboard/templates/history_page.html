@@ -13,7 +13,7 @@
     <a href="#wars">Wars</a>
     <ul>
         {% for war in wars %}
-        <li class="toc-item"><a href=#{{war["id"]}}>{{ war["start"] }} - {{ war["end"] }}: {{war["name"]}}</a></li>
+        <li class="toc-item"><a href={{"#war_{}".format(war["war"].war_id)}}>{{ war["start"] }} - {{ war["end"] }}: {{war["war"].name}}</a></li>
         {% endfor %}
     </ul>
     {% endif %}
@@ -32,18 +32,18 @@
 <h1>Wars</h1>
 {% for war in wars %}
 <div class="ledgerbox">
-    <a name={{war["id"]}}></a>
-    <h2 class="war-header">{{ war["name"] }} ({{ war["start"] }} - {{ war["end"] }}) </h2>
+    <a name={{"war_{}".format(war["war"].war_id)}}></a>
+    <h2 class="war-header">{{ war["war"].name }} ({{ war["start"] }} - {{ war["end"] }}) </h2>
     <h4>Attackers:</h4>
     <ul>
-        {% for country in war["attackers"] %}
-        <li class="eventitem">{{country}}</li>
+        {% for wp in war["attackers"] %}
+        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].war_goal}}" war goal'</li>
         {% endfor %}
     </ul>
     <h4>Defenders:</h4>
     <ul>
-        {% for country in war["defenders"] %}
-        <li class="eventitem">{{country}}</li>
+        {% for wp in war["defenders"] %}
+        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].war_goal}}" war goal'</li>
         {% endfor %}
     </ul>
     <h4>Combat Log: </h4>
@@ -65,22 +65,11 @@
 <a name=country_{{country.country_id}}></a>
 <div class="ledgerbox">
     <h2 class="leader-header"><a href={{url_for("history_page", game_id=game_name, country=country.country_id)}}> {{ country.country_name }}</a></h2>
-    <span>Toggle Event Types:
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('researched_technology');">Technologies</a>
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('edict');">Edicts</a>
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('tradition');">Traditions</a>
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('ascension_perk');">Ascensions</a>
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('leader_recruited');">Leader Recruitment</a>
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('colonization');">Colonizations</a>
-            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('first_contact');">First Contact</a>
-        </span>
-
-
     <ul class="event_list">
         <li class="eventitem">
             <div class="countrydetails">
-                <span class="countrydetailskey">Country type:</span>
-                <span class="countrydetailsvalue">{{country_details[country]["country_type"]}}</span>
+                <span class="countrydetailskey">Personality:</span>
+                <span class="countrydetailsvalue">{{country_details[country]["personality"]}}</span>
             </div>
         </li>
         <li class="eventitem">
@@ -107,7 +96,24 @@
                 <span class="countrydetailsvalue">{{country_details[country]["civics"]}}</span>
             </div>
         </li>
+        <li class="eventitem">
+            <div class="countrydetails">
+                <span class="countrydetailskey">Country type:</span>
+                <span class="countrydetailsvalue">{{country_details[country]["country_type"]}}</span>
+            </div>
+        </li>
     </ul>
+
+
+    <span>Toggle Event Types:
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('researched_technology');">Technologies</a>
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('edict');">Edicts</a>
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('tradition');">Traditions</a>
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('ascension_perk');">Ascensions</a>
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('leader_recruited');">Leader Recruitment</a>
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('colonization');">Colonizations</a>
+            <a class="button vis_toggle" href="#country_{{country.country_id}}" onclick="toggle_visibility('first_contact');">First Contact</a>
+    </span>
 
     <ul class="event_list">
         {% for event in events %}
@@ -119,8 +125,7 @@
                             {{links[event["leader"]]|safe}} ruled the {{links[event["country"]]|safe}}.
                         </span>
             </div>
-            {% endif %}
-            {% if event["event_type"] == "colonization" %}
+        {% elif event["event_type"] == "colonization" %}
         <li class="eventitem colonization">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -130,28 +135,26 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "researched_technology" %}
+        {% elif event["event_type"] == "researched_technology" %}
         <li class="eventitem researched_technology">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                            Scientist {{links[event["leader"]]|safe}} researched the "{{event["description"]}}" technology.
-                         </span>
+                    {% if "leader" in event %}Due to Scientist {{links[event["leader"]]|safe}}'s work, the {% endif %}{{links[event["country"]]|safe}} researched the "{{event["description"]}}" technology.
+                 </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "governed_sector" %}
+        {% elif event["event_type"] == "governed_sector" %}
         <li class="eventitem governed_sector">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                            Governor {{links[event["leader"]]|safe}} governed the {{event["description"]}} sector.
+                            Governor {{links[event["leader"]]|safe}} governed the {{event["description"]}} sector{% if "planet" in event %}
+                            from planet "{{ event["planet"].get_name() }}" in the {{links[event["system"]]|safe}} system{%endif%}.
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "edict" %}
+        {% elif event["event_type"] == "edict" %}
         <li class="eventitem edict">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -160,8 +163,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "ascension_perk" %}
+        {% elif event["event_type"] == "ascension_perk" %}
         <li class="eventitem ascension_perk">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
@@ -170,8 +172,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "government_reform" %}
+        {% elif event["event_type"] == "government_reform" %}
         <li class="eventitem government_reform">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
@@ -180,8 +181,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "tradition" %}
+        {% elif event["event_type"] == "tradition" %}
         <li class="eventitem tradition">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
@@ -190,8 +190,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "faction_leader" %}
+        {% elif event["event_type"] == "faction_leader" %}
         <li class="eventitem faction_leader">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -200,8 +199,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "first_contact" %}
+        {% elif event["event_type"] == "first_contact" %}
         <li class="eventitem first_contact">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
@@ -211,8 +209,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "rivalry_declaration" %}
+        {% elif event["event_type"] == "rivalry_declaration" %}
         <li class="eventitem rivalry_declaration">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -222,8 +219,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "defensive_pact" %}
+        {% elif event["event_type"] == "defensive_pact" %}
         <li class="eventitem defensive_pact">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -233,8 +229,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "non_aggression_pact" %}
+        {% elif event["event_type"] == "non_aggression_pact" %}
         <li class="eventitem non_aggression_pact">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -244,8 +239,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "formed_federation" %}
+        {% elif event["event_type"] == "formed_federation" %}
         <li class="eventitem formed_federation">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}} - {{event["end_date"]}}:</span>
@@ -255,8 +249,7 @@
                          </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "habitat_ringworld_construction" %}
+        {% elif event["event_type"] == "habitat_ringworld_construction" %}
         <li class="eventitem habitat_ringworld_construction">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
@@ -266,14 +259,53 @@
                  </span>
             </div>
         </li>
-        {% endif %}
-        {% if event["event_type"] == "leader_recruited" %}
+        {% elif event["event_type"] == "leader_recruited" %}
         <li class="eventitem leader_recruited">
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                             The {{links[event["country"]]|safe}} recruited {{ event.leader.leader_class }} {{links[event["leader"]]|safe}}.
                          </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "sector_creation" %}
+        <li class="eventitem sector_creation">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    Created the {{ event["description"] }} sector
+                    {% if "leader" in event %} under Ruler {{links[event["leader"]]|safe}}{% endif %}{% if "planet" in event %}
+                    with capital on planet "{{ event["planet"].get_name() }}" in the {{links[event["system"]]|safe}} system{% endif %}.
+                </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "new_faction" %}
+        <li class="eventitem new_faction">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    The "{{ event.faction.faction_name}}", a new {{ event.faction.ethics }} faction, emerged in the {{links[event["country"]]|safe}}.
+                </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "war" %}
+        <li class="eventitem war">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under the rule of {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
+                    entered the "<a class="textlink" href={{"#war_{}".format(event['war'].war_id)}}>{{event["war"].name}}</a>" conflict.
+                </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "peace" %}
+        <li class="eventitem peace">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under the rule of {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
+                    negotiated peace in the "<a class="textlink" href={{"#war_{}".format(event['war'].war_id)}}">{{event["war"].name}}</a>" conflict.
+                </span>
             </div>
         </li>
         {% endif %}

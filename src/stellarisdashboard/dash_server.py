@@ -57,11 +57,11 @@ def history_page(
     if game_id is None:
         game_id = ""
 
+    games_dict = models.get_available_games_dict()
     matches = models.get_known_games(game_id)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
-    games_dict = models.get_available_games_dict()
     game_id = matches[0]
     country = games_dict[game_id]
 
@@ -134,25 +134,44 @@ def settings_page():
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["extract_system_ownership"]),
             "name": "Extract system ownership",
-            "description": "Extracting ownership of systems can be slow. If this setting is used, the galaxy view won't work properly.",
+            "description": "Extracting ownership of systems can be slow. If this setting is used, the historical galaxy map won't show any empires.",
         },
         "show_everything": {
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["show_everything"]),
             "name": "Cheat mode: Show all empires",
-            "description": "Cheat mode: Show data for all empires.",
+            "description": "Cheat mode: Show data for all empires, regardless of diplomatic status, even if you haven't met them in-game.",
         },
         "only_show_default_empires": {
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["only_show_default_empires"]),
             "name": "Only show default empires",
-            "description": 'Only show normal empires. Use it to exclude fallen empires and similar.',
+            "description": 'Only show default-class empires, i.e. normal countries. Use it to exclude fallen empires and similar. Usually, this setting only matters if you have the Cheat mode enabled.',
+        },
+        "only_read_player_history": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["only_read_player_history"]),
+            "name": "Only extract player history",
+            "description": "Only extract your country's history for the event ledger. Reduces workload and database size, but you won't have access to the full game history.",
+        },
+        "allow_backdating": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["allow_backdating"]),
+            "name": "Back-date initial events",
+            "description": "If active, events that occur before the game starts are back-dated by an appropriate, randomized amount. If inactive, all initial events happen on (or near) 2200.01.01, which may look odd.",
         },
         "save_name_filter": {
             "type": t_str,
             "value": current_settings["save_name_filter"],
             "name": "Save file name filter",
-            "description": "Save files whose file names do not contain this string are ignored. You can use it to only read yearly autosaves, by setting the value to \"01.sav\"",
+            "description": "Save files whose file names do not contain this string are ignored. For example, you can use it to only read yearly autosaves, by setting the value to \".01.01.sav\"",
+        },
+        "read_only_every_nth_save": {
+            "type": t_int,
+            "value": current_settings["read_only_every_nth_save"],
+            "max": 10,
+            "name": "Only read every n-th save",
+            "description": "Set to 2 to ignore every other save, to 3 to ignore 2/3 of saves, and so on. This is applied after all other filters.",
         },
         "threads": {
             "type": t_int,
@@ -613,22 +632,6 @@ class EventFilter:
         return result
 
 
-"""
-opened_borders = enum.auto()  # TODO
-first_contact = enum.auto()  # TODO
-non_aggression_pact = enum.auto()
-defensive_pact = enum.auto()
-formed_federation = enum.auto()  # TODO
-
-closed_borders = enum.auto()
-insult = enum.auto()
-rivalry_declaration = enum.auto()
-sent_war_declaration = enum.auto()
-war = enum.auto()
-peace = enum.auto()
-"""
-
-
 def get_event_and_link_dicts(
         session,
         game_id,
@@ -639,14 +642,16 @@ def get_event_and_link_dicts(
     country_details = {}
     for country_model in session.query(models.Country).order_by(models.Country.country_id.asc()):
         events[country_model] = []
-        preformatted_links[country_model] = preformat_history_url(country_model.country_name, game_id, country=country_model.country_id)
-
+        preformatted_links[country_model] = preformat_history_url(
+            country_model.country_name, game_id, country=country_model.country_id
+        )
         gov = country_model.get_current_government()
         if gov is not None:
             country_details[country_model] = dict(
                 country_type=game_info.convert_id_to_name(country_model.country_type),
                 type=game_info.convert_id_to_name(gov.gov_type, remove_prefix="gov"),
                 authority=gov.authority,
+                personality=game_info.convert_id_to_name(gov.personality),
                 ethics=", ".join([game_info.convert_id_to_name(e, remove_prefix="ethic") for e in sorted(gov.ethics)]),
                 civics=", ".join([game_info.convert_id_to_name(c, remove_prefix="civic") for c in sorted(gov.civics)]),
             )
@@ -672,6 +677,8 @@ def get_event_and_link_dicts(
                 target_country=event.target_country,
                 description=event.get_description(),
             )
+            if event.planet and event_dict["system"] is None:
+                event_dict["system"] = event.planet.system
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
             events[country_model].append(
                 event_dict
@@ -691,7 +698,6 @@ def get_event_and_link_dicts(
             if not config.CONFIG.allow_backdating and event.start_date_days < 0:
                 event_dict["start_date"] = models.days_to_date(0)
                 event_dict["end_date"] = models.days_to_date(0)
-
         if not events[country_model]:
             del events[country_model]
     return events, country_details, preformatted_links
@@ -712,24 +718,19 @@ def get_war_dicts(session, current_date):
                 and not config.Config.show_everything):
             continue
 
-        attackers = [
-            f'{wp.country.country_name}: "{wp.war_goal}" war goal' for wp in war.participants
-            if wp.is_attacker
-        ]
-        defenders = [
-            f'{wp.country.country_name}: "{wp.war_goal}" war goal' for wp in war.participants
-            if not wp.is_attacker
-        ]
-
         combats = sorted([combat for combat in war.combat], key=lambda combat: combat.date)
-        war_id = "_".join(war.name.split()).lower()
         wars.append(dict(
-            name=war.name,
-            id=war_id,
+            war=war,
             start=start,
             end=end,
-            attackers=attackers,
-            defenders=defenders,
+            attackers=[
+                dict(country=wp.country, wp=wp)
+                for wp in war.participants if wp.is_attacker
+            ],
+            defenders=[
+                dict(country=wp.country, wp=wp)
+                for wp in war.participants if not wp.is_attacker
+            ],
             combat=[
                 str(combat) for combat in combats
                 if combat.attacker_war_exhaustion + combat.defender_war_exhaustion > 0.01

@@ -220,6 +220,24 @@ class PopEthics(enum.IntEnum):
     def from_str(cls, ethics_description: str):
         return cls.__members__.get(ethics_description, PopEthics.other)
 
+    def __str__(self):
+        str_dict = {
+            PopEthics.imperialist: "imperialist",
+            PopEthics.isolationist: "isolationist",
+            PopEthics.progressive: "progressive",
+            PopEthics.prosperity: "prosperity",
+            PopEthics.supremacist: "supremacist",
+            PopEthics.technologist: "technologist",
+            PopEthics.totalitarian: "totalitarian",
+            PopEthics.traditionalist: "traditionalist",
+            PopEthics.xenoist: "xenoist",
+            PopEthics.enslaved: "enslaved",
+            PopEthics.purge: "purge",
+            PopEthics.no_ethics: "no_ethics",
+            PopEthics.other: "other",
+        }
+        return str_dict[self]
+
 
 @enum.unique
 class LeaderClass(enum.Enum):
@@ -332,9 +350,10 @@ class HistoricalEventType(enum.Enum):
     discovered_new_system = enum.auto()
     habitat_ringworld_construction = enum.auto()
     megastructure_construction = enum.auto()
-    sector_creation = enum.auto()  # TODO?
+    sector_creation = enum.auto()
 
     # related to internal politics:
+    new_faction = enum.auto()
     government_reform = enum.auto()
     species_rights_reform = enum.auto()  # TODO this would be cool!
     capital_relocation = enum.auto()  # TODO
@@ -368,6 +387,7 @@ HISTORICAL_EVENT_TYPE_TO_STR_MAP = {
     HistoricalEventType.habitat_ringworld_construction: "habitat_ringworld_construction",
     HistoricalEventType.megastructure_construction: "megastructure_construction",
     HistoricalEventType.sector_creation: "sector_creation",
+    HistoricalEventType.new_faction: "new_faction",
     HistoricalEventType.government_reform: "government_reform",
     HistoricalEventType.species_rights_reform: "species_rights_reform",
     HistoricalEventType.capital_relocation: "capital_relocation",
@@ -630,6 +650,7 @@ class Government(Base):
 
     gov_name = Column(String(100))
     gov_type = Column(String(100))
+    personality=Column(String(50))
     authority = Column(Enum(GovernmentAuthority))
 
     ethics_1 = Column(String(80))
@@ -965,7 +986,7 @@ class ColonizedPlanet(Base):
 
     planet_name = Column(String(50))
     planet_id_in_game = Column(Integer, index=True)
-    system_id = Column(ForeignKey(System.system_id))
+    system_id = Column(ForeignKey(System.system_id), nullable=False)
     colonization_completed = Column(Boolean)
 
     historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
@@ -993,19 +1014,19 @@ class HistoricalEvent(Base):
     __tablename__ = "historicaleventtable"
     historical_event_id = Column(Integer, primary_key=True)
 
-    event_type = Column(Enum(HistoricalEventType), index=True)
-    country_id = Column(ForeignKey(Country.country_id), index=True)
+    event_type = Column(Enum(HistoricalEventType), nullable=False, index=True)
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+    start_date_days = Column(Integer, nullable=False, index=True)
 
     # Any of the following columns may be undefined, depending on the event type.
-    war_id = Column(ForeignKey(War.war_id), nullable=True)
     leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)
+    war_id = Column(ForeignKey(War.war_id), nullable=True)
     system_id = Column(ForeignKey(System.system_id), nullable=True)
     planet_id = Column(ForeignKey(ColonizedPlanet.planet_id), nullable=True)
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
     description_id = Column(ForeignKey(HistoricalEventDescription.historical_event_description_id), nullable=True)
     target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
 
-    start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer)
 
     war = relationship("War")

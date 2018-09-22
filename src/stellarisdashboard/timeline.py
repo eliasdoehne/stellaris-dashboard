@@ -247,6 +247,7 @@ class TimelineExtractor:
             gov_name=gov_name,
             gov_type=gov_type,
             authority=authority,
+            personality=country_dict.get("personality", "unknown_personality"),
             **ethics,
             **civics,
         )
@@ -656,6 +657,14 @@ class TimelineExtractor:
                 ethics=ethics,
             )
             self._session.add(faction)
+            if faction_id_in_game not in TimelineExtractor.NO_FACTION_ID_MAP.values():
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.new_faction,
+                    country=country_data.country,
+                    faction=faction,
+                    start_date_days=self._date_in_days,
+                    end_date_days=self._date_in_days,
+                ))
         faction_support_model = models.FactionSupport(
             faction=faction,
             country_data=country_data,
@@ -744,7 +753,6 @@ class TimelineExtractor:
                     name=war_name,
                     outcome=models.WarOutcome.in_progress,
                 )
-                self._session.add(war_model)
             elif war_dict.get("defender_force_peace") == "yes":
                 war_model.outcome = models.WarOutcome.status_quo
                 war_model.end_date_days = models.date_to_days(war_dict.get("defender_force_peace_date"))
@@ -755,6 +763,7 @@ class TimelineExtractor:
                 continue
             else:
                 war_model.end_date_days = self._date_in_days
+            self._session.add(war_model)
             war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
             war_goal_defender = war_dict.get("defender_war_goal", {})
             if war_goal_defender:
@@ -789,6 +798,7 @@ class TimelineExtractor:
                     )
                     self._session.add(models.HistoricalEvent(
                         event_type=models.HistoricalEventType.war,
+                        country=war_participant.country,
                         leader=self._get_current_ruler(country_dict),
                         start_date_days=self._date_in_days,
                         end_date_days=self._date_in_days,
@@ -882,18 +892,20 @@ class TimelineExtractor:
             owned_leaders = [owned_leaders]
         leaders = self._gamestate_dict["leaders"]
         active_leaders = set(owned_leaders)
+
+        # first, check if the known leaders in the DB are still there
         for leader in self._session.query(models.Leader).filter_by(
                 country=country_model,
                 is_active=True,
         ).all():
             if leader.leader_id_in_game not in active_leaders:
-                is_inactive = True
+                leader.is_active = False
             else:
                 current_leader_name = self.get_leader_name(leaders.get(leader.leader_id_in_game))
-                is_inactive = current_leader_name != leader.leader_name and leader.last_date < self._date_in_days - 3 * 360
-            if is_inactive:
-                leader.is_active = False
+                leader.is_active = current_leader_name == leader.leader_name or leader.last_date >= self._date_in_days - 3 * 360
             self._session.add(leader)
+
+        # then, check if
         for leader_id in owned_leaders:
             leader_dict = leaders.get(leader_id)
             if not isinstance(leader_dict, dict):
@@ -920,7 +932,7 @@ class TimelineExtractor:
             models.date_to_days(leader_dict.get("start", "10000.01.01")),
             models.date_to_days(leader_dict.get("date_added", "10000.01.01")),
         )
-        date_born = date_hired - 360 * leader_dict.get("age", 0.0) + random.randint(-15, 15)
+        date_born = date_hired - 360 * leader_dict.get("age", 0.0) + self.random_instance.randint(-15, 15)
         species_id = leader_dict.get("species_index", -1)
         species = self._session.query(models.Species).filter_by(species_id_in_game=species_id).one_or_none()
         leader = models.Leader(
@@ -959,7 +971,7 @@ class TimelineExtractor:
         last_researched_techs = country_dict.get("tech_status", {}).get("technology", [])
         if len(last_researched_techs) < 10:
             return
-        last_researched_techs = last_researched_techs[-10:]
+        last_researched_techs = last_researched_techs[-26:]
         for tech_name in last_researched_techs:
             if not isinstance(tech_name, str):
                 continue
@@ -971,10 +983,6 @@ class TimelineExtractor:
                 tech_type = "engineering"
             else:  # Some uncategorized DLC techs, repeatables etc.
                 continue
-            scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
-            if scientist_id is None:
-                continue
-            leader = self._session.query(models.Leader).filter_by(leader_id_in_game=scientist_id).one_or_none()
             matching_description = self._session.query(models.HistoricalEventDescription).filter_by(
                 text=tech_name,
             ).one_or_none()
@@ -992,6 +1000,8 @@ class TimelineExtractor:
                 )
                 self._session.add(matching_description)
             if matching_event is None:
+                scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
+                leader = self._session.query(models.Leader).filter_by(leader_id_in_game=scientist_id).one_or_none()
                 start_date = self._date_in_days
                 if start_date < 100:
                     start_date, _ = self._back_date_event(
@@ -1182,20 +1192,54 @@ class TimelineExtractor:
             self._session.add(matching_war)
 
     def _history_add_or_update_colony_and_sector_events(self, country_model, country_dict):
-        sector_dict = country_dict.get("sectors", [])
+        sector_dict = country_dict.get("sectors", {})
         for sector_id, sector_info in sector_dict.items():  # processing all colonies by sector allows reading the responsible sector governor
-            governor_id = sector_info.get("leader")
-            if governor_id is None:
-                continue  # sector has no governor
-            governor_model = self._session.query(models.Leader).filter_by(
-                country=country_model,
-                leader_id_in_game=governor_id,
+            sector_name = sector_info.get("name", "Unnamed")
+            sector_description = self._session.query(models.HistoricalEventDescription).filter_by(
+                text=sector_name,
             ).one_or_none()
-            if governor_model is None:
-                logger.warning(f"Could not find governor matching (in-game) ID {governor_id}")
-                continue
+            if sector_description is None:
+                sector_description = models.HistoricalEventDescription(
+                    text=sector_name
+                )
+                self._session.add(sector_description)
+
+            sector_capital = self._session.query(models.ColonizedPlanet).filter_by(
+                planet_id_in_game=sector_info.get("capital")
+            ).one_or_none()
+            self._history_add_sector_creation_event(country_model, country_dict, sector_capital, sector_description)
+            governor_id = sector_info.get("leader")
+            governor_model = None
+            if governor_id is not None:
+                governor_model = self._session.query(models.Leader).filter_by(
+                    country=country_model,
+                    leader_id_in_game=governor_id,
+                ).one_or_none()
+
             self._history_add_planetary_events(country_model, sector_info, governor_model)
-            self._history_add_or_update_governor_ruled_sector_event(country_model, sector_info, governor_model, country_dict)
+            if governor_model is not None:
+                self._history_add_or_update_governor_sector_events(country_model, sector_capital, governor_model, sector_description)
+
+    def _history_add_sector_creation_event(self, country_model, country_dict, sector_capital: models.ColonizedPlanet, sector_description: models.HistoricalEventDescription):
+        # also add a sector creation event if this sector is new...
+        sector_creation_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.sector_creation,
+            country=country_model,
+            description=sector_description,
+        ).one_or_none()
+        if sector_creation_event is None:
+            sector_creation_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.sector_creation,
+                leader=self._get_current_ruler(country_dict),
+                country=country_model,
+                description=sector_description,
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+            )
+        if sector_creation_event.planet is None and sector_capital is not None:
+            sector_creation_event.planet = sector_capital
+            sector_creation_event.system = sector_capital.system
+        self._session.add(sector_creation_event)
 
     def _history_add_planetary_events(self, country_model, sector_info, governor):
         for system_id in sector_info.get("galactic_object", []):
@@ -1205,63 +1249,6 @@ class TimelineExtractor:
             for planet_id in planets:
                 self._history_add_or_update_colonization_events(country_model, system_id, planet_id, governor)
                 self._history_add_or_update_habitat_ringworld_construction_event(country_model, system_id, planet_id, governor)
-
-    def _history_add_or_update_governor_ruled_sector_event(self, country_model, sector_info, governor, country_dict):
-        sector_name = sector_info.get("name", "Unnamed")
-
-        description = self._session.query(models.HistoricalEventDescription).filter_by(
-            text=sector_name,
-        ).one_or_none()
-        if description is None:
-            description = models.HistoricalEventDescription(
-                text=sector_name
-            )
-            self._session.add(description)
-
-        # check if governor was ruling same sector before => update date and return
-        existing_event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.governed_sector,
-            description=description,
-        ).order_by(models.HistoricalEvent.end_date_days.desc()).first()
-        if (existing_event is not None
-                and existing_event.leader == governor
-                and existing_event.end_date_days > self._date_in_days - 5 * 360):  # if the governor ruled this sector less than 5 years ago, re-use the event...
-            existing_event.end_date_days = self._date_in_days
-            self._session.add(existing_event)
-            return
-
-        # governor was not the last to this sector => add new event
-        sector_capital = self._session.query(models.ColonizedPlanet).filter_by(
-            planet_id_in_game=sector_info.get("capital")
-        ).one_or_none()
-        if sector_capital is None:
-            logger.warn(f"{self._logger_str}Could not identify sector capital:\n{sector_info}\n{country_model.country_name}")
-        self._session.add(models.HistoricalEvent(
-            event_type=models.HistoricalEventType.governed_sector,
-            leader=governor,
-            country=country_model,
-            planet=sector_capital,
-            description=description,
-            start_date_days=self._date_in_days,
-            end_date_days=self._date_in_days,
-        ))
-
-        # also add a sector creation event if this sector is new...
-        sector_creation_event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.sector_creation,
-            country=country_model,
-            description=description,
-        ).one_or_none()
-        if sector_creation_event is None:
-            sector_creation_event = models.HistoricalEvent(
-                event_type=models.HistoricalEventType.sector_creation,
-                leader=self._get_current_ruler(country_dict),
-                country=country_model,
-                description=description,
-                start_date_days=self._date_in_days,
-                end_date_days=self._date_in_days,
-            )
-            self._session.add(sector_creation_event)
 
     def _history_add_or_update_colonization_events(self, country_model: models.Country, system_id: int, planet_id: int, governor: models.Leader):
         planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
@@ -1378,6 +1365,34 @@ class TimelineExtractor:
                 system=system_model,
                 description=description,
             ))
+
+    def _history_add_or_update_governor_sector_events(self, country_model,
+                                                      sector_capital: models.ColonizedPlanet,
+                                                      governor: models.Leader,
+                                                      sector_description: models.HistoricalEventDescription):
+        # check if governor was ruling same sector before => update date and return
+        event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.governed_sector,
+            description=sector_description,
+        ).order_by(models.HistoricalEvent.end_date_days.desc()).first()
+        if (event is not None
+                and event.leader == governor
+                and event.end_date_days > self._date_in_days - 5 * 360):  # if the governor ruled this sector less than 5 years ago, re-use the event...
+            event.end_date_days = self._date_in_days
+        else:
+            event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.governed_sector,
+                leader=governor,
+                country=country_model,
+                description=sector_description,
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+            )
+
+        if event.planet is None and sector_capital is not None:
+            event.planet = sector_capital
+            event.system = sector_capital.system
+        self._session.add(event)
 
     def _history_add_or_update_faction_leader_event(self,
                                                     country_model: models.Country,
