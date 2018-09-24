@@ -105,20 +105,23 @@ class Attitude(enum.Enum):
     enigmatic = 22
     berserk = 23
 
-    def reveals_military_info(self):
+    def reveals_military_info(self) -> bool:
         return self in {Attitude.friendly, Attitude.loyal, Attitude.disloyal, Attitude.overlord}
 
-    def reveals_technology_info(self):
+    def reveals_technology_info(self) -> bool:
         return self.reveals_military_info() or (self in {Attitude.protective, Attitude.disloyal})
 
-    def reveals_economy_info(self):
+    def reveals_economy_info(self) -> bool:
         return self.reveals_technology_info() or (self in {Attitude.cordial, Attitude.receptive})
 
-    def reveals_demographic_info(self):
+    def reveals_demographic_info(self) -> bool:
         return self.reveals_economy_info() or (self in {Attitude.neutral, Attitude.wary})
 
-    def is_known(self):
+    def is_known(self) -> bool:
         return self != Attitude.unknown
+
+    def __str__(self):
+        return self.name.capitalize()
 
 
 @enum.unique
@@ -613,7 +616,7 @@ class Country(Base):
 
     game = relationship("Game", back_populates="countries")
     governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
-    country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan")
+    country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan", order_by="CountryData.date")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
@@ -630,6 +633,14 @@ class Country(Base):
         if not self.governments:
             return None
         return max(self.governments, key=lambda gov: gov.end_date_days)
+
+    def get_most_recent_data(self) -> Union["CountryData", None]:
+        if not self.country_data:
+            return None
+        return self.country_data[-1]
+
+    def is_known_to_player(self) -> bool:
+        return self.is_player or self.first_player_contact_date is not None
 
     def __repr__(self):
         return f"<Country {self.country_id_in_game} {self.country_name}, {self.country_type}>"
@@ -650,7 +661,7 @@ class Government(Base):
 
     gov_name = Column(String(100))
     gov_type = Column(String(100))
-    personality=Column(String(50))
+    personality = Column(String(50))
     authority = Column(Enum(GovernmentAuthority))
 
     ethics_1 = Column(String(80))
@@ -716,6 +727,8 @@ class CountryData(Base):
     country_data_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
+
+    date = Column(Integer, index=True, nullable=False)
 
     military_power = Column(Float)
     fleet_size = Column(Float)
@@ -903,11 +916,11 @@ class Combat(Base):
 
         defenders = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.defenders)
         if self.defender_war_exhaustion > 0:
-            defenders += f" ({self.defender_war_exhaustion} exhaustion)"
+            defenders += f" ({100 * self.defender_war_exhaustion:.2f}% exhaustion)"
 
         attackers = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.attackers)
         if self.attacker_war_exhaustion > 0:
-            attackers += f" ({self.attacker_war_exhaustion} exhaustion)"
+            attackers += f" ({100 * self.attacker_war_exhaustion:.2f}% exhaustion)"
 
         if self.combat_type == CombatType.armies:
             result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
@@ -1017,6 +1030,7 @@ class HistoricalEvent(Base):
     event_type = Column(Enum(HistoricalEventType), nullable=False, index=True)
     country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
     start_date_days = Column(Integer, nullable=False, index=True)
+    is_known_to_player = Column(Boolean, nullable=False)
 
     # Any of the following columns may be undefined, depending on the event type.
     leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)

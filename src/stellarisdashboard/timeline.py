@@ -122,6 +122,7 @@ class TimelineExtractor:
                 country=country_model,
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
+                is_known_to_player=True,  # galactic map is always visible
             ))
 
         for hl_data in system_data.get("hyperlane", []):
@@ -260,6 +261,7 @@ class TimelineExtractor:
                 leader=ruler,  # might be none, but probably very unlikely (?)
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
+                is_known_to_player=country_model.is_known_to_player(),
             ))
 
     def _count_starbases(self):
@@ -284,6 +286,7 @@ class TimelineExtractor:
 
         economy_data = self._extract_economy_data(country_dict)
         country_data = models.CountryData(
+            date=self._date_in_days,
             country=country,
             game_state=self._current_gamestate,
             military_power=country_dict.get("military_power", 0),
@@ -369,9 +372,11 @@ class TimelineExtractor:
                         leader=ruler,
                         start_date_days=self._date_in_days,
                         end_date_days=self._date_in_days,
+                        is_known_to_player=country_model.is_known_to_player() and target_country_model.is_known_to_player(),
                     )
                 else:
                     matching_event.end_date_days = self._date_in_days
+                    matching_event.is_known_to_player = country_model.is_known_to_player() and target_country_model.is_known_to_player()
                 self._session.add(matching_event)
 
     def _extract_player_economy(self, country_dict):
@@ -645,25 +650,30 @@ class TimelineExtractor:
                                          happiness: float,
                                          ethics: models.PopEthics,
                                          ):
+        country_model = country_data.country
         faction = self._session.query(models.PoliticalFaction).filter_by(
             faction_id_in_game=faction_id_in_game,
-            country=country_data.country,
+            country=country_model,
         ).one_or_none()
         if faction is None:
             faction = models.PoliticalFaction(
-                country=country_data.country,
+                country=country_model,
                 faction_name=faction_name,
                 faction_id_in_game=faction_id_in_game,
                 ethics=ethics,
             )
             self._session.add(faction)
             if faction_id_in_game not in TimelineExtractor.NO_FACTION_ID_MAP.values():
+                country_data = country_model.get_most_recent_data()
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.new_faction,
-                    country=country_data.country,
+                    country=country_model,
                     faction=faction,
                     start_date_days=self._date_in_days,
                     end_date_days=self._date_in_days,
+                    is_known_to_player=(country_model.is_known_to_player()
+                                        and country_data is not None
+                                        and country_data.attitude_towards_player.reveals_demographic_info()),
                 ))
         faction_support_model = models.FactionSupport(
             faction=faction,
@@ -803,6 +813,7 @@ class TimelineExtractor:
                         start_date_days=self._date_in_days,
                         end_date_days=self._date_in_days,
                         war=war_model,
+                        is_known_to_player=war_participant.country.is_known_to_player(),
                     ))
                 if war_participant.war_goal is None:
                     war_participant.war_goal = war_goal_defender
@@ -949,12 +960,14 @@ class TimelineExtractor:
             is_active=True,
         )
         self._session.add(leader)
+        country_data = country_model.get_most_recent_data()
         self._session.add(models.HistoricalEvent(
             event_type=models.HistoricalEventType.leader_recruited,
             country=country_model,
             leader=leader,
             start_date_days=date_hired,
             end_date_days=self._date_in_days,
+            is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_demographic_info(),
         ))
         return leader
 
@@ -1007,6 +1020,7 @@ class TimelineExtractor:
                     start_date, _ = self._back_date_event(
                         start_date, avg_years_to_backdate=50, avg_duration_days=0, key=f"{country_model.country_name}{tech_name}",
                     )
+                country_data = country_model.get_most_recent_data()
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.researched_technology,
                     country=country_model,
@@ -1014,6 +1028,7 @@ class TimelineExtractor:
                     start_date_days=start_date,  # Todo might be cool to know the start date of the tech
                     end_date_days=self._date_in_days,
                     description=matching_description,
+                    is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_technology_info(),
                 ))
 
     def _history_add_ruler_events(self, country_model: models.Country, country_dict):
@@ -1057,9 +1072,11 @@ class TimelineExtractor:
                 leader=ruler,
                 start_date_days=start_date,
                 end_date_days=self._date_in_days,
+                is_known_to_player=country_model.is_known_to_player(),
             )
         else:
             most_recent_ruler_event.end_date_days = self._date_in_days - 1
+            most_recent_ruler_event.is_known_to_player = country_model.is_known_to_player()
         self._session.add(most_recent_ruler_event)
 
     def _history_extract_tradition_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
@@ -1080,6 +1097,7 @@ class TimelineExtractor:
                 )
                 self._session.add(matching_description)
             if matching_event is None:
+                country_data = country_model.get_most_recent_data()
                 self._session.add(models.HistoricalEvent(
                     leader=ruler,
                     country=country_model,
@@ -1087,6 +1105,7 @@ class TimelineExtractor:
                     start_date_days=self._date_in_days,
                     end_date_days=self._date_in_days,
                     description=matching_description,
+                    is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
                 ))
 
     def _history_extract_ascension_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
@@ -1114,6 +1133,7 @@ class TimelineExtractor:
                     start_date_days=self._date_in_days,
                     end_date_days=self._date_in_days,
                     description=matching_description,
+                    is_known_to_player=country_model.is_known_to_player(),
                 ))
 
     def _history_extract_edict_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
@@ -1145,6 +1165,7 @@ class TimelineExtractor:
                 )
                 self._session.add(matching_description)
             if matching_event is None:
+                country_data = country_model.get_most_recent_data()
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.edict,
                     country=country_model,
@@ -1152,6 +1173,7 @@ class TimelineExtractor:
                     description=matching_description,
                     start_date_days=self._date_in_days,
                     end_date_days=expiry_date,
+                    is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
                 ))
 
     def _history_extract_peace_events_and_settle_matching_wars(self, ruler_model: models.Leader, country_model: models.Country, country_dict):
@@ -1167,13 +1189,12 @@ class TimelineExtractor:
                 continue  # truce is due to diplomatic agreements or similar
             matching_war = self._session.query(models.War).order_by(models.War.start_date_days.desc()).filter_by(name=war_name).first()
             if matching_war is None:
-                logger.warning(f"Could not find war matching truce for {war_name}")
+                logger.info(f"Could not find war matching truce for {war_name}")
                 continue
             end_date = truce_info.get("start_date")
             if end_date:
                 end_date_days = models.date_to_days(end_date)
                 matching_war.end_date_days = end_date_days
-                print(f"Logging Peace Event {end_date}")
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.peace,
                     war=matching_war,
@@ -1181,6 +1202,7 @@ class TimelineExtractor:
                     leader=ruler_model,
                     start_date_days=end_date_days,
                     end_date_days=end_date_days,
+                    is_known_to_player=country_model.is_known_to_player(),
                 ))
             if matching_war.outcome == models.WarOutcome.in_progress:
                 if matching_war.attacker_war_exhaustion < matching_war.defender_war_exhaustion:
@@ -1228,6 +1250,7 @@ class TimelineExtractor:
             description=sector_description,
         ).one_or_none()
         if sector_creation_event is None:
+            country_data = country_model.get_most_recent_data()
             sector_creation_event = models.HistoricalEvent(
                 event_type=models.HistoricalEventType.sector_creation,
                 leader=self._get_current_ruler(country_dict),
@@ -1235,6 +1258,7 @@ class TimelineExtractor:
                 description=sector_description,
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
+                is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
             )
         if sector_creation_event.planet is None and sector_capital is not None:
             sector_creation_event.planet = sector_capital
@@ -1315,6 +1339,7 @@ class TimelineExtractor:
                 end_date_days=end_date_days,
                 planet=planet_model,
                 system=system_model,
+                is_known_to_player=country_model.is_known_to_player(),
             )
         else:
             event.end_date_days = end_date_days
@@ -1356,7 +1381,7 @@ class TimelineExtractor:
                 start_date, end_date = self._back_date_event(start_date, avg_years_to_backdate=750, avg_duration_days=2500,
                                                              key=f"{country_model.country_name}{p_name}")
             logger.info(f"{self._logger_str}New Megastructure {models.days_to_date(self._date_in_days)}")
-            self._session.add(models.HistoricalEvent(
+            event = models.HistoricalEvent(
                 event_type=models.HistoricalEventType.habitat_ringworld_construction,
                 country=country_model,
                 leader=governor,
@@ -1364,7 +1389,11 @@ class TimelineExtractor:
                 end_date_days=end_date,
                 system=system_model,
                 description=description,
-            ))
+                is_known_to_player=country_model.is_known_to_player(),
+            )
+        elif not event.is_known_to_player:
+            event.is_known_to_player = country_model.is_known_to_player()
+        self._session.add(event)
 
     def _history_add_or_update_governor_sector_events(self, country_model,
                                                       sector_capital: models.ColonizedPlanet,
@@ -1380,6 +1409,7 @@ class TimelineExtractor:
                 and event.end_date_days > self._date_in_days - 5 * 360):  # if the governor ruled this sector less than 5 years ago, re-use the event...
             event.end_date_days = self._date_in_days
         else:
+            country_data = country_model.get_most_recent_data()
             event = models.HistoricalEvent(
                 event_type=models.HistoricalEventType.governed_sector,
                 leader=governor,
@@ -1387,6 +1417,7 @@ class TimelineExtractor:
                 description=sector_description,
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
+                is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
             )
 
         if event.planet is None and sector_capital is not None:
@@ -1414,6 +1445,8 @@ class TimelineExtractor:
             event_type=models.HistoricalEventType.faction_leader,
             faction=faction_model,
         ).one_or_none()
+        country_data = country_model.get_most_recent_data()
+        is_known = country_data is not None and country_data.attitude_towards_player.reveals_demographic_info()
         if matching_event is None:
             matching_event = models.HistoricalEvent(
                 country=country_model,
@@ -1422,8 +1455,10 @@ class TimelineExtractor:
                 faction=faction_model,
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
+                is_known_to_player=is_known,
             )
         else:
+            matching_event.is_known_to_player = is_known
             matching_event.end_date_days = self._date_in_days
         self._session.add(matching_event)
 
