@@ -55,11 +55,6 @@ a.button.vis_toggle {
     padding: 0.1cm;
 }
 
-a.textlink {
-    color: rgba(195, 133, 33, 1);
-    font-size: 16px;
-}
-
 li.game {
     color: rgba(195, 133, 33, 1);
     list-style-type: none;
@@ -73,13 +68,6 @@ li.game {
 li.toc-item {
     color: rgba(195, 133, 33, 1);
     list-style-type: none;
-}
-
-div.ledgerbox {
-    background-color: rgba(43, 59, 52, 1);
-    width: 90%;
-    margin: 0.5cm auto;
-    padding: 0.25cm;
 }
 
 form.settingsform {
@@ -115,22 +103,32 @@ span.settinginput {
     flex: 1 0 20%;
 }
 
-div.countrydetails {
+div.objectdetails {
     display: flex;
     flex-direction: row;
+    font-size: 14px;
 }
 
-span.countrydetailskey {
+span.objectdetailskey {
     align-self: flex-start;
     text-align: right;
-    min-width: 210px;
-    margin-right: 20px;
+    min-width: 260px;
+    margin-right: 10px;
     flex: 0 1 auto;
+    font-size: 14px;
 }
 
-span.countrydetailsvalue {
+span.objectdetailsvalue {
     align-self: flex-end;
     flex: 0 1 auto;
+    font-size: 14px;
+}
+
+div.ledgerbox {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.1cm auto;
+    padding: 0.1cm;
 }
 
 ul.event_list {
@@ -142,7 +140,6 @@ li.eventitem {
     margin: auto;
 }
 
-
 div.eventdescription {
     padding: 0.01cm;
     display: flex;
@@ -152,14 +149,24 @@ div.eventdescription {
 span.dateblock {
     align-self: flex-start;
     text-align: right;
-    margin-right: 20px;
-    min-width: 210px;
+    margin-right: 10px;
+    min-width: 260px;
     font-family: monospace;
     font-size: 14px;
     flex: 0 1 auto;
 }
 
+span.dateblock.war {
+    min-width: 100px;
+}
+
 span.eventtext {
     align-self: flex-end;
     flex: 0 1 auto;
+    font-size: 14px;
+}
+
+a.textlink {
+    color: rgba(195, 133, 33, 1);
+    font-size: 14px;
 }

@@ -7,6 +7,7 @@ import time
 import zipfile
 from collections import namedtuple
 from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator
+import threading
 
 logger = logging.getLogger(__name__)
 try:
@@ -43,7 +44,7 @@ class SavePathMonitor:
 
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
         self.processed_saves: Set[pathlib.Path] = set()
-        self.num_processed_saves: int = 0
+        self.num_encountered_saves: int = 0
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
         self.work_pool = None
@@ -65,14 +66,14 @@ class SavePathMonitor:
             logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
             if (config.CONFIG.read_only_every_nth_save is not None) and (config.CONFIG.read_only_every_nth_save > 1):
                 num_files = len(new_files)
-                new_files = [f for (i, f) in enumerate(new_files) if (i + self.num_processed_saves) % config.CONFIG.read_only_every_nth_save == 0]
-                self.num_processed_saves += num_files
-                self.num_processed_saves %= config.CONFIG.read_only_every_nth_save
+                new_files = [f for (i, f) in enumerate(new_files) if (i + self.num_encountered_saves) % config.CONFIG.read_only_every_nth_save == 0]
+                self.num_encountered_saves += num_files
+                self.num_encountered_saves %= config.CONFIG.read_only_every_nth_save
                 logger.info(f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}...")
 
         if config.CONFIG.threads > 1 and len(new_files) > 1:
             all_game_ids = [f.parent.stem for f in new_files]
-            chunksize = min(16, 2 * config.CONFIG.threads)
+            chunksize = min(16, int(2 * config.CONFIG.threads))
             for chunk in split_into_chunks(zip(all_game_ids, new_files), chunksize):
                 chunk_game_ids, chunk_files = zip(*chunk)
                 with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
@@ -311,6 +312,10 @@ class SaveFileParser:
             res = self._lookahead_token
             self._lookahead_token = None
         return res
+
+
+def _parse_and_return_with_game_id(save_file):
+    return save_file.parent.stem, parse_save(save_file)
 
 
 def parse_save(filename):

@@ -561,7 +561,7 @@ class EmpireProgressionPlotData:
         faction_sizes = {}
         faction_happiness = {}
         faction_support_dict = {}
-        for faction_data in sorted(country_data.faction_support, key=lambda fdata: fdata.faction.ethics):
+        for faction_data in sorted(country_data.faction_support, key=lambda fdata: str(fdata.faction.ethics)):
             faction = faction_data.faction.faction_name
             if faction not in faction_sizes:
                 faction_sizes[faction] = 0

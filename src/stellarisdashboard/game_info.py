@@ -257,6 +257,55 @@ ASCENSION_PERKS = {
     "ap_machine_worlds",  #: "Machine Worlds",
 }
 
+COLONIZABLE_PLANET_CLASSES_PLANETS = {
+    "pc_desert",
+    "pc_arid",
+    "pc_savannah",
+    "pc_tropical",
+    "pc_continental",
+    "pc_ocean",
+    "pc_tundra",
+    "pc_arctic",
+    "pc_alpine",
+    "pc_gaia",
+    "pc_nuked",
+    "pc_machine",
+}
+COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES = {
+    "pc_ringworld_habitable",
+    "pc_habitat",
+}
+COLONIZABLE_PLANET_CLASSES = COLONIZABLE_PLANET_CLASSES_PLANETS | COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES
+
+DESTROYED_BY_WEAPONS_PLANET_CLASSES = {
+    "pc_shattered",
+    "pc_shielded",
+    "pc_ringworld_shielded",
+    "pc_habitat_shielded",
+    "pc_ringworld_habitable_damaged",
+}
+DESTROYED_BY_EVENTS_AND_CRISES_PLANET_CLASSES = {
+    "pc_egg_cracked",
+    "pc_shrouded",
+    "pc_ai",
+    "pc_infested",
+    "pc_gray_goo",
+}
+DESTROYED_PLANET_CLASSES = DESTROYED_BY_WEAPONS_PLANET_CLASSES | DESTROYED_BY_EVENTS_AND_CRISES_PLANET_CLASSES
+
+
+def is_destroyed_planet(planet_class):
+    return planet_class in DESTROYED_PLANET_CLASSES
+
+
+def is_colonizable_planet(planet_class):
+    return planet_class in COLONIZABLE_PLANET_CLASSES
+
+
+def is_colonizable_megastructure(planet_class):
+    return planet_class in COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES
+
+
 LOWERCASE_WORDS = {"the", "in", "of", "for", "is", "over", "under"}
 WORD_REPLACEMENT = {
     "Ai": "AI",
