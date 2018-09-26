@@ -3,7 +3,7 @@ import enum
 import logging
 import pathlib
 import threading
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -105,20 +105,23 @@ class Attitude(enum.Enum):
     enigmatic = 22
     berserk = 23
 
-    def reveals_military_info(self):
+    def reveals_military_info(self) -> bool:
         return self in {Attitude.friendly, Attitude.loyal, Attitude.disloyal, Attitude.overlord}
 
-    def reveals_technology_info(self):
+    def reveals_technology_info(self) -> bool:
         return self.reveals_military_info() or (self in {Attitude.protective, Attitude.disloyal})
 
-    def reveals_economy_info(self):
+    def reveals_economy_info(self) -> bool:
         return self.reveals_technology_info() or (self in {Attitude.cordial, Attitude.receptive})
 
-    def reveals_demographic_info(self):
+    def reveals_demographic_info(self) -> bool:
         return self.reveals_economy_info() or (self in {Attitude.neutral, Attitude.wary})
 
-    def is_known(self):
+    def is_known(self) -> bool:
         return self != Attitude.unknown
+
+    def __str__(self):
+        return self.name.capitalize()
 
 
 @enum.unique
@@ -131,21 +134,20 @@ class CombatType(enum.Enum):
     # TODO are there other types of war events?
 
     def __str__(self):
-        if self == CombatType.ships:
-            return "Fleet combat"
-        elif self == CombatType.armies:
-            return "Planetary invasion"
-        else:
-            return "Other engagement"
+        return self.name
 
 
 @enum.unique
 class WarOutcome(enum.Enum):
-    status_quo = 0
-    attacker_victory = 1
-    defender_victory = 2
-    in_progress = 3
-    other = 99
+    status_quo = enum.auto()
+    attacker_victory = enum.auto()
+    defender_victory = enum.auto()
+    in_progress = enum.auto()
+    unknown = enum.auto()
+    other = enum.auto()
+
+    def __str__(self):
+        return self.name.capitalize()
 
 
 @enum.unique
@@ -200,36 +202,55 @@ class WarGoal(enum.Enum):
 
 
 @enum.unique
-class PopEthics(enum.IntEnum):
-    imperialist = 0
-    isolationist = 1
-    progressive = 2
-    prosperity = 3
-    supremacist = 4
-    technologist = 5
-    totalitarian = 6
-    traditionalist = 7
-    xenoist = 8
-    enslaved = 9
-    purge = 10
-    no_ethics = 11  # e.g. robots1476894696
+class PopEthics(enum.Enum):
+    imperialist = enum.auto()
+    isolationist = enum.auto()
+    progressive = enum.auto()
+    prosperity = enum.auto()
+    supremacist = enum.auto()
+    technologist = enum.auto()
+    totalitarian = enum.auto()
+    traditionalist = enum.auto()
+    xenoist = enum.auto()
+    enslaved = enum.auto()
+    purge = enum.auto()
+    no_ethics = enum.auto()  # e.g. robots1476894696
 
-    other = 99  # the other values should be exhaustive, but this value serves as a default fallback to detect any issues.
+    other = enum.auto()  # the other values should be exhaustive, but this value serves as a default fallback to detect any issues.
 
     @classmethod
     def from_str(cls, ethics_description: str):
         return cls.__members__.get(ethics_description, PopEthics.other)
 
+    def __str__(self):
+        return self.name.capitalize()
+
+    def __le__(self, other):
+        raise ValueError()
+
 
 @enum.unique
 class LeaderClass(enum.Enum):
-    ruler = 0
-    governor = 1
-    scientist = 2
-    admiral = 3
-    general = 4
+    ruler = enum.auto()
+    governor = enum.auto()
+    scientist = enum.auto()
+    admiral = enum.auto()
+    general = enum.auto()
 
-    unknown = 99
+    unknown = enum.auto()
+
+    def __str__(self):
+        if self == LeaderClass.ruler:
+            return "ruler"
+        elif self == LeaderClass.governor:
+            return "Governor"
+        elif self == LeaderClass.scientist:
+            return "Scientist"
+        elif self == LeaderClass.admiral:
+            return "Admiral"
+        elif self == LeaderClass.general:
+            return "General"
+        return "Leader"
 
 
 @enum.unique
@@ -237,6 +258,9 @@ class LeaderGender(enum.Enum):
     female = 0
     male = 1
     other = 2
+
+    def __str__(self):
+        return self.name.capitalize()
 
 
 @enum.unique
@@ -300,34 +324,51 @@ AGENDA_STR_TO_ENUM = dict(
 )
 
 
-@enum.unique
-class LeaderAchievementType(enum.Enum):
-    # All leaders:
-    was_faction_leader = 5
+class HistoricalEventType(enum.Enum):
+    # tied to a specific leader:
+    ruled_empire = enum.auto()
+    governed_sector = enum.auto()
+    faction_leader = enum.auto()
+    leader_recruited = enum.auto()
+    leader_died = enum.auto()  # TODO
 
-    # Scientists:
-    researched_technology = 0
+    # civilizational advancement:
+    researched_technology = enum.auto()
+    tradition = enum.auto()
+    ascension_perk = enum.auto()
+    edict = enum.auto()
 
-    # Admirals:
-    won_fleet_battle = 1
+    # expansion:
+    colonization = enum.auto()
+    discovered_new_system = enum.auto()
+    habitat_ringworld_construction = enum.auto()
+    megastructure_construction = enum.auto()
+    sector_creation = enum.auto()
 
-    # Generals:
-    won_planet_invasion = 2
+    # related to internal politics:
+    new_faction = enum.auto()
+    government_reform = enum.auto()
+    species_rights_reform = enum.auto()  # TODO this would be cool!
+    capital_relocation = enum.auto()
+    planetary_unrest = enum.auto()
 
-    # Rulers:
-    was_ruler = 3
-    negotiated_peace_treaty = 4
-    passed_edict = 6
-    embraced_tradition = 7
-    achieved_ascension = 8
-    reformed_government = 9
+    # diplomacy and war:
+    first_contact = enum.auto()
+    non_aggression_pact = enum.auto()
+    defensive_pact = enum.auto()
+    formed_federation = enum.auto()
 
-    # Governors:
-    governed_sector = 10
-    built_megastructure = 11
-    colonized_planet = 12
+    closed_borders = enum.auto()
+    rivalry_declaration = enum.auto()
 
-    special_event = 99
+    war = enum.auto()
+    peace = enum.auto()
+
+    terraforming = enum.auto()
+    planet_destroyed = enum.auto()
+
+    def __str__(self):
+        return self.name
 
 
 def date_to_days(date_str: str) -> float:
@@ -343,7 +384,7 @@ def days_to_date(days: float) -> str:
     year = 2200 + year_offset
     month = 1 + month_offset
     day = days - 30 * month_offset + 1
-    return f"{year}.{month}.{day}"
+    return f"{year:04}.{month:02}.{day:02}"
 
 
 def get_last_modified_time(path: pathlib.Path) -> int:
@@ -389,9 +430,6 @@ class Game(Base):
     wars = relationship("War", back_populates="game", cascade="all,delete,delete-orphan")
     leaders = relationship("Leader", back_populates="game", cascade="all,delete,delete-orphan")
 
-    def __repr__(self):
-        return f"Game(game_id={self.game_id}, game_name={self.game_name})"
-
 
 class System(Base):
     __tablename__ = 'systemtable'
@@ -400,6 +438,7 @@ class System(Base):
 
     system_id_in_game = Column(Integer, index=True)
     original_name = Column(String(80))
+    star_class = Column(String(20))
 
     coordinate_x = Column(Float)
     coordinate_y = Column(Float)
@@ -410,6 +449,8 @@ class System(Base):
     # this could probably be done better....
     hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
     hyperlanes_two = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_two_id])
+
+    historical_events = relationship("HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan")
 
     def get_owner_country_id_at(self, time_in_days: int) -> int:
         if not self.ownership:
@@ -422,6 +463,11 @@ class System(Base):
                 most_recent_owner_end = ownership.end_date_days
                 most_recent_owner = ownership.country.country_id
         return most_recent_owner
+
+    def get_name(self):
+        if self.original_name.startswith("NAME_"):
+            return game_info.convert_id_to_name(self.original_name, remove_prefix="NAME")
+        return self.original_name
 
     def __str__(self):
         return f'System "{self.original_name}" @ {self.coordinate_x}, {self.coordinate_y}'
@@ -533,11 +579,12 @@ class Country(Base):
 
     game = relationship("Game", back_populates="countries")
     governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
-    country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan")
+    country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan", order_by="CountryData.date")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
     leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
+    historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -545,8 +592,25 @@ class Country(Base):
             if gov.start_date_days <= date_in_days <= gov.end_date_days:
                 return gov
 
+    def get_current_government(self) -> Union["Government", None]:
+        if not self.governments:
+            return None
+        return max(self.governments, key=lambda gov: gov.end_date_days)
+
+    def get_most_recent_data(self) -> Union["CountryData", None]:
+        if not self.country_data:
+            return None
+        return self.country_data[-1]
+
+    def is_known_to_player(self) -> bool:
+        return self.is_player or self.first_player_contact_date is not None
+
 
 class Government(Base):
+    """
+    Representation of a country's government, as specified by the country name, the government type (flavor text, e.g. "executive committee"),
+    the governing authority (e.g. "Democracy"), the date range, as well as the governing ethics and civics.
+    """
     __tablename__ = 'govtable'
     gov_id = Column(Integer, primary_key=True)
 
@@ -557,6 +621,7 @@ class Government(Base):
 
     gov_name = Column(String(100))
     gov_type = Column(String(100))
+    personality = Column(String(50))
     authority = Column(Enum(GovernmentAuthority))
 
     ethics_1 = Column(String(80))
@@ -585,25 +650,26 @@ class Government(Base):
 
     def get_reform_description_dict(self, old_gov: "Government") -> Dict[str, str]:
         reform_dict = {}
-        if old_gov.authority != self.authority:
-            old_authority = str(old_gov.authority)
-            new_authority = str(self.authority)
-            reform_dict["Authority"] = [f"From {old_authority} to {new_authority}"]
 
         if old_gov.gov_type != self.gov_type:
             ogt = game_info.convert_id_to_name(old_gov.gov_type, remove_prefix="gov")
             ngt = game_info.convert_id_to_name(self.gov_type, remove_prefix="gov")
-            reform_dict["Type"] = [f"From {ogt} to {ngt}"]
+            reform_dict["Type changed"] = [f'from "{ogt}" to "{ngt}"']
+
+        if old_gov.authority != self.authority:
+            old_authority = str(old_gov.authority)
+            new_authority = str(self.authority)
+            reform_dict["Authority changed"] = [f'from "{old_authority}" to "{new_authority}"']
 
         new_civics = self.civics - old_gov.civics
         removed_civics = old_gov.civics - self.civics
-        reform_dict["Removed Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
-        reform_dict["Adopted Civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics)
+        reform_dict["Removed civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
+        reform_dict["Adopted civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics)
 
         new_ethics = self.ethics - old_gov.ethics
         removed_ethics = old_gov.ethics - self.ethics
-        reform_dict["Abandoned Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
-        reform_dict["Embraced Ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
+        reform_dict["Abandoned ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
+        reform_dict["Embraced ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
         return {k: v for k, v in reform_dict.items() if v}
 
     def __str__(self):
@@ -612,13 +678,17 @@ class Government(Base):
 
 class CountryData(Base):
     """
-    Contains the state of the country at a specific moment, specifically basic data about economy, science and military.
-    Children objects contain data about demographics and political factions.
+    Contains the state of the country at a specific moment, specifically basic data about economy, science and military,
+    as well as diplomatic attitudes towards the player counter.
+
+    Child objects contain data about demographics and political factions.
     """
     __tablename__ = 'countrydatatable'
     country_data_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
+
+    date = Column(Integer, index=True, nullable=False)
 
     military_power = Column(Float)
     fleet_size = Column(Float)
@@ -659,9 +729,6 @@ class CountryData(Base):
     pop_counts = relationship("PopCount", back_populates="country_data", cascade="all,delete,delete-orphan")
     faction_support = relationship("FactionSupport", back_populates="country_data", cascade="all,delete,delete-orphan")
 
-    def __repr__(self):
-        return f"CountryData(country_name={self.country_name}, game_state={self.gamestate_id}, military_power={self.military_power}, fleet_size={self.fleet_size}, tech_progress={self.tech_progress}, exploration_progress={self.exploration_progress}, owned_planets={self.owned_planets})"
-
 
 class Species(Base):
     """Represents a species in a game. Not tied to any specific time."""
@@ -676,9 +743,6 @@ class Species(Base):
 
     game = relationship("Game", back_populates="species")
 
-    def __repr__(self):
-        return f"Species(species_id={self.species_id}, game_id={self.game_id}, species_name={self.species_name})"
-
 
 class PopCount(Base):
     """Contains the number of members of a single species in a single country."""
@@ -690,9 +754,6 @@ class PopCount(Base):
 
     country_data = relationship("CountryData", back_populates="pop_counts")
     species = relationship("Species")
-
-    def __repr__(self):
-        return f"PopCount(country_data_id={self.country_data_id}, species_name={self.species_name}, pop_count={self.pop_count})"
 
 
 class PoliticalFaction(Base):
@@ -708,9 +769,7 @@ class PoliticalFaction(Base):
 
     country = relationship("Country", back_populates="political_factions")
     faction_support = relationship("FactionSupport", back_populates="faction")
-
-    def __repr__(self):
-        return f"PoliticalFaction(faction_id={self.faction_id}, country_id={self.country_id}, faction_name={self.faction_name})"
+    historical_events = relationship("HistoricalEvent", back_populates="faction", cascade="all,delete,delete-orphan")
 
 
 class FactionSupport(Base):
@@ -728,9 +787,6 @@ class FactionSupport(Base):
     country_data = relationship("CountryData", back_populates="faction_support")
     faction = relationship("PoliticalFaction", back_populates="faction_support")
 
-    def __repr__(self):
-        return f"FactionSupport(fs_id={self.fs_id}, faction_id={self.faction_id}, country_data_id={self.country_data_id}, members={self.members}, happiness={self.happiness}, support={self.support})"
-
 
 class War(Base):
     __tablename__ = 'wartable'
@@ -742,17 +798,14 @@ class War(Base):
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer, index=True)
 
-    attacker_war_exhaustion = Column(Float)
-    defender_war_exhaustion = Column(Float)
+    attacker_war_exhaustion = Column(Float, nullable=False, default=0)
+    defender_war_exhaustion = Column(Float, nullable=False, default=0)
 
     outcome = Column(Enum(WarOutcome))
 
     game = relationship("Game", back_populates="wars")
     combat = relationship("Combat", back_populates="war", cascade="all,delete,delete-orphan")
     participants = relationship("WarParticipant", back_populates="war", cascade="all,delete,delete-orphan")
-
-    def __repr__(self):
-        return f"War(war_id={self.war_id}, game_id={self.game_id}, start_date_days={self.start_date_days}, name={self.name})"
 
 
 class WarParticipant(Base):
@@ -768,69 +821,28 @@ class WarParticipant(Base):
     country = relationship("Country", back_populates="war_participation")
     combat_participation = relationship("CombatParticipant", back_populates="war_participant")
 
-    def __repr__(self):
-        return f"WarParticipant(war_id={self.war_id}, country_id={self.country_id}, is_attacker={self.is_attacker})"
-
 
 class Combat(Base):
     __tablename__ = "combattable"
     combat_id = Column(Integer, primary_key=True)
 
-    system_id = Column(ForeignKey(System.system_id))
-    war_id = Column(ForeignKey(War.war_id))
+    system_id = Column(ForeignKey(System.system_id), nullable=False)
+    planet_id = Column(ForeignKey("planettable.planet_id"))
+    war_id = Column(ForeignKey(War.war_id), nullable=False)
 
-    date = Column(Integer, index=True)
+    date = Column(Integer, nullable=False, index=True)
 
     attacker_victory = Column(Boolean)
-    attacker_war_exhaustion = Column(Float)
-    defender_war_exhaustion = Column(Float)
+    attacker_war_exhaustion = Column(Float, nullable=False, default=0.0)
+    defender_war_exhaustion = Column(Float, nullable=False, default=0.0)
 
-    planet = Column(String(50))
-
-    combat_type = Column(Enum(CombatType))
+    combat_type = Column(Enum(CombatType), nullable=False)
 
     system = relationship("System")
+    planet = relationship("Planet")
     war = relationship("War", back_populates="combat")
     attackers = relationship("CombatParticipant", primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)")
     defenders = relationship("CombatParticipant", primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)")
-
-    def __str__(self):
-        loc = ""
-        if self.planet:
-            loc += f'planet "{self.planet}"'
-        if self.system:
-            if loc:
-                loc += " in the "
-            loc += f'"{self.system.original_name}" system'
-
-        defenders = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.defenders)
-        if self.defender_war_exhaustion > 0:
-            defenders += f" ({self.defender_war_exhaustion} exhaustion)"
-
-        attackers = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.attackers)
-        if self.attacker_war_exhaustion > 0:
-            attackers += f" ({self.attacker_war_exhaustion} exhaustion)"
-
-        if self.combat_type == CombatType.armies:
-            result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
-            if self.attacker_victory:
-                result += f"{attackers} succeeded in invasion of {loc} against {defenders}"
-            else:
-                result += f"{defenders} defended against invasion of {loc} against {attackers}"
-        elif self.combat_type == CombatType.ships:
-            result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
-            if self.attacker_victory:
-                result += f"{attackers} defeated {defenders} in the {loc}"
-            else:
-                result += f"{attackers} were defeated by {defenders} in the {loc}"
-        else:
-            result = f"{days_to_date(self.date)}: {str(self.combat_type)} {loc}: "
-            if self.attacker_victory:
-                result += f"{attackers} defeated {defenders}"
-            else:
-                result += f"{attackers} were defeated by {defenders}"
-
-        return result
 
 
 class CombatParticipant(Base):
@@ -844,9 +856,6 @@ class CombatParticipant(Base):
 
     war_participant = relationship("WarParticipant", back_populates="combat_participation")
     combat = relationship("Combat")
-
-    def __repr__(self):
-        return f"CombatParticipant(combat_id={self.combat_id}, war_participant_id={self.war_participant_id}, is_attacker={self.is_attacker})"
 
 
 class Leader(Base):
@@ -872,61 +881,105 @@ class Leader(Base):
     game = relationship("Game", back_populates="leaders")
     country = relationship("Country", back_populates="leaders")
     species = relationship("Species")
-    achievements = relationship("LeaderAchievement", back_populates="leader", cascade="all,delete,delete-orphan")
+    historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
 
-    def __repr__(self):
-        return f"Leader(leader_id_in_game={self.leader_id_in_game}, leader_name={self.leader_name}, leader_class={self.leader_class}, gender={self.gender}, leader_agenda={self.leader_agenda}, date_hired={days_to_date(self.date_hired)}, date_born={days_to_date(self.date_born)})"
+    def get_name(self):
+        result = f"{self.leader_class.name} {self.leader_name}"
+        return result[0].upper() + result[1:]
 
 
-class LeaderAchievement(Base):
-    __tablename__ = "leaderachievementtable"
+class Planet(Base):
+    __tablename__ = "planettable"
+    planet_id = Column(Integer, primary_key=True)
 
-    leader_achievement_id = Column(Integer, primary_key=True)
-    leader_id = Column(ForeignKey(Leader.leader_id))
+    planet_name = Column(String(50))
+    planet_class = Column(String(20))
+    planet_id_in_game = Column(Integer, index=True)
+    system_id = Column(ForeignKey(System.system_id), nullable=False)
+    colonized_date = Column(Integer)
 
-    start_date_days = Column(Integer, index=True)
-    end_date_days = Column(Integer, index=True)
-    achievement_type = Column(Enum(LeaderAchievementType), index=True)
-    achievement_description = Column(String(80))
+    historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
+    system = relationship("System")
 
-    leader = relationship("Leader", back_populates="achievements")
+    def get_name(self):
+        if self.planet_name.startswith("NAME_"):
+            return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
+        return self.planet_name
+
+    def get_class(self):
+        return game_info.convert_id_to_name(self.planet_class, remove_prefix="pc")
+
+
+class SharedDescription(Base):
+    __tablename__ = "shareddescriptiontable"
+    description_id = Column(Integer, primary_key=True)
+
+    text = Column(String(80), index=True)
+
+
+class HistoricalEvent(Base):
+    """
+    This class represents arbitrary historical events for the text ledger.
+    The event_type specifies which event is encoded, depending on which
+    certain columns may or may not be null.
+    """
+    __tablename__ = "historicaleventtable"
+    historical_event_id = Column(Integer, primary_key=True)
+
+    event_type = Column(Enum(HistoricalEventType), nullable=False, index=True)
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+    start_date_days = Column(Integer, nullable=False, index=True)
+    is_known_to_player = Column(Boolean, nullable=False)
+    is_of_global_relevance = Column(Boolean, default=True)
+
+    # Any of the following columns may be undefined, depending on the event type.
+    leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)
+    war_id = Column(ForeignKey(War.war_id), nullable=True)
+    system_id = Column(ForeignKey(System.system_id), nullable=True)
+    planet_id = Column(ForeignKey(Planet.planet_id), nullable=True)
+    faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
+    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=True)
+    target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
+
+    end_date_days = Column(Integer)
+
+    war = relationship("War")
+    country = relationship("Country", back_populates="historical_events", foreign_keys=[country_id])
+    target_country = relationship("Country", foreign_keys=[target_country_id])
+    leader = relationship("Leader", back_populates="historical_events")
+    system = relationship("System", back_populates="historical_events")
+    planet = relationship("Planet", back_populates="historical_events")
+    faction = relationship("PoliticalFaction", back_populates="historical_events")
+    description = relationship("SharedDescription")
 
     def __str__(self):
         start_date = days_to_date(self.start_date_days)
         end_date = days_to_date(self.end_date_days)
-        if self.achievement_type == LeaderAchievementType.was_ruler:
-            achievement_text = f'{start_date} - {end_date}: Ruled the {self.achievement_description} with "{self.leader.leader_agenda}" agenda'
-        elif self.achievement_type == LeaderAchievementType.negotiated_peace_treaty:
-            achievement_text = f"{end_date}: Negotiated peace in the {self.achievement_description}"
-        elif self.achievement_type == LeaderAchievementType.passed_edict:
-            name = game_info.convert_id_to_name(self.achievement_description)
-            achievement_text = f'{start_date} - {end_date}: Issued "{name}" edict'
-        elif self.achievement_type == LeaderAchievementType.embraced_tradition:
-            tradition = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tr")
-            achievement_text = f'{end_date}: Adopted "{tradition}" tradition'
-        elif self.achievement_type == LeaderAchievementType.achieved_ascension:
-            perk = game_info.convert_id_to_name(self.achievement_description, remove_prefix="ap")
-            achievement_text = f'{end_date}: "{perk}" ascension.'
-        elif self.achievement_type == LeaderAchievementType.researched_technology:
-            tech = game_info.convert_id_to_name(self.achievement_description, remove_prefix="tech")
-            achievement_text = f'{end_date}: Researched "{tech}" technology'
-        elif self.achievement_type == LeaderAchievementType.was_faction_leader:
-            achievement_text = f'{start_date} - {end_date}: Leader of the "{self.achievement_description}" faction'
-        elif self.achievement_type == LeaderAchievementType.governed_sector:
-            achievement_text = f'{start_date} - {end_date}: Governed "{self.achievement_description}" sector.'
-        elif self.achievement_type == LeaderAchievementType.built_megastructure:
-            achievement_text = f'{start_date}: Finished construction of "{self.achievement_description}".'
-        elif self.achievement_type == LeaderAchievementType.colonized_planet:
-            achievement_text = f'{start_date} - {end_date}: Colonization of planet "{self.achievement_description}".'
-        elif self.achievement_type == LeaderAchievementType.reformed_government:
-            old_gov = self.leader.country.get_government_for_date(self.start_date_days - 1)
-            new_gov = self.leader.country.get_government_for_date(self.start_date_days)
+        text = f"{start_date} - {end_date}: {str(self.event_type)}"
+        return text
+
+    def get_description(self):
+        if self.event_type == HistoricalEventType.tradition:
+            return game_info.convert_id_to_name(self.description.text, remove_prefix="tr")
+        elif self.event_type == HistoricalEventType.researched_technology:
+            return game_info.convert_id_to_name(self.description.text, remove_prefix="tech")
+        elif self.event_type == HistoricalEventType.edict:
+            return game_info.convert_id_to_name(self.description.text)
+        elif self.event_type == HistoricalEventType.ascension_perk:
+            return game_info.convert_id_to_name(self.description.text, remove_prefix="ap")
+        elif self.event_type == HistoricalEventType.government_reform:
+            old_gov = self.country.get_government_for_date(self.start_date_days - 1)
+            new_gov = self.country.get_government_for_date(self.start_date_days)
             reform_dict = new_gov.get_reform_description_dict(old_gov)
-            reform_lines = []
-            for cat, reforms in reform_dict.items():
-                reform_lines.append(f"{cat}: " + ", ".join(reforms))
-            ref = ". ".join(reform_lines)
-            achievement_text = f"{start_date}: Government reform: \n{ref}"
+            reform_lines = [f"{cat} " + ", ".join(reforms) + "." for (cat, reforms) in reform_dict.items()]
+            ref = " ".join(reform_lines)
+            return ref
+        elif self.event_type == HistoricalEventType.terraforming:
+            current_pc, target_pc = self.description.text.split(",")
+            current_pc = game_info.convert_id_to_name(current_pc, remove_prefix="pc")
+            target_pc = game_info.convert_id_to_name(target_pc, remove_prefix="pc")
+            return f"from {current_pc} to {target_pc}"
+        elif self.description:
+            return game_info.convert_id_to_name(self.description.text)
         else:
-            achievement_text = f"{start_date} - {end_date}: {self.achievement_description}"
-        return achievement_text
+            return None

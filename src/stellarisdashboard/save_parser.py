@@ -1,12 +1,13 @@
 import concurrent.futures
 import enum
+import itertools
 import logging
 import pathlib
 import time
 import zipfile
 from collections import namedtuple
-from typing import Any, Dict, Tuple, Set, Iterable, List
-import time
+from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator
+import threading
 
 logger = logging.getLogger(__name__)
 try:
@@ -24,6 +25,17 @@ FilePosition = namedtuple("FilePosition", "line col")
 class StellarisFileFormatError(Exception): pass
 
 
+T = TypeVar("T")
+
+
+def split_into_chunks(iterable: Iterator[T], chunksize: int) -> Iterator[List[T]]:
+    while iterable:
+        chunk = list(itertools.islice(iterable, chunksize))
+        if not chunk:
+            break
+        yield chunk
+
+
 class SavePathMonitor:
     """
     Check the save path for new save games. Found save files are parsed and returned
@@ -32,6 +44,7 @@ class SavePathMonitor:
 
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
         self.processed_saves: Set[pathlib.Path] = set()
+        self.num_encountered_saves: int = 0
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
         self.work_pool = None
@@ -51,11 +64,26 @@ class SavePathMonitor:
         if new_files:
             new_files_str = ", ".join(f.stem for f in new_files[:10])
             logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
+            if (config.CONFIG.read_only_every_nth_save is not None) and (config.CONFIG.read_only_every_nth_save > 1):
+                num_files = len(new_files)
+                new_files = [f for (i, f) in enumerate(new_files) if (i + self.num_encountered_saves) % config.CONFIG.read_only_every_nth_save == 0]
+                self.num_encountered_saves += num_files
+                self.num_encountered_saves %= config.CONFIG.read_only_every_nth_save
+                logger.info(f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}...")
+
         if config.CONFIG.threads > 1 and len(new_files) > 1:
-            game_ids = [f.parent.stem for f in new_files]
-            with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
-                for game_id, result in zip(game_ids, executor.map(parse_save, new_files, timeout=None)):
-                    yield game_id, result
+            all_game_ids = [f.parent.stem for f in new_files]
+            chunksize = min(16, int(2 * config.CONFIG.threads))
+            for chunk in split_into_chunks(zip(all_game_ids, new_files), chunksize):
+                chunk_game_ids, chunk_files = zip(*chunk)
+                with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
+                    futures = [executor.submit(parse_save, save_file) for save_file in chunk_files]
+                    for i, (game_id, future) in enumerate(zip(chunk_game_ids, futures)):
+                        result = future.result()
+                        yield game_id, result
+                        futures[i] = None
+                        del result
+                        del future._result
         else:
             for save_file in new_files:
                 yield save_file.parent.stem, parse_save(save_file)
@@ -76,14 +104,6 @@ class SavePathMonitor:
         """ Ensure that no existing files are re-parsed. """
         self.processed_saves |= set(self.valid_save_files())
         self._last_checked_time = time.time()
-
-    def apply_game_name_filter(self, game_name_prefix: str) -> None:
-        self.mark_all_existing_saves_processed()
-        whitelisted = set()
-        for fname in self.processed_saves:
-            if fname.parent.stem.lower().startswith(game_name_prefix.lower()):
-                whitelisted.add(fname)
-        self.processed_saves -= whitelisted
 
     def valid_save_files(self) -> List[pathlib.Path]:
         prefiltered_files = (save_file for save_file in self.save_parent_dir.glob("**/*.sav")
@@ -292,6 +312,10 @@ class SaveFileParser:
             res = self._lookahead_token
             self._lookahead_token = None
         return res
+
+
+def _parse_and_return_with_game_id(save_file):
+    return save_file.parent.stem, parse_save(save_file)
 
 
 def parse_save(filename):

@@ -1,15 +1,15 @@
 import itertools
 import logging
 import random
-from typing import Dict, Any, List
-
 import time
+from typing import Dict, Any, Tuple, Union
 
 from stellarisdashboard import models, game_info, config
 
 logger = logging.getLogger(__name__)
 
 
+# noinspection PyArgumentList
 class TimelineExtractor:
     """ Process data from parsed save file dictionaries and add it to the database. """
 
@@ -51,11 +51,14 @@ class TimelineExtractor:
         self._date_in_days = None
         self._logger_str = None
 
+        self.random_instance = random.Random()
+
         self._new_models = []
         self._enclave_trade_modifiers = None
         self._initialize_enclave_trade_info()
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
+        self.random_instance.seed(game_name)
         date_str = gamestate_dict["date"]
         self._logger_str = f"{game_name} {date_str}:"
         logger.info(f"Processing {game_name}, {date_str}")
@@ -86,39 +89,56 @@ class TimelineExtractor:
                 logger.error(e)
                 raise e
             finally:
-                self._session = None
                 self._reset_state()
 
     def _extract_galaxy_data(self):
         logger.info(f"{self._logger_str} Extracting galaxy data...")
-        hyperlanes = set()
-        for system_id_in_game, system_data in self._gamestate_dict.get("galactic_object", {}).items():
-            original_system_name = system_data.get("name")
-            coordinate_x = system_data.get("coordinate", {}).get("x", 0)
-            coordinate_y = system_data.get("coordinate", {}).get("y", 0)
-            self._session.add(models.System(
-                game=self.game,
-                system_id_in_game=system_id_in_game,
-                original_name=original_system_name,
-                coordinate_x=coordinate_x,
-                coordinate_y=coordinate_y,
+        for system_id_in_game in self._gamestate_dict.get("galactic_object", {}):
+            self._add_single_system(system_id_in_game)
+
+    def _add_single_system(self, system_id: int, country_model: models.Country = None) -> Union[models.System, None]:
+        """ This is separated into a method since it is occasionally necessary to add individual systems after the initial scan of the galaxy. """
+        system_data = self._gamestate_dict.get("galactic_object", {}).get(system_id)
+        if system_data is None:
+            logger.warn(f"{self._logger_str} Found no data for system with ID {system_id}!")
+            return
+        original_system_name = system_data.get("name")
+        coordinate_x = system_data.get("coordinate", {}).get("x", 0)
+        coordinate_y = system_data.get("coordinate", {}).get("y", 0)
+        system_model = models.System(
+            game=self.game,
+            system_id_in_game=system_id,
+            star_class=system_data.get("star_class"),
+            original_name=original_system_name,
+            coordinate_x=coordinate_x,
+            coordinate_y=coordinate_y,
+        )
+        self._session.add(system_model)
+        if country_model is not None:
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.discovered_new_system,
+                system=system_model,
+                country=country_model,
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+                is_known_to_player=True,  # galactic map is always visible
             ))
-            for hl_data in system_data.get("hyperlane", []):
-                neighbor = hl_data.get("to")
-                # use frozenset to avoid antiparallel duplicates
-                if neighbor == system_id_in_game:
-                    continue  # This can happen in Stellaris 2.1
-                hyperlanes.add(frozenset([system_id_in_game, neighbor]))
-        for hl in hyperlanes:
-            a, b = hl
-            one = self._session.query(models.System).filter_by(system_id_in_game=a, ).one_or_none()
-            two = self._session.query(models.System).filter_by(system_id_in_game=b, ).one_or_none()
-            if one is None or two is None:
-                logger.warning(f"Could not find systems with IDs {a}, {b}")
+
+        for hl_data in system_data.get("hyperlane", []):
+            neighbor_id = hl_data.get("to")
+            if neighbor_id == system_id:
+                continue  # This can happen in Stellaris 2.1
+            neighbor_model = self._session.query(models.System).filter_by(
+                system_id_in_game=neighbor_id
+            ).one_or_none()
+            if neighbor_model is None:
+                continue  # assume that the hyperlane will be created when adding the neighbor system to DB later
+
             self._session.add(models.HyperLane(
-                system_one=one,
-                system_two=two,
+                system_one=system_model,
+                system_two=neighbor_model,
             ))
+        return system_model
 
     def _process_gamestate(self):
         self._extract_player_trade_agreements()
@@ -130,20 +150,17 @@ class TimelineExtractor:
         )
         self._session.add(self._current_gamestate)
 
-        player_country = None
-        player_country_data = None
-        player_country_dict = {}
         for country_id, country_data_dict in self._gamestate_dict["country"].items():
             if not isinstance(country_data_dict, dict):
                 continue
 
-            country = self._session.query(models.Country).filter_by(
+            country_model = self._session.query(models.Country).filter_by(
                 game=self.game,
                 country_id_in_game=country_id
             ).one_or_none()
             country_type = country_data_dict.get("type")
-            if country is None:
-                country = models.Country(
+            if country_model is None:
+                country_model = models.Country(
                     is_player=(country_id == self._player_country),
                     country_id_in_game=country_id,
                     game=self.game,
@@ -151,47 +168,40 @@ class TimelineExtractor:
                     country_name=country_data_dict.get("name", "no name")
                 )
                 if country_id == self._player_country:
-                    country.first_player_contact_date = 0
-                self._session.add(country)
+                    country_model.first_player_contact_date = 0
+                self._session.add(country_model)
+            self._extract_country_leaders(country_model, country_data_dict)
 
-            diplomacy_data = self._extract_diplomacy_toward_player(country_data_dict)
-            if country.first_player_contact_date is None and diplomacy_data.get("has_communications_with_player"):
-                country.first_player_contact_date = self._date_in_days
-                self._session.add(country)
-
-            if country_type not in {"default", "fallen_empire", "awakened_fallen_empire"}:
+            if country_type not in {"default", "fallen_empire", "awakened_fallen_empire"}:  # TODO consider adding more types,  "ruined_marauders", "dormant_marauders", "awakened_marauders"
                 continue  # Enclaves, Leviathans, etc ....
-            self._extract_country_government(country, country_data_dict)
 
-            country_data = self._extract_country_data(country_id, country, country_data_dict, diplomacy_data)
-            if country_data.attitude_towards_player.is_known():
+            diplomacy_data = self._process_diplomacy(country_model, country_data_dict)
+            if country_model.first_player_contact_date is None and diplomacy_data.get("has_communications_with_player"):
+                country_model.first_player_contact_date = self._date_in_days
+                self._session.add(country_model)
+
+            self._extract_country_government(country_model, country_data_dict)
+
+            country_data_model = self._extract_country_data(country_id, country_model, country_data_dict, diplomacy_data)
+            if country_data_model.attitude_towards_player.is_known():
                 debug_name = country_data_dict.get('name', 'Unnamed Country')
                 logger.info(f"{self._logger_str} Extracting country info: {debug_name}")
 
-            self._extract_pop_info_from_planets(country_data_dict, country_data)
-            if country_data.country.is_player:
-                player_country = country
-                player_country_data = country_data
-                player_country_dict = country_data_dict
+            if config.CONFIG.only_read_player_history and not country_model.is_player:
+                continue
+            self._history_process_planet_and_sector_events(country_model, country_data_dict)
+            self._extract_pop_info_from_planets(country_data_dict, country_data_model)
+            self._extract_factions_and_faction_leaders(country_model, country_data_model)
+            self._history_add_ruler_events(country_model, country_data_dict)
+            self._history_add_tech_events(country_model, country_data_dict)
 
         self._extract_wars()
-        self._extract_player_leaders(player_country, player_country_dict)
-        self._extract_factions_and_faction_leaders(player_country_data)
-        self._add_ruler_leader_achievements(player_country_dict)
-        self._add_scientist_tech_achievements(player_country_dict)
-        self._add_governor_achievements(player_country_dict)
+        self._settle_finished_wars()
         if config.CONFIG.extract_system_ownership:
             self._extract_system_ownership()
 
     def _extract_country_government(self, country_model: models.Country, country_dict):
-        prev_gov = self._session.query(models.Government).filter_by(
-            country=country_model,
-        ).order_by(
-            models.Government.end_date_days.desc()
-        ).first()
-
         gov_name = country_dict.get("name", "Unnamed Country")
-
         ethics_list = country_dict.get("ethos", {}).get("ethic", [])
         if not isinstance(ethics_list, list):
             ethics_list = [ethics_list]
@@ -206,6 +216,16 @@ class TimelineExtractor:
         )
         gov_type = country_dict.get("government", {}).get("type", "other")
         gov_was_reformed = False
+
+        prev_gov = self._session.query(models.Government).filter(
+            models.Government.start_date_days <= self._date_in_days,
+            models.Government.end_date_days <= self._date_in_days,
+        ).filter_by(
+            country=country_model,
+        ).order_by(
+            models.Government.start_date_days.desc()
+        ).first()
+
         if prev_gov is not None:
             prev_gov.end_date_days = self._date_in_days - 1
             self._session.add(prev_gov)
@@ -231,30 +251,36 @@ class TimelineExtractor:
             gov_name=gov_name,
             gov_type=gov_type,
             authority=authority,
+            personality=country_dict.get("personality", "unknown_personality"),
             **ethics,
             **civics,
         )
         self._session.add(gov)
-        if gov_was_reformed and country_model.country_id_in_game == self._player_country:
+        if gov_was_reformed:
             ruler = self._get_current_ruler(country_dict)
-            if ruler is not None:
-                self._session.add(models.LeaderAchievement(
-                    leader=ruler,
-                    achievement_type=models.LeaderAchievementType.reformed_government,
-                    start_date_days=self._date_in_days,
-                    end_date_days=self._date_in_days,
-                    achievement_description="",
-                ))
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.government_reform,
+                country=country_model,
+                leader=ruler,  # might be none, but probably very unlikely (?)
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+                is_known_to_player=country_model.is_known_to_player(),
+            ))
 
     def _count_starbases(self):
         self._country_starbases_dict = {}
         for starbase_dict in self._gamestate_dict.get("starbases", {}).values():
             if not isinstance(starbase_dict, dict):
                 continue
-            owner_id = starbase_dict.get("owner", -1)
+            system_id_in_game = starbase_dict.get("system")
+            if system_id_in_game is None:
+                continue
+            owner_id = starbase_dict.get("owner")
+            if owner_id is None:
+                continue
             if owner_id not in self._country_starbases_dict:
                 self._country_starbases_dict[owner_id] = set()
-            self._country_starbases_dict[owner_id].add(starbase_dict.get("system", -1))
+            self._country_starbases_dict[owner_id].add(system_id_in_game)
 
     def _extract_country_data(self, country_id, country: models.Country, country_dict, diplomacy_data) -> models.CountryData:
         is_player = (country_id == self._player_country)
@@ -268,6 +294,7 @@ class TimelineExtractor:
 
         economy_data = self._extract_economy_data(country_dict)
         country_data = models.CountryData(
+            date=self._date_in_days,
             country=country,
             game_state=self._current_gamestate,
             military_power=country_dict.get("military_power", 0),
@@ -285,9 +312,9 @@ class TimelineExtractor:
         self._session.add(country_data)
         return country_data
 
-    def _extract_diplomacy_toward_player(self, country_dict):
+    def _process_diplomacy(self, country_model: models.Country, country_dict):
         relations_manager = country_dict.get("relations_manager", [])
-        diplomacy_info = dict(
+        diplomacy_towards_player = dict(
             has_rivalry_with_player=False,
             has_defensive_pact_with_player=False,
             has_federation_with_player=False,
@@ -297,26 +324,72 @@ class TimelineExtractor:
             has_migration_treaty_with_player=False,
         )
         if not isinstance(relations_manager, dict):
-            return diplomacy_info
+            return diplomacy_towards_player
         relation_list = relations_manager.get("relation", [])
         if not isinstance(relation_list, list):  # if there is only one
             relation_list = [relation_list]
         for relation in relation_list:
             if not isinstance(relation, dict):
                 continue
-            if relation.get("country") != self._player_country:
-                continue
-            diplomacy_info.update(
-                has_rivalry_with_player=relation.get("is_rival") == "yes",
-                has_defensive_pact_with_player=relation.get("defensive_pact") == "yes",
-                has_federation_with_player=relation.get("alliance") == "yes",
-                has_non_aggression_pact_with_player=relation.get("non_aggression_pledge") == "yes",
-                has_closed_borders_with_player=relation.get("closed_borders") == "yes",
-                has_communications_with_player=relation.get("communications") == "yes",
-                has_migration_treaty_with_player=relation.get("migration_access") == "yes",
-            )
+
+            if not config.CONFIG.only_read_player_history or country_model.is_player:
+                self._history_add_or_update_diplomatic_events(country_model, country_dict, relation)
+
+            if relation.get("country") == self._player_country:
+                diplomacy_towards_player.update(
+                    has_rivalry_with_player=relation.get("is_rival") == "yes",
+                    has_defensive_pact_with_player=relation.get("defensive_pact") == "yes",
+                    has_federation_with_player=relation.get("alliance") == "yes",
+                    has_non_aggression_pact_with_player=relation.get("non_aggression_pledge") == "yes",
+                    has_closed_borders_with_player=relation.get("closed_borders") == "yes",
+                    has_communications_with_player=relation.get("communications") == "yes",
+                    has_migration_treaty_with_player=relation.get("migration_access") == "yes",
+                )
             break
-        return diplomacy_info
+        return diplomacy_towards_player
+
+    def _history_add_or_update_diplomatic_events(self, country_model: models.Country, country_dict, relation):
+        relation_country = relation.get("country")
+        target_country_model = self._session.query(models.Country).filter_by(
+            country_id_in_game=relation_country,
+        ).one_or_none()
+        if target_country_model is None:
+            return  # target country might not be in DB yet if this is the first save...
+        ruler = self._get_current_ruler(country_dict)
+        tc_ruler = self._get_current_ruler(self._gamestate_dict["country"].get(target_country_model.country_id_in_game))
+
+        is_known_to_player = country_model.is_known_to_player() and target_country_model.is_known_to_player()
+        for target_event_type, relation_status in [
+            (models.HistoricalEventType.rivalry_declaration, relation.get("is_rival") == "yes"),
+            (models.HistoricalEventType.closed_borders, relation.get("closed_borders") == "yes"),
+            (models.HistoricalEventType.defensive_pact, relation.get("defensive_pact") == "yes"),
+            (models.HistoricalEventType.formed_federation, relation.get("alliance") == "yes"),
+            (models.HistoricalEventType.non_aggression_pact, relation.get("non_aggression_pledge") == "yes"),
+            (models.HistoricalEventType.first_contact, relation.get("communications") == "yes"),
+        ]:
+            if relation_status:
+                for (c, tc, r) in [(country_model, target_country_model, ruler),
+                                   (target_country_model, country_model, tc_ruler)]:
+                    matching_event = self._session.query(models.HistoricalEvent).filter_by(
+                        event_type=target_event_type,
+                        country=c,
+                        target_country=tc,
+                    ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
+
+                    if matching_event is None or matching_event.end_date_days < self._date_in_days - 5 * 360:
+                        matching_event = models.HistoricalEvent(
+                            event_type=target_event_type,
+                            country=c,
+                            target_country=tc,
+                            leader=r,
+                            start_date_days=self._date_in_days,
+                            end_date_days=self._date_in_days,
+                            is_known_to_player=is_known_to_player,
+                        )
+                    else:
+                        matching_event.end_date_days = self._date_in_days
+                        matching_event.is_known_to_player = is_known_to_player
+                    self._session.add(matching_event)
 
     def _extract_player_economy(self, country_dict):
         base_economy_data = self._extract_economy_data(country_dict)
@@ -492,6 +565,7 @@ class TimelineExtractor:
             attitude_towards_player = models.Attitude.__members__.get(attitude_towards_player, models.Attitude.unknown)
         return attitude_towards_player
 
+    # TODO Extract research and sensor link agreements between all countries for HistoricalEvents
     def _extract_player_trade_agreements(self):
         self._player_research_agreements = set()
         self._player_sensor_links = set()
@@ -529,7 +603,7 @@ class TimelineExtractor:
             self._player_monthly_trade_info["energy_trade_income"] += other_resources.get("energy", 0)
             self._player_monthly_trade_info["food_trade_income"] += other_resources.get("food", 0)
 
-    def _extract_factions_and_faction_leaders(self, country_data: models.CountryData):
+    def _extract_factions_and_faction_leaders(self, country_model: models.Country, country_data: models.CountryData):
         faction_pop_sum = 0
         for faction_id, faction_dict in self._gamestate_dict.get("pop_factions", {}).items():
             if not faction_dict or faction_dict == "none":
@@ -542,7 +616,7 @@ class TimelineExtractor:
             # If the faction is in the database, get it, otherwise add a new faction
             members = len(faction_dict.get("members", []))
             faction_pop_sum += members
-            self._add_faction_and_faction_support(
+            faction_model = self._add_faction_and_faction_support(
                 faction_id_in_game=faction_id,
                 faction_name=faction_name,
                 country_data=country_data,
@@ -551,7 +625,7 @@ class TimelineExtractor:
                 happiness=faction_dict.get("happiness", 0),
                 ethics=models.PopEthics.from_str(faction_dict.get("type")),
             )
-            self._add_faction_leader_achievement(faction_dict)
+            self._history_add_or_update_faction_leader_event(country_model, faction_model, faction_dict)
 
         for faction_name, num in self._factionless_pops.items():
             if not num:
@@ -589,25 +663,40 @@ class TimelineExtractor:
                                          happiness: float,
                                          ethics: models.PopEthics,
                                          ):
+        country_model = country_data.country
         faction = self._session.query(models.PoliticalFaction).filter_by(
             faction_id_in_game=faction_id_in_game,
-            country=country_data.country,
+            country=country_model,
         ).one_or_none()
         if faction is None:
             faction = models.PoliticalFaction(
-                country=country_data.country,
+                country=country_model,
                 faction_name=faction_name,
                 faction_id_in_game=faction_id_in_game,
                 ethics=ethics,
             )
             self._session.add(faction)
-        self._session.add(models.FactionSupport(
+            if faction_id_in_game not in TimelineExtractor.NO_FACTION_ID_MAP.values():
+                country_data = country_model.get_most_recent_data()
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.new_faction,
+                    country=country_model,
+                    faction=faction,
+                    start_date_days=self._date_in_days,
+                    end_date_days=self._date_in_days,
+                    is_known_to_player=(country_model.is_known_to_player()
+                                        and country_data is not None
+                                        and country_data.attitude_towards_player.reveals_demographic_info()),
+                ))
+        faction_support_model = models.FactionSupport(
             faction=faction,
             country_data=country_data,
             members=members,
             support=support,
-            happiness=happiness)
+            happiness=happiness,
         )
+        self._session.add(faction_support_model)
+        return faction
 
     def _extract_pop_info_from_planets(self, country_dict: Dict[str, Any], country_data: models.CountryData):
         self._factionless_pops = {
@@ -619,9 +708,7 @@ class TimelineExtractor:
         pop_data = self._gamestate_dict["pop"]
 
         for planet_id in country_dict.get("owned_planets", []):
-            tiles = self._gamestate_dict["planet"][planet_id].get("tiles", [])
-            for tile_data in tiles.values():
-                pop_id = tile_data.get("pop")
+            for pop_id in self._gamestate_dict.get("planet", {}).get(planet_id, {}).get("pop", []):
                 if pop_id is None:
                     continue
                 elif pop_id not in pop_data:
@@ -630,7 +717,7 @@ class TimelineExtractor:
                 this_pop = pop_data[pop_id]
                 if not isinstance(this_pop, dict):
                     continue  # might be "none"
-                if this_pop["growth_state"] != "grown":
+                if this_pop["growth_state"] not in ["grown", 1]:
                     continue
                 species_id = this_pop["species_index"]
                 species_dict = self._gamestate_dict["species"][species_id]
@@ -646,25 +733,29 @@ class TimelineExtractor:
 
         for species_id, pop_count in species_demographics.items():
             species_data = self._gamestate_dict["species"][species_id]
-            species_name = species_data["name"]
-            species = self._session.query(models.Species).filter_by(
-                game=self.game, species_id_in_game=species_id
-            ).one_or_none()
-            if species is None:
-                species = models.Species(
-                    game=self.game,
-                    species_name=species_name,
-                    species_id_in_game=species_id,
-                    is_robotic=species_data["class"] == "ROBOT",
-                    parent_species_id_in_game=species_data.get("base", -1),
-                )
-                self._session.add(species)
             pop_count = models.PopCount(
                 country_data=country_data,
-                species=species,
+                species=self._get_or_add_species(species_id),
                 pop_count=pop_count,
             )
             self._session.add(pop_count)
+
+    def _get_or_add_species(self, species_id_in_game: int):
+        species_data = self._gamestate_dict["species"][species_id_in_game]
+        species_name = species_data["name"]
+        species = self._session.query(models.Species).filter_by(
+            game=self.game, species_id_in_game=species_id_in_game
+        ).one_or_none()
+        if species is None:
+            species = models.Species(
+                game=self.game,
+                species_name=species_name,
+                species_id_in_game=species_id_in_game,
+                is_robotic=species_data["class"] == "ROBOT",
+                parent_species_id_in_game=species_data.get("base", -1),
+            )
+            self._session.add(species)
+        return species
 
     def _extract_wars(self):
         logger.info(f"{self._logger_str} Processing Wars")
@@ -676,12 +767,13 @@ class TimelineExtractor:
             if not isinstance(war_dict, dict):
                 continue
             war_name = war_dict.get("name", "Unnamed war")
-            war = self._session.query(models.War).order_by(models.War.end_date_days.desc()).filter_by(
+            war_model = self._session.query(models.War).order_by(models.War.end_date_days.desc()).filter_by(
                 game=self.game, name=war_name
             ).first()
-            if war is None:
+            if war_model is None or (war_model.outcome != models.WarOutcome.in_progress
+                                     and war_model.end_date_days < self._date_in_days - 5 * 360):
                 start_date_days = models.date_to_days(war_dict["start_date"])
-                war = models.War(
+                war_model = models.War(
                     war_id_in_game=war_id,
                     game=self.game,
                     start_date_days=start_date_days,
@@ -689,17 +781,17 @@ class TimelineExtractor:
                     name=war_name,
                     outcome=models.WarOutcome.in_progress,
                 )
-                self._session.add(war)
             elif war_dict.get("defender_force_peace") == "yes":
-                war.outcome = models.WarOutcome.status_quo
-                war.end_date_days = models.date_to_days(war_dict.get("defender_force_peace_date"))
+                war_model.outcome = models.WarOutcome.status_quo
+                war_model.end_date_days = models.date_to_days(war_dict.get("defender_force_peace_date"))
             elif war_dict.get("attacker_force_peace") == "yes":
-                war.outcome = models.WarOutcome.status_quo
-                war.end_date_days = models.date_to_days(war_dict.get("attacker_force_peace_date"))
-            elif war.outcome != models.WarOutcome.in_progress:
+                war_model.outcome = models.WarOutcome.status_quo
+                war_model.end_date_days = models.date_to_days(war_dict.get("attacker_force_peace_date"))
+            elif war_model.outcome != models.WarOutcome.in_progress:
                 continue
             else:
-                war.end_date_days = self._date_in_days
+                war_model.end_date_days = self._date_in_days
+            self._session.add(war_model)
             war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
             war_goal_defender = war_dict.get("defender_war_goal", {})
             if war_goal_defender:
@@ -713,28 +805,39 @@ class TimelineExtractor:
                 country_id = war_party_info.get("country")
                 db_country = self._session.query(models.Country).filter_by(game=self.game, country_id_in_game=country_id).one_or_none()
 
+                country_dict = self._gamestate_dict["country"][country_id]
                 if db_country is None:
-                    country_name = self._gamestate_dict["country"][country_id]["name"]
+                    country_name = country_dict["name"]
                     logger.warning(f"Could not find country matching war participant {country_name}")
                     continue
 
                 is_attacker = country_id in attackers
 
                 war_participant = self._session.query(models.WarParticipant).filter_by(
-                    war=war, country=db_country
+                    war=war_model, country=db_country
                 ).one_or_none()
                 if war_participant is None:
                     war_goal = war_goal_attacker if is_attacker else war_goal_defender
                     war_participant = models.WarParticipant(
-                        war=war,
+                        war=war_model,
                         war_goal=models.WarGoal.__members__.get(war_goal, models.WarGoal.wg_other),
                         country=db_country,
                         is_attacker=is_attacker,
                     )
-                    self._session.add(war_participant)
+                    self._session.add(models.HistoricalEvent(
+                        event_type=models.HistoricalEventType.war,
+                        country=war_participant.country,
+                        leader=self._get_current_ruler(country_dict),
+                        start_date_days=self._date_in_days,
+                        end_date_days=self._date_in_days,
+                        war=war_model,
+                        is_known_to_player=war_participant.country.is_known_to_player(),
+                    ))
                 if war_participant.war_goal is None:
                     war_participant.war_goal = war_goal_defender
-            self._extract_combat_victories(war_dict, war)
+                self._session.add(war_participant)
+
+            self._extract_combat_victories(war_dict, war_model)
 
     def _extract_combat_victories(self, war_dict, war: models.War):
         battles = war_dict.get("battles", [])
@@ -751,15 +854,19 @@ class TimelineExtractor:
                 continue
             attacker_victory = b_dict.get("attacker_victory") == "yes"
 
-            system_id_in_game = b_dict.get("system")
-            system = self._session.query(models.System).filter_by(
-                system_id_in_game=system_id_in_game
+            planet_model = self._session.query(models.Planet).filter_by(
+                planet_id_in_game=b_dict.get("planet"),
             ).one_or_none()
 
-            planet_name = ""
-            planet = b_dict.get("planet")
-            if planet in self._gamestate_dict["planet"]:
-                planet_name = self._gamestate_dict["planet"][planet].get("name", "")
+            if planet_model is None:
+                system_id_in_game = b_dict.get("system")
+                system = self._session.query(models.System).filter_by(
+                    system_id_in_game=system_id_in_game
+                ).one_or_none()
+                if system is None:
+                    system = self._add_single_system(system_id_in_game)
+            else:
+                system = planet_model.system
 
             combat_type = models.CombatType.__members__.get(b_dict.get("type"), models.CombatType.other)
 
@@ -774,8 +881,8 @@ class TimelineExtractor:
                 continue
             combat = self._session.query(models.Combat).filter_by(
                 war=war,
-                system=system,
-                planet=planet_name,
+                system=system if system is not None else planet_model.system,
+                planet=planet_model,
                 combat_type=combat_type,
                 attacker_victory=attacker_victory,
                 attacker_war_exhaustion=attacker_exhaustion,
@@ -790,7 +897,8 @@ class TimelineExtractor:
                 date=date_in_days,
                 attacker_war_exhaustion=attacker_exhaustion,
                 defender_war_exhaustion=defender_exhaustion,
-                system=system, planet=planet_name,
+                system=system,
+                planet=planet_model,
                 combat_type=combat_type,
                 attacker_victory=attacker_victory,
             )
@@ -812,33 +920,50 @@ class TimelineExtractor:
                     combat=combat, war_participant=war_participant, is_attacker=country_id in battle_attackers,
                 ))
 
-    def _extract_player_leaders(self, country: models.Country, country_dict):
-        player_owned_leaders = country_dict.get("owned_leaders", [])
-        if not isinstance(player_owned_leaders, list):  # if there is only one
-            player_owned_leaders = [player_owned_leaders]
-        logger.info(f"{self._logger_str} Processing Leaders")
+    def _extract_country_leaders(self, country_model: models.Country, country_dict):
+        owned_leaders = country_dict.get("owned_leaders", [])
+        if not isinstance(owned_leaders, list):  # if there is only one
+            owned_leaders = [owned_leaders]
         leaders = self._gamestate_dict["leaders"]
-        active_leaders = set(player_owned_leaders)
-        for leader in self._session.query(models.Leader).filter_by(is_active=True).all():
+        active_leaders = set(owned_leaders)
+
+        # first, check if the known leaders in the DB are still there
+        for leader in self._session.query(models.Leader).filter_by(
+                country=country_model,
+                is_active=True,
+        ).all():
             if leader.leader_id_in_game not in active_leaders:
-                is_inactive = True
+                leader.is_active = False
             else:
                 current_leader_name = self.get_leader_name(leaders.get(leader.leader_id_in_game))
-                is_inactive = current_leader_name != leader.leader_name
+                leader.is_active = (current_leader_name == leader.leader_name
+                                    or leader.last_date >= self._date_in_days - 3 * 360)
+            if not leader.is_active:
+                country_data = country_model.get_most_recent_data()
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.leader_died,
+                    country=country_model,
+                    leader=leader,
+                    start_date_days=leader.last_date,
+                    end_date_days=leader.last_date,
+                    is_known_to_player=(country_data is not None
+                                        and country_data.attitude_towards_player.reveals_economy_info()),
+                ))
+            self._session.add(leader)
 
-            if is_inactive:
-                leader.is_active = False
-                self._session.add(leader)
-        for leader_id in player_owned_leaders:
+        # then, check if
+        for leader_id in owned_leaders:
             leader_dict = leaders.get(leader_id)
             if not isinstance(leader_dict, dict):
                 continue
             leader = self._session.query(models.Leader).filter_by(game=self.game, leader_id_in_game=leader_id).one_or_none()
             if leader is None:
-                leader = self._add_new_leader(country, leader_id, leader_dict)
+                leader = self._add_new_leader(country_model, leader_id, leader_dict)
+            leader.is_active = True
             leader.last_date = self._date_in_days
+            self._session.add(leader)
 
-    def _add_new_leader(self, country, leader_id, leader_dict):
+    def _add_new_leader(self, country_model: models.Country, leader_id: int, leader_dict) -> models.Leader:
         if "pre_ruler_class" in leader_dict:
             leader_class = models.LeaderClass.__members__.get(leader_dict.get("pre_ruler_class"), models.LeaderClass.unknown)
         else:
@@ -853,11 +978,11 @@ class TimelineExtractor:
             models.date_to_days(leader_dict.get("start", "10000.01.01")),
             models.date_to_days(leader_dict.get("date_added", "10000.01.01")),
         )
-        date_born = date_hired - 360 * leader_dict.get("age", 0.0) + random.randint(-15, 15)
+        date_born = date_hired - 360 * leader_dict.get("age", 0.0) + self.random_instance.randint(-15, 15)
         species_id = leader_dict.get("species_index", -1)
-        species = self._session.query(models.Species).filter_by(species_id_in_game=species_id).one_or_none()
+        species = self._get_or_add_species(species_id)
         leader = models.Leader(
-            country=country,
+            country=country_model,
             leader_id_in_game=leader_id,
             leader_class=leader_class,
             leader_name=leader_name,
@@ -870,6 +995,15 @@ class TimelineExtractor:
             is_active=True,
         )
         self._session.add(leader)
+        country_data = country_model.get_most_recent_data()
+        self._session.add(models.HistoricalEvent(
+            event_type=models.HistoricalEventType.leader_recruited,
+            country=country_model,
+            leader=leader,
+            start_date_days=date_hired,
+            end_date_days=self._date_in_days,
+            is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
+        ))
         return leader
 
     def get_leader_name(self, leader_dict):
@@ -878,14 +1012,14 @@ class TimelineExtractor:
         leader_name = f"{first_name} {last_name}".strip()
         return leader_name
 
-    def _add_scientist_tech_achievements(self, player_country_dict):
-        tech_status_dict = player_country_dict.get("tech_status")
+    def _history_add_tech_events(self, country_model: models.Country, country_dict):
+        tech_status_dict = country_dict.get("tech_status")
         if not isinstance(tech_status_dict, dict):
             return
-        last_researched_techs = player_country_dict.get("tech_status", {}).get("technology", [])
+        last_researched_techs = country_dict.get("tech_status", {}).get("technology", [])
         if len(last_researched_techs) < 10:
             return
-        last_researched_techs = last_researched_techs[-10:]
+        last_researched_techs = last_researched_techs[-26:]
         for tech_name in last_researched_techs:
             if not isinstance(tech_name, str):
                 continue
@@ -897,130 +1031,172 @@ class TimelineExtractor:
                 tech_type = "engineering"
             else:  # Some uncategorized DLC techs, repeatables etc.
                 continue
-            scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
-            if scientist_id is None:
-                continue
-            leader = self._session.query(models.Leader).filter_by(leader_id_in_game=scientist_id).one_or_none()
-            if leader is None:
-                logger.warning(f"Could not find scientist matching leader id {scientist_id}")
-                continue
-            # check for existing achievement in database:
-            matching_achievement = self._session.query(models.LeaderAchievement).filter_by(
-                achievement_type=models.LeaderAchievementType.researched_technology,
-                achievement_description=tech_name,
+            matching_description = self._get_or_add_shared_description(text=tech_name)
+            # check for existing event in database:
+            matching_event = self._session.query(models.HistoricalEvent).filter_by(
+                event_type=models.HistoricalEventType.researched_technology,
+                country=country_model,
+                description=matching_description,
             ).one_or_none()
-            if matching_achievement is None:
-                self._session.add(models.LeaderAchievement(
+            if matching_event is None:
+                scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
+                leader = self._session.query(models.Leader).filter_by(leader_id_in_game=scientist_id).one_or_none()
+                country_data = country_model.get_most_recent_data()
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.researched_technology,
+                    country=country_model,
                     leader=leader,
-                    achievement_type=models.LeaderAchievementType.researched_technology,
                     start_date_days=self._date_in_days,  # Todo might be cool to know the start date of the tech
                     end_date_days=self._date_in_days,
-                    achievement_description=tech_name,
+                    description=matching_description,
+                    is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_technology_info(),
                 ))
 
-    def _add_ruler_leader_achievements(self, player_country_dict):
-        ruler = self._get_current_ruler(player_country_dict)
+    def _history_add_ruler_events(self, country_model: models.Country, country_dict):
+        ruler = self._get_current_ruler(country_dict)
         if ruler is not None:
-            self._extract_ruler_was_ruler_achievement(ruler, player_country_dict)
-            self._extract_ruler_tradition_achievements(ruler, player_country_dict)
-            self._extract_ruler_ascension_achievements(ruler, player_country_dict)
-            self._extract_ruler_edict_achievements(ruler, player_country_dict)
-            self._extract_ruler_negotiated_peace_achievements_and_settle_matching_wars(ruler, player_country_dict)
+            capital_id = country_dict.get("capital")
+            capital = None
+            if capital_id is not None:
+                capital = self._session.query(models.Planet).filter_by(
+                    planet_id_in_game=capital_id
+                ).one_or_none()
 
-    def _get_current_ruler(self, country_dict):
+            self._history_add_or_update_ruler(ruler, country_model, capital)
+            self._history_extract_tradition_events(ruler, country_model, country_dict)
+            self._history_extract_ascension_events(ruler, country_model, country_dict)
+            self._history_extract_edict_events(ruler, country_model, country_dict)
+
+    def _get_current_ruler(self, country_dict) -> Union[models.Leader, None]:
+        if not isinstance(country_dict, dict):
+            return None
         ruler_id = country_dict.get("ruler", -1)
         if ruler_id < 0:
             logger.warning(f"Could not find leader id for ruler!")
             return None
         leader = self._session.query(models.Leader).filter_by(
-            leader_id_in_game=ruler_id, is_active=True
-        ).one_or_none()
+            leader_id_in_game=ruler_id,
+            is_active=True,
+        ).order_by(models.Leader.is_active.desc()).first()
         if leader is None:
-            logger.warning(f"Could not find leader matching leader id {ruler_id}")
+            logger.warning(f"Could not find leader matching leader id {ruler_id} for country {country_dict.get('name')}")
         return leader
 
-    def _extract_ruler_was_ruler_achievement(self, leader, player_country_dict):
-        most_recent_ruler_achievement = self._session.query(models.LeaderAchievement).order_by(
-            models.LeaderAchievement.end_date_days.desc()
-        ).filter_by(
-            achievement_type=models.LeaderAchievementType.was_ruler,
+    def _history_add_or_update_ruler(self, ruler: models.Leader, country_model: models.Country, capital: models.Planet):
+        most_recent_ruler_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.ruled_empire,
+            country=country_model,
+            leader=ruler,
+        ).order_by(
+            models.HistoricalEvent.start_date_days.desc()
         ).first()
-        if most_recent_ruler_achievement is not None:
-            most_recent_ruler_achievement.end_date_days = self._date_in_days - 1
-            self._session.add(most_recent_ruler_achievement)
-        add_new_achievement = most_recent_ruler_achievement is None or most_recent_ruler_achievement.leader != leader
-        if add_new_achievement:  # add the new LeaderAchievement
+        capital_system = capital.system if capital is not None else None
+        if most_recent_ruler_event is None:
             start_date = self._date_in_days
             if start_date < 100:
                 start_date = 0
-            self._session.add(models.LeaderAchievement(
-                leader=leader,
-                achievement_type=models.LeaderAchievementType.was_ruler,
+            most_recent_ruler_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.ruled_empire,
+                country=country_model,
+                leader=ruler,
                 start_date_days=start_date,
+                planet=capital,
+                system=capital_system,
                 end_date_days=self._date_in_days,
-                achievement_description=player_country_dict.get("name", ""),
+                is_known_to_player=country_model.is_known_to_player(),
+            )
+        else:
+            most_recent_ruler_event.end_date_days = self._date_in_days - 1
+            most_recent_ruler_event.is_known_to_player = country_model.is_known_to_player()
+        if most_recent_ruler_event.planet is None:
+            most_recent_ruler_event.planet = capital
+            most_recent_ruler_event.system = capital.system
+        elif most_recent_ruler_event.planet != capital:
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.capital_relocation,
+                country=country_model,
+                leader=ruler,
+                start_date_days=most_recent_ruler_event.end_date_days,
+                planet=capital,
+                system=capital_system,
+                end_date_days=self._date_in_days,
+                is_known_to_player=country_model.is_known_to_player(),
             ))
+        self._session.add(most_recent_ruler_event)
 
-    def _extract_ruler_tradition_achievements(self, leader, player_country_dict):
-        for tradition in player_country_dict.get("traditions", []):
-            matching_achievement = self._session.query(models.LeaderAchievement).filter_by(
-                achievement_type=models.LeaderAchievementType.embraced_tradition,
-                achievement_description=tradition,
+    def _history_extract_tradition_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+        for tradition in country_dict.get("traditions", []):
+            matching_description = self._get_or_add_shared_description(text=tradition)
+            matching_event = self._session.query(models.HistoricalEvent).filter_by(
+                country=country_model,
+                event_type=models.HistoricalEventType.tradition,
+                description=matching_description,
             ).one_or_none()
-            if matching_achievement is None:
-                self._session.add(models.LeaderAchievement(
-                    leader=leader,
-                    achievement_type=models.LeaderAchievementType.embraced_tradition,
+            if matching_event is None:
+                country_data = country_model.get_most_recent_data()
+                self._session.add(models.HistoricalEvent(
+                    leader=ruler,
+                    country=country_model,
+                    event_type=models.HistoricalEventType.tradition,
                     start_date_days=self._date_in_days,
                     end_date_days=self._date_in_days,
-                    achievement_description=tradition,
+                    description=matching_description,
+                    is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
                 ))
 
-    def _extract_ruler_ascension_achievements(self, leader, player_country_dict):
-        for perk in player_country_dict.get("ascension_perks", []):
-            matching_achievement = self._session.query(models.LeaderAchievement).filter_by(
-                achievement_type=models.LeaderAchievementType.achieved_ascension,
-                achievement_description=perk,
+    def _history_extract_ascension_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+        for ascension_perk in country_dict.get("ascension_perks", []):
+            matching_description = self._get_or_add_shared_description(text=ascension_perk)
+            matching_event = self._session.query(models.HistoricalEvent).filter_by(
+                country=country_model,
+                event_type=models.HistoricalEventType.ascension_perk,
+                description=matching_description,
             ).one_or_none()
-            if matching_achievement is None:
-                self._session.add(models.LeaderAchievement(
-                    leader=leader,
-                    achievement_type=models.LeaderAchievementType.achieved_ascension,
+            if matching_event is None:
+                self._session.add(models.HistoricalEvent(
+                    leader=ruler,
+                    country=country_model,
+                    event_type=models.HistoricalEventType.ascension_perk,
                     start_date_days=self._date_in_days,
                     end_date_days=self._date_in_days,
-                    achievement_description=perk,
+                    description=matching_description,
+                    is_known_to_player=country_model.is_known_to_player(),
                 ))
 
-    def _extract_ruler_edict_achievements(self, ruler, country_dict):
+    def _history_extract_edict_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
         edict_list = country_dict.get("edicts", [])
         if not isinstance(edict_list, list):
             edict_list = [edict_list]
         for edict in edict_list:
             if not isinstance(edict, dict):
                 continue
-            edict_name = edict.get("edict")
             expiry_date = models.date_to_days(edict.get("date"))
-            matching_achievement = self._session.query(
-                models.LeaderAchievement
+            description = self._get_or_add_shared_description(text=(edict.get("edict")))
+            matching_event = self._session.query(
+                models.HistoricalEvent
             ).filter_by(
-                achievement_type=models.LeaderAchievementType.passed_edict,
-                achievement_description=edict_name,
+                event_type=models.HistoricalEventType.edict,
+                country=country_model,
+                description=description,
                 end_date_days=expiry_date,
             ).one_or_none()
-            if matching_achievement is None:
-                self._session.add(models.LeaderAchievement(
+            if matching_event is None:
+                country_data = country_model.get_most_recent_data()
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.edict,
+                    country=country_model,
                     leader=ruler,
-                    achievement_type=models.LeaderAchievementType.passed_edict,
-                    achievement_description=edict_name,
+                    description=description,
                     start_date_days=self._date_in_days,
                     end_date_days=expiry_date,
+                    is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
                 ))
 
-    def _extract_ruler_negotiated_peace_achievements_and_settle_matching_wars(self, ruler, player_country_dict):
-        logger.info(f"{self._logger_str} Processing Truces")
-        truces_dict = player_country_dict.get("truce", {})
-        if not truces_dict:
+    def _settle_finished_wars(self):
+        truces_dict = self._gamestate_dict.get("truce", {})
+        if not isinstance(truces_dict, dict):
             return
+        #  resolve wars based on truces...
         for truce_id, truce_info in truces_dict.items():
             if not isinstance(truce_info, dict):
                 continue
@@ -1030,19 +1206,11 @@ class TimelineExtractor:
                 continue  # truce is due to diplomatic agreements or similar
             matching_war = self._session.query(models.War).order_by(models.War.start_date_days.desc()).filter_by(name=war_name).first()
             if matching_war is None:
-                logger.warning(f"Could not find war matching truce for {war_name}")
                 continue
-            end_date = truce_info.get("start_date")
-            if end_date:
-                end_date_days = models.date_to_days(end_date)
-                matching_war.end_date_days = end_date_days
-                self._session.add(models.LeaderAchievement(
-                    achievement_type=models.LeaderAchievementType.negotiated_peace_treaty,
-                    start_date_days=end_date_days,
-                    end_date_days=end_date_days,
-                    achievement_description=war_name,
-                    leader=ruler,
-                ))
+            end_date = truce_info.get("start_date")  # start of truce => end of war
+            if isinstance(end_date, str) and end_date != None:
+                matching_war.end_date_days = models.date_to_days(end_date)
+
             if matching_war.outcome == models.WarOutcome.in_progress:
                 if matching_war.attacker_war_exhaustion < matching_war.defender_war_exhaustion:
                     matching_war.outcome = models.WarOutcome.attacker_victory
@@ -1050,136 +1218,351 @@ class TimelineExtractor:
                     matching_war.outcome = models.WarOutcome.defender_victory
                 else:
                     matching_war.outcome = models.WarOutcome.status_quo
+                self._history_add_peace_events(matching_war)
+            self._session.add(matching_war)
+        #  resolve wars that are no longer in the save files...
+        for war in self._session.query(models.War).filter_by(outcome=models.WarOutcome.in_progress).all():
+            if war.end_date_days < self._date_in_days - 5 * 360:
+                war.outcome = models.WarOutcome.unknown
+                self._session.add(war)
+                self._history_add_peace_events(war)
 
-    def _add_governor_achievements(self, player_country_dict):
-        sector_dict = player_country_dict.get("sectors", [])
+    def _history_process_planet_and_sector_events(self, country_model, country_dict):
+        sector_dict = country_dict.get("sectors", {})
+        # processing all colonies by sector allows reading the responsible sector governor
         for sector_id, sector_info in sector_dict.items():
-            governor_id = sector_info.get("leader")
-            if governor_id is None:
-                continue  # sector has no governor
-            governor = self._session.query(models.Leader).filter_by(
-                leader_id_in_game=governor_id,
+            sector_description = self._get_or_add_shared_description(text=(sector_info.get("name", "Unnamed")))
+            sector_capital = self._session.query(models.Planet).filter_by(
+                planet_id_in_game=sector_info.get("capital")
             ).one_or_none()
-            if governor is None:
-                logger.warning(f"Could not find governor matching (in-game) ID {governor_id}")
-                continue
-            self._add_governor_ruled_sector_achievements(sector_info, governor)
-            self._add_governor_planetary_achievements(sector_info, governor)
+            self._history_add_sector_creation_event(country_model, country_dict, sector_capital, sector_description)
+            governor_id = sector_info.get("leader")
+            governor_model = None
+            if governor_id is not None:
+                governor_model = self._session.query(models.Leader).filter_by(
+                    country=country_model,
+                    leader_id_in_game=governor_id,
+                ).one_or_none()
 
-    def _add_governor_ruled_sector_achievements(self, sector_info, governor):
-        sector_name = sector_info.get("name", "Unnamed Sector")
-        achievement = self._session.query(models.LeaderAchievement).filter_by(
-            achievement_type=models.LeaderAchievementType.governed_sector,
-            achievement_description=sector_name,
-        ).order_by(models.LeaderAchievement.end_date_days.desc()).first()
-        add_new_achievement = False
-        if achievement is None:
-            add_new_achievement = True
-        else:
-            achievement.end_date_days = self._date_in_days - 1
-            self._session.add(achievement)
-            if achievement.leader != governor:
-                add_new_achievement = True
-        if add_new_achievement:
-            self._session.add(models.LeaderAchievement(
-                leader=governor,
+            self._history_add_planetary_events(country_model, sector_info, governor_model)
+            if governor_model is not None:
+                self._history_add_or_update_governor_sector_events(country_model, sector_capital, governor_model, sector_description)
+
+    def _history_add_sector_creation_event(self, country_model, country_dict, sector_capital: models.Planet, sector_description: models.SharedDescription):
+        # also add a sector creation event if this sector is new...
+        sector_creation_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.sector_creation,
+            country=country_model,
+            description=sector_description,
+        ).one_or_none()
+        if sector_creation_event is None:
+            country_data = country_model.get_most_recent_data()
+            sector_creation_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.sector_creation,
+                leader=self._get_current_ruler(country_dict),
+                country=country_model,
+                description=sector_description,
                 start_date_days=self._date_in_days,
-                end_date_days=self._date_in_days + 1,
-                achievement_type=models.LeaderAchievementType.governed_sector,
-                achievement_description=sector_name,
-            ))
+                end_date_days=self._date_in_days,
+                is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
+            )
+        if sector_creation_event.planet is None and sector_capital is not None:
+            sector_creation_event.planet = sector_capital
+            sector_creation_event.system = sector_capital.system
+        self._session.add(sector_creation_event)
 
-    def _add_governor_planetary_achievements(self, sector_info, governor):
-        for system_id in sector_info.get("galactic_object", []):
-            planets = self._gamestate_dict.get("galactic_object").get(system_id).get("planet", [])
+    def _history_add_planetary_events(self, country_model: models.Country, sector_dict, governor: models.Leader):
+        for system_id in sector_dict.get("galactic_object", []):
+            system_model = self._session.query(models.System).filter_by(
+                system_id_in_game=system_id,
+            ).one_or_none()
+            if system_model is None:
+                logger.info(f"Adding single system with in-game id {system_id}")
+                system_model = self._add_single_system(system_id, country_model=country_model)
+            system_dict = self._gamestate_dict.get("galactic_object").get(system_id, {})
+            if system_model.original_name != system_dict.get("name"):
+                system_model.original_name = system_dict.get("name")
+                self._session.update(system_model)
+
+            planets = system_dict.get("planet", [])
             if not isinstance(planets, list):
                 planets = [planets]
+            for planet_id in planets:
+                planet_dict = self._gamestate_dict.get("planet", {}).get(planet_id)
+                if not isinstance(planet_dict, dict):
+                    continue
+                planet_class = planet_dict.get("planet_class")
+                is_colonizable = game_info.is_colonizable_planet(planet_class)
+                is_destroyed = game_info.is_destroyed_planet(planet_class)
+                is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in self._all_planetary_modifiers(planet_dict))
 
-            for p in planets:
-                planet_dict = self._gamestate_dict.get("planet", {}).get(p)
-                self._add_governor_megastructure_achievement(system_id, planet_dict, governor)
-                self._add_governor_colonization_achievement(system_id, planet_dict, governor)
+                if not (is_colonizable or is_destroyed or is_terraformable):
+                    continue  # don't bother with uninteresting planets
 
-    def _add_governor_megastructure_achievement(self, system_id, planet_dict, governor):
-        pc = planet_dict.get("planet_class")
-        p_name = planet_dict.get("name")
-        if pc not in {"pc_habitat", "pc_ringworld_habitable"}:
+                planet_model = self._get_and_update_planet_model(country_model, system_model, planet_id, planet_dict)
+                if planet_model is None:
+                    continue
+                if is_colonizable:
+                    self._history_add_or_update_colonization_events(country_model, system_model, planet_model, planet_dict, governor)
+                    if game_info.is_colonizable_megastructure(planet_class):
+                        self._history_add_or_update_habitable_megastructure_construction_event(country_model, system_model, planet_model, planet_dict, governor, system_id)
+                if is_terraformable:
+                    self._history_add_or_update_terraforming_events(country_model, system_model, planet_model, planet_dict, governor)
+
+    def _history_add_or_update_terraforming_events(self, country_model: models.Country,
+                                                   system_model: models.System,
+                                                   planet_model: models.Planet,
+                                                   planet_dict,
+                                                   governor: models.Leader):
+        terraform_dict = planet_dict.get("terraform_process")
+        if not isinstance(terraform_dict, dict):
             return
-        if pc == "pc_ringworld_habitable":
-            sys_name = self._gamestate_dict["galactic_object"].get(system_id).get("name", "Unknown system")
-            p_name = f"{sys_name} Ringworld"
-        a = self._session.query(models.LeaderAchievement).filter_by(
-            leader=governor,
-            achievement_type=models.LeaderAchievementType.built_megastructure,
-            achievement_description=p_name,
-        ).one_or_none()
-        if a is None:
-            self._session.add(models.LeaderAchievement(
+
+        current_pc = planet_dict.get("planet_class")
+        target_pc = terraform_dict.get("planet_class")
+        text = f"{current_pc},{target_pc}"
+        if not game_info.is_colonizable_planet(target_pc):
+            logger.info(f"Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}")
+            return
+        matching_description = self._get_or_add_shared_description(text)
+        matching_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.terraforming,
+            description=matching_description,
+            system=system_model,
+            planet=planet_model,
+        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
+        if matching_event is None or matching_event.end_date_days < self._date_in_days - 5 * 360:
+            matching_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.terraforming,
+                country=country_model,
+                system=planet_model.system,
+                planet=planet_model,
                 leader=governor,
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
-                achievement_type=models.LeaderAchievementType.built_megastructure,
-                achievement_description=p_name,
-            ))
+                description=matching_description,
+                is_known_to_player=country_model.is_known_to_player(),
+            )
+        else:
+            matching_event.end_date_days = self._date_in_days
+        self._session.add(matching_event)
 
-    def _add_governor_colonization_achievement(self, system_id, planet_dict, governor):
-        p_name = planet_dict.get("name")
-        if "colonizer_pop" in planet_dict:
-            a = self._session.query(models.LeaderAchievement).filter_by(
-                achievement_type=models.LeaderAchievementType.colonized_planet,
-                achievement_description=p_name,
-            ).one_or_none()
-            if a is None:
-                self._session.add(models.LeaderAchievement(
-                    leader=governor,
+    def _get_and_update_planet_model(self, country_model: models.Country,
+                                     system_model: models.System,
+                                     planet_id: int,
+                                     planet_dict) -> Union[models.Planet, None]:
+        planet_class = planet_dict.get("planet_class")
+        planet_name = planet_dict.get("name")
+        planet_model = self._session.query(models.Planet).filter_by(
+            planet_id_in_game=planet_id
+        ).one_or_none()
+        if planet_model is None:
+            planet_model = models.Planet(
+                planet_name=planet_name,
+                planet_id_in_game=planet_id,
+                system=system_model,
+                planet_class=planet_class,
+                colonized_date=None,
+            )
+        elif planet_model.planet_name != planet_name:
+            planet_model.planet_name = planet_name
+        if planet_model.planet_class != planet_class:
+            if game_info.is_destroyed_planet(planet_class):
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.planet_destroyed,
+                    country=country_model,
+                    system=system_model,
+                    planet=planet_model,
                     start_date_days=self._date_in_days,
-                    end_date_days=self._date_in_days,
-                    achievement_type=models.LeaderAchievementType.colonized_planet,
-                    achievement_description=p_name,
+                    is_of_global_relevance=True,
+                    description=self._get_or_add_shared_description(planet_model.planet_class),
+                    is_known_to_player=country_model.is_known_to_player(),
                 ))
-            else:
-                a.end_date_days = self._date_in_days
-                self._session.add(a)
-        elif "colonize_date" in planet_dict:
-            colonize_date = models.date_to_days(planet_dict["colonize_date"])
-            a = self._session.query(models.LeaderAchievement).filter_by(
-                achievement_type=models.LeaderAchievementType.colonized_planet,
-                achievement_description=p_name,
-            ).one_or_none()
-            if a is None:
-                a = models.LeaderAchievement(
-                    leader=governor,
-                    start_date_days=colonize_date,
-                    end_date_days=colonize_date,
-                    achievement_type=models.LeaderAchievementType.colonized_planet,
-                    achievement_description=p_name,
-                )
-            else:
-                a.end_date_days = colonize_date
-            self._session.add(a)
+            planet_model.planet_class = planet_class
+        self._session.add(planet_model)
+        return planet_model
 
-    def _add_faction_leader_achievement(self, faction_dict):
+    def _all_planetary_modifiers(self, planet_dict):
+        modifiers = planet_dict.get("timed_modifiers", [])
+        if not isinstance(modifiers, list):
+            modifiers = [modifiers]
+        for m in modifiers:
+            if not isinstance(m, dict):
+                continue
+            modifier = m.get("modifier", "no modifier")
+            duration = m.get("days")
+            if duration == "-1" or duration == -1 or duration is None or not isinstance(duration, int):
+                duration = None
+            yield modifier, duration
+
+        planet_modifiers = planet_dict.get("planet_modifier", [])
+        if not isinstance(planet_modifiers, list):
+            planet_modifiers = [planet_modifiers]
+        for pm in planet_modifiers:
+            if pm is not None:
+                yield pm, None
+
+    def _history_add_or_update_colonization_events(self, country_model: models.Country,
+                                                   system_model: models.System,
+                                                   planet_model: models.Planet,
+                                                   planet_dict,
+                                                   governor: models.Leader):
+        if "colonize_date" in planet_dict or planet_dict.get("pop"):
+            # I think one of these occurs once the colonization is finished
+            colonization_completed = True
+        elif "colonizer_pop" in planet_dict:
+            # while colonization still in progress
+            colonization_completed = False
+        else:
+            # planet is not colonized at all
+            return
+
+        colonization_end_date = planet_dict.get("colonize_date")
+        if not colonization_end_date:
+            end_date_days = self._date_in_days
+        else:
+            end_date_days = models.date_to_days(colonization_end_date)
+
+        if planet_model.colonized_date is not None:
+            # abort early if the planet is already added and known to be fully colonized
+            return
+        elif colonization_completed:
+            # set the planet's colonization flag and allow updating the event one last time
+            planet_model.colonized_date = colonization_end_date
+            self._session.add(planet_model)
+        event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.colonization,
+            planet=planet_model
+        ).one_or_none()
+        if event is None:
+            start_date = self._date_in_days
+            if self._date_in_days < 100:
+                end_date_days = min(end_date_days, 0)
+                if country_model.is_player:
+                    end_date_days = 0
+                governor = None
+            event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.colonization,
+                leader=governor,
+                country=country_model,
+                start_date_days=min(start_date, end_date_days),
+                end_date_days=end_date_days,
+                planet=planet_model,
+                system=system_model,
+                is_known_to_player=country_model.is_known_to_player(),
+            )
+        else:
+            event.end_date_days = end_date_days
+        self._session.add(event)
+
+    def _history_add_or_update_habitable_megastructure_construction_event(self, country_model: models.Country,
+                                                                          system_model: models.System,
+                                                                          planet_model: models.Planet,
+                                                                          planet_dict,
+                                                                          governor: models.Leader,
+                                                                          system_id: int):
+        planet_class = planet_dict.get("planet_class")
+        if planet_class == "pc_ringworld_habitable":
+            sys_name = self._gamestate_dict["galactic_object"].get(system_id).get("name", "Unknown system")
+            p_name = f"{sys_name} Ringworld"
+        elif planet_class == "pc_habitat":
+            p_name = planet_dict.get("name")
+        else:
+            logging.info("Expected megastructre planet class")
+            return
+
+        description = self._get_or_add_shared_description(
+            text=p_name,
+        )
+        event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.habitat_ringworld_construction,
+            system=planet_model.system,
+            description=description,
+        ).one_or_none()
+        if event is None:
+            start_date = end_date = self._date_in_days  # TODO: change this when tracking the construction sites in the future
+            logger.info(f"{self._logger_str}: New Megastructure {models.days_to_date(self._date_in_days)}")
+            event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.habitat_ringworld_construction,
+                country=country_model,
+                leader=governor,
+                start_date_days=start_date,
+                end_date_days=end_date,
+                planet=planet_model,
+                system=system_model,
+                description=description,
+                is_known_to_player=country_model.is_known_to_player(),
+            )
+        elif not event.is_known_to_player:
+            event.is_known_to_player = country_model.is_known_to_player()
+        self._session.add(event)
+
+    def _history_add_or_update_governor_sector_events(self, country_model,
+                                                      sector_capital: models.Planet,
+                                                      governor: models.Leader,
+                                                      sector_description: models.SharedDescription):
+        # check if governor was ruling same sector before => update date and return
+        event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.governed_sector,
+            description=sector_description,
+        ).order_by(models.HistoricalEvent.end_date_days.desc()).first()
+        if (event is not None
+                and event.leader == governor
+                and event.end_date_days > self._date_in_days - 5 * 360):  # if the governor ruled this sector less than 5 years ago, re-use the event...
+            event.end_date_days = self._date_in_days
+        else:
+            country_data = country_model.get_most_recent_data()
+            event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.governed_sector,
+                leader=governor,
+                country=country_model,
+                description=sector_description,
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+                is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
+            )
+
+        if event.planet is None and sector_capital is not None:
+            event.planet = sector_capital
+            event.system = sector_capital.system
+        self._session.add(event)
+
+    def _history_add_or_update_faction_leader_event(self,
+                                                    country_model: models.Country,
+                                                    faction_model: models.PoliticalFaction,
+                                                    faction_dict):
         faction_leader_id = faction_dict.get("leader", -1)
         if faction_leader_id < 0:
             return
-        leader = self._session.query(models.Leader).filter_by(leader_id_in_game=faction_leader_id).one_or_none()
-        if leader is None:
-            logger.warning(f"Could not find leader matching leader id {faction_leader_id}")
-            return
-        matching_achievement = self._session.query(models.LeaderAchievement).filter_by(
-            leader=leader, achievement_type=models.LeaderAchievementType.was_faction_leader,
+        leader = self._session.query(models.Leader).filter_by(
+            country=country_model,
+            leader_id_in_game=faction_leader_id,
         ).one_or_none()
-        if matching_achievement is not None:
-            matching_achievement.end_date_days = self._date_in_days
-        else:  # add the new LeaderAchievement
-            matching_achievement = models.LeaderAchievement(
+        if leader is None:
+            logger.warning(f"Could not find leader matching leader id {faction_leader_id} for {country_model.country_name}\n{faction_dict}")
+            return
+        matching_event = self._session.query(models.HistoricalEvent).filter_by(
+            country=country_model,
+            leader=leader,
+            event_type=models.HistoricalEventType.faction_leader,
+            faction=faction_model,
+        ).one_or_none()
+        country_data = country_model.get_most_recent_data()
+        is_known = country_data is not None and country_data.attitude_towards_player.reveals_demographic_info()
+        if matching_event is None:
+            matching_event = models.HistoricalEvent(
+                country=country_model,
                 leader=leader,
-                achievement_type=models.LeaderAchievementType.was_faction_leader,
+                event_type=models.HistoricalEventType.faction_leader,
+                faction=faction_model,
                 start_date_days=self._date_in_days,
                 end_date_days=self._date_in_days,
-                achievement_description=faction_dict.get("name")
+                is_known_to_player=is_known,
             )
-            self._session.add(matching_achievement)
+        else:
+            matching_event.is_known_to_player = is_known
+            matching_event.end_date_days = self._date_in_days
+        self._session.add(matching_event)
 
     def _extract_system_ownership(self):
         logger.info(f"{self._logger_str} Processing system ownership")
@@ -1195,8 +1578,11 @@ class TimelineExtractor:
             if system_id_in_game is None or country_id_in_game is None:
                 continue
             system = self._session.query(models.System).filter_by(system_id_in_game=system_id_in_game).one_or_none()
-            country = self._session.query(models.Country).filter_by(country_id_in_game=country_id_in_game).one_or_none()
-            if system is None or country is None:
+            country_model = self._session.query(models.Country).filter_by(country_id_in_game=country_id_in_game).one_or_none()
+            if system is None:
+                logger.info(f"{self._logger_str}Detected new system {system_id_in_game}!")
+                system = self._add_single_system(system_id_in_game, country_model=country_model)
+            if country_model is None:
                 logger.warning(f"Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}")
                 continue
             ownership = self._session.query(models.SystemOwnership).filter_by(
@@ -1205,15 +1591,41 @@ class TimelineExtractor:
             if ownership is not None:
                 ownership.end_date_days = self._date_in_days
                 self._session.add(ownership)
-            if ownership is None or ownership.country != country:
+            if ownership is None or ownership.country != country_model:
                 ownership = models.SystemOwnership(
                     start_date_days=self._date_in_days,
                     end_date_days=self._date_in_days + 1,
-                    country=country,
+                    country=country_model,
                     system=system,
                 )
                 self._session.add(ownership)
         logger.info(f"{self._logger_str} Processed system ownership in {time.clock()-start}s")
+
+    def _history_add_peace_events(self, war: models.War):
+        for wp in war.participants:
+            matching_event = self._session.query(models.HistoricalEvent).filter_by(
+                event_type=models.HistoricalEventType.peace,
+                country=wp.country,
+                war=war,
+            ).one_or_none()
+            if matching_event is None:
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.peace,
+                    war=war,
+                    country=wp.country,
+                    leader=self._get_current_ruler(self._gamestate_dict["country"].get(wp.country.country_id_in_game, {})),
+                    start_date_days=war.end_date_days,
+                    is_known_to_player=wp.country.is_known_to_player(),
+                ))
+
+    def _get_or_add_shared_description(self, text: str) -> models.SharedDescription:
+        matching_description = self._session.query(models.SharedDescription).filter_by(
+            text=text,
+        ).one_or_none()
+        if matching_description is None:
+            matching_description = models.SharedDescription(text=text)
+            self._session.add(matching_description)
+        return matching_description
 
     def _initialize_enclave_trade_info(self):
         trade_level_1 = [10, 20]

@@ -68,6 +68,8 @@ DEFAULT_SETTINGS = dict(
     save_name_filter="",
     read_only_every_nth_save=1,
     debug_mode=False,
+    allow_backdating=True,
+    only_read_player_history=False,
 )
 
 
@@ -92,6 +94,9 @@ class Config:
     save_name_filter: str = None
     read_only_every_nth_save: int = None
 
+    allow_backdating = True
+    only_read_player_history = False
+
     PATH_KEYS = {
         "base_output_path",
         "save_file_path",
@@ -99,8 +104,10 @@ class Config:
     BOOL_KEYS = {
         "check_version",
         "extract_system_ownership",
-        "only_show_default_empires",
         "show_everything",
+        "only_show_default_empires",
+        "allow_backdating",
+        "only_read_player_history",
     }
     INT_KEYS = {
         "port",
@@ -153,7 +160,10 @@ class Config:
             "extract_system_ownership": self.extract_system_ownership,
             "show_everything": self.show_everything,
             "only_show_default_empires": self.only_show_default_empires,
+            "only_read_player_history": self.only_read_player_history,
+            "read_only_every_nth_save": self.read_only_every_nth_save,
             "save_name_filter": self.save_name_filter,
+            "allow_backdating": self.allow_backdating,
             "threads": self.threads,
         }
 

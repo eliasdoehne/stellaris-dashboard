@@ -1,10 +1,11 @@
 
 body {
+    font-family: verdana;
     background-color: rgba(33, 43, 39, 1);
+    font-size: 16px;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    font-family: verdana;
     color: rgba(217, 217, 217, 1);
     margin-top: 10px;
     margin-bottom: 10px;
@@ -15,10 +16,10 @@ h4, h5, h6 {
     text-align: left;
 }
 
-p, span.settingname {
+p, span {
     color: rgba(217, 217, 217, 1);
     font-family: verdana;
-    font-size: 20px;
+    font-size: 16px;
 }
 
 a {
@@ -40,7 +41,7 @@ a.button, input.button {
 
     color: rgba(195, 133, 33, 1);
     font-family: verdana;
-    font-size: 20px;
+    font-size: 16px;
 
     background-color: rgba(43, 59, 52, 1);
     display: inline;
@@ -50,11 +51,8 @@ a.button, input.button {
     border: 1px solid rgba(195, 133, 33, 1);
 }
 
-li.eventtext {
-    color: rgba(217, 217, 217, 1);
-    list-style-type: none;
-    margin: auto;
-    padding: 0.01cm;
+a.button.vis_toggle {
+    padding: 0.1cm;
 }
 
 li.game {
@@ -64,34 +62,12 @@ li.game {
     margin: 0.5cm auto;
     padding: 0.25cm;
     text-align: center;
-
     border: 1px solid rgba(195, 133, 33, 1);
 }
 
 li.toc-item {
     color: rgba(195, 133, 33, 1);
     list-style-type: none;
-}
-
-div.war-box {
-    background-color: rgba(43, 59, 52, 1);
-    width: 90%;
-    margin: 0.5cm auto;
-    padding: 0.25cm;
-}
-
-div.toc {
-    background-color: rgba(43, 59, 52, 1);
-    width: 90%;
-    margin: 0.5cm auto;
-    padding: 0.25cm;
-}
-
-div.leader-box {
-    background-color: rgba(43, 59, 52, 1);
-    width: 90%;
-    margin: 0.5cm auto;
-    padding: 0.25cm;
 }
 
 form.settingsform {
@@ -125,4 +101,72 @@ span.settingname {
 span.settinginput {
     align-self: flex-end;
     flex: 1 0 20%;
+}
+
+div.objectdetails {
+    display: flex;
+    flex-direction: row;
+    font-size: 14px;
+}
+
+span.objectdetailskey {
+    align-self: flex-start;
+    text-align: right;
+    min-width: 260px;
+    margin-right: 10px;
+    flex: 0 1 auto;
+    font-size: 14px;
+}
+
+span.objectdetailsvalue {
+    align-self: flex-end;
+    flex: 0 1 auto;
+    font-size: 14px;
+}
+
+div.ledgerbox {
+    background-color: rgba(43, 59, 52, 1);
+    width: 90%;
+    margin: 0.1cm auto;
+    padding: 0.1cm;
+}
+
+ul.event_list {
+    list-style: none;
+}
+
+li.eventitem {
+    color: rgba(217, 217, 217, 1);
+    margin: auto;
+}
+
+div.eventdescription {
+    padding: 0.01cm;
+    display: flex;
+    flex-direction: row;
+}
+
+span.dateblock {
+    align-self: flex-start;
+    text-align: right;
+    margin-right: 10px;
+    min-width: 260px;
+    font-family: monospace;
+    font-size: 14px;
+    flex: 0 1 auto;
+}
+
+span.dateblock.war {
+    min-width: 100px;
+}
+
+span.eventtext {
+    align-self: flex-end;
+    flex: 0 1 auto;
+    font-size: 14px;
+}
+
+a.textlink {
+    color: rgba(195, 133, 33, 1);
+    font-size: 14px;
 }
