@@ -112,7 +112,7 @@ div.objectdetails {
 span.objectdetailskey {
     align-self: flex-start;
     text-align: right;
-    min-width: 260px;
+    min-width: 240px;
     margin-right: 10px;
     flex: 0 1 auto;
     font-size: 14px;
@@ -150,7 +150,7 @@ span.dateblock {
     align-self: flex-start;
     text-align: right;
     margin-right: 10px;
-    min-width: 260px;
+    min-width: 240px;
     font-family: monospace;
     font-size: 14px;
     flex: 0 1 auto;

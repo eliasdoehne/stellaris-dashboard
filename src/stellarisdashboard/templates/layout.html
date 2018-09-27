@@ -8,11 +8,10 @@
         <a class="button" href="/settings/">Dashboard Settings</a>
         {%if show_old_version_notice%}
         <p>
-            You seem to be using an old version of the stellaris dashboard program.
-            You can get the current version on <a href=https://github.com/eliasdoehne/stellaris-dashboard>Github.</a>
-            You are using version {{ version }}.
+            You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
+            You can get the most current version <a href=https://github.com/eliasdoehne/stellaris-dashboard class="textlink">on Github.</a>
 
-            You can disable this update notice in the <a href="/settings/">Dashboard Settings</a>.
+            This update notice can be disabled in the <a href="/settings/" class="textlink">Dashboard Settings</a>.
         </p>
         {%endif%}
         {% block body %}{% endblock %}

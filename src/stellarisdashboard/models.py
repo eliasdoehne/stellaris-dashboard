@@ -331,6 +331,7 @@ class HistoricalEventType(enum.Enum):
     faction_leader = enum.auto()
     leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
+    level_up = enum.auto()
 
     # civilizational advancement:
     researched_technology = enum.auto()
@@ -344,6 +345,9 @@ class HistoricalEventType(enum.Enum):
     habitat_ringworld_construction = enum.auto()
     megastructure_construction = enum.auto()
     sector_creation = enum.auto()
+    expanded_to_system = enum.auto()
+    gained_system = enum.auto()
+    lost_system = enum.auto()
 
     # related to internal politics:
     new_faction = enum.auto()
@@ -359,10 +363,14 @@ class HistoricalEventType(enum.Enum):
     formed_federation = enum.auto()
 
     closed_borders = enum.auto()
-    rivalry_declaration = enum.auto()
+    received_closed_borders = enum.auto()
+    sent_rivalry = enum.auto()
+    received_rivalry = enum.auto()
 
     war = enum.auto()
     peace = enum.auto()
+    fleet_combat = enum.auto()
+    army_combat = enum.auto()
 
     terraforming = enum.auto()
     planet_destroyed = enum.auto()
@@ -872,6 +880,7 @@ class Leader(Base):
     leader_class = Column(Enum(LeaderClass))
     gender = Column(Enum(LeaderGender))
     leader_agenda = Column(Enum(LeaderAgenda))
+    last_level = Column(Integer)
 
     date_hired = Column(Integer)  # The date when this leader was first encountered
     date_born = Column(Integer)  # estimated birthday
@@ -927,12 +936,12 @@ class HistoricalEvent(Base):
     historical_event_id = Column(Integer, primary_key=True)
 
     event_type = Column(Enum(HistoricalEventType), nullable=False, index=True)
-    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
     start_date_days = Column(Integer, nullable=False, index=True)
-    is_known_to_player = Column(Boolean, nullable=False)
+    is_known_to_player = Column(Boolean, nullable=False, default=False)
     is_of_global_relevance = Column(Boolean, default=True)
 
     # Any of the following columns may be undefined, depending on the event type.
+    country_id = Column(ForeignKey(Country.country_id), index=True)
     leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)
     war_id = Column(ForeignKey(War.war_id), nullable=True)
     system_id = Column(ForeignKey(System.system_id), nullable=True)

@@ -1,4 +1,5 @@
 import logging
+import random
 import time
 from typing import Dict, Any, List
 from urllib import parse
@@ -32,7 +33,7 @@ def is_old_version(requested_version: str) -> bool:
 @flask_app.route("/checkversion/<version>/")
 def index_page(version=None):
     show_old_version_notice = False
-    if version is not None:
+    if config.CONFIG.check_version and version is not None:
         show_old_version_notice = is_old_version(version)
     games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
     return render_template(
@@ -40,6 +41,7 @@ def index_page(version=None):
         games=games,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
+        update_version_id=version,
     )
 
 
@@ -107,6 +109,7 @@ def history_page(
         is_filtered_page=is_filtered_page,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
+        update_version_id=version,
     )
 
 
@@ -160,12 +163,6 @@ def settings_page():
             "value": _convert_python_bool_to_lowercase(current_settings["only_read_player_history"]),
             "name": "Only extract player history",
             "description": "Only extract your country's history for the event ledger. Reduces workload and database size, but you won't have access to the full game history.",
-        },
-        "allow_backdating": {
-            "type": t_bool,
-            "value": _convert_python_bool_to_lowercase(current_settings["allow_backdating"]),
-            "name": "Back-date initial events",
-            "description": "If active, events that occur before the game starts are back-dated by an appropriate, randomized amount. If inactive, all initial events happen on (or near) 2200.01.01, which may look odd.",
         },
         "save_name_filter": {
             "type": t_str,
@@ -651,7 +648,8 @@ class EventFilter:
             self.min_date <= event.start_date_days <= self.max_date,
             self.country_filter is None or self.country_filter == event.country_id,
         ])
-
+        if not event.is_of_global_relevance and (self.is_empty_filter or self.country_filter is not None):
+            return False
         if self.leader_filter is not None:
             result &= event.leader_id == self.leader_filter
         if self.system_filter is not None:
@@ -670,6 +668,7 @@ class EventTemplateDictBuilder:
         self.event_filter = event_filter
         self.game_id = game_id
         self._session = db_session
+        self._random_instance = random.Random("EventTemplateDictBuilder")
 
     def get_event_and_link_dicts(self):
         events = {}
@@ -703,13 +702,14 @@ class EventTemplateDictBuilder:
                         continue
                 start = models.days_to_date(event.start_date_days)
                 end_date = None
+                is_active = False
                 if event.end_date_days is not None:
                     end_date = models.days_to_date(event.end_date_days)
-                    if event.end_date_days == most_recent_date:
-                        start = f"active {start}"
+                    is_active = event.end_date_days >= most_recent_date
                 event_dict = dict(
                     country=event.country,
                     start_date=start,
+                    is_active=is_active,
                     end_date=end_date,
                     event_type=str(event.event_type),
                     war=event.war,
@@ -727,7 +727,7 @@ class EventTemplateDictBuilder:
                     event_dict
                 )
 
-                if event.country not in preformatted_links:
+                if event.country is not None and event.country not in preformatted_links:
                     preformatted_links[event.country] = self._preformat_history_url(
                         event.country.country_name, country=event.country.country_id
                     )
@@ -741,11 +741,6 @@ class EventTemplateDictBuilder:
                 if event.war:
                     preformatted_links[event.war] = self._preformat_history_url(event.war.name,
                                                                                 war=event.war.war_id)
-                if not config.CONFIG.allow_backdating and event.start_date_days < 0:
-                    event_dict["start_date"] = models.days_to_date(0)
-                    event_dict["end_date"] = models.days_to_date(0)
-                    # TODO
-
             if not events[key] and self.event_filter.is_empty_filter:
                 del events[key]
         return events, details, preformatted_links, titles
@@ -768,7 +763,7 @@ class EventTemplateDictBuilder:
         if isinstance(key, models.Country):
             return key.country_name
         elif isinstance(key, models.System):
-            return key.original_name
+            return f"{key.original_name} System"
         elif isinstance(key, models.Leader):
             return key.get_name()
         elif isinstance(key, models.Planet):
@@ -915,50 +910,8 @@ class EventTemplateDictBuilder:
 
         return wars, links
 
-    def _preformat_history_url(self, text, **kwargs):
-        return f'<a class="textlink" href={flask.url_for("history_page", game_id=self.game_id, **kwargs)}>{text}</a>'
-
-
-"""
-    def __str__(self):
-        loc = ""
-        if self.planet:
-            loc += f'planet "{self.planet}"'
-        if self.system:
-            if loc:
-                loc += " in the "
-            loc += f'"{self.system.original_name}" system'
-
-        defenders = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.defenders)
-        if self.defender_war_exhaustion > 0:
-            defenders += f" ({100 * self.defender_war_exhaustion:.2f}% exhaustion)"
-
-        attackers = ", ".join(f'"{cp.war_participant.country.country_name}"' for cp in self.attackers)
-        if self.attacker_war_exhaustion > 0:
-            attackers += f" ({100 * self.attacker_war_exhaustion:.2f}% exhaustion)"
-
-        if self.combat_type == CombatType.armies:
-            result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
-            if self.attacker_victory:
-                result += f"{attackers} succeeded in invasion of {loc} against {defenders}"
-            else:
-                result += f"{defenders} defended against invasion of {loc} against {attackers}"
-        elif self.combat_type == CombatType.ships:
-            result = f"{days_to_date(self.date)}: {str(self.combat_type)}: "
-            if self.attacker_victory:
-                result += f"{attackers} defeated {defenders} in the {loc}"
-            else:
-                result += f"{attackers} were defeated by {defenders} in the {loc}"
-        else:
-            result = f"{days_to_date(self.date)}: {str(self.combat_type)} {loc}: "
-            if self.attacker_victory:
-                result += f"{attackers} defeated {defenders}"
-            else:
-                result += f"{attackers} were defeated by {defenders}"
-
-        return result
-
-"""
+    def _preformat_history_url(self, text, a_class="textlink", **kwargs):
+        return f'<a class="{a_class}" href={flask.url_for("history_page", game_id=self.game_id, **kwargs)}>{text}</a>'
 
 
 def get_country_color(country_name: str, alpha: float = 1.0) -> str:
