@@ -49,9 +49,9 @@ def _get_default_save_path():
 def _get_default_base_output_path():
     system = platform.system()
     if system == "Linux":
-        return pathlib.Path.home() / default_paths.linux_output_path
+        return pathlib.Path.cwd() / default_paths.linux_output_path
     elif system == "Windows":
-        return pathlib.Path.home() / default_paths.win_output_path
+        return pathlib.Path.cwd() / default_paths.win_output_path
     return None
 
 
@@ -68,7 +68,6 @@ DEFAULT_SETTINGS = dict(
     save_name_filter="",
     read_only_every_nth_save=1,
     debug_mode=False,
-    allow_backdating=True,
     only_read_player_history=False,
 )
 
@@ -94,7 +93,6 @@ class Config:
     save_name_filter: str = None
     read_only_every_nth_save: int = None
 
-    allow_backdating = True
     only_read_player_history = False
 
     PATH_KEYS = {
@@ -106,7 +104,6 @@ class Config:
         "extract_system_ownership",
         "show_everything",
         "only_show_default_empires",
-        "allow_backdating",
         "only_read_player_history",
     }
     INT_KEYS = {
@@ -163,7 +160,6 @@ class Config:
             "only_read_player_history": self.only_read_player_history,
             "read_only_every_nth_save": self.read_only_every_nth_save,
             "save_name_filter": self.save_name_filter,
-            "allow_backdating": self.allow_backdating,
             "threads": self.threads,
         }
 
