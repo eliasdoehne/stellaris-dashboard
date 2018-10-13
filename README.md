@@ -4,27 +4,28 @@ The stellaris dashboard is a program that reads your Stellaris save files while 
 
 # Features
 
-There are two main components: A **timeline dashboard** which shows you graphs of many statistics about the empires in your game, and a **text ledger** listing the events that define the history of your game.
+There are two main components: A **timeline dashboard** which shows you graphs of many statistics about the empires in your game, and an **event ledger** listing the events that define the history of your game.
 
-By using [the game mod](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202) available on the steam workshop, the entire functionality of the dashboard is available in-game through the integrated browser.
+By using [the game mod](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202) available on the steam workshop, the dashboard is available directly in-game through the integrated browser (by clicking the help icon).
 
 **Important**: This program only works for **singleplayer** games. Also, other mods may or may not work, the program is developed with the vanilla game in mind. Which version of Stellaris is supported by a particular release should be annotated in the release notes, so if you use an older version of Stellaris, you could download one of the older releases, or try your luck with the most recent one.
 
 ## Timeline Dashboard
 
-Here is an animation of the timeline dashboard in action:
+Here is an animation of the timeline dashboard in action: 
 
 https://gfycat.com/RealAnguishedAustralianfreshwatercrocodile
 (the animation is old, but it shows the concept)
 
-The timeline dashboard shows information about:
+The graphs show information about:
 
-  - Economy: detailed categorized energy, mineral and food budgets (categories include production, sector income, trade, ship and pop maintenance, enclave trade deals...)
+  - Economy: detailed energy, mineral and food budgets
   - Science: number of techs, research output, exploration (number of surveyed objects)
   - Population: number of pops, species demographics
   - Factions: size, support and happiness of each faction
   - Military: fleet strength
-  - Galaxy Map: shows which country owned which system in the past
+
+There is also a historical galaxy map showing which country owned which system in the past. (Hyperlane fog of war is not supported by the map)
 
 For game balance, only some information is shown by default: you can only see the fleet power of empires who are friendly, or who have given you active sensor links or defensive pacts. But if you want, you can also configure the program to show data of every empire by activating the "Cheat mode: Show all empires". If you select this option, you can additionally deactivate the "Only show default empires" option to also include fallen empires in the graphs.
 
@@ -32,7 +33,9 @@ For game balance, only some information is shown by default: you can only see th
 ## Event Ledger
 The second main feature is the event ledger. Here are some screenshots:
 
-https://imgur.com/a/t6858co
+https://imgur.com/a/1Zwkss5
+
+And here is an animated demo: https://gfycat.com/ClumsyOddballAmphibian
 
 You can browse through the event ledger by clicking the links, allowing you to view the history of a specific country, leader, system, or war. For each war, a combat log of major fleet battles and planet invasions is shown.
 
@@ -46,35 +49,42 @@ As with the timeline graphs, only some information is shown based on your diplom
 
 # Installation
 
-If you experience any issues, please open a github issue, or start [a discussion topic in the steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
+If you experience issues, please start [a discussion topic in the steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
+
+Before following the OS-specific instructions below, subscribe to the browser mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202). Remember to activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz). You can open the in-game internet browser by clicking on the help icon in the lower right. The dashboard can then be accessed with the buttons in the top right corner of the browser window. 
 
 ### Windows
 You can follow my [video tutorial](https://youtu.be/gXpkyL_7jNE?t=379) for the installation in Windows.
 
-  1. Subscribe to the browser mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202)
-  2. [Get Python 3.6 or 3.7](https://www.python.org/)
+  1. [Get Python 3.6 or newer](https://www.python.org/)
   ***IMPORTANT: Make sure to check the "Add Python to PATH" option in the first step of the python installer!***
-  3. Download the latest release of the dashboard [from github](https://github.com/eliasdoehne/stellaris-dashboard/releases) (Click on "Download Source Code (zip)")
-  4. Extract the archive in a location of your choice.
-  5. Run the `install.bat` file in the extracted folder by double-clicking it. At this point, Windows may show you a security warning [like this](https://imgur.com/6PIZCmA). If so, click on "More Information" to enable the "Run anyway" button.
-  6. To start the program, run `stellarisdashboard.bat`. A similar Windows security warning as before may appear.
-  7. Remember to activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz)
-  8. In-game, you can open the internet browser by clicking on the help icon in the lower right. The dashboard can be accessed with the buttons in the top right corner of the browser window. 
+  2. Download the latest release of the dashboard [from github](https://github.com/eliasdoehne/stellaris-dashboard/releases) (Click on "Download Source Code (zip)")
+  3. Extract the archive in a location of your choice.
+  4. Run the `install.bat` file in the extracted folder by double-clicking it. At this point, Windows may show you a security warning [like this](https://imgur.com/6PIZCmA). If so, click on "More Information" to enable the "Run anyway" button.
+  5. To start the program, run `stellarisdashboard.bat`. A similar Windows security warning as before may appear.
       
 ### Linux
-Ensure that you are using Python 3.6 or later when running the commands below. You probably have other, possibly incompatible versions of Python installed on your system already!
+Make sure that you are using Python 3.6 or later when running these commands. You may have other versions of Python installed on your system that are incompatible!
  
-  1. Subscribe to the browser mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202)
-  2. [Get Python 3.6 or 3.7](https://www.python.org/)
-  3. Download and extract the dashboard program where you want it
+  1. [Get Python 3.6 or newer](https://www.python.org/). In all following commands, replace `python3.6` with the python you installed. 
+  2. Download the latest release of the dashboard [from github](https://github.com/eliasdoehne/stellaris-dashboard/releases) (Click on "Download Source Code (zip)")
+  3. Extract the archive in a location of your choice.
   4. Open a terminal in that folder and run `python3.6 -m venv env` to create a virtual environment
   5. Run `source env/bin/activate` to activate the virtual environment (important!)
   6. Run `python3.6 -m pip install -e .` to install the dashboard.
-  8. Activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz)
-  9. To start the program, run `stellarisdashboard` (Remember to always first activate your virtual environment with `source env/bin/activate`)
-  10. In-game, you can open the internet browser by clicking on the help icon in the lower right. The dashboard can be accessed with the buttons in the top right corner of the browser window.
+  7. To start the program, run `stellarisdashboard` (Remember to first activate your virtual environment with `source env/bin/activate`)
 
-These instructions may also work on Mac OS X, although I cannot test this or help with any problems.
+These instructions should also work on Mac OS X, although I cannot test this. Mac users should also follow the cython instructions in the next section to improve the performance of the program.
+
+### Cython
+This section is only important if you see an error message mentioning Cython.
+
+The dashboard uses a Cython extension to accelerate the processing of save files. Binaries are included for some common platforms, but you can also build it yourself:
+
+  1. Install a C compiler and install cython following the instructions at http://docs.cython.org/en/latest/src/quickstart/install.html
+  2. Install the dashboard using the instructions above.
+
+The program should run with the Cython error, but it will be much slower.
 
 # Other information
 
@@ -86,29 +96,28 @@ The Hardware requirements depend on several factors:
   - How fast you play / how much you pause the game. 
   - Autosave frequency
 
-If the dashboard cannot keep up, it may miss some data. If you have a quad-core CPU or better, I suggest allowing 2 threads. If the program cannot keep up, you can also change the "Only read every n-th save" option in the settings menu. For example, if you set it to 3, the dashboard will only read every third save. Another option that can help with the performance is "Extract system ownership".
+If the dashboard cannot keep up, it may miss some data. If you have a quad-core CPU or better, I suggest allowing 2 threads in the settings menu. You can also change the "Only read every n-th save" option in the settings menu. For example, if you set it to 3, the dashboard will only read every third save. Another option that can help with the performance is "Extract system ownership".
 
-As for disk space, the database itself should only require a few megabytes. The data for each game is stored in a separate database in your output folder named by the game ID, so you can delete them individually if you wish.
+For disk space, the database itself should only require a few megabytes per century of gametime. The data for each game is stored in a separate database in your output folder named by the game ID, so you can delete them individually.
 
-Stellaris always deletes the oldest autosave so only the most recent files are kept. If you plan a long game and want to be able to re-generate the database later (in case I release an update or if something goes wrong), you need to continually backup the save files yourself. This requires much more disk space for all the save files, but allows you to rebuild the full database at any point using the command `stellarisdashboardcli parse_saves --save-path *path to your save_backup*`. If you do this, I recommend only backing up the auto-save files, as the saves are processed in alphabetical order, and the dashboard expects to process them chronologically.
+Stellaris always deletes the oldest autosave so only the most recent files are kept. If you plan a long game and want to be able to re-generate the database later (in case I release an update or if something goes wrong), you need to continually backup the save files yourself. This requires more disk space for all the save files, but allows you to rebuild the full database at any point using the command `stellarisdashboardcli parse_saves --save-path *path to your save_backup*`. If you do this, I recommend only backing up auto-save files, as the saves are processed in alphabetical order, and the dashboard expects to process them in order of increasing in-game time.
 
 
 ## Update notifications
 Since the dashboard is still a work in progress, I occasionally release updates. If a new version of the dashboard program is released I can update the mod in the Steam workshop, and you will see a notification in the dashboard UI. 
 
-This notification can be shown because the workshop mod contains a version ID, allowing the dashboard to compare its own version to this ID. The dashboard program itself does not send any data. It only runs locally on your computer.
+This notification can be shown because the workshop mod contains a version ID, allowing the dashboard to compare its own version to this ID. The dashboard program itself does not send any data. It only runs locally on your computer. You can disable update notifications in the settings menu.
 
 ## Why a separate program?
 The dashboard is quite complex and to my knowledge, making a mod with these features by editing the game files would be impossible, or at least much more difficult. This is why you have to run the external program to use the dashboard.
 
 # Known Issues
 
-  1. Budget numbers (especially for food, and if sectors are involved) do not always match up exactly (but should be reasonably close)
-  2. Star systems that are added to the map mid-game (e.g. precursor homeworlds) are currently not added to the database.
-  3. Loading old save files may mess up the data base.
-  4. Renaming things (leaders, planets, systems etc) might cause issues.
+  1. Budget numbers (especially if sectors are involved) may not always match up exactly (but should be close)
+  2. Loading save files out of order (with respect to in-game time) is not supported, and this will screw up the data.
+  3. Renaming things (leaders, planets, systems etc) after they have been added to the database might cause issues.
  
-If an error occurs, please try restarting the dashboard. If you run into problems that don't go away after restarting, please open a github issue, or start a discussion topic [on the Steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
+If an error occurs, please try restarting the dashboard program. If you run into problems that don't go away after restarting, please start a new discussion topic [on the Steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
    
 
 # Acknowledgements
