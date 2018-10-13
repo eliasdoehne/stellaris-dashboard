@@ -11,6 +11,7 @@ import flask
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template, request, redirect
+from pkg_resources import parse_version
 
 from stellarisdashboard import config, models, visualization_data, game_info
 
@@ -22,11 +23,15 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.1.5"
+VERSION_ID = "v0.2.0"
 
 
 def is_old_version(requested_version: str) -> bool:
-    return requested_version != VERSION_ID
+    try:
+        req_version = parse_version(requested_version)
+        return parse_version(VERSION_ID) < req_version
+    except Exception:
+        return False
 
 
 @flask_app.route("/")

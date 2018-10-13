@@ -2,13 +2,13 @@
 
 The stellaris dashboard is a program that reads your Stellaris save files while you play the game and shows you more detailed information and stats about your playthrough. 
 
+**Important**: This program only works for **singleplayer** games.
+
 # Features
 
 There are two main components: A **timeline dashboard** which shows you graphs of many statistics about the empires in your game, and an **event ledger** listing the events that define the history of your game.
 
 By using [the game mod](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202) available on the steam workshop, the dashboard is available directly in-game through the integrated browser (by clicking the help icon).
-
-**Important**: This program only works for **singleplayer** games. Also, other mods may or may not work, the program is developed with the vanilla game in mind. Which version of Stellaris is supported by a particular release should be annotated in the release notes, so if you use an older version of Stellaris, you could download one of the older releases, or try your luck with the most recent one.
 
 ## Timeline Dashboard
 
@@ -116,7 +116,8 @@ The dashboard is quite complex and to my knowledge, making a mod with these feat
   1. Budget numbers (especially if sectors are involved) may not always match up exactly (but should be close)
   2. Loading save files out of order (with respect to in-game time) is not supported, and this will screw up the data.
   3. Renaming things (leaders, planets, systems etc) after they have been added to the database might cause issues.
- 
+  4. The dashboard may not work with other mods, it is developed with the vanilla game in mind.   
+  
 If an error occurs, please try restarting the dashboard program. If you run into problems that don't go away after restarting, please start a new discussion topic [on the Steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
    
 

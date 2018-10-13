@@ -37,8 +37,6 @@ except RuntimeError as e:
     print("Using pre-built C-extension if available, or (slow) fallback solution.")
     extension_modules = []
 
-# TODO: Fix the Cython extensions!
-
 setup(
     name="stellarisdashboard",
     ext_modules=extension_modules,
