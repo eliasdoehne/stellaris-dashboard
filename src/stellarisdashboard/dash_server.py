@@ -1,3 +1,5 @@
+"""This file contains the code for the flask server hosting the visualizations and the event ledger."""
+
 import logging
 import random
 import time
@@ -17,6 +19,7 @@ from stellarisdashboard import config, models, visualization_data, game_info
 
 logger = logging.getLogger(__name__)
 
+# Initialize Flask, requests to /timeline/... are handled by the dash framework, all others via the flask routes defined below.
 flask_app = flask.Flask(__name__)
 flask_app.logger.setLevel(logging.DEBUG)
 timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=False, url_base_pathname="/timeline/")
@@ -26,20 +29,17 @@ timeline_app.scripts.config.serve_locally = True
 VERSION_ID = "v0.2.0"
 
 
-def is_old_version(requested_version: str) -> bool:
-    try:
-        req_version = parse_version(requested_version)
-        return parse_version(VERSION_ID) < req_version
-    except Exception:
-        return False
-
-
 @flask_app.route("/")
 @flask_app.route("/checkversion/<version>/")
 def index_page(version=None):
+    """ Show a list of known games with database files.
+
+    :param version: Used to check for updates.
+    :return:
+    """
     show_old_version_notice = False
     if config.CONFIG.check_version and version is not None:
-        show_old_version_notice = is_old_version(version)
+        show_old_version_notice = _is_old_version(version)
     games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
     return render_template(
         "index.html",
@@ -60,7 +60,7 @@ def history_page(
 ):
     show_old_version_notice = False
     if version is not None:
-        show_old_version_notice = is_old_version(version)
+        show_old_version_notice = _is_old_version(version)
     if game_id is None:
         game_id = ""
 
@@ -72,38 +72,22 @@ def history_page(
     game_id = matches[0]
     country = games_dict[game_id]
 
-    country_id = request.args.get("country", None)
-    leader_id = request.args.get("leader", None)
-    system_id = request.args.get("system", None)
-    war_id = request.args.get("war", None)
-    planet_id = request.args.get("planet", None)
-    min_date = request.args.get("min_date", float("-inf"))
-    is_filtered_page = any([country_id, leader_id, system_id, war_id, planet_id])
-    event_filter = EventFilter(
-        min_date=min_date,
-        country_filter=country_id,
-        war_filter=war_id,
-        leader_filter=leader_id,
-        system_filter=system_id,
-    )
+    event_filter = get_event_filter()
 
-    page_title = "Global Event Ledger"
     with models.get_db_session(game_id) as session:
         dict_builder = EventTemplateDictBuilder(
             session, game_id, event_filter
         )
         preformatted_links = {}
-        if is_filtered_page:
-            page_title = f"History {country_id} {leader_id} {system_id}"
         wars = []
-        if not is_filtered_page or war_id is not None:
+        if event_filter.has_war_logs:
             wars, links = dict_builder.get_war_dicts()
             preformatted_links.update(links)
         events, details, links, title = dict_builder.get_event_and_link_dicts()
         preformatted_links.update(links)
     return render_template(
         "history_page.html",
-        page_title=page_title,
+        page_title=event_filter.page_title,
         game_name=game_id,
         country=country,
         wars=wars,
@@ -111,27 +95,48 @@ def history_page(
         details=details,
         links=preformatted_links,
         title=title,
-        is_filtered_page=is_filtered_page,
+        is_filtered_page=not event_filter.is_empty_filter,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
         update_version_id=version,
     )
 
 
-@flask_app.route("/country/<country_id>")
-def country(country_id=None):
-    return f"Hello Country {country_id}"
+def get_event_filter() -> "EventFilter":
+    country_id = request.args.get("country", None)
+    leader_id = request.args.get("leader", None)
+    system_id = request.args.get("system", None)
+    war_id = request.args.get("war", None)
+    planet_id = request.args.get("planet", None)
+    min_date = request.args.get("min_date", float("-inf"))
+    event_filter = EventFilter(
+        min_date=min_date,
+        country_filter=country_id,
+        war_filter=war_id,
+        leader_filter=leader_id,
+        system_filter=system_id,
+        planet_filter=planet_id,
+    )
+    return event_filter
 
 
-@flask_app.route("/system/<system_id>")
-def system(system_id=None):
-    return f"Hello System {system_id}"
+def _is_old_version(requested_version: str) -> bool:
+    """ Compares the requested version against the VERSION_ID defined above.
+
+    :param requested_version: The version of the dashboard requested by the URL.
+    :return:
+    """
+    try:
+        req_version = parse_version(requested_version)
+        return parse_version(VERSION_ID) < req_version
+    except Exception:
+        return False
 
 
 @flask_app.route("/settings/")
 @flask_app.route("/settings")
 def settings_page():
-    def _convert_python_bool_to_lowercase(py_bool):
+    def _convert_python_bool_to_lowercase(py_bool: bool) -> str:
         return "true" if py_bool else "false"
 
     t_int = "int"
@@ -201,7 +206,6 @@ def settings_page():
 def apply_settings():
     previous_settings = config.CONFIG.get_adjustable_settings_dict()
     settings = request.form.to_dict(flat=True)
-    print(settings)
     for key in settings:
         if key in config.Config.BOOL_KEYS:
             settings[key] = key in settings  # only checked items are included in form data
@@ -217,6 +221,7 @@ def apply_settings():
     return redirect("/")
 
 
+# SOME CSS ATTRIBUTES FOR THE DASH FRAMEWORK
 DARK_THEME_BACKGROUND = 'rgba(33,43,39,1)'
 DARK_THEME_GALAXY_BACKGROUND = 'rgba(0,0,0,1)'
 DARK_THEME_BACKGROUND_DARK = 'rgba(20,25,25,1)'
@@ -224,16 +229,12 @@ BACKGROUND_PLOT_DARK = 'rgba(43,59,52,1)'
 DARK_THEME_TEXT_COLOR = 'rgba(217,217,217,1)'
 DARK_THEME_TEXT_HIGHLIGHT_COLOR = 'rgba(195, 133, 33, 1)'
 DEFAULT_PLOT_LAYOUT = dict(
-    yaxis=dict(
-        type="linear",
-    ),
+    yaxis=dict(type="linear"),
     height=640,
     plot_bgcolor=BACKGROUND_PLOT_DARK,
     paper_bgcolor=DARK_THEME_BACKGROUND,
     font={'color': DARK_THEME_TEXT_COLOR},
 )
-
-# SOME CSS ATTRIBUTES
 BUTTON_STYLE = {
     "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
     "font-family": "verdana",
@@ -258,7 +259,6 @@ TEXT_STYLE = {
     "font-family": "verdana",
     "color": "rgba(217, 217, 217, 1)",
 }
-
 SELECTED_TAB_STYLE = {
     'width': 'inherit',
     'boxShadow': 'none',
@@ -281,9 +281,9 @@ TAB_STYLE = {
     'color': DARK_THEME_TEXT_COLOR,
 }
 
+# Define the layout of the dash app:
 CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append("Galaxy")
-
 DEFAULT_SELECTED_CATEGORY = "Budget"
 
 timeline_app.layout = html.Div([
@@ -347,13 +347,6 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     return go.Layout(**layout)
 
 
-@timeline_app.callback(Output('ledger-link', 'href'),
-                       [Input('url', 'search')])
-def update_ledger_link(search):
-    game_id, _ = _get_game_ids_matching_url(search)
-    return flask.url_for("history_page", game_id=game_id)
-
-
 @timeline_app.callback(Output('game-name-header', 'children'),
                        [Input('url', 'search')])
 def update_game_header(search):
@@ -412,20 +405,38 @@ def _get_game_ids_matching_url(url):
     return game_id, matches
 
 
-def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
-    if plot_spec.style == visualization_data.PlotStyle.line:
-        plot_list = _get_line_plot_data(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.stacked:
-        plot_list = _get_stacked_plot_data(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.budget:
-        plot_list = _get_budget_plot_data(plot_data, plot_spec)
-    else:
-        logger.warning(f"Unknown Plot type {plot_spec}")
-        plot_list = []
+def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
+    start = time.time()
+    plot_data = visualization_data.get_current_execution_plot_data(game_id)
+    plot_list = get_plot_lines(plot_data, plot_spec)
+    end = time.time()
+    logger.debug(f"Update took {end - start} seconds!")
     return plot_list
 
 
-def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData,
+                   plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
+    """
+    Depending on the plot_spec.style attribute, retrieve the data to be plotted
+    in a format that can directly be passed into a Dash Figure object.
+
+    :param plot_data:
+    :param plot_spec:
+    :return:
+    """
+    if plot_spec.style == visualization_data.PlotStyle.line:
+        return _get_line_plot_data(plot_data, plot_spec)
+    elif plot_spec.style == visualization_data.PlotStyle.stacked:
+        return _get_stacked_plot_data(plot_data, plot_spec)
+    elif plot_spec.style == visualization_data.PlotStyle.budget:
+        return _get_budget_plot_data(plot_data, plot_spec)
+    else:
+        logger.warning(f"Unknown Plot type {plot_spec}")
+        return []
+
+
+def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
+                        plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
@@ -441,7 +452,8 @@ def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
     return plot_list
 
 
-def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
+                           plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     y_previous = None
     plot_list = []
     for key, x_values, y_values in plot_data.iterate_data(plot_spec):
@@ -460,7 +472,8 @@ def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotDa
     return plot_list
 
 
-def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
+                          plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     net_gain = None
     y_previous_pos, y_previous_neg = None, None
     pos_initiated = False
@@ -472,7 +485,8 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
             net_gain = [0.0 for _ in x_values]
             y_previous_pos = [0.0 for _ in x_values]
             y_previous_neg = [0.0 for _ in x_values]
-        fill_mode = "tozeroy"
+        fill_mode = "tozeroy"  # tonexty would be better, but for expenses, it always shades the region to the nearest lower line.
+        # Importantly, for any given category all entries must either be <=0 for expenses or >=0 for income.
         if all(y <= 0 for y in y_values):
             y_previous = y_previous_neg
         elif all(y >= 0 for y in y_values):
@@ -505,10 +519,16 @@ def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotDat
     return plot_list
 
 
-def get_galaxy(game_id, date):
+def get_galaxy(game_id: str, date: float) -> dcc.Graph:
+    """ Generate the galaxy map, ready to be used in the Dash layout.
+
+    :param game_id:
+    :param date:
+    :return:
+    """
     # adapted from https://plot.ly/python/network-graphs/
     galaxy = visualization_data.get_galaxy_data(game_id)
-    graph = galaxy.get_graph_for_date(date)
+    graph = galaxy.get_graph_for_date(int(date))
     edge_traces_data = {}
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
@@ -525,7 +545,7 @@ def get_galaxy(game_id, date):
             )
         x0, y0 = graph.nodes[edge[0]]['pos']
         x1, y1 = graph.nodes[edge[1]]['pos']
-        # insert None to prevent dash from rendering a single lingle
+        # insert None to prevent dash from joining the lines
         edge_traces_data[country]['x'] += [x0, x1, None]
         edge_traces_data[country]['y'] += [y0, y1, None]
         edge_traces_data[country]['text'] += [country]
@@ -587,9 +607,7 @@ def get_galaxy(game_id, date):
         plot_bgcolor=DARK_THEME_GALAXY_BACKGROUND,
         paper_bgcolor=BACKGROUND_PLOT_DARK,
         font={'color': DARK_THEME_TEXT_COLOR},
-
     )
-
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
@@ -647,6 +665,27 @@ class EventFilter:
                 and self.planet_filter is None
                 and self.leader_filter is None
                 and self.faction_filter is None)
+
+    @property
+    def has_war_logs(self) -> bool:
+        return self.is_empty_filter or self.war_filter is not None
+
+    @property
+    def page_title(self) -> str:
+        if self.is_empty_filter:
+            return "Global Event Ledger"
+        elif self.country_filter is not None:
+            return "Empire history"
+        elif self.war_filter is not None:
+            return "War log"
+        elif self.system_filter is not None:
+            return "System history"
+        elif self.planet_filter is not None:
+            return "Planet history"
+        elif self.leader_filter is not None:
+            return "Leader Biography"
+        elif self.faction_filter is not None:
+            return "Faction history"
 
     def include_event(self, event: models.HistoricalEvent) -> bool:
         result = all([
@@ -935,15 +974,6 @@ def get_most_recent_date(session):
     else:
         most_recent_date = most_recent_gs.date
     return most_recent_date
-
-
-def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
-    start = time.time()
-    plot_data = visualization_data.get_current_execution_plot_data(game_id)
-    plot_list = get_plot_lines(plot_data, plot_spec)
-    end = time.time()
-    logger.debug(f"Update took {end - start} seconds!")
-    return plot_list
 
 
 def start_server():
