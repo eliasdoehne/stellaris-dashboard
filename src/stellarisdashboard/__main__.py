@@ -8,6 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    """ Entry point for the default execution:
+
+    1. Start the flask server which hosts the visualizations
+    2. Begin monitoring for new save files
+    """
     polling_interval = 0.5
     stop_event = threading.Event()
     t_server = threading.Thread(target=dash_server.start_server, daemon=True)

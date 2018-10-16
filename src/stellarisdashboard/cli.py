@@ -1,3 +1,11 @@
+"""
+This file defines the command line interface for the Stellaris dashboard, and contains the functions
+for the top-level functionality of each dashboard feature.
+
+The CLI functions which are annotated with click decorators are only thin wrappers that call the
+corresponding function defined immediately below. This allows reusing the code in __main__.py.
+"""
+
 import logging
 import multiprocessing as mp
 import threading
@@ -9,16 +17,16 @@ from stellarisdashboard import config, save_parser, timeline, visualization_data
 
 logger = logging.getLogger(__name__)
 
-
-@click.group()
-def cli():
-    pass
-
-
+# These messages are shown by the CLI
 save_path_help_string = 'The path where the Stellaris save files are stored. This should be the path to the folder containing the save folders for each game.'
 game_name_help_string = 'An identifier of the game that you want to visualize. It matches prefixes, such that "--game-name uni" matches the game id "unitednationsofearth_-15512622", but not "lokkenmechanists_1256936305"'
 showeverything_help_string = 'Use this flag if you want to include all empires regardless of visibility.'
 threads_help_string = 'The number of threads that run in parallel when reading save games.'
+
+
+@click.group()
+def cli():
+    pass
 
 
 @cli.command()
@@ -29,6 +37,15 @@ def visualize(game_name, showeverything):
 
 
 def f_visualize_mpl(game_name_prefix: str, show_everything=False):
+    """
+    Export a static visualization using matplotlib.
+
+    Image files are saved to the output folder.
+
+    :param game_name_prefix: Visualizations are generated for all games matching this prefix.
+    :param show_everything: Override the option from the dashboard settings.
+    :return:
+    """
     config.CONFIG.show_everything = show_everything
     matching_games = models.get_known_games(game_name_prefix)
     if not matching_games:
@@ -54,6 +71,16 @@ def visualize_game_comparison(game_name, showeverything):
 
 
 def f_visualize_mpl_comparison(game_name_prefix: str, show_everything=True):
+    """
+    Generate a static comparative visualization of multiple games using matplotlib.
+    Useful to AI modders to evaluate how well their changes perform against the default AI.
+
+    Image files are saved to the output folder.
+
+    :param game_name_prefix: Visualizations are generated for all games matching this prefix.
+    :param show_everything: Override the option from the dashboard settings.
+    :return:
+    """
     config.CONFIG.show_everything = show_everything
     matching_games = models.get_known_games(game_name_prefix)
     if not matching_games:
@@ -86,6 +113,14 @@ def monitor_saves(save_path, polling_interval):
 
 
 def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading.Event = None):
+    """
+    Monitor the save path for new files, and maintain the corresponding plot data.
+
+    :param polling_interval: How often the path is checked for new files
+    :param save_path: Override for the path defined in the config.CONFIG object.
+    :param stop_event: Signals that the program is shutting down.
+    :return:
+    """
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     if polling_interval is None:
@@ -119,7 +154,7 @@ def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading
 @cli.command()
 @click.option('--threads', type=click.INT, help=threads_help_string)
 @click.option('--save-path', type=click.Path(exists=True, file_okay=False), help=save_path_help_string)
-@click.option('--game-name', type=click.STRING, help=game_name_help_string)
+@click.option('--game-name', type=click.STRING, help=game_name_help_string, default="")
 def parse_saves(threads, save_path, game_name):
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
