@@ -13,15 +13,15 @@ from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from stellarisdashboard import config, game_info
 
 logger = logging.getLogger(__name__)
-_ENGINES = {}
-_SESSIONMAKERS = {}
+
 DB_PATH: pathlib.Path = config.CONFIG.base_output_path / "db"
 if not DB_PATH.exists():
     logger.info(f"Creating database path {DB_PATH}")
     DB_PATH.mkdir()
 
 Base = declarative_base()
-
+_ENGINES = {}
+_SESSIONMAKERS = {}
 _DB_LOCK = threading.Lock()
 
 
@@ -45,6 +45,7 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
             s.close()
 
 
+### Some enum types representing various in-game concepts
 @enum.unique
 class GovernmentAuthority(enum.Enum):
     democratic = 0
@@ -131,8 +132,6 @@ class CombatType(enum.Enum):
 
     other = 99
 
-    # TODO are there other types of war events?
-
     def __str__(self):
         return self.name
 
@@ -153,7 +152,7 @@ class WarOutcome(enum.Enum):
 @enum.unique
 class WarGoal(enum.Enum):
     """
-    A list of possible wargoals, taken/adapted from https://stellaris.paradoxwikis.com/War_goals
+    A list of possible wargoals, adapted from https://stellaris.paradoxwikis.com/War_goals
     """
     wg_conquest = 0
     wg_force_ideology = 1
@@ -379,12 +378,25 @@ class HistoricalEventType(enum.Enum):
         return self.name
 
 
-def date_to_days(date_str: str) -> float:
+### Some convenience functions
+def date_to_days(date_str: str) -> int:
+    """ Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
+    2200.01.01.
+
+    :param date_str: Date in YYYY.MM.DD format
+    :return: Days passed since 2200.01.01
+    """
     y, m, d = map(int, date_str.split("."))
     return (y - 2200) * 360 + (m - 1) * 30 + d - 1
 
 
 def days_to_date(days: float) -> str:
+    """ Converts an integer counting the days passed in-game since 2200.01.01 to a readable date in YYYY.MM.DD format
+    (In Stellaris, there are 12 months with 30 days each)
+
+    :param date_str: Date in YYYY.MM.DD format
+    :return: Days passed since 2200.01.01
+    """
     days = int(days)
     year_offset = days // 360
     days -= 360 * year_offset
@@ -395,6 +407,7 @@ def days_to_date(days: float) -> str:
     return f"{year:04}.{month:02}.{day:02}"
 
 
+### Some helper functions to conveniently access the databases.
 def get_last_modified_time(path: pathlib.Path) -> int:
     return path.stat().st_mtime
 
@@ -424,6 +437,7 @@ def get_gamestates_since(game_name, date):
             yield gs
 
 
+### Database models
 class Game(Base):
     """Root object representing an entire game."""
     __tablename__ = 'gametable'
@@ -440,6 +454,7 @@ class Game(Base):
 
 
 class System(Base):
+    """ Represents a single star system/galactic_object. """
     __tablename__ = 'systemtable'
     system_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
@@ -461,6 +476,12 @@ class System(Base):
     historical_events = relationship("HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan")
 
     def get_owner_country_id_at(self, time_in_days: int) -> int:
+        """
+        Get the (database) country ID of the empire that owned this system.
+
+        :param time_in_days:
+        :return: Database country ID
+        """
         if not self.ownership:
             return -1
         # could be slow, but fine for now
@@ -482,6 +503,7 @@ class System(Base):
 
 
 class SystemOwnership(Base):
+    """ Represent the timespan during which some empire owned a given system. """
     __tablename__ = 'systemownershiptable'
     system_ownership_id = Column(Integer, primary_key=True)
 
@@ -499,6 +521,10 @@ class SystemOwnership(Base):
 
 
 class HyperLane(Base):
+    """
+    Represent hyperlane connections between systems. While the HyperLane is
+    represented as a directed edge, it should be interpreted as undirected.
+     """
     __tablename__ = "hyperlanetable"
     hyperlane_id = Column(Integer, primary_key=True)
 
@@ -616,8 +642,10 @@ class Country(Base):
 
 class Government(Base):
     """
-    Representation of a country's government, as specified by the country name, the government type (flavor text, e.g. "executive committee"),
-    the governing authority (e.g. "Democracy"), the date range, as well as the governing ethics and civics.
+    Representation of a country's government, as specified by the country name,
+    the government type (flavor text, e.g. "executive committee"), the governing
+    authority (e.g. "Democracy"), the date range, as well as the governing ethics
+    and civics.
     """
     __tablename__ = 'govtable'
     gov_id = Column(Integer, primary_key=True)
@@ -737,6 +765,28 @@ class CountryData(Base):
     pop_counts = relationship("PopCount", back_populates="country_data", cascade="all,delete,delete-orphan")
     faction_support = relationship("FactionSupport", back_populates="country_data", cascade="all,delete,delete-orphan")
 
+    def show_geography_info(self):
+        return self.country.is_player or self.attitude_towards_player.is_known()
+
+    def show_tech_info(self):
+        return self.country.is_player or self.has_research_agreement_with_player or self.attitude_towards_player.reveals_technology_info()
+
+    def show_economic_info(self):
+        return self.country.is_player or self.has_sensor_link_with_player or self.attitude_towards_player.reveals_economy_info()
+
+    def show_demographic_info(self):
+        return (self.country.is_player
+                or self.attitude_towards_player.reveals_demographic_info()
+                or self.has_sensor_link_with_player
+                or self.has_migration_treaty_with_player)
+
+    def show_military_info(self):
+        return (self.country.is_player
+                or self.has_sensor_link_with_player
+                or self.attitude_towards_player.reveals_military_info()
+                or self.has_defensive_pact_with_player
+                or self.has_federation_with_player)
+
 
 class Species(Base):
     """Represents a species in a game. Not tied to any specific time."""
@@ -797,6 +847,7 @@ class FactionSupport(Base):
 
 
 class War(Base):
+    """ Wars are represented by a list of participants and a list of combat events. """
     __tablename__ = 'wartable'
     war_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
@@ -854,6 +905,11 @@ class Combat(Base):
 
 
 class CombatParticipant(Base):
+    """
+    CombatParticipants have their own model, because a single combat engagement may have
+    more than two combatants, and the attacker in a single combat may be the defender in the
+    overall war.
+    """
     __tablename__ = 'combatparticipant'
     combat_participant_id = Column(Integer, primary_key=True)
 
@@ -928,9 +984,9 @@ class SharedDescription(Base):
 
 class HistoricalEvent(Base):
     """
-    This class represents arbitrary historical events for the text ledger.
+    This class represents various historical events used for the text ledger.
     The event_type specifies which event is encoded, depending on which
-    certain columns may or may not be null.
+    certain columns may be null.
     """
     __tablename__ = "historicaleventtable"
     historical_event_id = Column(Integer, primary_key=True)
@@ -967,7 +1023,15 @@ class HistoricalEvent(Base):
         text = f"{start_date} - {end_date}: {str(self.event_type)}"
         return text
 
-    def get_description(self):
+    def get_description(self) -> Union[str, None]:
+        """
+        Process the SharedDescription associated with the event (if any) and convert it to a string.
+
+        Returns None if no SharedDescription exists, allowing the corresponding entry to be deleted
+        from the event dictionary before it is passed to the template.
+
+        :return: Text contained in the SharedDescription, or None if none exists.
+        """
         if self.event_type == HistoricalEventType.tradition:
             return game_info.convert_id_to_name(self.description.text, remove_prefix="tr")
         elif self.event_type == HistoricalEventType.researched_technology:

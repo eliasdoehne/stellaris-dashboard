@@ -18,7 +18,7 @@ COLOR_ENGINEERING = (0.75, 0.59, 0.12)
 
 @enum.unique
 class PlotStyle(enum.Enum):
-    """ Used to define the kind of visualization that is specified by a given PlotSpecification (defined below)"""
+    """ Defines the kind of visualization associated with a given PlotSpecification (defined below)"""
     line = 0
     stacked = 1
     budget = 2
@@ -27,19 +27,20 @@ class PlotStyle(enum.Enum):
 @dataclasses.dataclass
 class PlotSpecification:
     """
-    This class is used to define all the different visualizations in a way that is
-    independent of the frontend, so that they can be defined in a single place for
+    This class is used to define all available visualizations in a way that is
+    independent of the frontend, such that they can be defined in a single place for
     both matplotlib and plotly.
     """
     plot_id: str
     title: str
 
-    # this function specifies how the corresponding value can be obtained from the EmpireProgressionPlotData instance:
+    # This function specifies how the associated data can be obtained from the EmpireProgressionPlotData instance.
     plot_data_function: Callable[["EmpireProgressionPlotData"], Any]
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
 
+### Define PlotSpecifications for all currently supported plots
 POP_COUNT_GRAPH = PlotSpecification(
     plot_id='pop-count-graph',
     title="Total Population",
@@ -159,7 +160,8 @@ EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.empire_food_budget,
     style=PlotStyle.budget,
 )
-# This specifies how the plots should be laid out in tabs by the plotly frontend
+
+# This dictionary specifies how the plots should be laid out in tabs by the plotly frontend
 # and how they should be split to different image files by matplotlib
 THEMATICALLY_GROUPED_PLOTS = {
     "Budget": [
@@ -195,10 +197,18 @@ THEMATICALLY_GROUPED_PLOTS = {
     ],
 }
 
+# The EmpireProgressionPlotData is cached here for each "active" game
+# (one that was requested or had a save file parsed in the current execution).
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
 
 
 def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotData":
+    """
+    Update and retrieve the EmpireProgressionPlotData object stored for the requested game.
+
+    :param game_name: The exact name of a game for which a database is available
+    :return:
+    """
     global _CURRENT_EXECUTION_PLOT_DATA
     if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
         with models.get_db_session(game_name) as session:
@@ -211,49 +221,50 @@ def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotDat
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
-def show_geography_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.attitude_towards_player.is_known()
-
-
-def show_tech_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.has_research_agreement_with_player or country_data.attitude_towards_player.reveals_technology_info()
-
-
-def show_economic_info(country_data: models.CountryData):
-    return country_data.country.is_player or country_data.has_sensor_link_with_player or country_data.attitude_towards_player.reveals_economy_info()
-
-
-def show_demographic_info(country_data: models.CountryData):
-    return (country_data.country.is_player
-            or country_data.attitude_towards_player.reveals_demographic_info()
-            or country_data.has_sensor_link_with_player
-            or country_data.has_migration_treaty_with_player)
-
-
-def show_military_info(country_data: models.CountryData):
-    return (country_data.country.is_player
-            or country_data.has_sensor_link_with_player
-            or country_data.attitude_towards_player.reveals_military_info()
-            or country_data.has_defensive_pact_with_player
-            or country_data.has_federation_with_player)
-
-
 def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0) -> Tuple[float, float, float]:
+    """
+    Generate RGB values for the given identifier. Some special values (tech categories)
+    have hardcoded colors to roughly match the game's look and feel.
+
+    For unknown identifiers, a random color is generated. Colors should be consistent, as the
+    random instance is seeded with the identifier.
+
+    Optionally, min- and max-values can be passed in to avoid colors that are hard to see against
+    the background. This may be configurable in a future version.
+
+    :param key_str: A (unique) identifier with which the color should be associated (e.g. legend entry)
+    :param range_min: Minimum value of each color component
+    :param range_max: Maximum value of each color component
+    :return: RGB values
+    """
     if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
     elif key_str.lower() == "society":
         r, g, b = COLOR_SOCIETY
     elif key_str.lower() == "engineering":
         r, g, b = COLOR_ENGINEERING
-    elif key_str == GalaxyMapData.UNCLAIMED:
+    elif key_str == GalaxyMapData.UNCLAIMED:  # for unclaimed system in the galaxy map
         r, g, b = 255, 255, 255
     else:
-        random.seed(key_str)
+        random.seed(key_str)  # to keep empire colors consistent between plots
         r, g, b = [random.uniform(range_min, range_max) for _ in range(3)]
     return r, g, b
 
 
 class EmpireProgressionPlotData:
+    """
+    Responsible for extracting the data for various plots from the database and
+    maintaining it in a format immediately suitable for visualization.
+
+    All data is represented as follows:
+       - A shared list of in-game dates in years
+       - For each metric, a dictionary mapping legend ID's (e.g. country names, budget categories etc)
+         to lists of float values. List entries for which no data should be shown to the player are
+         filled with NaN
+
+    The data should be accessed by calling the plot_data_function of some PlotSpecification,
+    passing the EmpireProgressionPlotData as an argument.
+    """
     DEFAULT_VAL = float("nan")
 
     def __init__(self, game_name):
@@ -467,70 +478,70 @@ class EmpireProgressionPlotData:
         return sorted(unsorted_data, key=lambda key_x_y_tup: (key_x_y_tup[2][-1], key_x_y_tup[0]), reverse=True)
 
     def _extract_pop_count(self, country_data: models.CountryData):
-        if self.show_everything or show_demographic_info(country_data):
+        if self.show_everything or country_data.show_demographic_info():
             new_val = sum(pc.pop_count for pc in country_data.pop_counts)
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.pop_count, country_data.country.country_name, new_val)
 
     def _extract_planet_count(self, country_data: models.CountryData):
-        if self.show_everything or show_geography_info(country_data):
+        if self.show_everything or country_data.show_geography_info():
             new_val = country_data.owned_planets
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.owned_planets, country_data.country.country_name, new_val)
 
     def _extract_system_count(self, country_data: models.CountryData):
-        if self.show_everything or show_geography_info(country_data):
+        if self.show_everything or country_data.show_geography_info():
             new_val = country_data.controlled_systems
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.controlled_systems, country_data.country.country_name, new_val)
 
     def _extract_energy_income(self, country_data: models.CountryData):
-        if self.show_everything or show_economic_info(country_data):
+        if self.show_everything or country_data.show_economic_info():
             new_val = country_data.energy_income - country_data.energy_spending
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.net_energy_income, country_data.country.country_name, new_val)
 
     def _extract_mineral_income(self, country_data: models.CountryData):
-        if self.show_everything or show_economic_info(country_data):
+        if self.show_everything or country_data.show_economic_info():
             new_val = country_data.mineral_income - country_data.mineral_spending
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.net_mineral_income, country_data.country.country_name, new_val)
 
     def _extract_tech_count(self, country_data: models.CountryData):
-        if self.show_everything or show_tech_info(country_data):
+        if self.show_everything or country_data.show_tech_info():
             new_val = country_data.tech_progress
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.tech_count, country_data.country.country_name, new_val)
 
     def _extract_research_output(self, country_data: models.CountryData):
-        if self.show_everything or show_tech_info(country_data):
+        if self.show_everything or country_data.show_tech_info():
             new_val = country_data.society_research + country_data.physics_research + country_data.engineering_research
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.total_research_output, country_data.country.country_name, new_val)
 
     def _extract_exploration_progress(self, country_data: models.CountryData):
-        if self.show_everything or show_tech_info(country_data):
+        if self.show_everything or country_data.show_tech_info():
             new_val = country_data.exploration_progress
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.survey_count, country_data.country.country_name, new_val)
 
     def _extract_military_strength(self, country_data: models.CountryData):
-        if self.show_everything or show_military_info(country_data):
+        if self.show_everything or country_data.show_military_info():
             new_val = country_data.military_power
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.military_power, country_data.country.country_name, new_val)
 
     def _extract_fleet_size(self, country_data: models.CountryData):
-        if self.show_everything or show_military_info(country_data):
+        if self.show_everything or country_data.show_military_info():
             new_val = country_data.fleet_size
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
@@ -627,24 +638,27 @@ _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
 
 
 def get_galaxy_data(game_name: str) -> "GalaxyMapData":
+    """
+    Similar to get_current_execution_plot_data, the GalaxyMapData for
+    each game is cached in the _GALAXY_DATA dictionary.
+    """
     if game_name not in _GALAXY_DATA:
         _GALAXY_DATA[game_name] = GalaxyMapData(game_name)
         _GALAXY_DATA[game_name].initialize_galaxy_graph()
     return _GALAXY_DATA[game_name]
 
 
-SystemID = int
-
-
 @dataclasses.dataclass
-class SystemOwnership:
+class _SystemOwnership:
+    """ Minimal representation of SystemOwnership that is not tied to a database session. """
     country: str
-    system_id: SystemID
+    system_id: int
     start: int
     end: int
 
 
 class GalaxyMapData:
+    """ Maintains the data for the historical galaxy map. """
     UNCLAIMED = "Unclaimed Systems"
 
     def __init__(self, game_id: str):
@@ -652,7 +666,7 @@ class GalaxyMapData:
         self.galaxy_graph: nx.Graph = None
         self._game_state_model = None
         self._cache_valid_date = -1
-        self._owner_cache: Dict[SystemID, List[SystemOwnership]] = None
+        self._owner_cache: Dict[int, List[_SystemOwnership]] = None
 
     def initialize_galaxy_graph(self):
         start_time = time.clock()
@@ -660,7 +674,7 @@ class GalaxyMapData:
         self.galaxy_graph = nx.Graph()
         with models.get_db_session(self.game_id) as session:
             for system in session.query(models.System).all():
-                assert isinstance(system, models.System)  # to remove IDE warnings
+                assert isinstance(system, models.System)  # to remove pycharm warnings
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
                     name=system.original_name,
@@ -672,7 +686,7 @@ class GalaxyMapData:
                 self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
         logger.debug(f"Initialized galaxy graph in {time.clock()-start_time} seconds.")
 
-    def get_graph_for_date(self, time_days):
+    def get_graph_for_date(self, time_days: int) -> nx.Graph:
         start_time = time.clock()
         if time_days > self._cache_valid_date:
             self._update_cache()
@@ -716,31 +730,33 @@ class GalaxyMapData:
         self._owner_cache = {}
         self._cache_valid_date = -1
         with models.get_db_session(self.game_id) as session:
-            ownerships = session.query(models.SystemOwnership).order_by(models.SystemOwnership.start_date_days).all()
-            for ownership in ownerships:
+            db_ownerships = session.query(models.SystemOwnership).order_by(
+                models.SystemOwnership.start_date_days
+            ).all()
+            for ownership in db_ownerships:
                 self._cache_valid_date = max(self._cache_valid_date, ownership.end_date_days)
                 system_id = ownership.system.system_id_in_game
                 name = self._get_country_name_from_id(ownership, ownership.end_date_days)
                 if system_id not in self._owner_cache:
                     self._owner_cache[system_id] = []
                     if ownership.start_date_days > 0:
-                        self._owner_cache[system_id].append(SystemOwnership(
+                        self._owner_cache[system_id].append(_SystemOwnership(
                             country=self.UNCLAIMED,
                             system_id=system_id,
                             start=0,
                             end=ownership.start_date_days,
                         ))
-                self._owner_cache[system_id].append(SystemOwnership(
+                self._owner_cache[system_id].append(_SystemOwnership(
                     country=name,
                     system_id=system_id,
                     start=ownership.start_date_days,
                     end=ownership.end_date_days,
                 ))
 
-    def _get_country_name_from_id(self, ownership: models.SystemOwnership, time_days):
-        country = ownership.country
+    def _get_country_name_from_id(self, db_ownership: models.SystemOwnership, time_days):
+        country = db_ownership.country
         if country is None:
-            logger.warning(f"{ownership} has no country!")
+            logger.warning(f"{db_ownership} has no country!")
             return GalaxyMapData.UNCLAIMED
         if config.CONFIG.show_everything:
             return country.country_name
