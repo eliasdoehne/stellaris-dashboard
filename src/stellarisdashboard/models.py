@@ -22,21 +22,22 @@ if not DB_PATH.exists():
 Base = declarative_base()
 _ENGINES = {}
 _SESSIONMAKERS = {}
-_DB_LOCK = threading.Lock()
+_DB_LOCKS = {}
 
 
 @contextlib.contextmanager
 def get_db_session(game_id) -> sqlalchemy.orm.Session:
-    with _DB_LOCK:
-        if game_id not in _SESSIONMAKERS:
-            db_file = DB_PATH / f"{game_id}.db"
-            if not db_file.exists():
-                logger.info(f"Creating database for game {game_id} in file {db_file}.")
-            engine = sqlalchemy.create_engine(f'sqlite:///{db_file}', echo=False)
-            Base.metadata.create_all(bind=engine)
-            _ENGINES[game_id] = engine
-            _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
+    if game_id not in _SESSIONMAKERS:
+        db_file = DB_PATH / f"{game_id}.db"
+        if not db_file.exists():
+            logger.info(f"Creating database for game {game_id} in file {db_file}.")
+        engine = sqlalchemy.create_engine(f'sqlite:///{db_file}', echo=False)
+        Base.metadata.create_all(bind=engine)
+        _ENGINES[game_id] = engine
+        _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
+        _DB_LOCKS[game_id] = threading.Lock()
 
+    with _DB_LOCKS[game_id]:
         session_factory = _SESSIONMAKERS[game_id]
         s = session_factory()
         try:
