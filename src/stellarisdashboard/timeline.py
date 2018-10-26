@@ -9,15 +9,19 @@ from stellarisdashboard import models, game_info, config
 logger = logging.getLogger(__name__)
 
 
+# to keep pycharm happy:
 # noinspection PyArgumentList
 class TimelineExtractor:
-    """ Process data from parsed save file dictionaries and add it to the database. """
+    """
+    Processes data from parsed gamestate dictionaries and adds it to the database.
+    Only process_gamestate should be called from outside the class.
+    """
 
-    # Some constants to represent custom "factions"
+    # Some constants to represent special pseudo-factions, to categorize pops that are unaffiliated for some reason
     NO_FACTION = "No faction"
     SLAVE_FACTION_NAME = "No faction (enslaved)"
     PURGE_FACTION_NAME = "No faction (purge)"
-    NON_SENTIENT_ROBOT_NO_FACTION = "No faction (non-sentient robot)"
+    NON_SENTIENT_ROBOT_FACTION_NAME = "No faction (non-sentient robot)"
     NO_FACTION_ID = -1
     SLAVE_FACTION_ID = -2
     PURGE_FACTION_ID = -3
@@ -27,14 +31,14 @@ class TimelineExtractor:
         NO_FACTION: models.PopEthics.no_ethics,
         SLAVE_FACTION_NAME: models.PopEthics.enslaved,
         PURGE_FACTION_NAME: models.PopEthics.purge,
-        NON_SENTIENT_ROBOT_NO_FACTION: models.PopEthics.no_ethics,
+        NON_SENTIENT_ROBOT_FACTION_NAME: models.PopEthics.no_ethics,
     }
 
     NO_FACTION_ID_MAP = {
         NO_FACTION_ID: NO_FACTION_ID,
         SLAVE_FACTION_NAME: SLAVE_FACTION_ID,
         PURGE_FACTION_NAME: PURGE_FACTION_ID,
-        NON_SENTIENT_ROBOT_NO_FACTION: NON_SENTIENT_ROBOT_FACTION_ID,
+        NON_SENTIENT_ROBOT_FACTION_NAME: NON_SENTIENT_ROBOT_FACTION_ID,
     }
 
     def __init__(self):
@@ -58,6 +62,14 @@ class TimelineExtractor:
         self._initialize_enclave_trade_info()
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
+        """
+        This is the only method that should be called. A database session is created for the
+        game identified by the game_name, and the relevant data is extracted from the gamestate_dict.
+
+        :param game_name: The game name used to identify the correct database. (e.g. "earthcustodianship_-1585140336")
+        :param gamestate_dict: A dictionary returned by the save file parser.
+        :return:
+        """
         self._random_instance.seed(game_name)
         date_str = gamestate_dict["date"]
         self._logger_str = f"{game_name} {date_str}:"
@@ -97,7 +109,6 @@ class TimelineExtractor:
             self._add_single_system(system_id_in_game)
 
     def _add_single_system(self, system_id: int, country_model: models.Country = None) -> Union[models.System, None]:
-        """ This is separated into a method since it is occasionally necessary to add individual systems after the initial scan of the galaxy. """
         system_data = self._gamestate_dict.get("galactic_object", {}).get(system_id)
         if system_data is None:
             logger.warn(f"{self._logger_str} Found no data for system with ID {system_id}!")
@@ -723,7 +734,7 @@ class TimelineExtractor:
         self._factionless_pops = {
             TimelineExtractor.SLAVE_FACTION_NAME: 0,
             TimelineExtractor.PURGE_FACTION_NAME: 0,
-            TimelineExtractor.NON_SENTIENT_ROBOT_NO_FACTION: 0,
+            TimelineExtractor.NON_SENTIENT_ROBOT_FACTION_NAME: 0,
         }
         species_demographics = {}
         pop_data = self._gamestate_dict["pop"]
@@ -750,7 +761,7 @@ class TimelineExtractor:
                 elif this_pop.get("purging") == "yes":
                     self._factionless_pops[TimelineExtractor.PURGE_FACTION_NAME] += 1
                 elif species_dict.get("class") == "ROBOT" and species_dict.get("pops_can_join_factions") == "no":
-                    self._factionless_pops[TimelineExtractor.NON_SENTIENT_ROBOT_NO_FACTION] += 1
+                    self._factionless_pops[TimelineExtractor.NON_SENTIENT_ROBOT_FACTION_NAME] += 1
 
         for species_id, pop_count in species_demographics.items():
             species_data = self._gamestate_dict["species"][species_id]
@@ -1709,6 +1720,17 @@ class TimelineExtractor:
         return matching_description
 
     def _initialize_enclave_trade_info(self):
+        """
+        Initialize a dictionary representing all possible combinations of:
+          - 3 enclave factions
+          - 6 resource trade types (pairs of resources, e.g. trade minerals for food)
+          - 3 tiers of trading amounts
+
+        The identifiers found in the save files are mapped to a dictionary, which maps
+        the type of income/expense to the numeric amount.
+
+        :return:
+        """
         trade_level_1 = [10, 20]
         trade_level_2 = [25, 50]
         trade_level_3 = [50, 100]

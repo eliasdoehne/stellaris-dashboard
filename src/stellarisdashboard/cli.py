@@ -38,9 +38,7 @@ def visualize(game_name, showeverything):
 
 def f_visualize_mpl(game_name_prefix: str, show_everything=False):
     """
-    Export a static visualization using matplotlib.
-
-    Image files are saved to the output folder.
+    Export a static visualization using matplotlib. Image files are saved to the output folder.
 
     :param game_name_prefix: Visualizations are generated for all games matching this prefix.
     :param show_everything: Override the option from the dashboard settings.

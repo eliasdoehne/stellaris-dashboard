@@ -74,6 +74,7 @@ DEFAULT_SETTINGS = dict(
 
 @dataclasses.dataclass
 class Config:
+    """ Stores the settings for the dashboard. """
     save_file_path: pathlib.Path = None
     base_output_path: pathlib.Path = None
     threads = None
