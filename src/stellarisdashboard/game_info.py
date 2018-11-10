@@ -275,7 +275,49 @@ COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES = {
     "pc_ringworld_habitable",
     "pc_habitat",
 }
-COLONIZABLE_PLANET_CLASSES = COLONIZABLE_PLANET_CLASSES_PLANETS | COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES
+
+# Planet classes for the planetary diversity mod
+# (see https://steamcommunity.com/workshop/filedetails/discussion/1466534202/3397295779078104093/)
+COLONIZABLE_PLANET_CLASSES_PD_PLANETS = {
+    "pc_antarctic",
+    "pc_deadcity",
+    "pc_retinal",
+    "pc_irradiated_terrestrial",
+    "pc_lush",
+    "pc_geocrystalline",
+    "pc_marginal",
+    "pc_irradiated_marginal",
+    "pc_marginal_cold",
+    "pc_crystal",
+    "pc_floating",
+    "pc_graveyard",
+    "pc_mushroom",
+    "pc_city",
+    "pc_archive",
+    "pc_biolumen",
+    "pc_technoorganic",
+    "pc_tidallylocked",
+    "pc_glacial",
+    "pc_frozen_desert",
+    "pc_steppe",
+    "pc_hadesert",
+    "pc_boreal",
+    "pc_sandsea",
+    "pc_subarctic",
+    "pc_geothermal",
+    "pc_cascadian",
+    "pc_swamp",
+    "pc_mangrove",
+    "pc_desertislands",
+    "pc_mesa",
+    "pc_oasis",
+    "pc_hajungle",
+    "pc_methane",
+    "pc_ammonia",
+}
+COLONIZABLE_PLANET_CLASSES = (COLONIZABLE_PLANET_CLASSES_PLANETS
+                              | COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES
+                              | COLONIZABLE_PLANET_CLASSES_PD_PLANETS)
 
 DESTROYED_BY_WEAPONS_PLANET_CLASSES = {
     "pc_shattered",
