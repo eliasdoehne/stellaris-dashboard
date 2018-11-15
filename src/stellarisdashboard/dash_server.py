@@ -191,8 +191,8 @@ def settings_page():
             "type": t_int,
             "value": current_settings["threads"],
             "max": config.CPU_COUNT,
-            "name": "Number of CPU cores",
-            "description": "Maximal number of CPU cores used for reading save files.",
+            "name": "Number of threads",
+            "description": "Maximal number of threads used for reading save files. New setting is applied after restarting the dashboard program.",
         },
     }
 
@@ -692,7 +692,7 @@ class EventFilter:
             self.min_date <= event.start_date_days <= self.max_date,
             self.country_filter is None or self.country_filter == event.country_id,
         ])
-        if not event.is_of_global_relevance and (self.is_empty_filter or self.country_filter is not None):
+        if not event.is_of_global_relevance and self.is_empty_filter:
             return False
         if self.leader_filter is not None:
             result &= event.leader_id == self.leader_filter
