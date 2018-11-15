@@ -53,6 +53,7 @@ a.button, input.button {
 
 a.button.vis_toggle {
     padding: 0.1cm;
+    font-size: 14px;
 }
 
 li.game {

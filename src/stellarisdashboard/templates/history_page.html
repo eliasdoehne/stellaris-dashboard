@@ -3,7 +3,7 @@
 
 <a class="button" href={{url_for("/timeline/", game_name=game_name)}}>Go to Timeline</a>
 {% if is_filtered_page %}
-<a class="button" href={{url_for("history_page", game_id=game_name)}}>Clear event filters</a>
+<a class="button" href={{url_for("history_page", game_id=game_name)}}>Go to global event ledger</a>
 {% endif %}
 {% if not is_filtered_page %}
 <h1> {{page_title}} </h1>
@@ -94,15 +94,19 @@
         {% endfor %}
     </ul>
 
-    <center><span>Toggle event types:
+    <center><div><span>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('researched_technology');">Technologies</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('edict');">Edicts</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('tradition');">Traditions</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('ascension_perk');">Ascensions</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('leader_recruited');">Leader Recruitment</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('colonization');">Colonizations</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('first_contact');">First Contact</a>
-    </span></center>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('army_combat');">Army Combat</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('fleet_combat');">Fleet Combat</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('expanded_to_system');">Outposts</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('leader_recruited');">Leader Recruitment</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('level_up');">Leader Promotion</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="show_all_ledgeritems();">Show all events</a>
+        </span></div>
+    </center>
 
     <ul class="event_list">
         {% for event in events %}
@@ -123,7 +127,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    relocated its capital to planet "{{ event["planet"].get_name() }}"
+                    relocated its capital to the {{ event["planet"].get_class() }} planet "{{ event["planet"].get_name() }}"
                     in the {{ links[event["system"]] | safe }} system.
                 </span>
             </div>
@@ -162,7 +166,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The {{links[event["country"]]|safe}} have built an outpost in the {{links[event["system"]]|safe}} system, claiming it for their empire.
+                    The {{links[event["country"]]|safe}} built an outpost in the {{links[event["system"]]|safe}} system, claiming it for their empire.
                  </span>
             </div>
         </li>
@@ -407,7 +411,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    Discovered the previously unknown {{ links[event["system"]] | safe}} system.
+                    The {{ links[event["country"]] | safe }} discovered the previously unknown {{ links[event["system"]] | safe}} system.
                 </span>
             </div>
         </li>
