@@ -46,7 +46,7 @@ class SavePathMonitor(abc.ABC):
         self._last_checked_time = 0
 
     @abc.abstractmethod
-    def get_new_game_states(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
         """
         Check the save path for new save files and yield results that are ready. Depending on the implementation,
         it files may be skipped if all parser threads are busy. Results are always returned in the correct order.
@@ -114,16 +114,16 @@ class ContinuousSavePathMonitor(SavePathMonitor):
         self._pool = mp.Pool(processes=config.CONFIG.threads)
         self._pending_results: Deque[Tuple[pathlib.PurePath, Any]] = collections.deque()
 
-    def get_new_game_states(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
                 fname, result = self._pending_results.popleft()
+                logger.info(f"Retrieving gamestate for {fname}")
                 try:
-                    logger.info(f"Retrieving result for {fname}")
                     yield fname.parent.stem, result.get()
                 except Exception as e:
-                    logger.error(f"Encountered exception {e} while reading save file {fname}:")
+                    logger.error(f"Error while reading save file {fname}:")
                     logger.error(traceback.format_exc())
             else:
                 break
@@ -133,7 +133,6 @@ class ContinuousSavePathMonitor(SavePathMonitor):
         for fname in new_files:
             if len(self._pending_results) >= config.CONFIG.threads:
                 break  # Ignore if there are any additional files
-            logger.info(f"Submitting {fname} to parser pool")
             result = self._pool.apply_async(parse_save, args=(fname,))
             self._pending_results.append((fname, result))
 
@@ -149,7 +148,7 @@ class BatchSavePathMonitor(SavePathMonitor):
     the CLI command `stellarisdashboardcli --parse-saves`.
     """
 
-    def get_new_game_states(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
         """
         Check the save directory for new files. If any are found, parse them and
         return the results as gamestate dictionaries as they come in.
@@ -183,14 +182,6 @@ class BatchSavePathMonitor(SavePathMonitor):
             if not chunk:
                 break
             yield chunk
-
-
-def parse_save_worker_mp(filename, task_queue: mp.Queue, result_queue: mp.Queue) -> Dict[str, Any]:
-    """
-
-    :param filename:
-    :return:
-    """
 
 
 def parse_save(filename) -> Dict[str, Any]:
