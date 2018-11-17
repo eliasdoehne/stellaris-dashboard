@@ -137,7 +137,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {{links[event["country"]]|safe}} colonized the {{ event["planet"].get_class() }} planet "{{event["planet"].get_name()}}" in the {{links[event["system"]]|safe}}
+                    The {{links[event["country"]]|safe}} colonized the {{ event["planet"].get_class() }} planet "{{event["planet"].get_name()}}" in the {{links[event["system"]]|safe}}
                     system{% if "leader" in event%} under Governor {{links[event["leader"]]|safe}}{% endif %}.
                  </span>
             </div>
@@ -195,14 +195,23 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{links[event["leader"]]|safe}} was promoted to a Rank {{event["description"]}} {{event["leader"].leader_class}}.
+                     {{event["leader"].leader_class}} {{links[event["leader"]]|safe}} was promoted to rank {{event["description"]}}.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "research_leader" %}
+        <li class="eventitem research_leader">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
+                <span class="eventtext">
+                    Scientist {{links[event["leader"]]|safe}} was in charge of the {{links[event["country"]]|safe}} {{event["description"]}} research efforts.
                  </span>
             </div>
         </li>
         {% elif event["event_type"] == "researched_technology" %}
         <li class="eventitem researched_technology">
             <div class="eventdescription">
-                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %}Scientist {{links[event["leader"]]|safe}}{% else %}{{links[event["country"]]|safe}}{% endif %}
                     researched the "{{event["description"]}}" technology.

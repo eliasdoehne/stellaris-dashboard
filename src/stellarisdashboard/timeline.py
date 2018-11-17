@@ -41,6 +41,9 @@ class TimelineExtractor:
         NON_SENTIENT_ROBOT_FACTION_NAME: NON_SENTIENT_ROBOT_FACTION_ID,
     }
 
+    # TODO consider adding more types,  "ruined_marauders", "dormant_marauders", "awakened_marauders"
+    SUPPORTED_COUNTRY_TYPES = {"default", "fallen_empire", "awakened_fallen_empire"}
+
     def __init__(self):
         self._gamestate_dict = None
         self.game = None
@@ -164,12 +167,7 @@ class TimelineExtractor:
         for country_id, country_data_dict in self._gamestate_dict["country"].items():
             if not isinstance(country_data_dict, dict):
                 continue
-
             country_type = country_data_dict.get("type")
-            # TODO consider adding more types,  "ruined_marauders", "dormant_marauders", "awakened_marauders"
-            if country_type not in {"default", "fallen_empire", "awakened_fallen_empire"}:
-                continue  # Skip enclaves, leviathans, etc ....
-
             country_model = self._session.query(models.Country).filter_by(
                 game=self.game,
                 country_id_in_game=country_id
@@ -185,6 +183,9 @@ class TimelineExtractor:
                 if country_id == self._player_country_id:
                     country_model.first_player_contact_date = 0
                 self._session.add(country_model)
+
+            if country_type not in self.SUPPORTED_COUNTRY_TYPES:
+                continue  # Skip enclaves, leviathans, etc ....
 
             self._extract_country_leaders(country_model, country_data_dict)
             diplomacy_data = self._process_diplomacy(country_model, country_data_dict)
@@ -368,33 +369,44 @@ class TimelineExtractor:
         if target_country_model is None:
             return  # target country might not be in DB yet if this is the first save...
         ruler = self._get_current_ruler(country_dict)
-        tc_ruler = self._get_current_ruler(self._gamestate_dict["country"].get(target_country_model.country_id_in_game))
+        tc_dict = self._gamestate_dict["country"].get(target_country_model.country_id_in_game)
+        tc_ruler = None
+        if tc_dict.get("country_type") in self.SUPPORTED_COUNTRY_TYPES:
+            tc_ruler = self._get_current_ruler(tc_dict)
 
         is_known_to_player = country_model.is_known_to_player() and target_country_model.is_known_to_player()
-        for event_type, reverse_event_type, relation_status in [
+        diplo_relations = [
             (
-                    models.HistoricalEventType.sent_rivalry,
-                    models.HistoricalEventType.received_rivalry,
-                    relation.get("is_rival") == "yes"
+                models.HistoricalEventType.sent_rivalry,
+                models.HistoricalEventType.received_rivalry,
+                relation.get("is_rival") == "yes"),
+            (
+                models.HistoricalEventType.closed_borders,
+                models.HistoricalEventType.received_closed_borders,
+                relation.get("closed_borders") == "yes"
             ),
             (
-                    models.HistoricalEventType.closed_borders,
-                    models.HistoricalEventType.received_closed_borders,
-                    relation.get("closed_borders") == "yes"
+                models.HistoricalEventType.defensive_pact,
+                None,
+                relation.get("defensive_pact") == "yes"
             ),
             (
-                    models.HistoricalEventType.defensive_pact, None, relation.get("defensive_pact") == "yes"
+                models.HistoricalEventType.formed_federation,
+                None,
+                relation.get("alliance") == "yes"
             ),
             (
-                    models.HistoricalEventType.formed_federation, None, relation.get("alliance") == "yes"
+                models.HistoricalEventType.non_aggression_pact,
+                None,
+                relation.get("non_aggression_pledge") == "yes"
             ),
             (
-                    models.HistoricalEventType.non_aggression_pact, None, relation.get("non_aggression_pledge") == "yes"
+                models.HistoricalEventType.first_contact,
+                None,
+                relation.get("communications") == "yes"
             ),
-            (
-                    models.HistoricalEventType.first_contact, None, relation.get("communications") == "yes"
-            ),
-        ]:
+        ]
+        for event_type, reverse_event_type, relation_status in diplo_relations:
             if relation_status:
                 if reverse_event_type is None:
                     reverse_event_type = event_type
@@ -1077,22 +1089,22 @@ class TimelineExtractor:
         tech_status_dict = country_dict.get("tech_status")
         if not isinstance(tech_status_dict, dict):
             return
-        last_researched_techs = country_dict.get("tech_status", {}).get("technology", [])
-        if len(last_researched_techs) < 10:
-            return
-        last_researched_techs = last_researched_techs[-26:]
-        for tech_name in last_researched_techs:
+        country_data = country_model.get_most_recent_data()
+        for tech_type in ["physics", "society", "engineering"]:
+            scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
+            scientist = self._session.query(models.Leader).filter_by(leader_id_in_game=scientist_id).one_or_none()
+            self.history_add_was_research_leader_events(country_model, country_data, scientist, tech_type)
+
+            progress_dict = tech_status_dict.get(f"{tech_type}_queue")
+            if progress_dict and isinstance(progress_dict, list):
+                progress_dict = progress_dict[0]
+            if not isinstance(progress_dict, dict):
+                continue
+            tech_name = progress_dict.get("technology")
             if not isinstance(tech_name, str):
                 continue
-            if tech_name in game_info.PHYSICS_TECHS:
-                tech_type = "physics"
-            elif tech_name in game_info.SOCIETY_TECHS:
-                tech_type = "society"
-            elif tech_name in game_info.ENGINEERING_TECHS:
-                tech_type = "engineering"
-            else:  # Some uncategorized DLC techs, repeatables etc.
-                continue
             matching_description = self._get_or_add_shared_description(text=tech_name)
+            # TODO CHECK IF THIS WORKS FOR REPEATABLE TECH
             # check for existing event in database:
             matching_event = self._session.query(models.HistoricalEvent).filter_by(
                 event_type=models.HistoricalEventType.researched_technology,
@@ -1100,19 +1112,46 @@ class TimelineExtractor:
                 description=matching_description,
             ).one_or_none()
             if matching_event is None:
-                scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
-                leader = self._session.query(models.Leader).filter_by(leader_id_in_game=scientist_id).one_or_none()
-                country_data = country_model.get_most_recent_data()
-                event = models.HistoricalEvent(
+                date_str = progress_dict.get("date")
+                start_date = models.date_to_days(progress_dict.get("date")) if date_str else self._date_in_days
+                matching_event = models.HistoricalEvent(
                     event_type=models.HistoricalEventType.researched_technology,
                     country=country_model,
-                    leader=leader,
-                    start_date_days=self._date_in_days,  # Todo might be cool to know the start date of the tech
+                    leader=scientist,
+                    start_date_days=start_date,
                     end_date_days=self._date_in_days,
                     description=matching_description,
                     is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_technology_info(),
                 )
-                self._session.add(event)
+            else:
+                matching_event.end_date_days = self._date_in_days
+            self._session.add(matching_event)
+
+    def history_add_was_research_leader_events(self, country_model: models.Country,
+                                               country_data: models.CountryData,
+                                               scientist: models.Leader,
+                                               tech_type: str):
+        """ Determine which scientist was in charge of leading research for a given tech type. """
+        matching_description = self._get_or_add_shared_description(text=tech_type.capitalize())
+        matching_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.research_leader,
+            country=country_model,
+            description=matching_description,
+        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
+        if matching_event is not None and matching_event.leader == scientist:
+            matching_event.end_date_days = self._date_in_days
+            self._session.add(matching_event)
+        elif scientist is not None:
+            new_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.research_leader,
+                country=country_model,
+                leader=scientist,
+                start_date_days=self._date_in_days,
+                end_date_days=self._date_in_days,
+                description=matching_description,
+                is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_technology_info(),
+            )
+            self._session.add(new_event)
 
     def _history_add_ruler_events(self, country_model: models.Country, country_dict):
         ruler = self._get_current_ruler(country_dict)

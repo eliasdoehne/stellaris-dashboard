@@ -328,6 +328,7 @@ class HistoricalEventType(enum.Enum):
     # tied to a specific leader:
     ruled_empire = enum.auto()
     governed_sector = enum.auto()
+    research_leader = enum.auto()
     faction_leader = enum.auto()
     leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
@@ -977,6 +978,7 @@ class Planet(Base):
 
 
 class SharedDescription(Base):
+    """ Represents short descriptions like technology names. """
     __tablename__ = "shareddescriptiontable"
     description_id = Column(Integer, primary_key=True)
 
@@ -1006,7 +1008,6 @@ class HistoricalEvent(Base):
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
     description_id = Column(ForeignKey(SharedDescription.description_id), nullable=True)
     target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
-
     end_date_days = Column(Integer)
 
     war = relationship("War")
