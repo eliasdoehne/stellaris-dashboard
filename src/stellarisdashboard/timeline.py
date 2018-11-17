@@ -1395,7 +1395,7 @@ class TimelineExtractor:
             system_dict = self._gamestate_dict.get("galactic_object").get(system_id, {})
             if system_model.original_name != system_dict.get("name"):
                 system_model.original_name = system_dict.get("name")
-                self._session.update(system_model)
+                self._session.add(system_model)
 
             planets = system_dict.get("planet", [])
             if not isinstance(planets, list):
