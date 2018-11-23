@@ -28,7 +28,7 @@ try:
     # Try to build the cython extension locally
     from Cython.Build import cythonize
 
-    extension_modules = cythonize("src/stellarisdashboard/cython_ext/token_value_stream.pyx")
+    extension_modules = cythonize("stellarisdashboard/cython_ext/token_value_stream.pyx")
 except ImportError:
     print("Cython is not installed, using pre-built C-extension if available, or (slow) fallback solution.")
     extension_modules = []
@@ -40,8 +40,6 @@ except RuntimeError as e:
 setup(
     name="stellarisdashboard",
     ext_modules=extension_modules,
-    packages=find_packages("src"),
-    package_dir={"": "src"},
     install_requires=[
         "click",
         "dash",
