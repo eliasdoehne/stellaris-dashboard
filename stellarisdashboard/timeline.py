@@ -379,7 +379,8 @@ class TimelineExtractor:
             (
                 models.HistoricalEventType.sent_rivalry,
                 models.HistoricalEventType.received_rivalry,
-                relation.get("is_rival") == "yes"),
+                relation.get("is_rival") == "yes"
+            ),
             (
                 models.HistoricalEventType.closed_borders,
                 models.HistoricalEventType.received_closed_borders,
@@ -387,29 +388,27 @@ class TimelineExtractor:
             ),
             (
                 models.HistoricalEventType.defensive_pact,
-                None,
+                models.HistoricalEventType.defensive_pact,
                 relation.get("defensive_pact") == "yes"
             ),
             (
                 models.HistoricalEventType.formed_federation,
-                None,
+                models.HistoricalEventType.formed_federation,
                 relation.get("alliance") == "yes"
             ),
             (
                 models.HistoricalEventType.non_aggression_pact,
-                None,
+                models.HistoricalEventType.non_aggression_pact,
                 relation.get("non_aggression_pledge") == "yes"
             ),
             (
                 models.HistoricalEventType.first_contact,
-                None,
+                models.HistoricalEventType.first_contact,
                 relation.get("communications") == "yes"
             ),
         ]
         for event_type, reverse_event_type, relation_status in diplo_relations:
             if relation_status:
-                if reverse_event_type is None:
-                    reverse_event_type = event_type
                 country_tuples = [
                     (event_type, country_model, target_country_model, ruler),
                     (reverse_event_type, target_country_model, country_model, tc_ruler)
