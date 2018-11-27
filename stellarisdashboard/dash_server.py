@@ -26,7 +26,7 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.2.0"
+VERSION_ID = "v0.2.1"
 
 
 @flask_app.route("/")
@@ -127,8 +127,7 @@ def _is_old_version(requested_version: str) -> bool:
     :return:
     """
     try:
-        req_version = parse_version(requested_version)
-        return parse_version(VERSION_ID) < req_version
+        return parse_version(VERSION_ID) < parse_version(requested_version)
     except Exception:
         return False
 
