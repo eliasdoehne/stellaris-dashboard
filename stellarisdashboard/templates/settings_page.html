@@ -13,7 +13,7 @@
             <input type="checkbox" title="{{ setting["description"] }}" name={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>
             {% endif %}
             {% if setting["type"] == "int" %}
-            <input type="number" title="{{ setting["description"] }}" name={{key}} min="1" max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
+            <input type="number" title="{{ setting["description"] }}" name={{key}} min={{setting["min"]}} max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
             {% endif %}
             {% if setting["type"] == "str" %}
             <input type="text" title="{{ setting["description"] }}" name={{key}} value={{setting["value"]}}> <br>

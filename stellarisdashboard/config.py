@@ -67,8 +67,9 @@ DEFAULT_SETTINGS = dict(
     extract_system_ownership=True,
     save_name_filter="",
     read_only_every_nth_save=1,
-    debug_mode=False,
     only_read_player_history=False,
+    plot_width=1150,
+    plot_height=640,
 )
 
 
@@ -82,11 +83,12 @@ class Config:
     port: int = None
     colormap: str = None
     log_level: str = None
+    plot_height: int = None
+    plot_width: int = None
 
     polling_interval: float = None
 
     check_version: bool = None
-    debug_mode = None
     show_everything: bool = None
     only_show_default_empires: bool = None
     extract_system_ownership: bool = None
@@ -111,6 +113,8 @@ class Config:
         "port",
         "read_only_every_nth_save",
         "threads",
+        "plot_width",
+        "plot_height",
     }
     FLOAT_KEYS = {
         "polling_interval",
@@ -126,15 +130,17 @@ class Config:
         logger.info("Updating settings")
         for key, val in settings_dict.items():
             if key not in Config.ALL_KEYS:
-                logger.warning(f'Ignoring undefined option {key} with value {val}.')
+                logger.info(f'Ignoring unknown option {key} with value {val}.')
                 continue
-            logger.info(f'Applying parameter {key} -> "{val}"')
+            old_val = self.__dict__.get(key)
             if key in Config.BOOL_KEYS:
                 val = self._preprocess_bool(val)
             if key in Config.PATH_KEYS:
-                logger.warning(f'Ignoring path option {key}. Change paths by editing default_paths.py instead!')
+                logger.info(f'Ignoring path option {key}. Change paths by editing default_paths.py instead!')
                 continue
             self.__setattr__(key, val)
+            if val != old_val:
+                logger.info(f'Updated {key.ljust(25)} {repr(old_val).rjust(8)} -> {repr(val).ljust(8)}')
 
     def write_to_file(self):
         fname = _get_settings_file_path()
@@ -162,6 +168,8 @@ class Config:
             "read_only_every_nth_save": self.read_only_every_nth_save,
             "save_name_filter": self.save_name_filter,
             "threads": self.threads,
+            "plot_width": self.plot_width,
+            "plot_height": self.plot_height,
         }
 
     def __str__(self):
@@ -192,23 +200,20 @@ class Config:
             return pathlib.Path(path)
 
 
+def _apply_existing_settings(config: Config):
+    settings = dict(DEFAULT_SETTINGS)
+    settings_file = _get_settings_file_path()
+    if settings_file.exists() and settings_file.is_file():
+        logger.info(f"Reading settings from {settings_file}...")
+        with open(settings_file, "r") as f:
+            settings.update(yaml.load(f))
+    config.apply_dict(settings)
+
+
 def _get_settings_file_path() -> pathlib.Path:
     this_dir = pathlib.Path(__file__).parent
     settings_file = pathlib.Path(this_dir / "config.yml")
     return settings_file
-
-
-def _apply_existing_config(config: Config):
-    settings_file = _get_settings_file_path()
-    if not settings_file.exists() or not settings_file.is_file():
-        logger.info(f"No settings file found. Using default settings.")
-        config.apply_dict(DEFAULT_SETTINGS)
-        return
-
-    logger.info(f"Reading settings file {settings_file}...")
-    with open(settings_file, "r") as f:
-        settings = yaml.load(f)
-    config.apply_dict(settings)
 
 
 def update_log_level():
@@ -222,15 +227,10 @@ CONFIG = Config(
     save_file_path=_get_default_save_path(),
     base_output_path=_get_default_base_output_path(),
 )
-CONFIG.apply_dict(DEFAULT_SETTINGS)
-_apply_existing_config(CONFIG)
+_apply_existing_settings(CONFIG)
 
-# Initialize output path
+# Initialize output paths
 if not CONFIG.base_output_path.exists():
-    CONFIG.base_output_path.mkdir()
-    (CONFIG.base_output_path / "db").mkdir()
-    (CONFIG.base_output_path / "output").mkdir()
+    (CONFIG.base_output_path / "db").mkdir(parents=True)
+    (CONFIG.base_output_path / "output").mkdir(parents=True)
 update_log_level()
-
-CONFIG.write_to_file()
-print(CONFIG)

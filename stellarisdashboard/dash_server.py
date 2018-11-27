@@ -183,6 +183,7 @@ def settings_page():
         "read_only_every_nth_save": {
             "type": t_int,
             "value": current_settings["read_only_every_nth_save"],
+            "min": 1,
             "max": 10000,
             "name": "Only read every n-th save",
             "description": "Set to 2 to ignore every other save, to 3 to ignore 2/3 of saves, and so on. This is applied after all other filters.",
@@ -190,9 +191,26 @@ def settings_page():
         "threads": {
             "type": t_int,
             "value": current_settings["threads"],
+            "min": 1,
             "max": config.CPU_COUNT,
             "name": "Number of threads",
             "description": "Maximal number of threads used for reading save files. New setting is applied after restarting the dashboard program.",
+        },
+        "plot_height": {
+            "type": t_int,
+            "value": current_settings["plot_height"],
+            "min": 300,
+            "max": 2000,
+            "name": "Plot height (pixels)",
+            "description": "Height of plots in the graph dashboard.",
+        },
+        "plot_width": {
+            "type": t_int,
+            "value": current_settings["plot_width"],
+            "min": 300,
+            "max": 2000,
+            "name": "Plot width (pixels)",
+            "description": "Height of plots in the graph dashboard.",
         },
     }
 
@@ -216,8 +234,6 @@ def apply_settings():
             settings[key] = False
     config.CONFIG.apply_dict(settings)
     config.CONFIG.write_to_file()
-    print("Updated configuration:")
-    print(config.CONFIG)
     return redirect("/")
 
 
@@ -230,7 +246,6 @@ DARK_THEME_TEXT_COLOR = 'rgba(217,217,217,1)'
 DARK_THEME_TEXT_HIGHLIGHT_COLOR = 'rgba(195, 133, 33, 1)'
 DEFAULT_PLOT_LAYOUT = dict(
     yaxis=dict(type="linear"),
-    height=640,
     plot_bgcolor=BACKGROUND_PLOT_DARK,
     paper_bgcolor=DARK_THEME_BACKGROUND,
     font={'color': DARK_THEME_TEXT_COLOR},
@@ -340,6 +355,8 @@ timeline_app.layout = html.Div([
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
+    layout["width"] = config.CONFIG.plot_width
+    layout["height"] = config.CONFIG.plot_height
     if plot_spec.style == visualization_data.PlotStyle.line:
         layout["hovermode"] = "closest"
     else:
@@ -386,10 +403,19 @@ def update_content(tab_value, search, date_fraction):
             figure = go.Figure(data=figure_data, layout=figure_layout)
 
             children.append(html.H2(f"{plot_spec.title}", style=HEADER_STYLE))
-            children.append(dcc.Graph(
-                id=f"{plot_spec.plot_id}",
-                figure=figure,
-            ))
+            children.append(
+                html.Div([dcc.Graph(
+                    id=f"{plot_spec.plot_id}",
+                    figure=figure,
+                    style=dict(
+                        textAlign="center",
+                    )
+                )], style=dict(
+                    margin="auto",
+                    width=f"{config.CONFIG.plot_width}px",
+                    height=f"{config.CONFIG.plot_height}px",
+                ))
+            )
     else:
         slider_date = 0.01 * date_fraction * current_date
         children.append(get_galaxy(game_id, slider_date))
