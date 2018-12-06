@@ -6,5 +6,5 @@ tags={
 	"Gameplay"
 }
 picture="thumbnail.jpg"
-remote_file_id="1481308598"
-supported_version="2.1.*"
+remote_file_id="1466534202"
+supported_version="2.2.*"
