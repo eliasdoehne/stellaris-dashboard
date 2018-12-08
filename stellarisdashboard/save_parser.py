@@ -290,11 +290,8 @@ class SaveFileParser:
 
     def parse_from_string(self, s: str):
         self._token_stream = token_stream(s)
-        self._parse_save()
-        return self.gamestate_dict
-
-    def _parse_save(self):
         self.gamestate_dict = self._parse_key_value_pair_list(self._next_token())
+        return self.gamestate_dict
 
     def _parse_key_value_pair(self):
         key_token = self._lookahead()
@@ -327,32 +324,28 @@ class SaveFileParser:
     def _parse_composite_game_object_or_list(self):
         brace = self._next_token()
         if brace.token_type != TokenType.BRACE_OPEN:
-            raise StellarisFileFormatError(
-                "Line {}: Expected {{ token, found {}".format(brace.pos, brace)
-            )
+            raise StellarisFileFormatError(f"Line {brace.pos}: Expected {{ token, found {brace}")
         tt = self._lookahead().token_type
         if tt == TokenType.BRACE_OPEN:  # indicates that this is a list since composite objects and lists cannot be keys
-            res = self._parse_list()
+            result = self._parse_list()
         elif tt == TokenType.BRACE_CLOSE:  # immediate closing brace => empty list
             self._next_token()
-            res = []
+            result = []
         else:
             token = self._next_token()
             next_token = self._lookahead()
             if next_token.token_type == TokenType.EQUAL:
-                res = self._parse_key_value_pair_list(token)
+                result = self._parse_key_value_pair_list(token)
             elif next_token.token_type.is_literal() or next_token.token_type == TokenType.BRACE_CLOSE:
-                res = self._parse_list(token.value)
+                result = self._parse_list(token.value)
             else:
                 raise StellarisFileFormatError(f"Unexpected token: {next_token}")
-        return res
+        return result
 
     def _parse_key_value_pair_list(self, first_key_token):
         eq_token = self._next_token()
         if eq_token.token_type != TokenType.EQUAL:
-            raise StellarisFileFormatError(
-                "Line {}: Expected =, found {}".format(eq_token.pos, eq_token)
-            )
+            raise StellarisFileFormatError(f"Line {eq_token.pos}: Expected =, found {eq_token}")
 
         next_token = self._lookahead()
         if next_token.token_type.is_literal():
@@ -360,9 +353,7 @@ class SaveFileParser:
         elif next_token.token_type == TokenType.BRACE_OPEN:
             first_value = self._parse_composite_game_object_or_list()
         else:
-            raise StellarisFileFormatError(
-                f"ERROR"
-            )
+            raise StellarisFileFormatError(f"Line {next_token.pos}: Expected literal or {{, found {eq_token}")
         result = {first_key_token.value: first_value}
         next_token = self._lookahead()
         handled_duplicate_keys = set()
@@ -379,20 +370,20 @@ class SaveFileParser:
         return result
 
     def _parse_list(self, first_value=None):
-        res = []
+        result = []
         if first_value is not None:
-            res.append(first_value)
+            result.append(first_value)
         while self._lookahead().token_type != TokenType.BRACE_CLOSE:
             val = self._parse_value()
-            res.append(val)
+            result.append(val)
         self._next_token()  # consume the final }
-        return res
+        return result
 
     def _parse_literal(self):
         token = self._next_token()
         if not token.token_type.is_literal():
             raise StellarisFileFormatError(
-                "Line {}: Expected literal, found {}".format(token.pos, token)
+                f"Line {token.pos}: Expected literal, found {token}"
             )
         return token.value
 
@@ -413,8 +404,8 @@ class SaveFileParser:
 
     def _next_token(self) -> Token:
         if self._lookahead_token is None:
-            res = next(self._token_stream)
+            token = next(self._token_stream)
         else:
-            res = self._lookahead_token
+            token = self._lookahead_token
             self._lookahead_token = None
-        return res
+        return token
