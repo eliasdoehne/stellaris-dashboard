@@ -1,16 +1,18 @@
+import abc
 import collections
 import concurrent.futures
-import multiprocessing as mp
 import enum
 import itertools
 import logging
+import multiprocessing as mp
 import pathlib
 import time
-import zipfile
-import abc
-from collections import namedtuple
-from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator, Union, Deque
 import traceback
+import zipfile
+from collections import namedtuple
+from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator, Deque
+
+from stellarisdashboard import config
 
 logger = logging.getLogger(__name__)
 try:
@@ -19,8 +21,6 @@ try:
 except ImportError as import_error:
     logger.info(f"Cython extensions not available, using slow parser. Error message: \"{import_error}\"")
     from stellarisdashboard import token_value_stream_re as token_value_stream
-
-from stellarisdashboard import config
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -191,7 +191,7 @@ def parse_save(filename) -> Dict[str, Any]:
     :param filename: Path to a .sav file
     :return: The gamestate dictionary
     """
-    gamestate = SaveFileParser(filename).parse_save()
+    gamestate = SaveFileParser().parse_save(filename)
     return gamestate
 
 
@@ -249,13 +249,13 @@ def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
 
 
 class SaveFileParser:
-    def __init__(self, filename):
+    def __init__(self):
         self.gamestate_dict = None
-        self.save_filename = filename
+        self.save_filename = None
         self._token_stream = None
         self._lookahead_token = None
 
-    def parse_save(self):
+    def parse_save(self, filename):
         """
         Parse a single save file to a gamestate dictionary.
 
@@ -278,21 +278,23 @@ class SaveFileParser:
 
         :return: A dictionary representing the gamestate of the savefile.
         """
+        self.save_filename = filename
         logging.info(f"Parsing Save File {self.save_filename}...")
         start_time = time.time()
         with zipfile.ZipFile(self.save_filename) as save_zip:
             gamestate = save_zip.read("gamestate").decode()
-        self._token_stream = token_stream(gamestate)
-        self._parse_save()
+        self.parse_from_string(gamestate)
         end_time = time.time()
-        print(f"Parsed save file {self.save_filename} in {end_time - start_time} seconds.")
+        logging.info(f"Parsed save file {self.save_filename} in {end_time - start_time} seconds.")
+        return self.gamestate_dict
+
+    def parse_from_string(self, s: str):
+        self._token_stream = token_stream(s)
+        self._parse_save()
         return self.gamestate_dict
 
     def _parse_save(self):
-        self.gamestate_dict = {}
-        while self._lookahead().token_type != TokenType.EOF:
-            key, value = self._parse_key_value_pair()
-            self._add_key_value_pair_or_convert_to_list(self.gamestate_dict, key, value)
+        self.gamestate_dict = self._parse_key_value_pair_list(self._next_token())
 
     def _parse_key_value_pair(self):
         key_token = self._lookahead()
@@ -329,17 +331,20 @@ class SaveFileParser:
                 "Line {}: Expected {{ token, found {}".format(brace.pos, brace)
             )
         tt = self._lookahead().token_type
-        if tt == TokenType.BRACE_OPEN or tt == TokenType.BRACE_CLOSE:  # the first case indicates a list of objects (which cannot be keys), the second an empty list
-            res = self._parse_object_list()
+        if tt == TokenType.BRACE_OPEN:  # indicates that this is a list since composite objects and lists cannot be keys
+            res = self._parse_list()
+        elif tt == TokenType.BRACE_CLOSE:  # immediate closing brace => empty list
+            self._next_token()
+            res = []
         else:
             token = self._next_token()
             next_token = self._lookahead()
             if next_token.token_type == TokenType.EQUAL:
                 res = self._parse_key_value_pair_list(token)
             elif next_token.token_type.is_literal() or next_token.token_type == TokenType.BRACE_CLOSE:
-                res = self._parse_object_list(token.value)
+                res = self._parse_list(token.value)
             else:
-                res = None
+                raise StellarisFileFormatError(f"Unexpected token: {next_token}")
         return res
 
     def _parse_key_value_pair_list(self, first_key_token):
@@ -358,23 +363,29 @@ class SaveFileParser:
             raise StellarisFileFormatError(
                 f"ERROR"
             )
-        res = {first_key_token.value: first_value}
+        result = {first_key_token.value: first_value}
         next_token = self._lookahead()
-        while next_token.token_type != TokenType.BRACE_CLOSE:
+        handled_duplicate_keys = set()
+        while next_token.token_type != TokenType.BRACE_CLOSE and next_token.token_type != TokenType.EOF:
             key, value = self._parse_key_value_pair()
-            self._add_key_value_pair_or_convert_to_list(res, key, value)
+            convert_to_list = key in result and key not in handled_duplicate_keys
+            self._add_key_value_pair_or_convert_to_list(
+                result, key, value, convert_to_list=convert_to_list
+            )
+            if convert_to_list:
+                handled_duplicate_keys.add(key)
             next_token = self._lookahead()
         self._next_token()
-        return res
+        return result
 
-    def _parse_object_list(self, first_value=None):
+    def _parse_list(self, first_value=None):
         res = []
         if first_value is not None:
             res.append(first_value)
         while self._lookahead().token_type != TokenType.BRACE_CLOSE:
             val = self._parse_value()
             res.append(val)
-        self._next_token()
+        self._next_token()  # consume the final }
         return res
 
     def _parse_literal(self):
@@ -386,15 +397,14 @@ class SaveFileParser:
         return token.value
 
     @staticmethod
-    def _add_key_value_pair_or_convert_to_list(obj, key, value):
-        if key not in obj:
-            obj[key] = value
+    def _add_key_value_pair_or_convert_to_list(obj, key, value, convert_to_list=False):
+        if key in obj:
+            if convert_to_list:
+                obj[key] = [obj[key]]
+            obj[key].append(value)
         else:
-            existing_value = obj[key]
-            if isinstance(existing_value, list):
-                existing_value.append(value)
-            else:
-                obj[key] = [obj[key], value]
+            assert not convert_to_list
+            obj[key] = value
 
     def _lookahead(self) -> Token:
         if self._lookahead_token is None:
