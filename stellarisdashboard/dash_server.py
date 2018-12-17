@@ -195,6 +195,12 @@ def settings_page():
             "name": "Number of threads",
             "description": "Maximal number of threads used for reading save files. New setting is applied after restarting the dashboard program.",
         },
+        "normalize_stacked_plots": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["normalize_stacked_plots"]),
+            "name": "Normalize stacked area plots",
+            "description": "If active, stacked area plots (e.g. population stats) will show percentages instead of raw values. This does not apply to budget charts.",
+        },
         "plot_height": {
             "type": t_int,
             "value": current_settings["plot_height"],
@@ -354,6 +360,8 @@ timeline_app.layout = html.Div([
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = DEFAULT_PLOT_LAYOUT
+    layout["xaxis"] = dict(title=plot_spec.x_axis_label)
+    layout["yaxis"]["title"] = plot_spec.y_axis_label
     layout["width"] = config.CONFIG.plot_width
     layout["height"] = config.CONFIG.plot_height
     if plot_spec.style == visualization_data.PlotStyle.line:
@@ -433,14 +441,14 @@ def _get_game_ids_matching_url(url):
 def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
     start = time.time()
     plot_data = visualization_data.get_current_execution_plot_data(game_id)
-    plot_list = get_plot_lines(plot_data, plot_spec)
+    plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
     end = time.time()
     logger.debug(f"Update took {end - start} seconds!")
     return plot_list
 
 
-def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData,
-                   plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
+def get_raw_plot_data_dicts(plot_data: visualization_data.EmpireProgressionPlotData,
+                            plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     """
     Depending on the plot_spec.style attribute, retrieve the data to be plotted
     in a format that can directly be passed into a Dash Figure object.
@@ -450,18 +458,18 @@ def get_plot_lines(plot_data: visualization_data.EmpireProgressionPlotData,
     :return:
     """
     if plot_spec.style == visualization_data.PlotStyle.line:
-        return _get_line_plot_data(plot_data, plot_spec)
+        return _get_raw_data_for_line_plot(plot_data, plot_spec)
     elif plot_spec.style == visualization_data.PlotStyle.stacked:
-        return _get_stacked_plot_data(plot_data, plot_spec)
+        return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
     elif plot_spec.style == visualization_data.PlotStyle.budget:
-        return _get_budget_plot_data(plot_data, plot_spec)
+        return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
     else:
         logger.warning(f"Unknown Plot type {plot_spec}")
         return []
 
 
-def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
-                        plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
+def _get_raw_data_for_line_plot(plot_data: visualization_data.EmpireProgressionPlotData,
+                                plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
@@ -470,78 +478,61 @@ def _get_line_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
             x=x_values,
             y=y_values,
             name=key,
-            text=[f"{val:.2f} - {key}" for val in y_values],
             line={"color": get_country_color(key, 1.0)},
+            text=get_plot_value_labels(x_values, y_values, key),
+            hoverinfo='text',
         )
         plot_list.append(line)
     return plot_list
 
 
-def _get_stacked_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
-                           plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
-    y_previous = None
-    plot_list = []
-    for key, x_values, y_values in plot_data.iterate_data(plot_spec):
-        if not any(y_values):
-            continue
-        line = {'x': x_values, 'name': key, "fill": "tonexty", "hoverinfo": "x+text"}
-        if y_previous is None:
-            y_previous = [0.0 for _ in x_values]
-        y_previous = [(a + b) for a, b in zip(y_previous, y_values)]
-        line["y"] = y_previous[:]  # make a copy
-        if line["y"]:
-            line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
-            line["line"] = {"color": get_country_color(key, 1.0)}
-            line["fillcolor"] = get_country_color(key, 0.75)
-            plot_list.append(line)
-    return plot_list
-
-
-def _get_budget_plot_data(plot_data: visualization_data.EmpireProgressionPlotData,
-                          plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
+def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.EmpireProgressionPlotData,
+                                               plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     net_gain = None
-    y_previous_pos, y_previous_neg = None, None
-    pos_initiated = False
-    plot_list = []
+    lines = []
+    normalized = config.CONFIG.normalize_stacked_plots and  plot_spec.style == visualization_data.PlotStyle.stacked
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
             continue
-        if net_gain is None:
-            net_gain = [0.0 for _ in x_values]
-            y_previous_pos = [0.0 for _ in x_values]
-            y_previous_neg = [0.0 for _ in x_values]
-        fill_mode = "tozeroy"  # tonexty would be better, but for expenses, it always shades the region to the nearest lower line.
-        # Importantly, for any given category all entries must either be <=0 for expenses or >=0 for income.
-        if all(y <= 0 for y in y_values):
-            y_previous = y_previous_neg
-        elif all(y >= 0 for y in y_values):
-            y_previous = y_previous_pos
-            if pos_initiated:
-                fill_mode = "tonexty"
-            pos_initiated = True
-        else:
-            logger.warning("Not a real budget Graph!")
-            break
-        line = {'x': x_values, 'name': key, "hoverinfo": "x+text"}
-        for i, y in enumerate(y_values):
-            y_previous[i] += y
-            net_gain[i] += y
-        line["y"] = y_previous[:]
-        line["fill"] = fill_mode
-        line["line"] = {"color": get_country_color(key, 1.0)}
-        line["fillcolor"] = get_country_color(key, 0.3)
-        line["text"] = [f"{val:.2f} - {key}" if val else "" for val in y_values]
-        plot_list.append(line)
-    if plot_list:
-        plot_list.append({
-            'x': plot_list[0]["x"],
-            'y': net_gain,
-            'name': 'Net gain',
-            'line': {'color': 'rgba(255,255,255,1)'},
-            'text': [f'{val:.2f} - net gain' for val in net_gain],
-            'hoverinfo': 'x+text',
-        })
-    return plot_list
+
+        if plot_spec.style == visualization_data.PlotStyle.budget:
+            if net_gain is None:
+                net_gain = [0.0 for _ in x_values]
+            net_gain = [net + y for (net, y) in zip(net_gain, y_values)]
+
+        lines.append(dict(
+            x=x_values,
+            y=y_values,
+            name=dict_key_to_legend_label(key),
+            hoverinfo='text',
+            mode='lines',
+            line=dict(width=0.5, color=get_country_color(key, 1.0)),
+            stackgroup='pos' if min(y_values) >= 0 else 'neg',
+            groupnorm="percent" if normalized else "",
+            fillcolor=get_country_color(key, 0.5),
+            text=get_plot_value_labels(x_values, y_values, key),
+        ))
+
+    if lines and not normalized and plot_spec.style == visualization_data.PlotStyle.budget:
+        # Add net value over time
+        name = 'Net result'
+        lines.append(dict(
+            x=lines[0]["x"],
+            y=net_gain,
+            name=name,
+            line=dict(color='rgba(255,255,255,1)'),
+            text=get_plot_value_labels(lines[0]["x"], net_gain, "Net result"),
+            hoverinfo='text',
+        ))
+    return lines
+
+
+def dict_key_to_legend_label(key: str):
+    return " ".join(key.capitalize().split("_"))
+
+
+def get_plot_value_labels(x_values, y_values, key):
+    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}' if y else "" for (x, y) in zip(x_values, y_values)]
 
 
 def get_galaxy(game_id: str, date: float) -> dcc.Graph:
@@ -717,8 +708,6 @@ class EventFilter:
             self.min_date <= event.start_date_days <= self.max_date,
             self.country_filter is None or self.country_filter == event.country_id,
         ])
-        if not event.is_of_global_relevance and self.is_empty_filter:
-            return False
         if self.leader_filter is not None:
             result &= event.leader_id == self.leader_filter
         if self.system_filter is not None:
@@ -763,7 +752,7 @@ class EventTemplateDictBuilder:
             for event in event_list:
                 if not self.event_filter.include_event(event):
                     continue
-                if not config.CONFIG.show_everything and not event.is_known_to_player:
+                if not config.CONFIG.show_everything and not event.event_is_known_to_player:
                     continue
                 country_type = event.country.country_type if event.country is not None else None
                 if config.CONFIG.only_show_default_empires:
@@ -787,7 +776,7 @@ class EventTemplateDictBuilder:
                     planet=event.planet,
                     faction=event.faction,
                     target_country=event.target_country,
-                    description=event.get_description(),
+                    description=event.description,
                 )
                 if event.planet and event_dict["system"] is None:
                     event_dict["system"] = event.planet.system
@@ -795,7 +784,8 @@ class EventTemplateDictBuilder:
                 events[key].append(
                     event_dict
                 )
-
+                if "faction" in event_dict:
+                    event_dict["faction_type"] = event.faction.type
                 if event.country is not None and event.country not in preformatted_links:
                     preformatted_links[event.country] = self._preformat_history_url(
                         event.country.country_name, country=event.country.country_id
@@ -832,7 +822,7 @@ class EventTemplateDictBuilder:
         if isinstance(key, models.Country):
             return key.country_name
         elif isinstance(key, models.System):
-            return f"{key.original_name} System"
+            return f"{key.name} System"
         elif isinstance(key, models.Leader):
             return key.get_name()
         elif isinstance(key, models.Planet):
@@ -845,7 +835,7 @@ class EventTemplateDictBuilder:
             return self._preformat_history_url(key.country_name,
                                                country=key.country_id)
         elif isinstance(key, models.System):
-            return self._preformat_history_url(game_info.convert_id_to_name(key.original_name, remove_prefix="NAME"),
+            return self._preformat_history_url(game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
                                                system=key.system_id)
         elif isinstance(key, models.Leader):
             return self._preformat_history_url(key.leader_name,
@@ -869,9 +859,9 @@ class EventTemplateDictBuilder:
                 + [hl.system_one for hl in system_model.hyperlanes_two]
         )
         details["Hyperlanes"] = ", ".join(
-            self._preformat_history_url(s.original_name, system=s.system_id)
+            self._preformat_history_url(s.name, system=s.system_id)
             for s in sorted(hyperlane_targets,
-                            key=lambda s: s.original_name)
+                            key=lambda s: s.name)
         )
         return details
 
@@ -928,7 +918,7 @@ class EventTemplateDictBuilder:
         links = {}
         for war in self._session.query(models.War).order_by(models.War.start_date_days).all():
             if not config.Config.show_everything:
-                is_visible_to_player = any(wp.country.is_known_to_player() for wp in war.participants)
+                is_visible_to_player = any(wp.country.has_met_player() for wp in war.participants)
                 if not is_visible_to_player:
                     continue
             if self.event_filter.war_filter is not None and self.event_filter.war_filter != war.war_id:

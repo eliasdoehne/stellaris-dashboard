@@ -115,7 +115,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class }} {{links[event["leader"]]|safe}} ruled the {{links[event["country"]]|safe}}
+                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} ruled the {{links[event["country"]]|safe}}
                     from the capital {{event["planet"].get_name()}} in the {{links[event["system"]] | safe}} system
                     with the agenda "{{ event["leader"].leader_agenda }}".
                 </span>
@@ -195,7 +195,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                     {{event["leader"].leader_class}} {{links[event["leader"]]|safe}} was promoted to rank {{event["description"]}}.
+                     {{event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} was promoted to rank {{event["description"]}}.
                  </span>
             </div>
         </li>
@@ -272,7 +272,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class }} {{links[event["leader"]]|safe}} was leader of the "{{ event["faction"].faction_name}}" faction.
+                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} was leader of the "{{ event["faction"].faction_name}}" faction.
                  </span>
             </div>
         </li>
@@ -391,7 +391,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The "{{ event["faction"].faction_name }}", a new {{ event["faction"].ethics }} faction, emerged in the {{links[event["country"]]|safe}}.
+                    The "{{ event["faction"].faction_name }}", a new {{ event["faction"].type }} faction, emerged in the {{links[event["country"]]|safe}}.
                 </span>
             </div>
         </li>

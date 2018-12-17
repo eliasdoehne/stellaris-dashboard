@@ -39,6 +39,9 @@ class PlotSpecification:
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
+    x_axis_label: str = "Time (years since 2200.01.01)"
+    y_axis_label: str = ""
+
 
 ### Define PlotSpecifications for all currently supported plots
 POP_COUNT_GRAPH = PlotSpecification(
@@ -71,18 +74,29 @@ NET_ENERGY_INCOME_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.net_energy_income,
     style=PlotStyle.line,
 )
+NET_ALLOYS_INCOME_GRAPH = PlotSpecification(
+    plot_id='net-alloys-income-graph',
+    title="Net Alloys Income",
+    plot_data_function=lambda pd: pd.net_alloys_income,
+    style=PlotStyle.line,
+)
+NET_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
+    plot_id='net-consumer-goods-income-graph',
+    title="Net Consumer Goods Income",
+    plot_data_function=lambda pd: pd.net_consumer_goods_income,
+    style=PlotStyle.line,
+)
+NET_FOOD_INCOME_GRAPH = PlotSpecification(
+    plot_id='net-food-income-graph',
+    title="Net Food Income",
+    plot_data_function=lambda pd: pd.net_food_income,
+    style=PlotStyle.line,
+)
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='tech-count-graph',
     title="Researched Technologies",
     plot_data_function=lambda pd: pd.tech_count,
     style=PlotStyle.line,
-)
-RESEARCH_ALLOCATION_GRAPH = PlotSpecification(
-    plot_id='empire-research-allocation-graph',
-    title="Research Allocation",
-    plot_data_function=lambda pd: pd.empire_research_allocation,
-    yrange=(0, 100),
-    style=PlotStyle.stacked,
 )
 RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     plot_id='empire-research-output-graph',
@@ -114,33 +128,81 @@ FLEET_SIZE_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.fleet_size,
     style=PlotStyle.line,
 )
-EMPIRE_DEMOGRAPHICS_GRAPH = PlotSpecification(
-    plot_id='empire-demographics-graph',
+SPECIES_DISTRIBUTION_GRAPH = PlotSpecification(
+    plot_id='empire-species-distribution-graph',
     title="Species Demographics",
     plot_data_function=lambda pd: pd.species_distribution,
-    yrange=(0, 100.0),
     style=PlotStyle.stacked,
 )
-FACTION_SIZE_GRAPH = PlotSpecification(
-    plot_id='empire-internal-politics-graph',
-    title="Faction Size",
-    plot_data_function=lambda pd: pd.faction_size_distribution,
-    yrange=(0, 100.0),
+SPECIES_CRIME_GRAPH = PlotSpecification(
+    plot_id='empire-species-crime-graph',
+    title="Crime by Species",
+    plot_data_function=lambda pd: pd.crime_by_species,
+    style=PlotStyle.line,
+)
+SPECIES_HAPPINESS_GRAPH = PlotSpecification(
+    plot_id='empire-species-happiness-graph',
+    title="Happiness by Species",
+    plot_data_function=lambda pd: pd.happiness_by_species,
+    style=PlotStyle.line,
+)
+ETHOS_DISTRIBUTION_GRAPH = PlotSpecification(
+    plot_id='empire-ethos-distribution-graph',
+    title="Ethos Demographics",
+    plot_data_function=lambda pd: pd.ethos_distribution,
     style=PlotStyle.stacked,
 )
-FACTION_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-faction-happiness-graph',
-    title="Faction Happiness",
-    plot_data_function=lambda pd: pd.faction_happiness,
+ETHOS_CRIME_GRAPH = PlotSpecification(
+    plot_id='empire-ethos-crime-graph',
+    title="Crime by Ethos",
+    plot_data_function=lambda pd: pd.crime_by_ethos,
+    style=PlotStyle.line,
+)
+ETHOS_HAPPINESS_GRAPH = PlotSpecification(
+    plot_id='empire-ethos-happiness-graph',
+    title="Happiness by Ethos",
+    plot_data_function=lambda pd: pd.happiness_by_ethos,
+    style=PlotStyle.line,
+)
+STRATA_DISTRIBUTION_GRAPH = PlotSpecification(
+    plot_id='empire-strata-distribution-graph',
+    title="Stratum Demographics",
+    plot_data_function=lambda pd: pd.stratum_distribution,
+    style=PlotStyle.stacked,
+)
+STRATA_CRIME_GRAPH = PlotSpecification(
+    plot_id='empire-strata-crime-graph',
+    title="Crime by Stratum",
+    plot_data_function=lambda pd: pd.crime_by_stratum,
+    style=PlotStyle.line,
+)
+STRATA_HAPPINESS_GRAPH = PlotSpecification(
+    plot_id='empire-strata-happiness-graph',
+    title="Happiness by Stratum",
+    plot_data_function=lambda pd: pd.happiness_by_stratum,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
-FACTION_SUPPORT_GRAPH = PlotSpecification(
-    plot_id='empire-faction-support-graph',
-    title="Faction Support",
-    plot_data_function=lambda pd: pd.faction_support,
-    yrange=(0, 100),
+JOB_DISTRIBUTION_GRAPH = PlotSpecification(
+    plot_id='empire-job-distribution-graph',
+    title="Job Demographics",
+    plot_data_function=lambda pd: pd.job_distribution,
+    # yrange=(0, 100.0),
     style=PlotStyle.stacked,
+)
+JOB_CRIME_GRAPH = PlotSpecification(
+    plot_id='empire-job-crime-graph',
+    title="Crime by Job",
+    plot_data_function=lambda pd: pd.crime_by_job,
+    # yrange=(0, 100.0),
+    style=PlotStyle.line,
+)
+JOB_HAPPINESS_GRAPH = PlotSpecification(
+    plot_id='empire-job-happiness-graph',
+    title="Happiness by Job",
+    plot_data_function=lambda pd: pd.happiness_by_job,
+    style=PlotStyle.line,
+    yrange=(0, 1.0),
 )
 EMPIRE_ENERGY_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-energy-budget-graph',
@@ -154,11 +216,42 @@ EMPIRE_MINERAL_ECONOMY_GRAPH = PlotSpecification(
     plot_data_function=lambda pd: pd.empire_mineral_budget,
     style=PlotStyle.budget,
 )
+EMPIRE_CONSUMER_GOODS_ECONOMY_GRAPH = PlotSpecification(
+    plot_id='empire-consumer-goods-budget-graph',
+    title="Consumer Goods Budget",
+    plot_data_function=lambda pd: pd.empire_consumer_goods_budget,
+    style=PlotStyle.budget,
+)
+EMPIRE_ALLOYS_ECONOMY_GRAPH = PlotSpecification(
+    plot_id='empire-alloys-budget-graph',
+    title="Alloys Budget",
+    plot_data_function=lambda pd: pd.empire_alloys_budget,
+    style=PlotStyle.budget,
+)
 EMPIRE_FOOD_ECONOMY_GRAPH = PlotSpecification(
     plot_id='empire-food-budget-graph',
     title="Food",
     plot_data_function=lambda pd: pd.empire_food_budget,
     style=PlotStyle.budget,
+)
+
+VICTORY_RANK_GRAPH = PlotSpecification(
+    plot_id='victory-rank-graph',
+    title="Victory Rank",
+    plot_data_function=lambda pd: pd.vic_rank,
+    style=PlotStyle.line,
+)
+VICTORY_SCORE_GRAPH = PlotSpecification(
+    plot_id='victory-score-graph',
+    title="Victory Score",
+    plot_data_function=lambda pd: pd.vic_score,
+    style=PlotStyle.line,
+)
+VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
+    plot_id='victory-economy-score-graph',
+    title="Victory Economic Score",
+    plot_data_function=lambda pd: pd.vic_economy_score,
+    style=PlotStyle.line,
 )
 
 # This dictionary specifies how the plots should be laid out in tabs by the plotly frontend
@@ -167,6 +260,8 @@ THEMATICALLY_GROUPED_PLOTS = {
     "Budget": [
         EMPIRE_ENERGY_ECONOMY_GRAPH,
         EMPIRE_MINERAL_ECONOMY_GRAPH,
+        EMPIRE_CONSUMER_GOODS_ECONOMY_GRAPH,
+        EMPIRE_ALLOYS_ECONOMY_GRAPH,
         EMPIRE_FOOD_ECONOMY_GRAPH,
     ],
     "Economy": [
@@ -174,26 +269,40 @@ THEMATICALLY_GROUPED_PLOTS = {
         SYSTEM_COUNT_GRAPH,
         NET_ENERGY_INCOME_GRAPH,
         NET_MINERAL_INCOME_GRAPH,
+        NET_ALLOYS_INCOME_GRAPH,
+        NET_CONSUMER_GOODS_INCOME_GRAPH,
+        NET_FOOD_INCOME_GRAPH,
     ],
     "Population": [
-        POP_COUNT_GRAPH,
-        EMPIRE_DEMOGRAPHICS_GRAPH,
+        SPECIES_DISTRIBUTION_GRAPH,
+        SPECIES_CRIME_GRAPH,
+        SPECIES_HAPPINESS_GRAPH,
+        JOB_DISTRIBUTION_GRAPH,
+        JOB_CRIME_GRAPH,
+        JOB_HAPPINESS_GRAPH,
+        ETHOS_DISTRIBUTION_GRAPH,
+        ETHOS_CRIME_GRAPH,
+        ETHOS_HAPPINESS_GRAPH,
+        STRATA_DISTRIBUTION_GRAPH,
+        STRATA_CRIME_GRAPH,
+        STRATA_HAPPINESS_GRAPH,
     ],
     "Factions": [
-        FACTION_SIZE_GRAPH,
-        FACTION_SUPPORT_GRAPH,
-        FACTION_HAPPINESS_GRAPH,
     ],
     "Science": [
         TECHNOLOGY_PROGRESS_GRAPH,
         TOTAL_RESEARCH_OUTPUT_GRAPH,
         SURVEY_PROGRESS_GRAPH,
         RESEARCH_OUTPUT_GRAPH,
-        RESEARCH_ALLOCATION_GRAPH,
     ],
     "Military": [
         FLEET_SIZE_GRAPH,
         MILITARY_POWER_GRAPH,
+    ],
+    "Victory Progress": [
+        VICTORY_RANK_GRAPH,
+        VICTORY_SCORE_GRAPH,
+        VICTORY_ECONOMY_SCORE_GRAPH,
     ],
 }
 
@@ -277,22 +386,49 @@ class EmpireProgressionPlotData:
         self.net_mineral_income = None
         self.net_energy_income = None
 
+        self.net_alloys_income = None
+        self.net_consumer_goods_income = None
+        self.net_food_income = None
+
         self.total_research_output = None
         self.tech_count = None
         self.survey_count = None
         self.military_power = None
         self.fleet_size = None
+
         self.species_distribution = None
-        self.faction_size_distribution = None
-        self.faction_happiness = None
-        self.faction_support = None
+        self.happiness_by_species = None
+        self.crime_by_species = None
+
+        self.job_distribution = None
+        self.happiness_by_job = None
+        self.crime_by_job = None
+
+        self.stratum_distribution = None
+        self.happiness_by_stratum = None
+        self.crime_by_stratum = None
+
+        self.faction_distribution = None
+        self.happiness_by_faction = None
+        self.crime_by_faction = None
+
+        self.ethos_distribution = None
+        self.happiness_by_ethos = None
+        self.crime_by_ethos = None
+
         self.empire_energy_budget = None
         self.empire_mineral_budget = None
+        self.empire_alloys_budget = None
+        self.empire_consumer_goods_budget = None
         self.empire_food_budget = None
-        self.empire_research_output = None
-        self.empire_research_allocation = None
 
-        self.data_dicts: List[Dict[str, List[float]]] = None
+        self.empire_research_output = None
+
+        self.vic_rank = None
+        self.vic_score = None
+        self.vic_economy_score = None
+
+        self.data_dicts: List[Tuple[Dict[str, List[float]], float]] = None
 
         self.show_everything: bool = None
         self.only_show_default_empires: bool = None
@@ -300,73 +436,93 @@ class EmpireProgressionPlotData:
     def initialize(self):
         self.dates: List[float] = []
         self.player_country: str = None
+
         self.pop_count: Dict[str, List[int]] = {}
         self.owned_planets: Dict[str, List[int]] = {}
         self.controlled_systems: Dict[str, List[int]] = {}
+
         self.net_mineral_income: Dict[str, List[float]] = {}
         self.net_energy_income: Dict[str, List[float]] = {}
+        self.net_alloys_income: Dict[str, List[float]] = {}
+        self.net_consumer_goods_income: Dict[str, List[float]] = {}
+        self.net_food_income: Dict[str, List[float]] = {}
 
         self.tech_count: Dict[str, List[int]] = {}
         self.total_research_output: Dict[str, List[int]] = {}
         self.survey_count: Dict[str, List[int]] = {}
         self.military_power: Dict[str, List[float]] = {}
         self.fleet_size: Dict[str, List[float]] = {}
+
         self.species_distribution: Dict[str, List[float]] = {}
-        self.faction_size_distribution: Dict[str, List[float]] = {}
-        self.faction_happiness: Dict[str, List[float]] = {}
-        self.faction_support: Dict[str, List[float]] = {}
-        self.empire_energy_budget: Dict[str, List[float]] = dict(
-            base_income=[],
-            trade_income=[],
-            production=[],
-            sector_income=[],
-            mission_income=[],
-            army_expenses=[],
-            building_expenses=[],
-            pop_expenses=[],
-            ship_expenses=[],
-            station_expenses=[],
-            colonization_expenses=[],
-            starbase_expenses=[],
-            trade_expenses=[],
-            mission_expenses=[],
-            enclaves_trade_income=[],
-            enclaves_trade_expenses=[],
-        )
-        self.empire_mineral_budget: Dict[str, List[float]] = dict(
-            production=[],
-            trade_income=[],
-            sector_income=[],
-            pop_expenses=[],
-            ship_expenses=[],
-            trade_expenses=[],
-            enclaves_trade_income=[],
-            enclaves_trade_expenses=[],
-        )
-        self.empire_food_budget: Dict[str, List[float]] = dict(
-            production=[],
-            trade_income=[],
-            enclave_trade_income=[],
-            other=[],
-            consumption=[],
-            trade_expenses=[],
-            enclave_trade_expenses=[],
-            sector_production=[],
-            sector_consumption=[],
-        )
+        self.happiness_by_species: Dict[str, List[float]] = {}
+        self.crime_by_species: Dict[str, List[float]] = {}
+
+        self.job_distribution: Dict[str, List[float]] = {}
+        self.happiness_by_job: Dict[str, List[float]] = {}
+        self.crime_by_job: Dict[str, List[float]] = {}
+
+        self.stratum_distribution: Dict[str, List[float]] = {}
+        self.happiness_by_stratum: Dict[str, List[float]] = {}
+        self.crime_by_stratum: Dict[str, List[float]] = {}
+
+        self.faction_distribution: Dict[str, List[float]] = {}
+        self.happiness_by_faction: Dict[str, List[float]] = {}
+        self.crime_by_faction: Dict[str, List[float]] = {}
+
+        self.ethos_distribution: Dict[str, List[float]] = {}
+        self.happiness_by_ethos: Dict[str, List[float]] = {}
+        self.crime_by_ethos: Dict[str, List[float]] = {}
+
+        self.empire_energy_budget: Dict[str, List[float]] = {}
+        self.empire_alloys_budget: Dict[str, List[float]] = {}
+        self.empire_consumer_goods_budget: Dict[str, List[float]] = {}
+        self.empire_mineral_budget: Dict[str, List[float]] = {}
+        self.empire_food_budget: Dict[str, List[float]] = {}
+
         self.empire_research_output = dict(physics=[], society=[], engineering=[])
-        self.empire_research_allocation = dict(physics=[], society=[], engineering=[])
+
+        self.vic_rank: Dict[str, List[float]] = {}
+        self.vic_score: Dict[str, List[float]] = {}
+        self.vic_economy_score: Dict[str, List[float]] = {}
+
         self.data_dicts = [
-            self.pop_count,
-            self.owned_planets,
-            self.tech_count,
-            self.total_research_output,
-            self.survey_count,
-            self.military_power,
-            self.fleet_size,
-            self.controlled_systems,
-            self.net_mineral_income,
-            self.net_energy_income,
+            (self.pop_count, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.owned_planets, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.controlled_systems, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.net_mineral_income, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.net_energy_income, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.net_alloys_income, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.net_consumer_goods_income, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.net_food_income, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.tech_count, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.total_research_output, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.survey_count, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.military_power, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.fleet_size, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.species_distribution, 0.0),
+            (self.happiness_by_species, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.crime_by_species, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.job_distribution, 0.0),
+            (self.happiness_by_job, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.crime_by_job, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.stratum_distribution, 0.0),
+            (self.happiness_by_stratum, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.crime_by_stratum, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.faction_distribution, 0.0),
+            (self.happiness_by_faction, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.crime_by_faction, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.ethos_distribution, 0.0),
+            (self.happiness_by_ethos, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.crime_by_ethos, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.empire_energy_budget, 0.0),
+            (self.empire_alloys_budget, 0.0),
+            (self.empire_consumer_goods_budget, 0.0),
+            (self.empire_mineral_budget, 0.0),
+            (self.empire_food_budget, 0.0),
+            (self.empire_research_output, 0.0),
+            (self.vic_rank, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.vic_score, EmpireProgressionPlotData.DEFAULT_VAL),
+            (self.vic_economy_score, EmpireProgressionPlotData.DEFAULT_VAL),
         ]
 
         self.show_everything = config.CONFIG.show_everything
@@ -389,76 +545,123 @@ class EmpireProgressionPlotData:
         self.dates.append(gs.date / 360.0)  # store date in years for visualization
         for country_data in gs.country_data:
             try:
-                if self.player_country is None and country_data.country.is_player:
-                    self.player_country = country_data.country.country_name
-                if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
-                    continue
-                self._extract_pop_count(country_data)
                 self._extract_planet_count(country_data)
                 self._extract_system_count(country_data)
                 self._extract_energy_income(country_data)
                 self._extract_mineral_income(country_data)
+                self._extract_alloys_income(country_data)
+                self._extract_consumer_goods_income(country_data)
+                self._extract_food_income(country_data)
                 self._extract_tech_count(country_data)
                 self._extract_research_output(country_data)
                 self._extract_exploration_progress(country_data)
                 self._extract_military_strength(country_data)
                 self._extract_fleet_size(country_data)
+
+                self._extract_victory_condition_info(country_data)
+
+                if self.player_country is None and country_data.country.is_player:
+                    self.player_country = country_data.country.country_name
+                if config.CONFIG.only_show_default_empires and country_data.country.country_type != "default":
+                    continue
                 if country_data.country.is_player:
-                    self._extract_player_empire_demographics(country_data)
-                    self._extract_player_empire_politics(country_data)
+                    self._process_pop_stats(country_data)
+                    self._extract_player_empire_budget(country_data)
                     self._extract_player_empire_research(country_data)
             except Exception as e:
                 print(e)
                 print(country_data.country.country_name)
-        self._extract_player_empire_budget_allocations(gs)
 
         # Pad every dict with the default value if no real value was added, to keep them consistent with the dates list
-        for data_dict in self.data_dicts:
+        for data_dict, default_val in self.data_dicts:
             for key in data_dict:
                 while len(data_dict[key]) < len(self.dates):
-                    data_dict[key].append(EmpireProgressionPlotData.DEFAULT_VAL)
+                    data_dict[key].append(default_val)
 
-    def _extract_player_empire_budget_allocations(self, gs: models.GameState):
+    def _extract_player_empire_budget(self, country_data: models.CountryData):
         # For some reason, some budget values have to be halved...
-        # ENERGY
-        self.empire_energy_budget["base_income"].append(gs.energy_income_base)
-        self.empire_energy_budget["trade_income"].append(gs.energy_income_trade)
-        self.empire_energy_budget["enclaves_trade_income"].append(gs.energy_income_enclaves)
-        self.empire_energy_budget["production"].append(gs.energy_income_production / 2)
-        self.empire_energy_budget["sector_income"].append(gs.energy_income_sectors)
-        self.empire_energy_budget["mission_income"].append(gs.energy_income_mission / 2)
+        for budget_item in country_data.budget:
+            assert isinstance(budget_item, models.BudgetItem)
+            self._add_new_value_to_data_dict(
+                self.empire_energy_budget,
+                budget_item.name,
+                budget_item.net_energy,
+                default_val=0.0,
+            )
+            self._add_new_value_to_data_dict(
+                self.empire_mineral_budget,
+                budget_item.name,
+                budget_item.net_minerals,
+                default_val=0.0,
+            )
+            self._add_new_value_to_data_dict(
+                self.empire_alloys_budget,
+                budget_item.name,
+                budget_item.net_alloys,
+                default_val=0.0,
+            )
+            self._add_new_value_to_data_dict(
+                self.empire_consumer_goods_budget,
+                budget_item.name,
+                budget_item.net_consumer_goods,
+                default_val=0.0,
+            )
+            self._add_new_value_to_data_dict(
+                self.empire_food_budget,
+                budget_item.name,
+                budget_item.net_food,
+                default_val=0.0,
+            )
 
-        self.empire_energy_budget["army_expenses"].append(gs.energy_spending_army)
-        self.empire_energy_budget["building_expenses"].append(gs.energy_spending_building / 2)
-        self.empire_energy_budget["pop_expenses"].append(gs.energy_spending_pop / 2)
-        self.empire_energy_budget["ship_expenses"].append(gs.energy_spending_ship / 2)
-        self.empire_energy_budget["station_expenses"].append(gs.energy_spending_station / 2)
-        self.empire_energy_budget["colonization_expenses"].append(gs.energy_spending_colonization)
-        self.empire_energy_budget["starbase_expenses"].append(gs.energy_spending_starbases / 2)
-        self.empire_energy_budget["mission_expenses"].append(gs.energy_spending_mission / 2)
-        self.empire_energy_budget["trade_expenses"].append(gs.energy_spending_trade)
-        self.empire_energy_budget["enclaves_trade_expenses"].append(gs.energy_spending_enclaves)
-
-        # MINERALS
-        self.empire_mineral_budget["production"].append(gs.mineral_income_production - gs.mineral_income_sectors - gs.mineral_income_enclaves)
-        self.empire_mineral_budget["trade_income"].append(gs.mineral_income_trade)
-        self.empire_mineral_budget["enclaves_trade_income"].append(gs.mineral_income_enclaves)
-        self.empire_mineral_budget["sector_income"].append(gs.mineral_income_sectors)
-
-        self.empire_mineral_budget["pop_expenses"].append(gs.mineral_spending_pop / 2)
-        self.empire_mineral_budget["ship_expenses"].append(gs.mineral_spending_ship / 2)
-        self.empire_mineral_budget["trade_expenses"].append(gs.mineral_spending_trade)
-        self.empire_mineral_budget["enclaves_trade_expenses"].append(gs.mineral_spending_enclaves)
-
-        # FOOD
-        self.empire_food_budget["production"].append(gs.food_income_production)
-        self.empire_food_budget["trade_income"].append(gs.food_income_trade)
-        self.empire_food_budget["enclave_trade_income"].append(gs.food_income_enclaves)
-        self.empire_food_budget["sector_production"].append(gs.food_income_sectors)
-        self.empire_food_budget["consumption"].append(- gs.food_spending - gs.food_spending_enclaves - gs.food_spending_trade)
-        self.empire_food_budget["trade_expenses"].append(gs.food_spending_trade)
-        self.empire_food_budget["enclave_trade_expenses"].append(gs.food_spending_enclaves)
-        self.empire_food_budget["sector_consumption"].append(-gs.food_spending_sectors)
+    def _process_pop_stats(self, country_data: models.CountryData):
+        for stats in country_data.pop_stats_species:
+            assert isinstance(stats, models.PopStatsBySpecies)
+            self._add_new_value_to_data_dict(self.species_distribution,
+                                             stats.species.species_name,
+                                             stats.pop_count,
+                                             default_val=0)
+            self._add_new_value_to_data_dict(self.happiness_by_species,
+                                             stats.species.species_name,
+                                             stats.happiness)
+            self._add_new_value_to_data_dict(self.crime_by_species,
+                                             stats.species.species_name,
+                                             stats.crime)
+        for stats in country_data.pop_stats_job:
+            assert isinstance(stats, models.PopStatsByJob)
+            self._add_new_value_to_data_dict(self.job_distribution,
+                                             stats.job_description,
+                                             stats.pop_count,
+                                             default_val=0)
+            self._add_new_value_to_data_dict(self.happiness_by_job,
+                                             stats.job_description,
+                                             stats.happiness)
+            self._add_new_value_to_data_dict(self.crime_by_job,
+                                             stats.job_description,
+                                             stats.crime)
+        for stats in country_data.pop_stats_stratum:
+            assert isinstance(stats, models.PopStatsByStratum)
+            self._add_new_value_to_data_dict(self.stratum_distribution,
+                                             stats.stratum,
+                                             stats.pop_count,
+                                             default_val=0)
+            self._add_new_value_to_data_dict(self.happiness_by_stratum,
+                                             stats.stratum,
+                                             stats.happiness)
+            self._add_new_value_to_data_dict(self.crime_by_stratum,
+                                             stats.stratum,
+                                             stats.crime)
+        for stats in country_data.pop_stats_ethos:
+            assert isinstance(stats, models.PopStatsByEthos)
+            self._add_new_value_to_data_dict(self.ethos_distribution,
+                                             stats.ethos,
+                                             stats.pop_count,
+                                             default_val=0)
+            self._add_new_value_to_data_dict(self.happiness_by_ethos,
+                                             stats.ethos,
+                                             stats.happiness)
+            self._add_new_value_to_data_dict(self.crime_by_ethos,
+                                             stats.ethos,
+                                             stats.crime)
 
     def iterate_data(self, plot_spec: PlotSpecification) -> Iterable[Tuple[str, List[float], List[float]]]:
         data_dict = plot_spec.plot_data_function(self)
@@ -475,14 +678,7 @@ class EmpireProgressionPlotData:
 
     def data_sorted_by_last_value(self, plot_spec: PlotSpecification) -> List[Tuple[str, List[float], List[float]]]:
         unsorted_data = list(self.iterate_data(plot_spec))
-        return sorted(unsorted_data, key=lambda key_x_y_tup: (key_x_y_tup[2][-1], key_x_y_tup[0]), reverse=True)
-
-    def _extract_pop_count(self, country_data: models.CountryData):
-        if self.show_everything or country_data.show_demographic_info():
-            new_val = sum(pc.pop_count for pc in country_data.pop_counts)
-        else:
-            new_val = EmpireProgressionPlotData.DEFAULT_VAL
-        self._add_new_value_to_data_dict(self.pop_count, country_data.country.country_name, new_val)
+        return sorted(unsorted_data, key=lambda key_x_y_tup: (key_x_y_tup[2][-1], key_x_y_tup[0]))
 
     def _extract_planet_count(self, country_data: models.CountryData):
         if self.show_everything or country_data.show_geography_info():
@@ -500,28 +696,49 @@ class EmpireProgressionPlotData:
 
     def _extract_energy_income(self, country_data: models.CountryData):
         if self.show_everything or country_data.show_economic_info():
-            new_val = country_data.energy_income - country_data.energy_spending
+            new_val = country_data.net_energy
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.net_energy_income, country_data.country.country_name, new_val)
 
     def _extract_mineral_income(self, country_data: models.CountryData):
         if self.show_everything or country_data.show_economic_info():
-            new_val = country_data.mineral_income - country_data.mineral_spending
+            new_val = country_data.net_minerals
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.net_mineral_income, country_data.country.country_name, new_val)
 
+    def _extract_alloys_income(self, country_data: models.CountryData):
+        if self.show_everything or country_data.show_economic_info():
+            new_val = country_data.net_alloys
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.net_alloys_income, country_data.country.country_name, new_val)
+
+    def _extract_consumer_goods_income(self, country_data: models.CountryData):
+        if self.show_everything or country_data.show_economic_info():
+            new_val = country_data.net_consumer_goods
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.net_consumer_goods_income, country_data.country.country_name, new_val)
+
+    def _extract_food_income(self, country_data: models.CountryData):
+        if self.show_everything or country_data.show_economic_info():
+            new_val = country_data.net_food
+        else:
+            new_val = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.net_food_income, country_data.country.country_name, new_val)
+
     def _extract_tech_count(self, country_data: models.CountryData):
         if self.show_everything or country_data.show_tech_info():
-            new_val = country_data.tech_progress
+            new_val = country_data.tech_count
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.tech_count, country_data.country.country_name, new_val)
 
     def _extract_research_output(self, country_data: models.CountryData):
         if self.show_everything or country_data.show_tech_info():
-            new_val = country_data.society_research + country_data.physics_research + country_data.engineering_research
+            new_val = country_data.net_society_research + country_data.net_physics_research + country_data.net_engineering_research
         else:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.total_research_output, country_data.country.country_name, new_val)
@@ -547,87 +764,29 @@ class EmpireProgressionPlotData:
             new_val = EmpireProgressionPlotData.DEFAULT_VAL
         self._add_new_value_to_data_dict(self.fleet_size, country_data.country.country_name, new_val)
 
-    def _extract_player_empire_demographics(self, country_data: models.CountryData):
-        total_pop_count = 0
-        current_species_count = {s: 0 for s in self.species_distribution}
-        for pc in country_data.pop_counts:
-            species = pc.species.species_name
-            if species not in self.species_distribution:
-                current_species_count[species] = 0
-            current_species_count[species] += pc.pop_count
-            total_pop_count += pc.pop_count
-        for s, c in current_species_count.items():
-            if s not in self.species_distribution:
-                self.species_distribution[s] = [0 for _ in range(len(self.dates) - 1)]
-            self.species_distribution[s].append(c)
-        for species in current_species_count:
-            if len(self.species_distribution[species]) < len(self.dates):
-                self.species_distribution[species].append(0)
-        for species in self.species_distribution:
-            self.species_distribution[species][-1] *= 100.0 / total_pop_count
-
-    def _extract_player_empire_politics(self, country_data: models.CountryData):
-        total_faction_pop_count = 0
-        # first get the current size of each faction
-        faction_sizes = {}
-        faction_happiness = {}
-        faction_support_dict = {}
-        for faction_data in sorted(country_data.faction_support, key=lambda fdata: str(fdata.faction.ethics)):
-            faction = faction_data.faction.faction_name
-            if faction not in faction_sizes:
-                faction_sizes[faction] = 0
-                faction_happiness[faction] = 0
-                faction_support_dict[faction] = 0
-            total_faction_pop_count += faction_data.members
-            faction_sizes[faction] += faction_data.members
-            faction_happiness[faction] += faction_data.happiness
-            faction_support_dict[faction] += faction_data.support
-
-        for f in self.faction_size_distribution:
-            if f not in faction_sizes:
-                faction_sizes[f] = 0
-        for f in self.faction_happiness:
-            if f not in faction_happiness:
-                faction_happiness[f] = 0
-                faction_support_dict[f] = 0
-
-        pop_count = self.pop_count[country_data.country.country_name][-1]
-        if not pop_count:
-            return
-        # then add them to the data dictionary.
-        for f in faction_sizes:
-            if f not in self.faction_size_distribution:
-                self.faction_size_distribution[f] = [0 for _ in range(len(self.dates) - 1)]
-            self.faction_size_distribution[f].append(faction_sizes[f])
-        for f in faction_happiness:
-            if f not in self.faction_happiness:
-                self.faction_happiness[f] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
-                self.faction_support[f] = [0 for _ in range(len(self.dates) - 1)]
-            self.faction_happiness[f].append(faction_happiness[f])
-            self.faction_support[f].append(faction_support_dict[f])
-        for faction in faction_sizes:
-            if len(self.faction_size_distribution[faction]) < len(self.dates):
-                self.faction_size_distribution[faction].append(0)
-                if faction in self.faction_happiness:
-                    self.faction_happiness[faction].append(EmpireProgressionPlotData.DEFAULT_VAL)
-                    self.faction_support[faction].append(0)
-        for faction in self.faction_size_distribution:
-            self.faction_size_distribution[faction][-1] *= 100.0 / pop_count
-            self.faction_support[faction][-1] *= 100.0
+    def _extract_victory_condition_info(self, country_data: models.CountryData):
+        if self.show_everything or country_data.show_geography_info():
+            vic_rank = country_data.victory_rank
+            vic_score = country_data.victory_score
+            vic_economy_score = country_data.economy_power
+        else:
+            vic_rank = EmpireProgressionPlotData.DEFAULT_VAL
+            vic_score = EmpireProgressionPlotData.DEFAULT_VAL
+            vic_economy_score = EmpireProgressionPlotData.DEFAULT_VAL
+        self._add_new_value_to_data_dict(self.vic_rank, country_data.country.country_name, vic_rank)
+        self._add_new_value_to_data_dict(self.vic_score, country_data.country.country_name, vic_score)
+        self._add_new_value_to_data_dict(self.vic_economy_score, country_data.country.country_name, vic_economy_score)
 
     def _extract_player_empire_research(self, country_data: models.CountryData):
-        self.empire_research_output["physics"].append(country_data.physics_research)
-        self.empire_research_output["society"].append(country_data.society_research)
-        self.empire_research_output["engineering"].append(country_data.engineering_research)
-        research_sum = country_data.physics_research + country_data.society_research + country_data.engineering_research
-        total = max(1.0, research_sum)
-        self.empire_research_allocation["physics"].append(100.0 * country_data.physics_research / total)
-        self.empire_research_allocation["society"].append(100.0 * country_data.society_research / total)
-        self.empire_research_allocation["engineering"].append(100.0 * country_data.engineering_research / total)
+        self.empire_research_output["physics"].append(country_data.net_physics_research)
+        self.empire_research_output["society"].append(country_data.net_society_research)
+        self.empire_research_output["engineering"].append(country_data.net_engineering_research)
 
-    def _add_new_value_to_data_dict(self, data_dict, key, new_val):
+    def _add_new_value_to_data_dict(self, data_dict, key, new_val, default_val=DEFAULT_VAL):
         if key not in data_dict:
-            data_dict[key] = [EmpireProgressionPlotData.DEFAULT_VAL for _ in range(len(self.dates) - 1)]
+            if new_val == default_val:
+                return
+            data_dict[key] = [default_val for _ in range(len(self.dates) - 1)]
         if len(data_dict[key]) >= len(self.dates):
             logger.info(f"Ignoring duplicate value for {key}.")
             return
@@ -677,20 +836,20 @@ class GalaxyMapData:
                 assert isinstance(system, models.System)  # to remove pycharm warnings
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
-                    name=system.original_name,
+                    name=system.name,
                     country=GalaxyMapData.UNCLAIMED,
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
             for hl in session.query(models.HyperLane).all():
                 sys_one, sys_two = hl.system_one.system_id_in_game, hl.system_two.system_id_in_game
                 self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
-        logger.debug(f"Initialized galaxy graph in {time.clock()-start_time} seconds.")
+        logger.debug(f"Initialized galaxy graph in {time.clock() - start_time} seconds.")
 
     def get_graph_for_date(self, time_days: int) -> nx.Graph:
         start_time = time.clock()
         if time_days > self._cache_valid_date:
             self._update_cache()
-            logger.debug(f"Updated System Ownership Cache in {time.clock()-start_time} seconds.")
+            logger.debug(f"Updated System Ownership Cache in {time.clock() - start_time} seconds.")
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
         for country, nodes in systems_by_owner.items():
@@ -706,7 +865,7 @@ class GalaxyMapData:
                 self.galaxy_graph.edges[edge]["country"] = i_country
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
-        logger.info(f"Updated networkx graph in {time.clock()-start_time} seconds.")
+        logger.info(f"Updated networkx graph in {time.clock() - start_time} seconds.")
         return self.galaxy_graph
 
     def _get_system_ids_by_owner(self, time_days):

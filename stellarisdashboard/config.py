@@ -68,6 +68,7 @@ DEFAULT_SETTINGS = dict(
     save_name_filter="",
     read_only_every_nth_save=1,
     only_read_player_history=False,
+    normalize_stacked_plots=False,
     plot_width=1150,
     plot_height=640,
 )
@@ -93,6 +94,8 @@ class Config:
     only_show_default_empires: bool = None
     extract_system_ownership: bool = None
 
+    normalize_stacked_plots: bool = None
+
     save_name_filter: str = None
     read_only_every_nth_save: int = None
 
@@ -110,6 +113,7 @@ class Config:
         "show_everything",
         "only_show_default_empires",
         "only_read_player_history",
+        "normalize_stacked_plots",
     }
     INT_KEYS = {
         "port",
@@ -161,18 +165,19 @@ class Config:
         return result
 
     def get_adjustable_settings_dict(self):
-        return {
-            "check_version": self.check_version,
-            "extract_system_ownership": self.extract_system_ownership,
-            "show_everything": self.show_everything,
-            "only_show_default_empires": self.only_show_default_empires,
-            "only_read_player_history": self.only_read_player_history,
-            "read_only_every_nth_save": self.read_only_every_nth_save,
-            "save_name_filter": self.save_name_filter,
-            "threads": self.threads,
-            "plot_width": self.plot_width,
-            "plot_height": self.plot_height,
-        }
+        return dict(
+            check_version=self.check_version,
+            extract_system_ownership=self.extract_system_ownership,
+            show_everything=self.show_everything,
+            only_show_default_empires=self.only_show_default_empires,
+            only_read_player_history=self.only_read_player_history,
+            read_only_every_nth_save=self.read_only_every_nth_save,
+            save_name_filter=self.save_name_filter,
+            threads=self.threads,
+            plot_width=self.plot_width,
+            plot_height=self.plot_height,
+            normalize_stacked_plots=self.normalize_stacked_plots,
+        )
 
     def __str__(self):
         lines = [

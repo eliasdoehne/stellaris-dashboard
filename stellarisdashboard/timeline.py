@@ -51,13 +51,13 @@ class TimelineExtractor:
         self._player_country_id: int = None
         self._current_gamestate = None
         self._species_by_ingame_id = None
+        self._robot_species = None
         self._systems_owned_by_country_dict = None
         self._planets_owned_by_country_dict = None
-        self._owner_country_by_planet_id = None
+        self._planet_owner_country_by_planet_id = None
         self._player_research_agreements = None
         self._player_sensor_links = None
         self._player_monthly_trade_info = None
-        self._factionless_pops = None
         self._date_in_days = None
         self._logger_str = None
 
@@ -105,7 +105,7 @@ class TimelineExtractor:
             except Exception as e:
                 self._session.rollback()
                 logger.error(e)
-                if isinstance(e, KeyboardInterrupt):
+                if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
             finally:
                 self._reset_state()
@@ -159,14 +159,14 @@ class TimelineExtractor:
         return system_model
 
     def _process_gamestate(self):
-        self._extract_player_trade_agreements()
-        self._initialize_system_and_planet_ownership_dicts()
-        self._extract_species_and_initialize_species_by_id_dict()
-        self._process_pop_data()
         self._current_gamestate = models.GameState(
             game=self.game, date=self._date_in_days,
         )
         self._session.add(self._current_gamestate)
+        self._extract_player_trade_agreements()
+        self._initialize_system_and_planet_ownership_dicts()
+        self._extract_species_and_initialize_species_by_id_dict()
+        player_country_data = None
 
         for country_id, country_data_dict in self._gamestate_dict["country"].items():
             if not isinstance(country_data_dict, dict):
@@ -200,8 +200,9 @@ class TimelineExtractor:
             self._extract_country_government(country_model, country_data_dict)
 
             country_data_model = self._extract_country_data(country_id, country_model, country_data_dict, diplomacy_data)
+            self._extract_country_economy(country_data_model, country_data_dict)
             if country_model.is_player:
-                self._extract_country_economy(country_data_model, country_data_dict)
+                player_country_data = country_data_model
             if country_data_model.attitude_towards_player.is_known():
                 debug_name = country_data_dict.get('name', 'Unnamed Country')
                 logger.info(f"{self._logger_str} Extracting country info: {debug_name}")
@@ -218,6 +219,7 @@ class TimelineExtractor:
         self._settle_finished_wars()
         if config.CONFIG.extract_system_ownership:
             self._extract_system_ownership()
+        self._process_pop_data(player_country_data)
 
     def _extract_country_government(self, country_model: models.Country, country_dict):
         gov_name = country_dict.get("name", "Unnamed Country")
@@ -287,7 +289,7 @@ class TimelineExtractor:
     def _initialize_system_and_planet_ownership_dicts(self):
         self._systems_owned_by_country_dict = {}
         self._planets_owned_by_country_dict = {}
-        self._owner_country_by_planet_id = {}
+        self._planet_owner_country_by_planet_id = {}
         for country_id, country_dict in self._gamestate_dict["country"].items():
             if not isinstance(country_dict, dict):
                 continue
@@ -295,29 +297,168 @@ class TimelineExtractor:
             self._planets_owned_by_country_dict[country_id] = set(country_dict.get("owned_planets", []))
 
             for p_id in self._planets_owned_by_country_dict[country_id]:
-                self._owner_country_by_planet_id[p_id] = country_id
+                self._planet_owner_country_by_planet_id[p_id] = country_id
 
-            sectors = country_dict.get("owned_sectors", {})
-            if not isinstance(sectors, dict):
+            owned_sectors = country_dict.get("owned_sectors", [])
+            if not isinstance(owned_sectors, list):
                 continue
-            for sector_id in sectors.values():
+            for sector_id in owned_sectors:
                 sector_dict = self._gamestate_dict["sectors"].get(sector_id)
                 if not isinstance(sector_dict, dict):
                     continue
-                for system_id_in_game in sector_dict.get("systems"):
+                for system_id_in_game in sector_dict.get("systems", []):
                     if system_id_in_game is None:
                         continue
                     self._systems_owned_by_country_dict[country_id].add(system_id_in_game)
 
     def _extract_species_and_initialize_species_by_id_dict(self):
         self._species_by_ingame_id = {}
+        self._robot_species = set()
 
         for species_index, species_dict in enumerate(self._gamestate_dict.get("species", [])):
             species_model = self._get_or_add_species(species_index)
             self._species_by_ingame_id[species_index] = species_model
+            if species_dict.get("class") == "ROBOT":
+                self._robot_species.add(species_index)
 
-    def _process_pop_data(self):
-        self._factionless_pops = {}
+    def _process_pop_data(self, country_data: models.CountryData):
+        def init_dict():
+            return dict(pop_count=0, crime=0, happiness=0, power=0)
+
+        country_id_in_game = country_data.country.country_id_in_game
+
+        stats_by_species = {}
+        stats_by_faction = {}
+        stats_by_job = {}
+        stats_by_stratum = {}
+        stats_by_ethos = {}
+        stats_by_planet = {}
+
+        for pop_dict in self._gamestate_dict["pop"].values():
+            if not isinstance(pop_dict, dict):
+                continue
+            planet_id = pop_dict.get("planet")
+            if self._planet_owner_country_by_planet_id.get(planet_id) != country_id_in_game:
+                # for now, only use player pops
+                continue
+            species_id = pop_dict.get("species_index")
+            faction_id = pop_dict.get("pop_faction")
+            if faction_id is None:
+                if pop_dict.get("enslaved") == "yes":
+                    faction_id = self.SLAVE_FACTION_ID
+                elif species_id in self._robot_species:
+                    faction_id = self.NON_SENTIENT_ROBOT_FACTION_ID
+                # TODO: Figure out how to detect Purges
+                else:
+                    faction_id = self.NO_FACTION_ID
+
+            ethos = pop_dict.get("ethos", {}).get("ethic")
+            if not isinstance(ethos, str):
+                ethos = "ethic_no_ethos"
+
+            job = pop_dict.get("job", "unemployed")
+            stratum = pop_dict.get("category", "unknown stratum")
+
+            crime = pop_dict.get("crime", 0.0)
+            happiness = pop_dict.get("happiness", 0.0)
+            power = pop_dict.get("power", 0.0)
+
+            if species_id not in stats_by_species:
+                stats_by_species[species_id] = init_dict()
+            if faction_id not in stats_by_faction:
+                stats_by_faction[faction_id] = init_dict()
+            if job not in stats_by_job:
+                stats_by_job[job] = init_dict()
+            if stratum not in stats_by_stratum:
+                stats_by_stratum[stratum] = init_dict()
+            if ethos not in stats_by_ethos:
+                stats_by_ethos[ethos] = init_dict()
+            if planet_id not in stats_by_planet:
+                stats_by_planet[planet_id] = init_dict()
+
+            stats_by_species[species_id]["pop_count"] += 1
+            stats_by_faction[faction_id]["pop_count"] += 1
+            stats_by_job[job]["pop_count"] += 1
+            stats_by_stratum[stratum]["pop_count"] += 1
+            stats_by_ethos[ethos]["pop_count"] += 1
+            stats_by_planet[planet_id]["pop_count"] += 1
+
+            stats_by_species[species_id]["crime"] += crime
+            stats_by_faction[faction_id]["crime"] += crime
+            stats_by_job[job]["crime"] += crime
+            stats_by_stratum[stratum]["crime"] += crime
+            stats_by_ethos[ethos]["crime"] += crime
+            stats_by_planet[planet_id]["crime"] += crime
+
+            stats_by_species[species_id]["happiness"] += happiness
+            stats_by_faction[faction_id]["happiness"] += happiness
+            stats_by_job[job]["happiness"] += happiness
+            stats_by_stratum[stratum]["happiness"] += happiness
+            stats_by_ethos[ethos]["happiness"] += happiness
+            stats_by_planet[planet_id]["happiness"] += happiness
+
+            stats_by_species[species_id]["power"] += power
+            stats_by_faction[faction_id]["power"] += power
+            stats_by_job[job]["power"] += power
+            stats_by_stratum[stratum]["power"] += power
+            stats_by_ethos[ethos]["power"] += power
+            stats_by_planet[planet_id]["power"] += power
+
+        for species_id, val_dict in stats_by_species.items():
+            if val_dict["pop_count"] == 0:
+                continue
+            val_dict["crime"] /= val_dict["pop_count"]
+            val_dict["happiness"] /= val_dict["pop_count"]
+            val_dict["power"] /= val_dict["pop_count"]
+
+            species = self._get_or_add_species(species_id)
+            self._session.add(models.PopStatsBySpecies(
+                country_data=country_data,
+                species=species,
+                **val_dict
+            ))
+
+        for job, val_dict in stats_by_job.items():
+            if val_dict["pop_count"] == 0:
+                continue
+            val_dict["crime"] /= val_dict["pop_count"]
+            val_dict["happiness"] /= val_dict["pop_count"]
+            val_dict["power"] /= val_dict["pop_count"]
+
+            job = self._get_or_add_shared_description(job)
+            self._session.add(models.PopStatsByJob(
+                country_data=country_data,
+                db_job_description=job,
+                **val_dict
+            ))
+
+        for stratum, val_dict in stats_by_stratum.items():
+            if val_dict["pop_count"] == 0:
+                continue
+            val_dict["crime"] /= val_dict["pop_count"]
+            val_dict["happiness"] /= val_dict["pop_count"]
+            val_dict["power"] /= val_dict["pop_count"]
+
+            stratum = self._get_or_add_shared_description(stratum)
+            self._session.add(models.PopStatsByStratum(
+                country_data=country_data,
+                db_stratum_description=stratum,
+                **val_dict
+            ))
+
+        for ethos, val_dict in stats_by_ethos.items():
+            if val_dict["pop_count"] == 0:
+                continue
+            val_dict["crime"] /= val_dict["pop_count"]
+            val_dict["happiness"] /= val_dict["pop_count"]
+            val_dict["power"] /= val_dict["pop_count"]
+
+            ethos = self._get_or_add_shared_description(ethos)
+            self._session.add(models.PopStatsByEthos(
+                country_data=country_data,
+                db_ethos_description=ethos,
+                **val_dict
+            ))
 
     def _extract_country_data(self, country_id, country: models.Country, country_dict, diplomacy_data) -> models.CountryData:
         is_player = (country_id == self._player_country_id)
@@ -336,10 +477,8 @@ class TimelineExtractor:
             game_state=self._current_gamestate,
 
             military_power=country_dict.get("military_power", 0),
-            economy_power=country_dict.get("economy_power", 0),
             tech_power=country_dict.get("tech_power", 0),
             fleet_size=country_dict.get("fleet_size", 0),
-            victory_score=country_dict.get("victory_score", 0),
             empire_size=country_dict.get("empire_size", 0),
             empire_cohesion=country_dict.get("empire_cohesion", 0),
             tech_count=tech_count,
@@ -347,9 +486,26 @@ class TimelineExtractor:
             owned_planets=len(country_dict.get("owned_planets", [])),
             controlled_systems=len(self._systems_owned_by_country_dict.get(country_id, [])),
 
+            victory_rank=country_dict.get("victory_rank", 0),
+            victory_score=country_dict.get("victory_score", 0),
+            economy_power=country_dict.get("economy_power", 0),
+
             has_research_agreement_with_player=has_research_agreement_with_player,
             has_sensor_link_with_player=has_sensor_link_with_player,
             attitude_towards_player=attitude_towards_player,
+
+            # Resource income values are calculated in _extract_country_economy
+            net_energy=0.0,
+            net_minerals=0.0,
+            net_alloys=0.0,
+            net_consumer_goods=0.0,
+            net_food=0.0,
+            net_unity=0.0,
+            net_influence=0.0,
+            net_physics_research=0.0,
+            net_society_research=0.0,
+            net_engineering_research=0.0,
+
             **diplomacy_data,
         )
         self._session.add(country_data)
@@ -363,30 +519,53 @@ class TimelineExtractor:
                 continue
             if not values:
                 continue
+            energy = values.get("energy", 0.0)
+            minerals = values.get("minerals", 0.0)
+            alloys = values.get("alloys", 0.0)
+            consumer_goods = values.get("consumer_goods", 0.0)
+            food = values.get("food", 0.0)
+            unity = values.get("unity", 0.0)
+            influence = values.get("influence", 0.0)
+            physics = values.get("physics_research", 0.0)
+            society = values.get("society_research", 0.0)
+            engineering = values.get("engineering_research", 0.0)
 
-            description = self._get_or_add_shared_description(item_name)
+            country_data.net_energy += energy
+            country_data.net_minerals += minerals
+            country_data.net_alloys += alloys
+            country_data.net_consumer_goods += consumer_goods
+            country_data.net_food += food
+            country_data.net_unity += unity
+            country_data.net_influence += influence
+            country_data.net_physics_research += physics
+            country_data.net_society_research += society
+            country_data.net_engineering_research += engineering
 
-            self._session.add(models.BudgetItem(
-                country_data=country_data,
-                db_budget_item_name=description,
-                net_energy=values.get("energy", 0.0),
-                net_minerals=values.get("minerals", 0.0),
-                net_food=values.get("food", 0.0),
-                net_alloys=values.get("alloys", 0.0),
-                net_consumer_goods=values.get("consumer_goods", 0.0),
-                net_unity=values.get("unity", 0.0),
-                net_influence=values.get("influence", 0.0),
-                net_volatile_motes=values.get("volatile_motes", 0.0),
-                net_exotic_gases=values.get("exotic_gases", 0.0),
-                net_rare_crystals=values.get("rare_crystals", 0.0),
-                net_living_metal=values.get("living_metal", 0.0),
-                net_zro=values.get("zro", 0.0),
-                net_dark_matter=values.get("dark_matter", 0.0),
-                net_nanites=values.get("nanites", 0.0),
-                net_physics_research=values.get("physics_research", 0.0),
-                net_society_research=values.get("society_research", 0.0),
-                net_engineering_research=values.get("engineering_research", 0.0),
-            ))
+            if country_data.country.is_player:
+                description = self._get_or_add_shared_description(item_name)
+
+                self._session.add(models.BudgetItem(
+                    country_data=country_data,
+                    db_budget_item_name=description,
+                    net_energy=energy,
+                    net_minerals=minerals,
+                    net_food=food,
+                    net_alloys=alloys,
+                    net_consumer_goods=consumer_goods,
+                    net_unity=unity,
+                    net_influence=influence,
+                    net_volatile_motes=values.get("volatile_motes", 0.0),
+                    net_exotic_gases=values.get("exotic_gases", 0.0),
+                    net_rare_crystals=values.get("rare_crystals", 0.0),
+                    net_living_metal=values.get("living_metal", 0.0),
+                    net_zro=values.get("zro", 0.0),
+                    net_dark_matter=values.get("dark_matter", 0.0),
+                    net_nanites=values.get("nanites", 0.0),
+                    net_physics_research=physics,
+                    net_society_research=society,
+                    net_engineering_research=engineering,
+                ))
+        self._session.add(country_data)  # update
 
     def _process_diplomacy(self, country_model: models.Country, country_dict):
         relations_manager = country_dict.get("relations_manager", [])
@@ -586,7 +765,6 @@ class TimelineExtractor:
             self._player_monthly_trade_info["food_trade_income"] += other_resources.get("food", 0)
 
     def _extract_factions_and_faction_leaders(self, country_model: models.Country, country_data: models.CountryData):
-        faction_pop_sum = 0
         for faction_id, faction_dict in self._gamestate_dict.get("pop_factions", {}).items():
             if not faction_dict or faction_dict == "none":
                 continue
@@ -596,7 +774,7 @@ class TimelineExtractor:
             if faction_country_name != country_data.country.country_name:
                 continue
             # If the faction is in the database, get it, otherwise add a new faction
-            faction_model = self._add_faction_and_faction_support(
+            faction_model = self._get_or_add_faction(
                 faction_id_in_game=faction_id,
                 faction_name=faction_name,
                 country_data=country_data,
@@ -604,23 +782,18 @@ class TimelineExtractor:
             )
             self._history_add_or_update_faction_leader_event(country_model, faction_model, faction_dict)
 
-        for faction_name, num in self._factionless_pops.items():
-            if not num:
-                continue
-            faction_pop_sum += num
-            self._add_faction_and_faction_support(
-                faction_id_in_game=self.NO_FACTION_ID_MAP[faction_name],
+        for faction_name, faction_id in self.NO_FACTION_ID_MAP.items():
+            self._get_or_add_faction(
+                faction_id_in_game=faction_id,
                 faction_name=faction_name,
                 country_data=country_data,
                 faction_type=TimelineExtractor.NO_FACTION_POP_ETHICS[faction_name],
             )
 
-    def _add_faction_and_faction_support(self,
-                                         faction_id_in_game: int,
-                                         faction_name: str,
-                                         country_data: models.CountryData,
-                                         faction_type: str,
-                                         ):
+    def _get_or_add_faction(self, faction_id_in_game: int,
+                            faction_name: str,
+                            country_data: models.CountryData,
+                            faction_type: str):
         country_model = country_data.country
         faction = self._session.query(models.PoliticalFaction).filter_by(
             faction_id_in_game=faction_id_in_game,
@@ -1698,8 +1871,9 @@ class TimelineExtractor:
         logger.info(f"{self._logger_str} Resetting timeline state")
         self._systems_owned_by_country_dict = None
         self._planets_owned_by_country_dict = None
-        self._owner_country_by_planet_id = None
+        self._planet_owner_country_by_planet_id = None
         self._species_by_ingame_id = None
+        self._robot_species = None
         self._current_gamestate = None
         self._gamestate_dict = None
         self._player_country_id = None

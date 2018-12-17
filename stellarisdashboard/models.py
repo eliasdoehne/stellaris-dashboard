@@ -359,6 +359,7 @@ class GameState(Base):
 
     game = relationship("Game", back_populates="game_states")
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
+    planet_stats = relationship("PlanetStats", back_populates="gamestate", cascade="all,delete,delete-orphan")
 
 
 class Country(Base):
@@ -482,11 +483,13 @@ class CountryData(Base):
 
     date = Column(Integer, index=True, nullable=False)
 
-    military_power = Column(Float)
+    victory_rank = Column(Integer)
+    victory_score = Column(Float)
     economy_power = Column(Float)
     tech_power = Column(Float)
+
+    military_power = Column(Float)
     fleet_size = Column(Float)
-    victory_score = Column(Float)
     empire_size = Column(Float)
     empire_cohesion = Column(Float)
 
@@ -494,6 +497,17 @@ class CountryData(Base):
     exploration_progress = Column(Integer)
     owned_planets = Column(Integer)
     controlled_systems = Column(Integer)
+
+    net_energy = Column(Float, nullable=False, default=0.0)
+    net_minerals = Column(Float, nullable=False, default=0.0)
+    net_alloys = Column(Float, nullable=False, default=0.0)
+    net_consumer_goods = Column(Float, nullable=False, default=0.0)
+    net_food = Column(Float, nullable=False, default=0.0)
+    net_unity = Column(Float, nullable=False, default=0.0)
+    net_influence = Column(Float, nullable=False, default=0.0)
+    net_physics_research = Column(Float, nullable=False, default=0.0)
+    net_society_research = Column(Float, nullable=False, default=0.0)
+    net_engineering_research = Column(Float, nullable=False, default=0.0)
 
     # Diplomacy towards player
     attitude_towards_player = Column(Enum(Attitude))
@@ -517,6 +531,7 @@ class CountryData(Base):
     pop_stats_faction = relationship("PopStatsByFaction", back_populates="country_data", cascade="all,delete,delete-orphan")
     pop_stats_job = relationship("PopStatsByJob", back_populates="country_data", cascade="all,delete,delete-orphan")
     pop_stats_stratum = relationship("PopStatsByStratum", back_populates="country_data", cascade="all,delete,delete-orphan")
+    pop_stats_ethos = relationship("PopStatsByEthos", back_populates="country_data", cascade="all,delete,delete-orphan")
 
     def show_geography_info(self):
         return self.country.is_player or self.attitude_towards_player.is_known()
@@ -555,7 +570,7 @@ class BudgetItem(Base):
     net_energy = Column(Float, default=0.0)
     net_minerals = Column(Float, default=0.0)
     net_food = Column(Float, default=0.0)
-    
+
     net_alloys = Column(Float, default=0.0)
     net_consumer_goods = Column(Float, default=0.0)
 
@@ -578,7 +593,7 @@ class BudgetItem(Base):
     db_budget_item_name = relationship("SharedDescription")
 
     @property
-    def budget_item_name(self) -> str:
+    def name(self) -> str:
         return self.db_budget_item_name.text
 
 
@@ -625,7 +640,7 @@ class PoliticalFaction(Base):
     country_id = Column(ForeignKey(Country.country_id), index=True)
 
     faction_name = Column(String(80))
-    faction_id_in_game = Column(Integer)
+    faction_id_in_game = Column(Integer, index=True)
     faction_type_description_id = Column(ForeignKey(SharedDescription.description_id))
 
     db_faction_type = relationship("SharedDescription")
@@ -773,9 +788,9 @@ class PopStatsBySpecies(Base):
     species_id = Column(ForeignKey(Species.species_id))
 
     pop_count = Column(Integer)
-    average_happiness = Column(Float)
-    average_power = Column(Float)
-    average_crime = Column(Float)
+    happiness = Column(Float)
+    power = Column(Float)
+    crime = Column(Float)
 
     country_data = relationship("CountryData", back_populates="pop_stats_species")
     species = relationship("Species")
@@ -788,9 +803,10 @@ class PopStatsByFaction(Base):
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id))
 
     pop_count = Column(Integer)
-    average_happiness = Column(Float)
-    average_power = Column(Float)
-    average_crime = Column(Float)
+    happiness = Column(Float)
+    power = Column(Float)
+    crime = Column(Float)
+
     faction_approval = Column(Float)
     support = Column(Float)
 
@@ -805,9 +821,9 @@ class PopStatsByJob(Base):
     job_description_id = Column(ForeignKey(SharedDescription.description_id))
 
     pop_count = Column(Integer)
-    average_happiness = Column(Float)
-    average_power = Column(Float)
-    average_crime = Column(Float)
+    happiness = Column(Float)
+    power = Column(Float)
+    crime = Column(Float)
 
     db_job_description = relationship(SharedDescription)
     country_data = relationship("CountryData", back_populates="pop_stats_job")
@@ -821,13 +837,12 @@ class PopStatsByStratum(Base):
     __tablename__ = 'popstats_stratum_table'
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
-    faction_id = Column(ForeignKey(PoliticalFaction.faction_id))
     stratum_description_id = Column(ForeignKey(SharedDescription.description_id))
 
     pop_count = Column(Integer)
-    average_happiness = Column(Float)
-    average_power = Column(Float)
-    average_crime = Column(Float)
+    happiness = Column(Float)
+    power = Column(Float)
+    crime = Column(Float)
 
     db_stratum_description = relationship(SharedDescription)
     country_data = relationship("CountryData", back_populates="pop_stats_stratum")
@@ -835,6 +850,46 @@ class PopStatsByStratum(Base):
     @property
     def stratum(self) -> str:
         return self.db_stratum_description.text
+
+
+class PopStatsByEthos(Base):
+    __tablename__ = 'popstats_ethos_table'
+    pop_stats_stratum_id = Column(Integer, primary_key=True)
+    country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
+    ethos_description_id = Column(ForeignKey(SharedDescription.description_id))
+
+    pop_count = Column(Integer)
+    happiness = Column(Float)
+    power = Column(Float)
+    crime = Column(Float)
+
+    db_ethos_description = relationship(SharedDescription)
+    country_data = relationship("CountryData", back_populates="pop_stats_ethos")
+
+    @property
+    def ethos(self) -> str:
+        return self.db_ethos_description.text
+
+
+class PlanetStats(Base):
+    __tablename__ = "planetstats_table"
+    planet_stats_id = Column(Integer, primary_key=True)
+    gamestate_id = Column(ForeignKey(GameState.gamestate_id), index=True)
+
+    planet_id = Column(ForeignKey(Planet.planet_id))
+
+    pop_count = Column(Integer)
+    happiness = Column(Float)
+    power = Column(Float)
+    crime = Column(Float)
+
+    migration = Column(Float)
+    free_amenities = Column(Float)
+    free_housing = Column(Float)
+    stability = Column(Float)
+
+    planet = relationship(Planet)
+    gamestate = relationship(GameState, back_populates="planet_stats")
 
 
 class HistoricalEvent(Base):
