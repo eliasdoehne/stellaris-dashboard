@@ -13,6 +13,7 @@ from collections import namedtuple
 from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator, Deque
 
 from stellarisdashboard import config
+from stellarisdashboard.token_value_stream_re import INT, FLOAT
 
 logger = logging.getLogger(__name__)
 try:
@@ -230,16 +231,12 @@ def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
             yield Token(TokenType.BRACE_OPEN, "{", line_number)
         else:
             token_type = None
-            if value[0].isdigit():
-                try:
-                    value = int(value)
-                    token_type = TokenType.INTEGER
-                except ValueError:
-                    try:
-                        value = float(value)
-                        token_type = TokenType.FLOAT
-                    except ValueError:
-                        pass
+            if INT.fullmatch(value):
+                value = int(value)
+                token_type = TokenType.INTEGER
+            elif FLOAT.fullmatch(value):
+                value = float(value)
+                token_type = TokenType.FLOAT
 
             if token_type is None:
                 value = value.strip('"')
