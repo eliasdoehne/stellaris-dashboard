@@ -26,7 +26,7 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.2.1"
+VERSION_ID = "v0.3"
 
 
 @flask_app.route("/")
@@ -586,7 +586,7 @@ def dict_key_to_legend_label(key: str):
 
 
 def get_plot_value_labels(x_values, y_values, key):
-    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}' if y else "" for (x, y) in zip(x_values, y_values)]
+    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}' if (y and y == y) else "" for (x, y) in zip(x_values, y_values)]
 
 
 def get_galaxy(game_id: str, date: float) -> dcc.Graph:

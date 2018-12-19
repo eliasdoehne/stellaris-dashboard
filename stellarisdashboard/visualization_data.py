@@ -665,7 +665,6 @@ class EmpireProgressionPlotData:
         else:
             use_every_nth_gamestate = (num_new_gs // self.plot_time_resolution) + 1
         tstart = time.time()
-        print(num_new_gs, self.plot_time_resolution, use_every_nth_gamestate)
         for i, gs in enumerate(models.get_gamestates_since(self.game_name, self.last_date)):
             if gs.date <= self.last_date:
                 print(f"Warning: Received non-chronological gamestate {gs}")
