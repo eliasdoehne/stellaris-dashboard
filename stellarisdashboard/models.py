@@ -121,6 +121,15 @@ class WarOutcome(enum.Enum):
         return self.name.capitalize()
 
 
+@enum.unique
+class HistoricalEventScope(enum.IntEnum):
+    galaxy = 100
+    country = 80
+    leader = 30
+    system = 20
+    all = 0
+
+
 class HistoricalEventType(enum.Enum):
     # tied to a specific leader:
     ruled_empire = enum.auto()
@@ -177,6 +186,61 @@ class HistoricalEventType(enum.Enum):
     def __str__(self):
         return self.name
 
+    @property
+    def scope(self):
+        if self in {
+            HistoricalEventType.ruled_empire,
+            HistoricalEventType.habitat_ringworld_construction,
+            HistoricalEventType.megastructure_construction,
+            HistoricalEventType.colonization,
+            HistoricalEventType.gained_system,
+            HistoricalEventType.lost_system,
+            HistoricalEventType.new_faction,
+            HistoricalEventType.government_reform,
+            HistoricalEventType.species_rights_reform,
+            HistoricalEventType.first_contact,
+            HistoricalEventType.non_aggression_pact,
+            HistoricalEventType.defensive_pact,
+            HistoricalEventType.formed_federation,
+            HistoricalEventType.commercial_pact,
+            HistoricalEventType.closed_borders,
+            HistoricalEventType.received_closed_borders,
+            HistoricalEventType.sent_rivalry,
+            HistoricalEventType.received_rivalry,
+            HistoricalEventType.war,
+            HistoricalEventType.peace,
+            HistoricalEventType.terraforming,
+            HistoricalEventType.planet_destroyed,
+        }:
+            return HistoricalEventScope.galaxy
+        elif self in {
+            HistoricalEventType.discovered_new_system,
+            HistoricalEventType.expanded_to_system,
+            HistoricalEventType.capital_relocation,
+            HistoricalEventType.sector_creation,
+            HistoricalEventType.planetary_unrest,
+            HistoricalEventType.governed_sector,
+            HistoricalEventType.research_leader,
+            HistoricalEventType.faction_leader,
+            HistoricalEventType.leader_recruited,
+            HistoricalEventType.leader_died,
+            HistoricalEventType.researched_technology,
+            HistoricalEventType.tradition,
+            HistoricalEventType.ascension_perk,
+            HistoricalEventType.edict,
+        }:
+            return HistoricalEventScope.country
+        elif self in {
+            HistoricalEventType.level_up,
+        }:
+            return HistoricalEventScope.leader
+        elif self in {
+            HistoricalEventType.fleet_combat,
+            HistoricalEventType.army_combat,
+        }:
+            return HistoricalEventScope.system
+        return HistoricalEventScope.all
+
 
 ### Some convenience functions
 def date_to_days(date_str: str) -> int:
@@ -230,7 +294,12 @@ def get_available_games_dict() -> Dict[str, str]:
     return games
 
 
-def get_gamestates_since(game_name, date):
+def count_gamestates_since(game_name: str, date: float) -> int:
+    with get_db_session(game_name) as session:
+        return session.query(GameState).filter(GameState.date > date).count()
+
+
+def get_gamestates_since(game_name: str, date: float):
     with get_db_session(game_name) as session:
         game = session.query(Game).one()
         for gs in session.query(GameState).filter(GameState.game == game, GameState.date > date).order_by(GameState.date).all():
@@ -301,12 +370,12 @@ class System(Base):
         return most_recent_owner
 
     def get_name(self):
-        if self.original_name.startswith("NAME_"):
-            return game_info.convert_id_to_name(self.original_name, remove_prefix="NAME")
-        return self.original_name
+        if self.name.startswith("NAME_"):
+            return game_info.convert_id_to_name(self.name, remove_prefix="NAME")
+        return self.name
 
     def __str__(self):
-        return f'System "{self.original_name}" @ {self.coordinate_x}, {self.coordinate_y}'
+        return f'System "{self.name}" @ {self.coordinate_x}, {self.coordinate_y}'
 
 
 class SystemOwnership(Base):
@@ -324,7 +393,15 @@ class SystemOwnership(Base):
     country = relationship("Country", back_populates="owned_systems")
 
     def __str__(self):
-        return f"SystemOwnership of {self.system.original_name}: {self.start_date_days} - {self.end_date_days} -- {self.country.country_name}"
+        return f"SystemOwnership of {self.system_name}: {self.start_date_days} - {self.end_date_days} -- {self.country_name}"
+
+    @property
+    def country_name(self):
+        return self.country.country_name
+
+    @property
+    def system_name(self):
+        return self.system.name
 
 
 class HyperLane(Base):
@@ -355,11 +432,14 @@ class GameState(Base):
     __tablename__ = 'gamestatetable'
     gamestate_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    date = Column(Integer, index=True)  # Days since 2200.1.1
+    date = Column(Integer, index=True, nullable=False)  # Days since 2200.1.1
 
     game = relationship("Game", back_populates="game_states")
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
     planet_stats = relationship("PlanetStats", back_populates="gamestate", cascade="all,delete,delete-orphan")
+
+    def __str__(self):
+        return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"
 
 
 class Country(Base):
@@ -686,6 +766,9 @@ class WarParticipant(Base):
     country = relationship("Country", back_populates="war_participation")
     combat_participation = relationship("CombatParticipant", back_populates="war_participant")
 
+    def get_war_goal(self):
+        return game_info.convert_id_to_name(self.war_goal, remove_prefix="wg")
+
 
 class Combat(Base):
     __tablename__ = "combattable"
@@ -758,6 +841,10 @@ class Leader(Base):
         result = f"{self.leader_class.capitalize()} {self.leader_name}"
         return result[0].upper() + result[1:]
 
+    @property
+    def agenda(self):
+        return game_info.convert_id_to_name(self.leader_agenda, remove_prefix="agenda")
+
 
 class Planet(Base):
     __tablename__ = "planettable"
@@ -771,6 +858,10 @@ class Planet(Base):
 
     historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
     system = relationship("System")
+
+    @property
+    def name(self):
+        return self.get_name()
 
     def get_name(self):
         if self.planet_name.startswith("NAME_"):
@@ -807,8 +898,8 @@ class PopStatsByFaction(Base):
     power = Column(Float)
     crime = Column(Float)
 
-    faction_approval = Column(Float)
-    support = Column(Float)
+    faction_approval = Column(Float, default=0.0)
+    support = Column(Float, default=0.0)
 
     country_data = relationship("CountryData", back_populates="pop_stats_faction")
     faction = relationship("PoliticalFaction")
@@ -958,3 +1049,4 @@ class HistoricalEvent(Base):
             return game_info.convert_id_to_name(self.db_description.text)
         else:
             return "Unknown Event"
+

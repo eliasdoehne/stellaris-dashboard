@@ -139,9 +139,7 @@ def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading
             show_wait_message = True
             nothing_new = False
             tle.process_gamestate(game_name, gamestate_dict)
-            plot_data = visualization_data.get_current_execution_plot_data(game_name)
-            plot_data.initialize()
-            plot_data.update_with_new_gamestate()
+            visualization_data.get_current_execution_plot_data(game_name)
             del gamestate_dict
         if nothing_new:
             if show_wait_message:

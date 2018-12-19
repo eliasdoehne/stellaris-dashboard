@@ -171,3 +171,7 @@ a.textlink {
     color: rgba(195, 133, 33, 1);
     font-size: 14px;
 }
+
+a.titlelink {
+    color: rgba(195, 133, 33, 1);
+}

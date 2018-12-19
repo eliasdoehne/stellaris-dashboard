@@ -37,13 +37,13 @@
     <h4>Attackers:</h4>
     <ul>
         {% for wp in war["attackers"] %}
-        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].war_goal}}" war goal</li>
+        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].get_war_goal()}}" war goal</li>
         {% endfor %}
     </ul>
     <h4>Defenders:</h4>
     <ul>
         {% for wp in war["defenders"] %}
-        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].war_goal}}" war goal</li>
+        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].get_war_goal()}}" war goal</li>
         {% endfor %}
     </ul>
     {% if war["combat"] %}
@@ -82,7 +82,7 @@
     {% if not is_filtered_page %}
     <a name=country_{{object.country_id}}></a>
     {% endif %}
-    <h2 class="eventlist_header">{{title[object]}}</h2>
+    <h2 class="eventlist_header">{{title[object] | safe}}</h2>
 
     <ul class="event_list">
         {% for (itemname, value) in details[object].items() %}
@@ -117,7 +117,7 @@
                 <span class="eventtext">
                     {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} ruled the {{links[event["country"]]|safe}}
                     from the capital {{event["planet"].get_name()}} in the {{links[event["system"]] | safe}} system
-                    with the agenda "{{ event["leader"].leader_agenda }}".
+                    with agenda "{{ event["leader"].agenda }}".
                 </span>
             </div>
         </li>
@@ -204,7 +204,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    Scientist {{links[event["leader"]]|safe}} was in charge of the {{links[event["country"]]|safe}} {{event["description"]}} research efforts.
+                    Scientist {{links[event["leader"]]|safe}} led the {{links[event["country"]]|safe}}'s {{event["description"]}} research efforts.
                  </span>
             </div>
         </li>
@@ -370,7 +370,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The {{links[event["country"]]|safe}} hired  {{links[event["leader"]]|safe}} as {{ event["leader"].leader_class }}.
+                    The {{links[event["country"]]|safe}} hired {{ event["leader"].leader_class }} {{links[event["leader"]]|safe}}.
                  </span>
             </div>
         </li>
@@ -440,7 +440,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{links[event["leader"]]|safe}} has died, or was fired from their position as {{ event["leader"].leader_class }} in the {{ links[event["country"]] | safe }}.
+                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} has died or was fired.
                 </span>
             </div>
         </li>

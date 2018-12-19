@@ -167,25 +167,51 @@ def settings_page():
             "name": "Only show default empires",
             "description": 'Only show default-class empires, i.e. normal countries. Use it to exclude fallen empires and similar. Usually, this setting only matters if you have the Cheat mode enabled.',
         },
+        "filter_events_by_type": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["filter_events_by_type"]),
+            "name": "Filter historical events by scope",
+            "description": "If enabled, only the most relevant historical events are shown to reduce clutter in the event ledger.",
+        },
         "only_read_player_history": {
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["only_read_player_history"]),
             "name": "Only extract player history",
             "description": "Only extract your country's history for the event ledger. Reduces workload and database size, but you won't have access to the full game history.",
         },
+        "normalize_stacked_plots": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["normalize_stacked_plots"]),
+            "name": "Normalize stacked area plots",
+            "description": "Default value for the \"Normalize stacked plots\" checkbox on the timeline page. If active, stacked plots (e.g. population stats) will show percentages instead of raw values.",
+        },
+        "use_two_y_axes_for_budgets": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["use_two_y_axes_for_budgets"]),
+            "name": "Use separate y-axis for budget net income.",
+            "description": "If enabled, the net income lines of budget graphs are drawn on a separate y-axis.",
+        },
         "save_name_filter": {
             "type": t_str,
             "value": current_settings["save_name_filter"],
             "name": "Save file name filter",
-            "description": "Save files whose file names do not contain this string are ignored. For example, you can use it to only read yearly autosaves, by setting the value to \".01.01.sav\"",
+            "description": "Saves whose file names do not contain this string are ignored. For example, you can use this to filter yearly autosaves, by setting the value to \".01.01.sav\".",
         },
         "read_only_every_nth_save": {
             "type": t_int,
             "value": current_settings["read_only_every_nth_save"],
             "min": 1,
             "max": 10000,
-            "name": "Only read every n-th save",
-            "description": "Set to 2 to ignore every other save, to 3 to ignore 2/3 of saves, and so on. This is applied after all other filters.",
+            "name": "Only read every n-th save to the database",
+            "description": "Reading every save file may result in a fairly large database file. This setting allows to skip reading save files, at the cost of storing fewer details. Set to 1 to read every save, to 2 to ignore every other save, to 3 to ignore 2/3 of saves, and so on. This filter is applied after all other filters.",
+        },
+        "plot_time_resolution": {
+            "type": t_int,
+            "value": current_settings["plot_time_resolution"],
+            "min": 0,
+            "max": 10000,
+            "name": "Graph Resolution (# of data points)",
+            "description": "This setting controls the number of points used for each visualization, showing fewer details with better performance. Set to 0 to show the full data. The setting is only applied on initialization.",
         },
         "threads": {
             "type": t_int,
@@ -193,13 +219,7 @@ def settings_page():
             "min": 1,
             "max": config.CPU_COUNT,
             "name": "Number of threads",
-            "description": "Maximal number of threads used for reading save files. New setting is applied after restarting the dashboard program.",
-        },
-        "normalize_stacked_plots": {
-            "type": t_bool,
-            "value": _convert_python_bool_to_lowercase(current_settings["normalize_stacked_plots"]),
-            "name": "Normalize stacked area plots",
-            "description": "If active, stacked area plots (e.g. population stats) will show percentages instead of raw values. This does not apply to budget charts.",
+            "description": "Maximal number of threads used for reading save files. The new value is applied after restarting the dashboard program.",
         },
         "plot_height": {
             "type": t_int,
@@ -311,10 +331,20 @@ timeline_app.layout = html.Div([
     html.Div([
         html.Div([
             html.A("Go to Game Selection", id='index-link', href="/", style=BUTTON_STYLE),
-            html.A(f'Dashboard Settings', id='settings-link', href="/settings/", style=BUTTON_STYLE),
+            html.A(f'Settings', id='settings-link', href="/settings/", style=BUTTON_STYLE),
             html.A(f'Go to Event Ledger', id='ledger-link', href="/", style=BUTTON_STYLE),
         ]),
         html.H1(children="Unknown Game", id="game-name-header", style=HEADER_STYLE),
+
+        dcc.Checklist(
+            id="dash-plot-checklist",
+            options=[
+                {'label': 'Normalize stacked plots', 'value': 'normalize_stacked_plots'},
+            ],
+            values=['normalize_stacked_plots'] if config.CONFIG.normalize_stacked_plots else [],
+            labelStyle=dict(color=DARK_THEME_TEXT_COLOR),
+            style={"text-align": "center"},
+        ),
         dcc.Tabs(
             id='tabs-container',
             style=TAB_CONTAINER_STYLE,
@@ -359,8 +389,10 @@ timeline_app.layout = html.Div([
 
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
-    layout = DEFAULT_PLOT_LAYOUT
-    layout["xaxis"] = dict(title=plot_spec.x_axis_label)
+    layout = dict(DEFAULT_PLOT_LAYOUT)
+    layout["xaxis"] = dict(
+        title=plot_spec.x_axis_label,
+    )
     layout["yaxis"]["title"] = plot_spec.y_axis_label
     layout["width"] = config.CONFIG.plot_width
     layout["height"] = config.CONFIG.plot_height
@@ -368,6 +400,12 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
         layout["hovermode"] = "closest"
     else:
         layout["hovermode"] = "x"
+    if plot_spec.style == visualization_data.PlotStyle.budget and config.CONFIG.use_two_y_axes_for_budgets:
+        layout["yaxis2"] = dict(
+            title=f'{plot_spec.y_axis_label} (net gain)',
+            overlaying='y',
+            side='right'
+        )
     return go.Layout(**layout)
 
 
@@ -384,8 +422,14 @@ def update_game_header(search):
 
 
 @timeline_app.callback(Output('tab-content', 'children'),
-                       [Input('tabs-container', 'value'), Input('url', 'search'), Input('dateslider', 'value')])
-def update_content(tab_value, search, date_fraction):
+                       [
+                           Input('tabs-container', 'value'),
+                           Input('url', 'search'),
+                           Input('dateslider', 'value'),
+                           Input('dash-plot-checklist', 'values')
+                       ])
+def update_content(tab_value, search, date_fraction, dash_plot_checklist):
+    config.CONFIG.normalize_stacked_plots = "normalize_stacked_plots" in dash_plot_checklist
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
@@ -404,15 +448,16 @@ def update_content(tab_value, search, date_fraction):
     children = []
     if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
         plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+        plot_data = visualization_data.get_current_execution_plot_data(game_id)
         for plot_spec in plots:
-            figure_data = get_figure_data(game_id, plot_spec)
+            figure_data = get_figure_data(plot_data, plot_spec)
             figure_layout = get_figure_layout(plot_spec)
+            figure_layout["title"] = plot_spec.title
             figure = go.Figure(data=figure_data, layout=figure_layout)
 
-            children.append(html.H2(f"{plot_spec.title}", style=HEADER_STYLE))
             children.append(
                 html.Div([dcc.Graph(
-                    id=f"{plot_spec.plot_id}",
+                    id=plot_spec.plot_id,
                     figure=figure,
                     style=dict(
                         textAlign="center",
@@ -438,9 +483,8 @@ def _get_game_ids_matching_url(url):
     return game_id, matches
 
 
-def get_figure_data(game_id: str, plot_spec: visualization_data.PlotSpecification):
+def get_figure_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
     start = time.time()
-    plot_data = visualization_data.get_current_execution_plot_data(game_id)
     plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
     end = time.time()
     logger.debug(f"Update took {end - start} seconds!")
@@ -490,7 +534,7 @@ def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.Emp
                                                plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     net_gain = None
     lines = []
-    normalized = config.CONFIG.normalize_stacked_plots and  plot_spec.style == visualization_data.PlotStyle.stacked
+    normalized = config.CONFIG.normalize_stacked_plots and plot_spec.style == visualization_data.PlotStyle.stacked
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
         if not any(y_values):
             continue
@@ -500,6 +544,10 @@ def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.Emp
                 net_gain = [0.0 for _ in x_values]
             net_gain = [net + y for (net, y) in zip(net_gain, y_values)]
 
+        y_min = min(y_values)
+        stackgroup = "pos"
+        if y_min < 0:  # float("nan")
+            stackgroup = "neg"
         lines.append(dict(
             x=x_values,
             y=y_values,
@@ -507,28 +555,34 @@ def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.Emp
             hoverinfo='text',
             mode='lines',
             line=dict(width=0.5, color=get_country_color(key, 1.0)),
-            stackgroup='pos' if min(y_values) >= 0 else 'neg',
+            stackgroup=stackgroup,
             groupnorm="percent" if normalized else "",
             fillcolor=get_country_color(key, 0.5),
             text=get_plot_value_labels(x_values, y_values, key),
         ))
 
-    if lines and not normalized and plot_spec.style == visualization_data.PlotStyle.budget:
+    if lines and plot_spec.style == visualization_data.PlotStyle.budget:
         # Add net value over time
         name = 'Net result'
-        lines.append(dict(
+        line = dict(
             x=lines[0]["x"],
             y=net_gain,
             name=name,
             line=dict(color='rgba(255,255,255,1)'),
             text=get_plot_value_labels(lines[0]["x"], net_gain, "Net result"),
             hoverinfo='text',
-        ))
+        )
+        if config.CONFIG.use_two_y_axes_for_budgets:
+            line["yaxis"] = 'y2'
+        lines.append(line)
     return lines
 
 
 def dict_key_to_legend_label(key: str):
-    return " ".join(key.capitalize().split("_"))
+    words = key.split("_")
+    if words[0][0].islower():
+        words[0] = words[0].capitalize()
+    return " ".join(words)
 
 
 def get_plot_value_labels(x_values, y_values, key):
@@ -618,7 +672,8 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
             x=1.0,
             y=1.0,
         ),
-        height=720,
+        width=config.CONFIG.plot_width,
+        height=config.CONFIG.plot_height,
         hovermode='closest',
         plot_bgcolor=DARK_THEME_GALAXY_BACKGROUND,
         paper_bgcolor=BACKGROUND_PLOT_DARK,
@@ -642,6 +697,7 @@ class EventFilter:
                  system_filter=None,
                  planet_filter=None,
                  faction_filter=None,
+                 scope_threshold=None,
                  ):
         self.min_date = float(min_date)
         self.max_date = float(max_date)
@@ -651,6 +707,8 @@ class EventFilter:
         self.system_filter = int(system_filter) if system_filter is not None else None
         self.planet_filter = int(planet_filter) if planet_filter is not None else None
         self.faction_filter = int(faction_filter) if faction_filter is not None else None
+        self.scope_threshold = None
+        self._initialize_scope()
 
     @property
     def query_args_info(self):
@@ -707,6 +765,7 @@ class EventFilter:
         result = all([
             self.min_date <= event.start_date_days <= self.max_date,
             self.country_filter is None or self.country_filter == event.country_id,
+            event.event_type.scope >= self.scope_threshold,
         ])
         if self.leader_filter is not None:
             result &= event.leader_id == self.leader_filter
@@ -717,6 +776,19 @@ class EventFilter:
         if self.faction_filter is not None:
             result &= event.faction_id == self.faction_filter
         return result
+
+    def _initialize_scope(self):
+        if config.CONFIG.filter_events_by_type:
+            self.scope_threshold = min([
+                models.HistoricalEventScope.galaxy,
+                models.HistoricalEventScope.country if self.country_filter is not None else float('inf'),
+                models.HistoricalEventScope.all if self.leader_filter is not None else float('inf'),
+                models.HistoricalEventScope.all if self.system_filter is not None else float('inf'),
+                models.HistoricalEventScope.all if self.planet_filter is not None else float('inf'),
+                models.HistoricalEventScope.all if self.war_filter is not None else float('inf'),
+            ])
+        else:
+            self.scope_threshold = models.HistoricalEventScope.all
 
 
 class EventTemplateDictBuilder:
@@ -820,7 +892,7 @@ class EventTemplateDictBuilder:
 
     def get_title(self, key) -> str:
         if isinstance(key, models.Country):
-            return key.country_name
+            return self._get_url_for(key, a_class="titlelink")
         elif isinstance(key, models.System):
             return f"{key.name} System"
         elif isinstance(key, models.Leader):
@@ -830,22 +902,27 @@ class EventTemplateDictBuilder:
         else:
             return ""
 
-    def _get_url_for(self, key):
+    def _get_url_for(self, key, a_class="textlink"):
         if isinstance(key, models.Country):
             return self._preformat_history_url(key.country_name,
-                                               country=key.country_id)
+                                               country=key.country_id,
+                                               a_class=a_class)
         elif isinstance(key, models.System):
             return self._preformat_history_url(game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
-                                               system=key.system_id)
+                                               system=key.system_id,
+                                               a_class=a_class)
         elif isinstance(key, models.Leader):
             return self._preformat_history_url(key.leader_name,
-                                               leader=key.leader_id)
+                                               leader=key.leader_id,
+                                               a_class=a_class)
         elif isinstance(key, models.Planet):
             return self._preformat_history_url(game_info.convert_id_to_name(key.planet_name),
-                                               planet=key.planet_id)
+                                               planet=key.planet_id,
+                                               a_class=a_class)
         elif isinstance(key, models.War):
             return self._preformat_history_url(key.name,
-                                               war=key.war_id)
+                                               war=key.war_id,
+                                               a_class=a_class)
         else:
             return str(key)
 
@@ -869,10 +946,10 @@ class EventTemplateDictBuilder:
         country_url = self._preformat_history_url(leader_model.country.country_name,
                                                   country=leader_model.country.country_id)
         details = {
-            "Leader Name": game_info.convert_id_to_name(leader_model.leader_name),
-            "Gender": leader_model.gender,
+            "Leader Name": leader_model.leader_name,
+            "Gender": game_info.convert_id_to_name(leader_model.gender),
             "Species": leader_model.species.species_name,
-            "Class": f"{leader_model.leader_class} in the {country_url}",
+            "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
             "Born": models.days_to_date(leader_model.date_born),
             "Hired": models.days_to_date(leader_model.date_hired),
             "Last active": models.days_to_date(leader_model.last_date),
@@ -889,7 +966,7 @@ class EventTemplateDictBuilder:
             details.update({
                 "Personality": game_info.convert_id_to_name(gov.personality),
                 "Government Type": game_info.convert_id_to_name(gov.gov_type, remove_prefix="gov"),
-                "Authority": gov.authority,
+                "Authority": game_info.convert_id_to_name(gov.authority, remove_prefix="auth"),
                 "Ethics": ", ".join([game_info.convert_id_to_name(e, remove_prefix="ethic") for e in sorted(gov.ethics)]),
                 "Civics": ", ".join([game_info.convert_id_to_name(c, remove_prefix="civic") for c in sorted(gov.civics)]),
             })

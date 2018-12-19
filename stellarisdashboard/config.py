@@ -63,12 +63,15 @@ DEFAULT_SETTINGS = dict(
     colormap="viridis",
     log_level="INFO",
     show_everything=False,
+    filter_events_by_type=True,
     only_show_default_empires=True,
     extract_system_ownership=True,
     save_name_filter="",
     read_only_every_nth_save=1,
+    plot_time_resolution=200,
     only_read_player_history=False,
     normalize_stacked_plots=False,
+    use_two_y_axes_for_budgets=False,
     plot_width=1150,
     plot_height=640,
 )
@@ -93,11 +96,14 @@ class Config:
     show_everything: bool = None
     only_show_default_empires: bool = None
     extract_system_ownership: bool = None
+    filter_events_by_type: bool = None
 
     normalize_stacked_plots: bool = None
+    use_two_y_axes_for_budgets: bool = None
 
     save_name_filter: str = None
     read_only_every_nth_save: int = None
+    plot_time_resolution: int = None
 
     only_read_player_history: bool = None
 
@@ -110,14 +116,17 @@ class Config:
     BOOL_KEYS = {
         "check_version",
         "extract_system_ownership",
+        "filter_events_by_type",
         "show_everything",
         "only_show_default_empires",
         "only_read_player_history",
         "normalize_stacked_plots",
+        "use_two_y_axes_for_budgets",
     }
     INT_KEYS = {
         "port",
         "read_only_every_nth_save",
+        "plot_time_resolution",
         "threads",
         "plot_width",
         "plot_height",
@@ -171,12 +180,15 @@ class Config:
             show_everything=self.show_everything,
             only_show_default_empires=self.only_show_default_empires,
             only_read_player_history=self.only_read_player_history,
+            filter_events_by_type=self.filter_events_by_type,
             read_only_every_nth_save=self.read_only_every_nth_save,
+            plot_time_resolution=self.plot_time_resolution,
             save_name_filter=self.save_name_filter,
             threads=self.threads,
             plot_width=self.plot_width,
             plot_height=self.plot_height,
             normalize_stacked_plots=self.normalize_stacked_plots,
+            use_two_y_axes_for_budgets=self.use_two_y_axes_for_budgets,
         )
 
     def __str__(self):

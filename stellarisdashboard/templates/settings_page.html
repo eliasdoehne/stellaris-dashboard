@@ -3,6 +3,12 @@
 
 <h1>Settings</h1>
 
+<p>Hover over each setting to see a more detailed description.</p>
+<p>
+    To change the paths for the dashboard output and the Stellaris
+    save files, edit the file <code>stellarisdashboard/default_paths.py.</code>
+</p>
+
 <form class="settingsform" action="/applysettings/" method="POST">
     <div class="settings">
         {% for key, setting in current_settings.items() %}
@@ -28,8 +34,4 @@
         <input type="reset" class="button" value="Reset Values"/>
     </div>
 </form>
-
-<p>
-    You can change the paths for the dashboard output and the Stellaris save files by editing the file <code>stellarisdashboard/default_paths.py.</code>
-</p>
 {% endblock %}
