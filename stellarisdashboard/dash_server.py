@@ -274,6 +274,7 @@ DEFAULT_PLOT_LAYOUT = dict(
     plot_bgcolor=BACKGROUND_PLOT_DARK,
     paper_bgcolor=DARK_THEME_BACKGROUND,
     font={'color': DARK_THEME_TEXT_COLOR},
+    showlegend=True,
 )
 BUTTON_STYLE = {
     "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
@@ -516,7 +517,7 @@ def _get_raw_data_for_line_plot(plot_data: visualization_data.EmpireProgressionP
                                 plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
     for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
-        if not any(y_values):
+        if all(y != y for y in y_values):
             continue
         line = dict(
             x=x_values,
