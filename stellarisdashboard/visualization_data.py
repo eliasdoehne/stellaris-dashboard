@@ -664,7 +664,8 @@ class EmpireProgressionPlotData:
             use_every_nth_gamestate = 1
         else:
             use_every_nth_gamestate = (num_new_gs // self.plot_time_resolution) + 1
-        tstart = time.time()
+        t_start = time.time()
+        num_loaded_gs = 0
         for i, gs in enumerate(models.get_gamestates_since(self.game_name, self.last_date)):
             if gs.date <= self.last_date:
                 print(f"Warning: Received non-chronological gamestate {gs}")
@@ -674,9 +675,9 @@ class EmpireProgressionPlotData:
                     or i % use_every_nth_gamestate == 0
                     or (num_new_gs - i + len(self.dates)) <= self.plot_time_resolution):
                 self.process_gamestate(gs)
+                num_loaded_gs += 1
             self.last_date = gs.date
-
-        print(f"Finished reading {len(self.dates)} gamestates from DB in {time.time() - tstart:5.3f} s.")
+        logger.info(f"Loaded {num_loaded_gs} new gamestates from the database in {time.time() - t_start:5.3f} seconds. ({len(self.dates)} gamestates in total)")
 
     def process_gamestate(self, gs: models.GameState):
         self.dates.append(gs.date / 360.0)  # store date in years for visualization
