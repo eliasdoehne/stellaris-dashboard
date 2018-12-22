@@ -145,17 +145,17 @@ class Config:
         logger.info("Updating settings")
         for key, val in settings_dict.items():
             if key not in Config.ALL_KEYS:
-                logger.info(f'Ignoring unknown option {key} with value {val}.')
+                logger.info(f'Ignoring unknown setting {key} with value {val}.')
                 continue
             old_val = self.__dict__.get(key)
             if key in Config.BOOL_KEYS:
                 val = self._preprocess_bool(val)
             if key in Config.PATH_KEYS:
-                logger.info(f'Ignoring path option {key}. Change paths by editing default_paths.py instead!')
+                logger.info(f'Ignoring path setting {key}. Please change paths by editing default_paths.py instead.')
                 continue
             self.__setattr__(key, val)
             if val != old_val:
-                logger.info(f'Updated {key.ljust(25)} {repr(old_val).rjust(8)} -> {repr(val).ljust(8)}')
+                logger.info(f'Updated setting {key.ljust(28)} {repr(old_val).rjust(8)} -> {repr(val).ljust(8)}')
 
     def write_to_file(self):
         fname = _get_settings_file_path()

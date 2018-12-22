@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import logging
 import random
@@ -65,8 +66,6 @@ class TimelineExtractor:
         self._random_instance = random.Random()
 
         self._new_models = []
-        self._enclave_trade_modifiers = None
-        self._initialize_enclave_trade_info()
 
     def process_gamestate(self, game_name: str, gamestate_dict: Dict[str, Any]):
         """
@@ -92,9 +91,18 @@ class TimelineExtractor:
                 if self.game is None:
                     logger.info(f"Adding new game {game_name} to database.")
                     player_country_name = self._gamestate_dict["country"][self._player_country_id]["name"]
-                    self.game = models.Game(game_name=game_name, player_country_name=player_country_name)
-                    self._session.add(self.game)
+                    galaxy_info = self._gamestate_dict["galaxy"]
+                    self.game = models.Game(
+                        game_name=game_name,
+                        player_country_name=player_country_name,
+                        db_galaxy_template=galaxy_info.get("template", "Unknown"),
+                        db_galaxy_shape=galaxy_info.get("shape", "Unknown"),
+                        db_difficulty=galaxy_info.get("difficulty", "Unknown"),
+                        db_last_updated=datetime.datetime.now(),
+                    )
                     self._extract_galaxy_data()
+                self.game.db_last_updated = datetime.datetime.now()
+                self._session.add(self.game)
                 self._date_in_days = models.date_to_days(self._gamestate_dict["date"])
                 game_states_by_date = {gs.date: gs for gs in self.game.game_states}
                 if self._date_in_days in game_states_by_date:
@@ -194,10 +202,6 @@ class TimelineExtractor:
 
             self._extract_country_leaders(country_model, country_data_dict)
             diplomacy_data = self._process_diplomacy(country_model, country_data_dict)
-            if country_model.first_player_contact_date is None and diplomacy_data.get("has_communications_with_player"):
-                country_model.first_player_contact_date = self._date_in_days
-                self._session.add(country_model)
-
             self._extract_country_government(country_model, country_data_dict)
 
             country_data_model = self._extract_country_data(country_id, country_model, country_data_dict, diplomacy_data)
@@ -637,6 +641,7 @@ class TimelineExtractor:
             has_commercial_pact_with_player=False,
             is_player_neighbor=False,
         )
+
         if not isinstance(relations_manager, dict):
             return diplomacy_towards_player
         relation_list = relations_manager.get("relation", [])
@@ -645,10 +650,6 @@ class TimelineExtractor:
         for relation in relation_list:
             if not isinstance(relation, dict):
                 continue
-
-            if not config.CONFIG.only_read_player_history or country_model.is_player:
-                self._history_add_or_update_diplomatic_events(country_model, country_dict, relation)
-
             if relation.get("country") == self._player_country_id:
                 diplomacy_towards_player.update(
                     has_rivalry_with_player=relation.get("is_rival") == "yes",
@@ -660,6 +661,14 @@ class TimelineExtractor:
                     has_migration_treaty_with_player=relation.get("migration_access") == "yes",
                     is_player_neighbor=relation.get("borders") == "yes",
                 )
+
+                if country_model.first_player_contact_date is None and diplomacy_towards_player.get("has_communications_with_player"):
+                    country_model.first_player_contact_date = self._date_in_days
+                    self._session.add(country_model)
+
+            if not config.CONFIG.only_read_player_history or country_model.is_player:
+                self._history_add_or_update_diplomatic_events(country_model, country_dict, relation)
+
             break
         return diplomacy_towards_player
 
@@ -676,7 +685,8 @@ class TimelineExtractor:
         if target_country_dict.get("country_type") in self.SUPPORTED_COUNTRY_TYPES:
             tc_ruler = self._get_current_ruler(target_country_dict)
 
-        is_known_to_player = country_model.has_met_player() and target_country_model.has_met_player()
+        is_known_to_player = (country_model.is_player or target_country_model.is_player
+                              or (country_model.has_met_player() and target_country_model.has_met_player()))
         diplo_relations = [
             (
                 models.HistoricalEventType.sent_rivalry,
@@ -706,7 +716,7 @@ class TimelineExtractor:
             (
                 models.HistoricalEventType.first_contact,
                 models.HistoricalEventType.first_contact,
-                relation.get("communications") == "yes"
+                relation.get("contact") == "yes" or relation.get("communications") == "yes"
             ),
             (
                 models.HistoricalEventType.commercial_pact,
@@ -727,7 +737,7 @@ class TimelineExtractor:
                         target_country=tc_model,
                     ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
 
-                    if matching_event is None or matching_event.end_date_days < self._date_in_days - 5 * 360:
+                    if matching_event is None or matching_event.end_date_days < self._date_in_days - 9 * 360:
                         matching_event = models.HistoricalEvent(
                             event_type=et,
                             country=c_model,
@@ -741,33 +751,6 @@ class TimelineExtractor:
                         matching_event.end_date_days = self._date_in_days
                         matching_event.is_known_to_player = is_known_to_player
                     self._session.add(matching_event)
-
-    def _extract_enclave_resource_deals(self, country_dict):
-        enclave_deals = dict(
-            mineral_income_enclaves=0,
-            mineral_spending_enclaves=0,
-            energy_income_enclaves=0,
-            energy_spending_enclaves=0,
-            food_income_enclaves=0,
-            food_spending_enclaves=0,
-        )
-
-        timed_modifier_list = country_dict.get("timed_modifier", [])
-        if not isinstance(timed_modifier_list, list):
-            # if for some reason there is only a single timed_modifier, timed_modifier_list will not be a list but a dictionary => Put it in a list!
-            timed_modifier_list = [timed_modifier_list]
-        for modifier_dict in timed_modifier_list:
-            if not isinstance(modifier_dict, dict):
-                continue
-            modifier_id = modifier_dict.get("modifier", "")
-            enclave_trade_budget_dict = self._enclave_trade_modifiers.get(modifier_id, {})
-            for budget_item, amount in enclave_trade_budget_dict.items():
-                enclave_deals[budget_item] += amount
-        # Make spending numbers negative:
-        enclave_deals["mineral_spending_enclaves"] *= -1
-        enclave_deals["energy_spending_enclaves"] *= -1
-        enclave_deals["food_spending_enclaves"] *= -1
-        return enclave_deals
 
     def _extract_ai_attitude_towards_player(self, country_data):
         attitude_towards_player = "unknown"
@@ -1487,18 +1470,15 @@ class TimelineExtractor:
                 is_destroyed = game_info.is_destroyed_planet(planet_class)
                 is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in self._all_planetary_modifiers(planet_dict))
 
-                if not (is_colonizable or is_destroyed or is_terraformable):
-                    continue  # don't bother with uninteresting planets
+                is_interesting = is_colonizable or is_destroyed or is_terraformable
+                if not is_interesting:
+                    continue
 
-                planet_model = self._add_or_update_planet_model(system_model, planet_id)
+                planet_model = self._get_and_update_planet_model(system_model, planet_id)
                 if planet_model is None:
                     continue
                 if is_colonizable:
                     self._history_add_or_update_colonization_events(country_model, system_model, planet_model, planet_dict, governor)
-                    if game_info.is_colonizable_megastructure(planet_class):
-                        self._history_add_or_update_habitable_megastructure_construction_event(
-                            country_model, system_model, planet_model, planet_dict, governor, system_id
-                        )
                 if is_terraformable:
                     self._history_add_or_update_terraforming_events(country_model, system_model, planet_model, planet_dict, governor)
 
@@ -1513,10 +1493,10 @@ class TimelineExtractor:
 
         current_pc = planet_dict.get("planet_class")
         target_pc = terraform_dict.get("planet_class")
-        text = f"{current_pc},{target_pc}"
-        if not game_info.is_colonizable_planet(target_pc):
+        if not isinstance(target_pc, str):
             logger.info(f"Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}")
             return
+        text = f"{current_pc},{target_pc}"
         matching_description = self._get_or_add_shared_description(text)
         matching_event = self._session.query(models.HistoricalEvent).filter_by(
             event_type=models.HistoricalEventType.terraforming,
@@ -1540,16 +1520,16 @@ class TimelineExtractor:
             matching_event.end_date_days = self._date_in_days
         self._session.add(matching_event)
 
-    def _add_or_update_planet_model(self,
-                                    system_model: models.System,
-                                    planet_id: int) -> Union[models.Planet, None]:
+    def _get_and_update_planet_model(self,
+                                     system_model: models.System,
+                                     planet_id: int) -> Union[models.Planet, None]:
         planet_dict = self._gamestate_dict["planet"].get(planet_id)
         if not isinstance(planet_dict, dict):
             return None
         planet_class = planet_dict.get("planet_class")
         planet_name = planet_dict.get("name")
         planet_model = self._session.query(models.Planet).filter_by(
-            planet_id_in_game=planet_id
+            planet_id_in_game=planet_id,
         ).one_or_none()
         if planet_model is None:
             colonize_date = planet_dict.get("colonize_date")
@@ -1594,18 +1574,18 @@ class TimelineExtractor:
                                                    planet_model: models.Planet,
                                                    planet_dict,
                                                    governor: models.Leader):
-        if "colonize_date" in planet_dict or planet_dict.get("pop"):
-            # I think one of these occurs once the colonization is finished
-            colonization_completed = True
-        elif "colonizer_pop" in planet_dict:
-            # while colonization still in progress
+        if planet_dict.get("is_under_colonization") == "yes":
+            # Colonization still in progress
             colonization_completed = False
+        elif "colonize_date" in planet_dict:
+            # colonization is finished
+            colonization_completed = True
         else:
-            # planet is not colonized at all
+            # not colonized at all
             return
 
         colonization_end_date = planet_dict.get("colonize_date")
-        if not colonization_end_date:
+        if not isinstance(colonization_end_date, str) or colonization_end_date == "none":
             end_date_days = self._date_in_days
         else:
             end_date_days = models.date_to_days(colonization_end_date)
@@ -1619,20 +1599,14 @@ class TimelineExtractor:
             self._session.add(planet_model)
         event = self._session.query(models.HistoricalEvent).filter_by(
             event_type=models.HistoricalEventType.colonization,
-            planet=planet_model
+            planet=planet_model,
         ).one_or_none()
         if event is None:
-            start_date = self._date_in_days
-            if self._date_in_days < 100:
-                end_date_days = min(end_date_days, 0)
-                if country_model.is_player:
-                    end_date_days = 0
-                governor = None
             event = models.HistoricalEvent(
                 event_type=models.HistoricalEventType.colonization,
                 leader=governor,
                 country=country_model,
-                start_date_days=min(start_date, end_date_days),
+                start_date_days=min(self._date_in_days, end_date_days),
                 end_date_days=end_date_days,
                 planet=planet_model,
                 system=system_model,
@@ -1640,48 +1614,6 @@ class TimelineExtractor:
             )
         else:
             event.end_date_days = end_date_days
-        self._session.add(event)
-
-    def _history_add_or_update_habitable_megastructure_construction_event(self, country_model: models.Country,
-                                                                          system_model: models.System,
-                                                                          planet_model: models.Planet,
-                                                                          planet_dict,
-                                                                          governor: models.Leader,
-                                                                          system_id: int):
-        planet_class = planet_dict.get("planet_class")
-        if planet_class == "pc_ringworld_habitable":
-            sys_name = self._gamestate_dict["galactic_object"].get(system_id).get("name", "Unknown system")
-            p_name = f"{sys_name} Ringworld"
-        elif planet_class == "pc_habitat":
-            p_name = planet_dict.get("name")
-        else:
-            logging.info("Expected megastructre planet class")
-            return
-
-        description = self._get_or_add_shared_description(
-            text=p_name,
-        )
-        event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.habitat_ringworld_construction,
-            system=planet_model.system,
-            db_description=description,
-        ).one_or_none()
-        if event is None:
-            start_date = end_date = self._date_in_days  # TODO: change this when tracking the construction sites in the future
-            logger.info(f"{self._logger_str}: New Megastructure {models.days_to_date(self._date_in_days)}")
-            event = models.HistoricalEvent(
-                event_type=models.HistoricalEventType.habitat_ringworld_construction,
-                country=country_model,
-                leader=governor,
-                start_date_days=start_date,
-                end_date_days=end_date,
-                planet=planet_model,
-                system=system_model,
-                db_description=description,
-                event_is_known_to_player=country_model.has_met_player(),
-            )
-        elif not event.event_is_known_to_player:
-            event.event_is_known_to_player = country_model.has_met_player()
         self._session.add(event)
 
     def _history_add_or_update_governor_sector_events(self, country_model,
@@ -1838,86 +1770,6 @@ class TimelineExtractor:
             matching_description = models.SharedDescription(text=text)
             self._session.add(matching_description)
         return matching_description
-
-    def _initialize_enclave_trade_info(self):
-        """
-        Initialize a dictionary representing all possible combinations of:
-          - 3 enclave factions
-          - 6 resource trade types (pairs of resources, e.g. trade minerals for food)
-          - 3 tiers of trading amounts
-
-        The identifiers found in the save files are mapped to a dictionary, which maps
-        the type of income/expense to the numeric amount.
-
-        :return:
-        """
-        trade_level_1 = [10, 20]
-        trade_level_2 = [25, 50]
-        trade_level_3 = [50, 100]
-
-        trade_energy_for_minerals = ["mineral_income_enclaves", "energy_spending_enclaves"]
-        trade_food_for_minerals = ["mineral_income_enclaves", "food_spending_enclaves"]
-        trade_minerals_for_energy = ["energy_income_enclaves", "mineral_spending_enclaves"]
-        trade_food_for_energy = ["energy_income_enclaves", "food_spending_enclaves"]
-        trade_minerals_for_food = ["food_income_enclaves", "mineral_spending_enclaves"]
-        trade_energy_for_food = ["food_income_enclaves", "energy_spending_enclaves"]
-
-        self._enclave_trade_modifiers = {
-            "enclave_mineral_trade_1_mut": dict(zip(trade_energy_for_minerals, trade_level_1)),
-            "enclave_mineral_trade_1_rig": dict(zip(trade_energy_for_minerals, trade_level_1)),
-            "enclave_mineral_trade_1_xur": dict(zip(trade_energy_for_minerals, trade_level_1)),
-            "enclave_mineral_trade_2_mut": dict(zip(trade_energy_for_minerals, trade_level_2)),
-            "enclave_mineral_trade_2_rig": dict(zip(trade_energy_for_minerals, trade_level_2)),
-            "enclave_mineral_trade_2_xur": dict(zip(trade_energy_for_minerals, trade_level_2)),
-            "enclave_mineral_trade_3_mut": dict(zip(trade_energy_for_minerals, trade_level_3)),
-            "enclave_mineral_trade_3_rig": dict(zip(trade_energy_for_minerals, trade_level_3)),
-            "enclave_mineral_trade_3_xur": dict(zip(trade_energy_for_minerals, trade_level_3)),
-            "enclave_mineral_food_trade_1_mut": dict(zip(trade_food_for_minerals, trade_level_1)),
-            "enclave_mineral_food_trade_1_rig": dict(zip(trade_food_for_minerals, trade_level_1)),
-            "enclave_mineral_food_trade_1_xur": dict(zip(trade_food_for_minerals, trade_level_1)),
-            "enclave_mineral_food_trade_2_mut": dict(zip(trade_food_for_minerals, trade_level_2)),
-            "enclave_mineral_food_trade_2_rig": dict(zip(trade_food_for_minerals, trade_level_2)),
-            "enclave_mineral_food_trade_2_xur": dict(zip(trade_food_for_minerals, trade_level_2)),
-            "enclave_mineral_food_trade_3_mut": dict(zip(trade_food_for_minerals, trade_level_3)),
-            "enclave_mineral_food_trade_3_rig": dict(zip(trade_food_for_minerals, trade_level_3)),
-            "enclave_mineral_food_trade_3_xur": dict(zip(trade_food_for_minerals, trade_level_3)),
-            "enclave_energy_trade_1_mut": dict(zip(trade_minerals_for_energy, trade_level_1)),
-            "enclave_energy_trade_1_rig": dict(zip(trade_minerals_for_energy, trade_level_1)),
-            "enclave_energy_trade_1_xur": dict(zip(trade_minerals_for_energy, trade_level_1)),
-            "enclave_energy_trade_2_mut": dict(zip(trade_minerals_for_energy, trade_level_2)),
-            "enclave_energy_trade_2_rig": dict(zip(trade_minerals_for_energy, trade_level_2)),
-            "enclave_energy_trade_2_xur": dict(zip(trade_minerals_for_energy, trade_level_2)),
-            "enclave_energy_trade_3_mut": dict(zip(trade_minerals_for_energy, trade_level_3)),
-            "enclave_energy_trade_3_rig": dict(zip(trade_minerals_for_energy, trade_level_3)),
-            "enclave_energy_trade_3_xur": dict(zip(trade_minerals_for_energy, trade_level_3)),
-            "enclave_energy_food_trade_1_mut": dict(zip(trade_food_for_energy, trade_level_1)),
-            "enclave_energy_food_trade_1_rig": dict(zip(trade_food_for_energy, trade_level_1)),
-            "enclave_energy_food_trade_1_xur": dict(zip(trade_food_for_energy, trade_level_1)),
-            "enclave_energy_food_trade_2_mut": dict(zip(trade_food_for_energy, trade_level_2)),
-            "enclave_energy_food_trade_2_rig": dict(zip(trade_food_for_energy, trade_level_2)),
-            "enclave_energy_food_trade_2_xur": dict(zip(trade_food_for_energy, trade_level_2)),
-            "enclave_energy_food_trade_3_mut": dict(zip(trade_food_for_energy, trade_level_3)),
-            "enclave_energy_food_trade_3_rig": dict(zip(trade_food_for_energy, trade_level_3)),
-            "enclave_energy_food_trade_3_xur": dict(zip(trade_food_for_energy, trade_level_3)),
-            "enclave_food_minerals_trade_1_mut": dict(zip(trade_minerals_for_food, trade_level_1)),
-            "enclave_food_minerals_trade_1_rig": dict(zip(trade_minerals_for_food, trade_level_1)),
-            "enclave_food_minerals_trade_1_xur": dict(zip(trade_minerals_for_food, trade_level_1)),
-            "enclave_food_minerals_trade_2_mut": dict(zip(trade_minerals_for_food, trade_level_2)),
-            "enclave_food_minerals_trade_2_rig": dict(zip(trade_minerals_for_food, trade_level_2)),
-            "enclave_food_minerals_trade_2_xur": dict(zip(trade_minerals_for_food, trade_level_2)),
-            "enclave_food_minerals_trade_3_mut": dict(zip(trade_minerals_for_food, trade_level_3)),
-            "enclave_food_minerals_trade_3_rig": dict(zip(trade_minerals_for_food, trade_level_3)),
-            "enclave_food_minerals_trade_3_xur": dict(zip(trade_minerals_for_food, trade_level_3)),
-            "enclave_food_energy_trade_1_mut": dict(zip(trade_energy_for_food, trade_level_1)),
-            "enclave_food_energy_trade_1_rig": dict(zip(trade_energy_for_food, trade_level_1)),
-            "enclave_food_energy_trade_1_xur": dict(zip(trade_energy_for_food, trade_level_1)),
-            "enclave_food_energy_trade_2_mut": dict(zip(trade_energy_for_food, trade_level_2)),
-            "enclave_food_energy_trade_2_rig": dict(zip(trade_energy_for_food, trade_level_2)),
-            "enclave_food_energy_trade_2_xur": dict(zip(trade_energy_for_food, trade_level_2)),
-            "enclave_food_energy_trade_3_mut": dict(zip(trade_energy_for_food, trade_level_3)),
-            "enclave_food_energy_trade_3_rig": dict(zip(trade_energy_for_food, trade_level_3)),
-            "enclave_food_energy_trade_3_xur": dict(zip(trade_energy_for_food, trade_level_3)),
-        }
 
     def _reset_state(self):
         logger.info(f"{self._logger_str} Resetting timeline state")

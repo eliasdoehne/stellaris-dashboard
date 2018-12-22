@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import enum
 import logging
 import pathlib
@@ -140,7 +141,7 @@ class HistoricalEventType(enum.Enum):
     leader_died = enum.auto()  # TODO
     level_up = enum.auto()
 
-    # civilizational advancement:
+    # empire progress:
     researched_technology = enum.auto()
     tradition = enum.auto()
     ascension_perk = enum.auto()
@@ -282,15 +283,21 @@ def get_known_games(game_name_prefix: str = "") -> List[str]:
     return [fname.stem for fname in files]
 
 
-def get_available_games_dict() -> Dict[str, str]:
+def get_available_games_dict() -> Dict[str, Dict[str, str]]:
     """ Returns a dictionary mapping game id to the name of the game's player country. """
     games = {}
-    for game_name in get_known_games():
-        with get_db_session(game_name) as session:
+    for game_id in get_known_games():
+        with get_db_session(game_id) as session:
             game = session.query(Game).one_or_none()
             if game is None:
                 continue
-            games[game_name] = game.player_country_name
+            games[game_id] = dict(
+                game_id=game_id,
+                country_name=game.player_country_name,
+                difficulty=game.difficulty,
+                galaxy=game.galaxy,
+                last_updated=game.last_updated,
+            )
     return games
 
 
@@ -313,12 +320,38 @@ class Game(Base):
     game_name = Column(String(50))
     player_country_name = Column(String(100))
 
+    db_galaxy_template = Column(String(100))
+    db_galaxy_shape = Column(String(100))
+    db_difficulty = Column(String(100))
+
+    db_last_updated = Column(sqlalchemy.DateTime, default=None)
+
     systems = relationship("System", back_populates="game", cascade="all,delete,delete-orphan")
     countries = relationship("Country", back_populates="game", cascade="all,delete,delete-orphan")
     species = relationship("Species", back_populates="game", cascade="all,delete,delete-orphan")
     game_states = relationship("GameState", back_populates="game", cascade="all,delete,delete-orphan")
     wars = relationship("War", back_populates="game", cascade="all,delete,delete-orphan")
     leaders = relationship("Leader", back_populates="game", cascade="all,delete,delete-orphan")
+
+    @property
+    def galaxy(self):
+        return f"{self.galaxy_template} {self.galaxy_shape}"
+
+    @property
+    def galaxy_template(self):
+        return game_info.convert_id_to_name(self.db_galaxy_template)
+
+    @property
+    def galaxy_shape(self):
+        return game_info.convert_id_to_name(self.db_galaxy_shape)
+
+    @property
+    def difficulty(self):
+        return game_info.convert_id_to_name(self.db_difficulty)
+
+    @property
+    def last_updated(self):
+        return f"{self.db_last_updated:%Y.%m.%d %H:%M}"
 
 
 class SharedDescription(Base):
@@ -1049,4 +1082,3 @@ class HistoricalEvent(Base):
             return game_info.convert_id_to_name(self.db_description.text)
         else:
             return "Unknown Event"
-

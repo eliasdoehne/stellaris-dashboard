@@ -411,7 +411,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    negotiated peace in the "{{links[event["war"]] | safe}}" conflict.
+                    made peace in the "{{links[event["war"]] | safe}}" conflict.
                 </span>
             </div>
         </li>
@@ -440,7 +440,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} has died or was fired.
+                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} died or was fired.
                 </span>
             </div>
         </li>

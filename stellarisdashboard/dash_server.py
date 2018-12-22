@@ -26,7 +26,7 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.3"
+VERSION_ID = "v0.3-beta"
 
 
 @flask_app.route("/")
@@ -40,7 +40,7 @@ def index_page(version=None):
     show_old_version_notice = False
     if config.CONFIG.check_version and version is not None:
         show_old_version_notice = _is_old_version(version)
-    games = [dict(country=country, game_name=g) for g, country in models.get_available_games_dict().items()]
+    games = models.get_available_games_dict().values()
     return render_template(
         "index.html",
         games=games,
@@ -64,13 +64,13 @@ def history_page(
     if game_id is None:
         game_id = ""
 
-    games_dict = models.get_available_games_dict()
     matches = models.get_known_games(game_id)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
     game_id = matches[0]
-    country = games_dict[game_id]
+    games_dict = models.get_available_games_dict()
+    country = games_dict[game_id]["country_name"]
 
     event_filter = get_event_filter()
 
@@ -419,7 +419,8 @@ def update_game_header(search):
         return "Unknown Game"
     game_id = matches[0]
     games_dict = models.get_available_games_dict()
-    return f"{games_dict[game_id]} ({game_id})"
+    country = games_dict[game_id]['country_name']
+    return f"{country} ({game_id})"
 
 
 @timeline_app.callback(Output('tab-content', 'children'),
@@ -435,9 +436,9 @@ def update_content(tab_value, search, date_fraction, dash_plot_checklist):
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
+    game_id = matches[0]
 
     games_dict = models.get_available_games_dict()
-    game_id = matches[0]
     if game_id not in games_dict:
         logger.warning(f"Game ID {game_id} does not match any known game!")
         return []
@@ -488,7 +489,7 @@ def get_figure_data(plot_data: visualization_data.EmpireProgressionPlotData, plo
     start = time.time()
     plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
     end = time.time()
-    logger.debug(f"Update took {end - start} seconds!")
+    logger.debug(f"Prepared data for figure {plot_spec.title} in {end - start} seconds.")
     return plot_list
 
 
@@ -522,7 +523,7 @@ def _get_raw_data_for_line_plot(plot_data: visualization_data.EmpireProgressionP
         line = dict(
             x=x_values,
             y=y_values,
-            name=key,
+            name=dict_key_to_legend_label(key),
             line={"color": get_country_color(key, 1.0)},
             text=get_plot_value_labels(x_values, y_values, key),
             hoverinfo='text',
@@ -587,7 +588,8 @@ def dict_key_to_legend_label(key: str):
 
 
 def get_plot_value_labels(x_values, y_values, key):
-    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}' if (y and y == y) else "" for (x, y) in zip(x_values, y_values)]
+    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}' if (y and y == y) else ""
+            for (x, y) in zip(x_values, y_values)]
 
 
 def get_galaxy(game_id: str, date: float) -> dcc.Graph:
