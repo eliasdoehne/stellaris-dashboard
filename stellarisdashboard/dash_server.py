@@ -235,10 +235,15 @@ def settings_page():
             "min": 300,
             "max": 2000,
             "name": "Plot width (pixels)",
-            "description": "Height of plots in the graph dashboard.",
+            "description": "Width of plots in the graph dashboard.",
+        },
+        "save_file_path": {
+            "type": t_str,
+            "value": current_settings["save_file_path"],
+            "name": "Save file path (Submit empty to reset to default)",
+            "description": "This controls the path where the dashboard will look for new or updated Stellaris save files. If you leave this input empty, the value will be reset to the default value.",
         },
     }
-
     return render_template(
         "settings_page.html",
         current_settings=settings_with_descriptions,
