@@ -88,7 +88,8 @@ class SavePathMonitor(abc.ABC):
 
     def mark_all_existing_saves_processed(self) -> None:
         """ Ensure that existing files are not re-parsed. """
-        self.processed_saves |= set(self._valid_save_files())
+        self.processed_saves |= {f for f in self._valid_save_files()
+                                 if f.stem != "ironman"}
         self._last_checked_time = time.time()
 
     def _valid_save_files(self) -> List[pathlib.Path]:
