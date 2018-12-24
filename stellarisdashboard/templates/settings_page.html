@@ -4,10 +4,6 @@
 <h1>Settings</h1>
 
 <p>Hover over each setting to see a more detailed description.</p>
-<p>
-    To change the paths for the dashboard output and the Stellaris
-    save files, edit the file <code>stellarisdashboard/default_paths.py.</code>
-</p>
 
 <form class="settingsform" action="/applysettings/" method="POST">
     <div class="settings">
@@ -22,7 +18,7 @@
             <input type="number" title="{{ setting['description'] }}" name={{key}} min={{setting["min"]}} max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
             {% endif %}
             {% if setting["type"] == "str" %}
-            <input type="text" title="{{ setting['description'] }}" name={{key}} value={{setting["value"]}}> <br>
+            <input type="text" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
             {% endif %}
             </span>
         </div>
