@@ -528,9 +528,9 @@ class EmpireProgressionPlotData:
 
         self.data_dicts: List[Tuple[Dict[str, List[float]], float]] = None
 
-        self.show_everything: bool = None
-        self.only_show_default_empires: bool = None
-        self.plot_time_resolution: int = None
+        self.show_everything: bool = config.CONFIG.show_everything
+        self.only_show_default_empires: bool = config.CONFIG.only_show_default_empires
+        self.plot_time_resolution: int = config.CONFIG.plot_time_resolution
         self.gs_count = -1
 
     def initialize(self):
