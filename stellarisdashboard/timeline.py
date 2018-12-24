@@ -106,11 +106,12 @@ class TimelineExtractor:
                 self._date_in_days = models.date_to_days(self._gamestate_dict["date"])
                 game_states_by_date = {gs.date: gs for gs in self.game.game_states}
                 if self._date_in_days in game_states_by_date:
-                    logger.info(f"Gamestate for {self.game.game_name}, date {date_str} exists! Replacing...")
-                    self._session.delete(game_states_by_date[self._date_in_days])
-                self._process_gamestate()
-                self._session.commit()
-                logger.info(f"{self._logger_str} Committed changes to database.")
+                    logger.info(f"{self._logger_str}: Gamestate for same date already exists in database. Aborting...")
+                    self._session.rollback()
+                else:
+                    self._process_gamestate()
+                    self._session.commit()
+                    logger.info(f"{self._logger_str} Committed changes to database.")
             except Exception as e:
                 self._session.rollback()
                 logger.error(e)
