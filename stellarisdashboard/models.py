@@ -894,14 +894,12 @@ class Planet(Base):
 
     @property
     def name(self):
-        return self.get_name()
-
-    def get_name(self):
         if self.planet_name.startswith("NAME_"):
             return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
         return self.planet_name
 
-    def get_class(self):
+    @property
+    def planetclass(self):
         return game_info.convert_id_to_name(self.planet_class, remove_prefix="pc")
 
 

@@ -55,7 +55,7 @@
                 <span class="dateblock war">{{engagement["date"]}}:</span>
                 <span class="eventtext">
                 {% if engagement["type"] == "armies" %}
-                    Planetary invasion of planet {{engagement["planet"].get_name()}} in the {{ links[engagement["system"]] | safe}} system:
+                    Planetary invasion of planet {{engagement["planet"].name}} in the {{ links[engagement["system"]] | safe}} system:
                 {% elif engagement["type"] == "ships" %}
                     Fleet combat in the {{ links[engagement["system"]] | safe}} system:
                 {% else %}
@@ -116,7 +116,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
                     {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} ruled the {{links[event["country"]]|safe}}
-                    from the capital {{event["planet"].get_name()}} in the {{links[event["system"]] | safe}} system
+                    {% if "planet" in event %} from the capital {{event["planet"].name}} in the {{links[event["system"]] | safe}} system {% endif %}
                     with agenda "{{ event["leader"].agenda }}".
                 </span>
             </div>
@@ -127,7 +127,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    relocated its capital to the {{ event["planet"].get_class() }} planet "{{ event["planet"].get_name() }}"
+                    relocated its capital to the {{ event["planet"].planetclass }} planet "{{ event["planet"].name }}"
                     in the {{ links[event["system"]] | safe }} system.
                 </span>
             </div>
@@ -137,7 +137,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    The {{links[event["country"]]|safe}} colonized the {{ event["planet"].get_class() }} planet "{{event["planet"].get_name()}}" in the {{links[event["system"]]|safe}}
+                    The {{links[event["country"]]|safe}} colonized the {{ event["planet"].planetclass }} planet "{{event["planet"].name}}" in the {{links[event["system"]]|safe}}
                     system{% if "leader" in event%} under Governor {{links[event["leader"]]|safe}}{% endif %}.
                  </span>
             </div>
@@ -147,7 +147,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    Invasion of planet "{{event["planet"].get_name()}}" in the {{links[event["system"]]|safe}}
+                    Invasion of planet "{{event["planet"].name}}" in the {{links[event["system"]]|safe}}
                     system during the "{{links[event["war"]]|safe}}" conflict.
                  </span>
             </div>
@@ -224,7 +224,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
                     Governor {{links[event["leader"]]|safe}} governed the {{event["description"]}} sector{% if "planet" in event %}
-                    from planet "{{ event["planet"].get_name() }}" in the {{links[event["system"]]|safe}} system{%endif%}.
+                    from planet "{{ event["planet"].name }}" in the {{links[event["system"]]|safe}} system{%endif%}.
                  </span>
             </div>
         </li>
@@ -381,7 +381,7 @@
                 <span class="eventtext">
                     {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
                     created the {{ event["description"] }} sector{% if "planet" in event %}
-                    with capital on planet "{{ event["planet"].get_name() }}" in the {{links[event["system"]]|safe}} system
+                    with capital on planet "{{ event["planet"].name }}" in the {{links[event["system"]]|safe}} system
                     {% endif %}.
                 </span>
             </div>
@@ -430,7 +430,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %} Under governor {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    terraformed the planet "{{ event["planet"].get_name() }}" in the {{links[event["system"]]|safe}} system
+                    terraformed the planet "{{ event["planet"].name }}" in the {{links[event["system"]]|safe}} system
                     {{ event["description"] }}.
                 </span>
             </div>

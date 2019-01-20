@@ -906,7 +906,7 @@ class EventTemplateDictBuilder:
         elif isinstance(key, models.Leader):
             return key.get_name()
         elif isinstance(key, models.Planet):
-            return key.get_name()
+            return key.name
         else:
             return ""
 
