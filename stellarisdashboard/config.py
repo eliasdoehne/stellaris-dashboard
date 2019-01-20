@@ -171,21 +171,23 @@ class Config:
 
             self.__setattr__(key, val)
             if val != old_val:
-                logger.info(f'Updated setting {key.ljust(28)} "{str(old_val).rjust(8)}" -> "{str(val).ljust(8)}"')
+                logger.info(f'Updated setting {key.ljust(28)} {str(old_val).rjust(8)} -> {str(val).ljust(8)}')
 
     def write_to_file(self):
         fname = _get_settings_file_path()
         if fname.exists() and not fname.is_file():
-            raise ValueError("Settings file {fname} is not a file!")
+            raise ValueError(f"Settings file {fname} exists and is not a file!")
         logger.info(f"Writing settings to {fname}")
         with open(fname, "w") as f:
             settings_dict = self.get_dict()
-            yaml.dump(settings_dict, f)
+            yaml.dump(settings_dict, f, default_flow_style=False)
 
     def get_dict(self):
         result = dict(**DEFAULT_SETTINGS)
         for key, val in self.__dict__.items():
             if key in Config.ALL_KEYS:
+                if key in CONFIG.PATH_KEYS:
+                    val = str(val)
                 result[key] = val
         return result
 
@@ -241,9 +243,7 @@ def _apply_existing_settings(config: Config):
 
 
 def _get_settings_file_path() -> pathlib.Path:
-    this_dir = pathlib.Path(__file__).parent
-    settings_file = pathlib.Path(this_dir / "config.yml")
-    return settings_file
+    return pathlib.Path.cwd() / "config.yml"
 
 
 def update_log_level():

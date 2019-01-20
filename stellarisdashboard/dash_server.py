@@ -218,7 +218,7 @@ def settings_page():
             "value": current_settings["threads"],
             "min": 1,
             "max": config.CPU_COUNT,
-            "name": "Number of threads",
+            "name": "Number of threads (applies after restart)",
             "description": "Maximal number of threads used for reading save files. The new value is applied after restarting the dashboard program.",
         },
         "plot_height": {
@@ -240,8 +240,8 @@ def settings_page():
         "save_file_path": {
             "type": t_str,
             "value": current_settings["save_file_path"],
-            "name": "Save file path (Submit empty to reset to default)",
-            "description": "This controls the path where the dashboard will look for new or updated Stellaris save files. If you leave this input empty, the value will be reset to the default value.",
+            "name": "Save file path (leave empty to restore default, applies after restart)",
+            "description": "This controls the path where the dashboard will look for new or updated Stellaris save files. If you leave this input empty, the value will be reset to the default value. The new value is applied after restarting the dashboard program.",
         },
     }
     return render_template(
@@ -705,7 +705,6 @@ class EventFilter:
                  system_filter=None,
                  planet_filter=None,
                  faction_filter=None,
-                 scope_threshold=None,
                  ):
         self.min_date = float(min_date)
         self.max_date = float(max_date)
