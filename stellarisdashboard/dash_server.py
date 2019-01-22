@@ -330,7 +330,7 @@ TAB_STYLE = {
 # Define the layout of the dash app:
 CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append("Galaxy")
-DEFAULT_SELECTED_CATEGORY = "Budget"
+DEFAULT_SELECTED_CATEGORY = "Economy"
 
 timeline_app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
@@ -494,7 +494,7 @@ def get_figure_data(plot_data: visualization_data.EmpireProgressionPlotData, plo
     start = time.time()
     plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
     end = time.time()
-    logger.debug(f"Prepared data for figure {plot_spec.title} in {end - start} seconds.")
+    logger.debug(f"Prepared data for figure {plot_spec.title} in {end - start:5.3f} seconds.")
     return plot_list
 
 
@@ -522,7 +522,7 @@ def get_raw_plot_data_dicts(plot_data: visualization_data.EmpireProgressionPlotD
 def _get_raw_data_for_line_plot(plot_data: visualization_data.EmpireProgressionPlotData,
                                 plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
-    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+    for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if all(y != y for y in y_values):
             continue
         line = dict(
@@ -542,18 +542,16 @@ def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.Emp
     net_gain = None
     lines = []
     normalized = config.CONFIG.normalize_stacked_plots and plot_spec.style == visualization_data.PlotStyle.stacked
-    for key, x_values, y_values in plot_data.data_sorted_by_last_value(plot_spec):
+    for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if not any(y_values):
             continue
-
         if plot_spec.style == visualization_data.PlotStyle.budget:
             if net_gain is None:
                 net_gain = [0.0 for _ in x_values]
             net_gain = [net + y for (net, y) in zip(net_gain, y_values)]
 
-        y_min = min(y_values)
         stackgroup = "pos"
-        if y_min < 0:  # float("nan")
+        if min(y_values) < 0:
             stackgroup = "neg"
         lines.append(dict(
             x=x_values,
@@ -593,7 +591,8 @@ def dict_key_to_legend_label(key: str):
 
 
 def get_plot_value_labels(x_values, y_values, key):
-    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}' if (y and y == y) else ""
+    return [f'{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}'
+            if (y and y == y) else ""
             for (x, y) in zip(x_values, y_values)]
 
 

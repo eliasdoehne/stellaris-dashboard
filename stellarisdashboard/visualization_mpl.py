@@ -40,7 +40,7 @@ class MatplotLibVisualization:
 
     def _line_plot(self, ax, plot_spec: visualization_data.PlotSpecification):
         ax.set_title(plot_spec.title)
-        for i, (key, x, y) in enumerate(self.plot_data.data_sorted_by_last_value(plot_spec)):
+        for i, (key, x, y) in enumerate(self.plot_data.get_data_for_plot(plot_spec)):
             if y:
                 plot_kwargs = self._get_country_plot_kwargs(key)
                 ax.plot(x, y, **plot_kwargs)
@@ -51,7 +51,7 @@ class MatplotLibVisualization:
         stacked = []
         labels = []
         colors = []
-        data = list(self.plot_data.data_sorted_by_last_value(plot_spec))
+        data = list(self.plot_data.get_data_for_plot(plot_spec))
         for i, (key, x, y) in enumerate(data):
             stacked.append(y)
             labels.append(key)
@@ -70,7 +70,7 @@ class MatplotLibVisualization:
         labels_pos = []
         stacked_neg = []
         labels_neg = []
-        data = self.plot_data.data_sorted_by_last_value(plot_spec)
+        data = self.plot_data.get_data_for_plot(plot_spec)
         data = [(key, x_values, y_values) for (key, x_values, y_values) in data if not all(y == 0 for y in y_values)]
         net = [0 for _ in self.plot_data.dates]
         for i, (key, x_values, y_values) in enumerate(data):
