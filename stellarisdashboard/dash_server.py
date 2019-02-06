@@ -490,7 +490,7 @@ def _get_game_ids_matching_url(url):
     return game_id, matches
 
 
-def get_figure_data(plot_data: visualization_data.EmpireProgressionPlotData, plot_spec: visualization_data.PlotSpecification):
+def get_figure_data(plot_data: visualization_data.PlotDataManager, plot_spec: visualization_data.PlotSpecification):
     start = time.time()
     plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
     end = time.time()
@@ -498,7 +498,7 @@ def get_figure_data(plot_data: visualization_data.EmpireProgressionPlotData, plo
     return plot_list
 
 
-def get_raw_plot_data_dicts(plot_data: visualization_data.EmpireProgressionPlotData,
+def get_raw_plot_data_dicts(plot_data: visualization_data.PlotDataManager,
                             plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     """
     Depending on the plot_spec.style attribute, retrieve the data to be plotted
@@ -519,7 +519,7 @@ def get_raw_plot_data_dicts(plot_data: visualization_data.EmpireProgressionPlotD
         return []
 
 
-def _get_raw_data_for_line_plot(plot_data: visualization_data.EmpireProgressionPlotData,
+def _get_raw_data_for_line_plot(plot_data: visualization_data.PlotDataManager,
                                 plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     plot_list = []
     for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
@@ -537,7 +537,7 @@ def _get_raw_data_for_line_plot(plot_data: visualization_data.EmpireProgressionP
     return plot_list
 
 
-def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.EmpireProgressionPlotData,
+def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.PlotDataManager,
                                                plot_spec: visualization_data.PlotSpecification) -> List[Dict[str, Any]]:
     net_gain = None
     lines = []

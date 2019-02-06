@@ -21,7 +21,7 @@ class MatplotLibVisualization:
         self.fig = None
         self.axes = None
         self.axes_iter = None
-        self.plot_data: visualization_data.EmpireProgressionPlotData = plot_data
+        self.plot_data: visualization_data.PlotDataManager = plot_data
 
     def make_plots(self):
         for category, plot_specifications in visualization_data.THEMATICALLY_GROUPED_PLOTS.items():
@@ -145,12 +145,12 @@ class MatplotLibComparativeVisualization:
         self.fig = None
         self.axes = None
         self.comparison_id = comparison_id
-        self.plot_data: Dict[str, visualization_data.EmpireProgressionPlotData] = {}
+        self.plot_data: Dict[str, visualization_data.PlotDataManager] = {}
         self.countries: Set[str] = set()
         self.countries_in_legend: Set[str] = set()
         self.games_in_legend: Set[str] = set()
 
-    def add_data(self, game_name: str, pd: visualization_data.EmpireProgressionPlotData):
+    def add_data(self, game_name: str, pd: visualization_data.PlotDataManager):
         self.plot_data[game_name] = pd
         self.countries |= pd.owned_planets.keys()
 

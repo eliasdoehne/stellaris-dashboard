@@ -4,7 +4,7 @@ import enum
 import logging
 import random
 import time
-from typing import List, Dict, Callable, Any, Tuple, Iterable, Union
+from typing import List, Dict, Callable, Tuple, Iterable, Union
 
 import networkx as nx
 
@@ -28,14 +28,12 @@ class PlotStyle(enum.Enum):
 @dataclasses.dataclass
 class PlotSpecification:
     """
-    This class is used to define all available visualizations in a way that is
-    independent of the frontend, such that they can be defined in a single place for
-    both matplotlib and plotly.
+    This class is used to define all available visualizations.
     """
     plot_id: str
     title: str
 
-    # This function specifies how the associated data can be obtained from the EmpireProgressionPlotData instance.
+    # This function specifies how the associated data can be obtained from the PlotDataManager instance.
     data_container_factory: Callable[[], "AbstractPlotDataContainer"]
     style: PlotStyle
     yrange: Tuple[float, float] = None
@@ -44,14 +42,14 @@ class PlotSpecification:
     y_axis_label: str = ""
 
 
-# The EmpireProgressionPlotData is cached here for each "active" game
+# The PlotDataManager is cached in memory for each "active" game
 # (one that was requested or had a save file parsed in the current execution).
-_CURRENT_EXECUTION_PLOT_DATA: Dict[str, "EmpireProgressionPlotData"] = {}
+_CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
 
 
-def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotData":
+def get_current_execution_plot_data(game_name: str) -> "PlotDataManager":
     """
-    Update and retrieve the EmpireProgressionPlotData object stored for the requested game.
+    Update and retrieve the PlotDataManager object stored for the requested game.
 
     :param game_name: The exact name of a game for which a database is available
     :return:
@@ -62,7 +60,7 @@ def get_current_execution_plot_data(game_name: str) -> "EmpireProgressionPlotDat
             game = session.query(models.Game).filter_by(game_name=game_name).first()
         if not game:
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = EmpireProgressionPlotData(game_name)
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(game_name)
         _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
@@ -73,8 +71,8 @@ def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0)
     Generate RGB values for the given identifier. Some special values (tech categories)
     have hardcoded colors to roughly match the game's look and feel.
 
-    For unknown identifiers, a random color is generated. Colors should be consistent, as the
-    random instance is seeded with the identifier.
+    For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
+    the random number generator. This makes colors consistent across figures and executions.
 
     Optionally, min- and max-values can be passed in to avoid colors that are hard to see against
     the background. This may be configurable in a future version.
@@ -93,17 +91,17 @@ def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0)
     elif key_str == GalaxyMapData.UNCLAIMED:  # for unclaimed system in the galaxy map
         r, g, b = 255, 255, 255
     else:
-        random.seed(key_str)  # to keep empire colors consistent between plots
+        random.seed(key_str)
         r, g, b = [random.uniform(range_min, range_max) for _ in range(3)]
     return r, g, b
 
 
-class EmpireProgressionPlotData:
+class PlotDataManager:
     """
     Responsible for maintaining a single game's data for every available PlotSpecification.
 
-    Data is organized as a dictionary mapping the plot_id of the PlotSpecification class
-    to a DataContainer instance (defined below this class).
+    The data is organized as a dictionary mapping the plot_id of the PlotSpecification class
+    to a DataContainer instance (defined below).
     """
 
     def __init__(self, game_name: str, plot_specifications: Dict[str, List[PlotSpecification]] = None):
@@ -164,12 +162,19 @@ class EmpireProgressionPlotData:
             self.last_date = gs.date
         logger.info(f"Loaded {num_loaded_gs} new gamestates from the database in {time.time() - t_start:5.3f} seconds. ({self._loaded_gamestates} gamestates in total)")
 
-    def get_data_for_plot(self, ps: PlotSpecification):
+    def get_data_for_plot(self, ps: PlotSpecification) -> Iterable[Tuple[str, List[int], List[float]]]:
+        """
+        Used to access the raw data for the provided plot specification. Individual traces to be plotted are
+        yielded one-by-one as tuples in the form (legend key, x values, y values).
+
+        :param ps:
+        :return:
+        """
         container = self.data_containers_by_plot_id.get(ps.plot_id)
         if container is None:
             logger.info(f"No data available for plot {ps.title} ({ps.plot_id}).")
             return
-        return container.iterate_traces()
+        yield from container.iterate_traces()
 
 
 class AbstractPlotDataContainer(abc.ABC):
@@ -179,7 +184,7 @@ class AbstractPlotDataContainer(abc.ABC):
         self.dates: List[float] = []
         self.data_dict: Dict[str, List[float]] = {}
 
-    def iterate_traces(self):
+    def iterate_traces(self) -> Iterable[Tuple[str, List[int], List[float]]]:
         for key, values in self.data_dict.items():
             yield key, self.dates, values
 
