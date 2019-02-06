@@ -170,6 +170,8 @@ class HistoricalEventType(enum.Enum):
     defensive_pact = enum.auto()
     formed_federation = enum.auto()
     commercial_pact = enum.auto()
+    research_agreement = enum.auto()
+    migration_treaty = enum.auto()
 
     closed_borders = enum.auto()
     received_closed_borders = enum.auto()
