@@ -31,26 +31,9 @@ class TimelineExtractor:
     SUPPORTED_COUNTRY_TYPES = {"default", "fallen_empire", "awakened_fallen_empire"}
 
     def __init__(self):
-        self._gamestate_dict = None
-        self.game = None
+        self.basic_info = None
         self._session = None
-        self._player_country_id: int = None
-        self._current_gamestate = None
-        self._species_by_ingame_id = None
-        self._robot_species = None
-        self._player_research_agreements = None
-        self._player_sensor_links = None
-        self._systems_by_ingame_country_id = None
-        self._planets_by_ingame_country_id = None
-        self._country_by_ingame_planet_id = None
-        self._country_by_faction_id = None
-        self._player_monthly_trade_info = None
-        self._date_in_days = None
-        self._logger_str = None
-
-        self._random_instance = random.Random()
-
-        self._new_models = []
+        self._gamestate_dict = None
 
     def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any]):
         """
@@ -61,44 +44,43 @@ class TimelineExtractor:
         :param gamestate_dict: A dictionary returned by the save file parser.
         :return:
         """
-        date_str = gamestate_dict["date"]
-        self._logger_str = f"{game_id} {date_str}:"
-        logger.info(f"Processing {game_id}, {date_str}")
         self._gamestate_dict = gamestate_dict
-        self._player_country_id = self._identify_player_country()
+        player_country_id = self._identify_player_country()
+        date_str = gamestate_dict["date"]
+        date_in_days = models.date_to_days(date_str)
+        self.basic_info = BasicGameInfo(
+            game_name=game_id,
+            date_in_days=date_in_days,
+            player_country_id=player_country_id,
+        )
+        logger.info(f"{self.basic_info.logger_str}: Processing Gamestate")
         with models.get_db_session(game_id) as self._session:
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
-                date_in_days = models.date_to_days(self._gamestate_dict["date"])
                 game_states_by_date = {gs.date: gs for gs in db_game.game_states}
-                if self._date_in_days in game_states_by_date:
-                    logger.info(f"{self._logger_str}: Gamestate for same date already exists in database. Aborting...")
+                if self.basic_info.date_in_days in game_states_by_date:
+                    logger.info(f"{self.basic_info.logger_str}: Gamestate for same date already exists in database. Aborting...")
                     self._session.rollback()
                 else:
                     db_game_state = self._session.add(models.GameState(
                         game=db_game,
                         date=date_in_days,
                     ))
-                    basic_info = BasicGameInfo(
-                        game_name=game_id,
-                        date_in_days=date_in_days,
-                        player_country_id=self._player_country_id,
-                    )
                     dependencies = {}
                     for data_processor in self._data_processors():
                         data_processor.initialize(db_game,
                                                   gamestate_dict,
                                                   db_game_state,
-                                                  basic_info,
+                                                  self.basic_info,
                                                   self._session)
-                        logger.info(f"{basic_info.logger_str} Processing {data_processor.ID}")
+                        logger.info(f"{self.basic_info.logger_str} Processing {data_processor.ID}")
                         data_processor.extract_data_from_gamestate(
                             {key: dependencies[key] for key in data_processor.DEPENDENCIES}
                         )
                         dependencies[data_processor.ID] = data_processor.data()
 
                 self._session.commit()
-                logger.info(f"{self._logger_str} Committed changes to database.")
+                logger.info(f"{self.basic_info.logger_str} Committed changes to database.")
             except Exception as e:
                 self._session.rollback()
                 logger.error(e)
@@ -110,7 +92,7 @@ class TimelineExtractor:
         players = self._gamestate_dict["player"]
         if players:
             if len({player["country"] for player in players}) != 1:
-                raise ValueError(f"{self._logger_str} Player country is ambiguous!")
+                raise ValueError(f"{self.basic_info.logger_str} Player country is ambiguous!")
             return players[0]["country"]
         else:
             return 0
@@ -119,7 +101,7 @@ class TimelineExtractor:
         game = self._session.query(models.Game).filter_by(game_name=game_id).first()
         if game is None:
             logger.info(f"Adding new game {game_id} to database.")
-            player_country_name = self._gamestate_dict["country"][self._player_country_id]["name"]
+            player_country_name = self._gamestate_dict["country"][self.basic_info.player_country_id]["name"]
             galaxy_info = self._gamestate_dict["galaxy"]
             game = models.Game(
                 game_name=game_id,
