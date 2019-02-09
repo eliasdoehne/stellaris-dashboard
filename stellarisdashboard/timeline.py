@@ -4,6 +4,7 @@ import datetime
 import itertools
 import logging
 import random
+import time
 from typing import Dict, Any, Union, Set, Iterable
 
 from stellarisdashboard import models, game_info, config
@@ -53,13 +54,14 @@ class TimelineExtractor:
             date_in_days=date_in_days,
             player_country_id=player_country_id,
         )
-        logger.info(f"{self.basic_info.logger_str}: Processing Gamestate")
+        logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
+        t_start_gs = time.clock()
         with models.get_db_session(game_id) as self._session:
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
                 game_states_by_date = {gs.date: gs for gs in db_game.game_states}
                 if self.basic_info.date_in_days in game_states_by_date:
-                    logger.info(f"{self.basic_info.logger_str}: Gamestate for same date already exists in database. Aborting...")
+                    logger.info(f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting...")
                     self._session.rollback()
                 else:
                     db_game_state = self._session.add(models.GameState(
@@ -68,23 +70,25 @@ class TimelineExtractor:
                     ))
                     dependencies = {}
                     for data_processor in self._data_processors():
+                        t_start = time.clock()
                         data_processor.initialize(db_game,
                                                   gamestate_dict,
                                                   db_game_state,
                                                   self.basic_info,
                                                   self._session)
-                        logger.info(f"{self.basic_info.logger_str} Processing {data_processor.ID}")
                         data_processor.extract_data_from_gamestate(
                             {key: dependencies[key] for key in data_processor.DEPENDENCIES}
                         )
                         dependencies[data_processor.ID] = data_processor.data()
+                        logger.info(f"{self.basic_info.logger_str}   - Processed {data_processor.ID} in {time.clock() - t_start:.2f} s")
 
+                logger.info(f"{self.basic_info.logger_str} Processed Gamestate in {time.clock() - t_start_gs:.2f} s")
                 self._session.commit()
                 logger.info(f"{self.basic_info.logger_str} Committed changes to database.")
             except Exception as e:
                 self._session.rollback()
-                logger.error(e)
-                logger.error("Rolling back changes to database...")
+                logger.error(f"{self.basic_info.logger_str}{e}")
+                logger.error(f"{self.basic_info.logger_str} Rolling back changes to database...")
                 if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
 
@@ -100,7 +104,7 @@ class TimelineExtractor:
     def _get_or_add_game_to_db(self, game_id: str):
         game = self._session.query(models.Game).filter_by(game_name=game_id).first()
         if game is None:
-            logger.info(f"Adding new game {game_id} to database.")
+            logger.info(f"{self.basic_info.logger_str} Adding new game {game_id} to database.")
             player_country_name = self._gamestate_dict["country"][self.basic_info.player_country_id]["name"]
             galaxy_info = self._gamestate_dict["galaxy"]
             game = models.Game(
@@ -198,12 +202,12 @@ class SystemProcessor(AbstractGamestateDataProcessor):
             if system_model is not None:
                 self.systems_by_ingame_id[system_id_in_game] = system_model
             else:
-                logger.info(f"Could not add or find system with ID {system_id_in_game} in database.")
+                logger.info(f"{self._basic_info.logger_str} Could not add or find system with ID {system_id_in_game} in database.")
 
     def _get_or_add_system(self, system_id: int) -> Union[models.System, None]:
         system_data = self._gamestate_dict.get("galactic_object", {}).get(system_id)
         if system_data is None:
-            logger.warning(f"Found no data for system with ID {system_id}!")
+            logger.warning(f"{self._basic_info.logger_str} Found no data for system with ID {system_id}!")
             return
         system_name = system_data.get("name")
         system_model = self._session.query(models.System).filter_by(
@@ -311,7 +315,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             system_model = systems_dict.get(system_id_in_game)
             country_model = countries_dict.get(country_id_in_game)
             if country_model is None or system_model is None:
-                logger.warning(f"Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}")
+                logger.warning(f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}")
                 continue
 
             if country_id_in_game not in self.systems_by_owner_country_id:
@@ -798,7 +802,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         species_id = leader_dict.get("species_index", -1)
         species = self._species_dict.get(species_id)
         if species is None:
-            logger.warning(f"Invalid species index for leader {leader_dict}")
+            logger.warning(f"{self._basic_info.logger_str} Invalid species index for leader {leader_dict}")
             return
         leader = models.Leader(
             country=country_model,
@@ -925,7 +929,7 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
                 system_id_in_game=system_id,
             ).one_or_none()
             if system_model is None:
-                logger.info(f"Could not find system with in-game id {system_id}")
+                logger.info(f"{self._basic_info.logger_str} Could not find system with in-game id {system_id}")
                 continue
 
             system_dict = self._gamestate_dict["galactic_object"].get(system_id, {})
@@ -966,7 +970,7 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
         current_pc = planet_dict.get("planet_class")
         target_pc = terraform_dict.get("planet_class")
         if not isinstance(target_pc, str):
-            logger.info(f"Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}")
+            logger.info(f"{self._basic_info.logger_str} Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}")
             return
         text = f"{current_pc},{target_pc}"
         matching_description = self._get_or_add_shared_description(text)
@@ -1151,7 +1155,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
                 return None
             ruler_id = country_dict.get("ruler", -1)
             if ruler_id < 0:
-                logger.info(f"Could not find leader id for ruler in country data.")
+                logger.info(f"{self._basic_info.logger_str} Could not find leader id for ruler in country data.")
             ruler = leader_by_ingame_id.get(ruler_id)
 
             self.ruler_by_country_id[country_id] = ruler
@@ -1463,7 +1467,7 @@ class FactionProcessor(AbstractGamestateDataProcessor):
         faction_leader_id = faction_dict.get("leader", -1)
         leader = self._leaders_dict.get(faction_leader_id)
         if leader is None:
-            logger.warning(f"Could not find faction leader matching leader id {faction_leader_id} for {country_model.country_name}\n{faction_dict}")
+            logger.warning(f"{self._basic_info.logger_str} Could not find faction leader matching leader id {faction_leader_id} for {country_model.country_name}\n{faction_dict}")
             return
         matching_event = self._session.query(models.HistoricalEvent).filter_by(
             country=country_model,
@@ -1736,7 +1740,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 country_dict = self._gamestate_dict["country"][country_id_ingame]
                 if db_country is None:
                     country_name = country_dict["name"]
-                    logger.warning(f"Could not find country matching war participant {country_name}")
+                    logger.warning(f"{self._basic_info.logger_str} Could not find country matching war participant {country_name}")
                     continue
 
                 is_attacker = country_id_ingame in attackers
@@ -1832,7 +1836,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
             for country_id in itertools.chain(battle_attackers, battle_defenders):
                 db_country = self._countries_dict.get(country_id)
                 if db_country is None:
-                    logger.warning(f"Could not find country with ID {country_id} when processing battle {b_dict}")
+                    logger.warning(f"{self._basic_info.logger_str} Could not find country with ID {country_id} when processing battle {b_dict}")
                     continue
                 is_known_to_player = is_known_to_player or db_country.has_met_player()
                 war_participant = self._session.query(models.WarParticipant).filter_by(
@@ -1840,7 +1844,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                     country=db_country,
                 ).one_or_none()
                 if war_participant is None:
-                    logger.info(f"Could not find War participant matching country {db_country.country_name} and war {war.name}.")
+                    logger.info(f"{self._basic_info.logger_str} Could not find War participant matching country {db_country.country_name} and war {war.name}.")
                     continue
                 self._session.add(models.CombatParticipant(
                     combat=combat, war_participant=war_participant, is_attacker=country_id in battle_attackers,
