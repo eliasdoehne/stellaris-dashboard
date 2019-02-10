@@ -64,10 +64,11 @@ class TimelineExtractor:
                     logger.info(f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting...")
                     self._session.rollback()
                 else:
-                    db_game_state = self._session.add(models.GameState(
+                    db_game_state = models.GameState(
                         game=db_game,
                         date=date_in_days,
-                    ))
+                    )
+                    self._session.add(db_game_state)
                     dependencies = {}
                     for data_processor in self._data_processors():
                         t_start = time.clock()
@@ -511,9 +512,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
         for country_id, country_model in countries_dict.items():
             country_data_dict = self._gamestate_dict["country"][country_id]
 
-            is_player = (country_id == self._basic_info.player_country_id)
-            has_sensor_link_with_player = is_player or (country_id in sensor_links[self._basic_info.player_country_id])
-            if is_player:
+            has_sensor_link_with_player = (country_model.is_player
+                                           or country_id in sensor_links[self._basic_info.player_country_id])
+            if country_model.is_player:
                 attitude_towards_player = models.Attitude.is_player
             else:
                 attitude_towards_player = self._extract_ai_attitude_towards_player(country_id)
@@ -521,7 +522,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             diplomacy_data = self._get_diplomacy_towards_player(diplomacy_dict, country_id)
 
             tech_count = len(country_data_dict.get("tech_status", {}).get("technology", []))
-            country_data = models.CountryData(
+            self.country_data_dict[country_id] = country_data = models.CountryData(
                 date=self._basic_info.date_in_days,
                 country=country_model,
                 game_state=self._db_gamestate,
@@ -1502,7 +1503,8 @@ class DiplomacyHistoricalEventProcessor(AbstractGamestateDataProcessor):
         ruler_dict = dependencies[RulerEventProcessor.ID]
 
         for country_id, country_model in country_dict.items():
-
+            if country_model.country_type not in TimelineExtractor.SUPPORTED_COUNTRY_TYPES:
+                continue
             diplo_relations = [
                 (
                     models.HistoricalEventType.sent_rivalry,
@@ -1553,6 +1555,8 @@ class DiplomacyHistoricalEventProcessor(AbstractGamestateDataProcessor):
             for event_type, reverse_event_type, diplo_dict_key in diplo_relations:
                 for target_country_id in diplo_dict[country_id][diplo_dict_key]:
                     target_country_model = country_dict.get(target_country_id)
+                    if target_country_model.country_type not in TimelineExtractor.SUPPORTED_COUNTRY_TYPES:
+                        continue
                     if target_country_model is None:
                         continue
                     is_known_to_player = (country_model.is_player or target_country_model.is_player
@@ -1932,7 +1936,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
         for country_id_in_game, country_model in countries_dict.items():
             if not country_model.is_player or country_id_in_game not in country_data_dict:
-                continue  # TODO Enable for other countries as well (Config setting?)
+                continue  # TODO for now, only player pops are processed Enable for other countries as well (Config setting?)
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}
             stats_by_faction = {}
@@ -1947,8 +1951,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 planet_id = pop_dict.get("planet")
                 planet_country_id_in_game = country_by_ingame_planet_id.get(planet_id)
                 country_model = countries_dict.get(planet_country_id_in_game)
-                if not country_model.is_player:
-                    # for now, only player pops are processed
+                if planet_country_id_in_game != country_id_in_game:
+
                     continue
                 species_id = pop_dict.get("species_index")
                 faction_id = pop_dict.get("pop_faction")
