@@ -458,6 +458,8 @@ def update_content(tab_value, search, date_fraction, dash_plot_checklist):
         plot_data = visualization_data.get_current_execution_plot_data(game_id)
         for plot_spec in plots:
             figure_data = get_figure_data(plot_data, plot_spec)
+            if not figure_data:
+                continue
             figure_layout = get_figure_layout(plot_spec)
             figure_layout["title"] = plot_spec.title
             figure = go.Figure(data=figure_data, layout=figure_layout)
@@ -524,6 +526,8 @@ def _get_raw_data_for_line_plot(plot_data: visualization_data.PlotDataManager,
     plot_list = []
     for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if all(y != y for y in y_values):
+            continue
+        if not x_values:
             continue
         line = dict(
             x=x_values,
