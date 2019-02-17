@@ -286,15 +286,18 @@ def get_known_games(game_name_prefix: str = "") -> List[str]:
 
 
 def get_available_games_dict() -> Dict[str, Dict[str, str]]:
-    """ Returns a dictionary mapping game id to the name of the game's player country. """
+    """ Returns a dictionary mapping game id to some basic info about the game. """
     games = {}
     for game_id in get_known_games():
         with get_db_session(game_id) as session:
             game = session.query(Game).one_or_none()
             if game is None:
                 continue
+            most_recent_gamestate = session.query(GameState).order_by(GameState.date.desc()).first()
             games[game_id] = dict(
                 game_id=game_id,
+                game_date=days_to_date(most_recent_gamestate.date),
+                num_saves=session.query(GameState.gamestate_id).count(),
                 country_name=game.player_country_name,
                 difficulty=game.difficulty,
                 galaxy=game.galaxy,
