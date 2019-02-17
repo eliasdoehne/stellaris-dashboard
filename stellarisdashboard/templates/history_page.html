@@ -126,8 +126,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    relocated its capital to the {{ event["planet"].planetclass }} planet "{{ event["planet"].name }}"
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} relocated their capital to the {{ event["planet"].planetclass }} planet "{{ event["planet"].name }}"
                     in the {{ links[event["system"]] | safe }} system.
                 </span>
             </div>
@@ -137,8 +140,9 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    The {{links[event["country"]]|safe}} colonized the {{ event["planet"].planetclass }} planet "{{event["planet"].name}}" in the {{links[event["system"]]|safe}}
-                    system{% if "leader" in event%} under Governor {{links[event["leader"]]|safe}}{% endif %}.
+                    The {{links[event["country"]]|safe}} colonized the {{ event["planet"].planetclass }}
+                    planet "{{event["planet"].name}}" in the {{links[event["system"]]|safe}} system
+                    {% if "leader" in event%} under Governor {{links[event["leader"]]|safe}}{% endif %}.
                  </span>
             </div>
         </li>
@@ -213,7 +217,9 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Scientist {{links[event["leader"]]|safe}}{% else %}{{links[event["country"]]|safe}}{% endif %}
+                    {% if "leader" in event %} Scientist {{links[event["leader"]]|safe}}
+                    {% else %} The {{links[event["country"]]|safe}}
+                    {% endif %}
                     researched the "{{event["description"]}}" technology.
                  </span>
             </div>
@@ -233,7 +239,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Ruler {{links[event["leader"]]|safe}}{% else %}{{links[event["country"]]|safe}}{% endif %}
+                    {% if "leader" in event %}Ruler {{links[event["leader"]]|safe}}{% else %}The {{links[event["country"]]|safe}}{% endif %}
                     enacted the "{{event["description"]}}" edict.
                  </span>
             </div>
@@ -243,7 +249,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
+                    {% if "leader" in event %}
                     Ruler {{links[event["leader"]]|safe}} ascended the {{links[event["country"]]|safe}} with "{{event["description"]}}".
+                    {% else %}
+                    The  {{links[event["country"]]|safe}} ascended with "{{event["description"]}}".
+                    {% endif %}
                  </span>
             </div>
         </li>
@@ -252,8 +262,12 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Ruler {{links[event["leader"]]|safe}} reformed the {% endif %}
-                    {{links[event["country"]]|safe}} government: {{event["description"]}}
+                    {% if "leader" in event %}
+                    Ruler {{links[event["leader"]]|safe}} reformed the {{links[event["country"]]|safe}} government:
+                    {% else %}
+                    Government reforms in the {{links[event["country"]]|safe}}:
+                    {% endif %}
+                    {{event["description"]}}
                  </span>
             </div>
         </li>
@@ -262,8 +276,10 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    adopted the "{{ event["description"]}}" tradition.
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} adopted the "{{ event["description"]}}" tradition.
                  </span>
             </div>
         </li>
@@ -281,8 +297,10 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    established first contact with the {{ links[event["target_country"]] | safe }}.
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} established first contact with the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -291,8 +309,10 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    declared rivalry against the {{ links[event["target_country"]] | safe }}.
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} declared rivalry against the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -301,8 +321,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    received a rivalry declaration from the {{ links[event["target_country"]] | safe }}.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} received a rivalry declaration from the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -311,8 +334,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    revoked border access to the {{ links[event["target_country"]] | safe }}.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} revoked border access to the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -330,8 +356,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    entered a defensive pact with the {{ links[event["target_country"]] | safe }}.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} entered a defensive pact with the {{ links[event["target_country"]] | safe }}.
                 </span>
             </div>
         </li>
@@ -340,8 +369,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    entered a non-aggression pact with the {{ links[event["target_country"]] | safe }}.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} entered a non-aggression pact with the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -350,8 +382,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    formed a federation with the {{ links[event["target_country"]] | safe }}.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} formed a federation with the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -379,8 +414,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    created the {{ event["description"] }} sector{% if "planet" in event %}
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} created the {{ event["description"] }} sector{% if "planet" in event %}
                     with capital on planet "{{ event["planet"].name }}" in the {{links[event["system"]]|safe}} system
                     {% endif %}.
                 </span>
@@ -400,8 +438,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    entered the "{{links[event["war"]] | safe}}" conflict.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} entered the "{{links[event["war"]] | safe}}" conflict.
                 </span>
             </div>
         </li>
@@ -410,8 +451,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the {% endif %}{{ links[event["country"]] | safe }}
-                    made peace in the "{{links[event["war"]] | safe}}" conflict.
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} made peace in the "{{links[event["war"]] | safe}}" conflict.
                 </span>
             </div>
         </li>
