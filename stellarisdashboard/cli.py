@@ -29,26 +29,23 @@ def cli():
 
 @cli.command()
 @click.option('--save-path', type=click.Path(exists=True, file_okay=False))
-@click.option('--polling-interval', type=click.FLOAT, default=0.5)
-def monitor_saves(save_path, polling_interval):
-    f_monitor_saves(polling_interval, save_path=save_path)
+def monitor_saves(save_path):
+    f_monitor_saves(save_path=save_path)
 
 
-def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading.Event = None):
+def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
     """
     Monitor the save path for new files, and maintain the corresponding plot data.
 
-    :param polling_interval: How often the path is checked for new files
     :param save_path: Override for the path defined in the config.CONFIG object.
     :param stop_event: Signals that the program is shutting down.
     :return:
     """
     if save_path is None:
         save_path = config.CONFIG.save_file_path
-    if polling_interval is None:
-        polling_interval = config.CONFIG.polling_interval
     if stop_event is None:
         stop_event = threading.Event()
+    polling_interval = config.CONFIG.polling_interval
     save_reader = save_parser.ContinuousSavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
     tle = timeline.TimelineExtractor()
