@@ -58,6 +58,8 @@ DEFAULT_SETTINGS = dict(
     threads=_get_default_thread_count(),
     port=28053,
     polling_interval=0.5,
+    save_file_delay=0.1,
+    max_file_read_attempts=1,
     check_version=True,
     colormap="viridis",
     log_level="INFO",
@@ -81,7 +83,7 @@ class Config:
     """ Stores the settings for the dashboard. """
     save_file_path: pathlib.Path = None
     base_output_path: pathlib.Path = None
-    threads = None
+    threads: int = None
 
     port: int = None
     colormap: str = None
@@ -90,6 +92,8 @@ class Config:
     plot_width: int = None
 
     polling_interval: float = None
+    save_file_delay: float = None
+    max_file_read_attempts: int = None
 
     check_version: bool = None
     show_everything: bool = None
@@ -129,9 +133,11 @@ class Config:
         "threads",
         "plot_width",
         "plot_height",
+        "max_file_read_attempts",
     }
     FLOAT_KEYS = {
         "polling_interval",
+        "save_file_delay",
     }
     STR_KEYS = {
         "colormap",
@@ -192,23 +198,7 @@ class Config:
         return result
 
     def get_adjustable_settings_dict(self):
-        return dict(
-            save_file_path=str(self.save_file_path),
-            check_version=self.check_version,
-            extract_system_ownership=self.extract_system_ownership,
-            show_everything=self.show_everything,
-            only_show_default_empires=self.only_show_default_empires,
-            only_read_player_history=self.only_read_player_history,
-            filter_events_by_type=self.filter_events_by_type,
-            read_only_every_nth_save=self.read_only_every_nth_save,
-            plot_time_resolution=self.plot_time_resolution,
-            save_name_filter=self.save_name_filter,
-            threads=self.threads,
-            plot_width=self.plot_width,
-            plot_height=self.plot_height,
-            normalize_stacked_plots=self.normalize_stacked_plots,
-            use_two_y_axes_for_budgets=self.use_two_y_axes_for_budgets,
-        )
+        return dataclasses.asdict(self)
 
     def __str__(self):
         lines = [

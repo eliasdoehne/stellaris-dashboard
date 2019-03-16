@@ -141,6 +141,7 @@ def settings_page():
     t_int = "int"
     t_bool = "bool"
     t_str = "str"
+    t_float = "float"
     current_settings = config.CONFIG.get_adjustable_settings_dict()
     settings_with_descriptions = {
         "check_version": {
@@ -243,6 +244,20 @@ def settings_page():
             "name": "Save file path (leave empty to restore default, applies after restart)",
             "description": "This controls the path where the dashboard will look for new or updated Stellaris save files. If you leave this input empty, the value will be reset to the default value. The new value is applied after restarting the dashboard program.",
         },
+        "save_file_delay": {
+            "type": t_float,
+            "value": current_settings["save_file_delay"],
+            "name": "Save file delay in seconds (applies after restart)",
+            "description": "Sometimes the dashboard may try to read a file before it is completely written to disk. This setting ensures that each file is only read after a delay.",
+        },
+        "max_file_read_attempts": {
+            "type": t_int,
+            "value": current_settings["max_file_read_attempts"],
+            "name": "Maximum read attempts per save files",
+            "min": 1,
+            "max": 2000,
+            "description": "If an error occurs while reading a save file, the dashboard will do this many retries after a short delay (Save file delay setting above).",
+        },
     }
     return render_template(
         "settings_page.html",
@@ -259,6 +274,8 @@ def apply_settings():
             settings[key] = key in settings  # only checked items are included in form data
         if key in config.Config.INT_KEYS:
             settings[key] = int(settings[key])
+        if key in config.Config.FLOAT_KEYS:
+            settings[key] = float(settings[key])
     for key in previous_settings:
         if key in config.Config.BOOL_KEYS and key not in settings:
             settings[key] = False

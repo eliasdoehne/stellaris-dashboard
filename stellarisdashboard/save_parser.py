@@ -6,11 +6,12 @@ import itertools
 import logging
 import multiprocessing as mp
 import pathlib
+import signal
 import time
 import traceback
 import zipfile
 from collections import namedtuple
-from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator, Deque
+from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator, Deque, Optional
 
 from stellarisdashboard import config
 from stellarisdashboard.token_value_stream_re import INT, FLOAT
@@ -32,6 +33,11 @@ class StellarisFileFormatError(Exception): pass
 T = TypeVar("T")
 
 
+def m_or_c_time(f: pathlib.Path):
+    stat = f.stat()
+    return max(stat.st_mtime, stat.st_ctime)
+
+
 class SavePathMonitor(abc.ABC):
     """
     Base class for path monitors, which check the save path for new save games.
@@ -44,10 +50,10 @@ class SavePathMonitor(abc.ABC):
         self.num_encountered_saves: int = 0
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
-        self._last_checked_time = 0
+        self._last_checked_time = float("-inf")
 
     @abc.abstractmethod
-    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
         """
         Check the save path for new save files and yield results that are ready. Depending on the implementation,
         it files may be skipped if all parser threads are busy. Results are always returned in the correct order.
@@ -88,8 +94,7 @@ class SavePathMonitor(abc.ABC):
 
     def mark_all_existing_saves_processed(self) -> None:
         """ Ensure that existing files are not re-parsed. """
-        self.processed_saves |= {f for f in self._valid_save_files()
-                                 if f.stem != "ironman"}
+        self.processed_saves |= {f for f in self._valid_save_files() if f.stem != "ironman"}
         self._last_checked_time = time.time()
 
     def _valid_save_files(self) -> List[pathlib.Path]:
@@ -98,9 +103,13 @@ class SavePathMonitor(abc.ABC):
                              and not str(save_file.parent.stem).startswith("mp")
                              and str(save_file.parent.stem).startswith(self.game_name_prefix))
         modified_files = sorted(f for f in prefiltered_files
-                                if f.stat().st_mtime > self._last_checked_time)
+                                if m_or_c_time(f) > self._last_checked_time)
         self._last_checked_time = time.time()
         return modified_files
+
+
+def _pool_worker_init():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 class ContinuousSavePathMonitor(SavePathMonitor):
@@ -113,10 +122,10 @@ class ContinuousSavePathMonitor(SavePathMonitor):
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
         super().__init__(save_parent_dir, game_name_prefix)
         self._num_threads = config.CONFIG.threads
-        self._pool = mp.Pool(processes=config.CONFIG.threads)
+        self._pool = mp.Pool(processes=config.CONFIG.threads, initializer=_pool_worker_init)
         self._pending_results: Deque[Tuple[pathlib.PurePath, Any]] = collections.deque()
 
-    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
@@ -124,7 +133,9 @@ class ContinuousSavePathMonitor(SavePathMonitor):
                 logger.info(f"Retrieving gamestate for {fname}")
                 try:
                     yield fname.parent.stem, result.get()
-                except Exception as e:
+                except KeyboardInterrupt:
+                    raise
+                except Exception:
                     logger.error(f"Error while reading save file {fname}:")
                     logger.error(traceback.format_exc())
             else:
@@ -142,6 +153,7 @@ class ContinuousSavePathMonitor(SavePathMonitor):
 
     def shutdown(self):
         self._pool.terminate()
+        self._pool.join()
 
 
 class BatchSavePathMonitor(SavePathMonitor):
@@ -150,7 +162,7 @@ class BatchSavePathMonitor(SavePathMonitor):
     the CLI command `stellarisdashboardcli --parse-saves`.
     """
 
-    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
         """
         Check the save directory for new files. If any are found, parse them and
         return the results as gamestate dictionaries as they come in.
@@ -193,7 +205,20 @@ def parse_save(filename) -> Dict[str, Any]:
     :param filename: Path to a .sav file
     :return: The gamestate dictionary
     """
-    gamestate = SaveFileParser().parse_save(filename)
+    gamestate = None
+    parser = SaveFileParser()
+    for attempt in range(config.CONFIG.max_file_read_attempts):
+        try:
+            gamestate = parser.parse_save(filename)
+            break
+        except KeyboardInterrupt:
+            raise
+        except zipfile.BadZipFile as e:
+            remaining = config.CONFIG.max_file_read_attempts - attempt - 1
+            if not remaining:
+                raise
+            logging.info(f"Encountered {e}, {remaining} attempts remaining.")
+            time.sleep(config.CONFIG.save_file_delay)
     return gamestate
 
 

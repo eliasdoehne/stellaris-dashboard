@@ -20,6 +20,9 @@
             {% if setting["type"] == "str" %}
             <input type="text" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
             {% endif %}
+            {% if setting["type"] == "float" %}
+            <input type="number" step="0.01" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
+            {% endif %}
             </span>
         </div>
         {% endfor %}

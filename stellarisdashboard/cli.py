@@ -60,6 +60,8 @@ def f_monitor_saves(polling_interval=None, save_path=None, stop_event: threading
             if stop_event.is_set():
                 save_reader.shutdown()
                 break
+            if gamestate_dict is None:
+                continue
             show_wait_message = True
             nothing_new = False
             tle.process_gamestate(game_name, gamestate_dict)
@@ -89,6 +91,8 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
     save_reader = save_parser.BatchSavePathMonitor(save_path, game_name_prefix=game_name_prefix)
     tle = timeline.TimelineExtractor()
     for game_name, gamestate_dict in save_reader.get_gamestates_and_check_for_new_files():
+        if gamestate_dict is None:
+            continue
         tle.process_gamestate(game_name, gamestate_dict)
         del gamestate_dict
 
