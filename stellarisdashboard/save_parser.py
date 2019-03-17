@@ -217,8 +217,9 @@ def parse_save(filename) -> Dict[str, Any]:
             remaining = config.CONFIG.max_file_read_attempts - attempt - 1
             if not remaining:
                 raise
-            logging.info(f"Encountered {e}, {remaining} attempts remaining.")
-            time.sleep(config.CONFIG.save_file_delay)
+            delay = config.CONFIG.save_file_delay
+            logging.info(f"Encountered BadZipFile error {e}. Next attempt in {delay} seconds, {remaining} attempts remaining.")
+            time.sleep(delay)
     return gamestate
 
 
