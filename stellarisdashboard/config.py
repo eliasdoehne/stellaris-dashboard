@@ -227,7 +227,7 @@ def _apply_existing_settings(config: Config):
     if settings_file.exists() and settings_file.is_file():
         logger.info(f"Reading settings from {settings_file}...")
         with open(settings_file, "r") as f:
-            settings.update(yaml.load(f))
+            settings.update(yaml.load(f, Loader=yaml.SafeLoader))
     config.apply_dict(settings)
 
 
