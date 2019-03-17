@@ -48,7 +48,6 @@ setup(
         "dash-renderer",
         "flask",
         "dataclasses",
-        "matplotlib",
         "networkx",
         "plotly",
         'sqlalchemy',
