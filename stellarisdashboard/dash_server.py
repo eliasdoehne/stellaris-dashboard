@@ -150,12 +150,6 @@ def settings_page():
             "name": "Check for new versions",
             "description": "Check if new versions of the dashboard are available. This only works if you subscribe to the mod in the Steam workshop.",
         },
-        "extract_system_ownership": {
-            "type": t_bool,
-            "value": _convert_python_bool_to_lowercase(current_settings["extract_system_ownership"]),
-            "name": "Extract system ownership",
-            "description": "Extracting ownership of systems can be slow. If this setting is used, the historical galaxy map won't show any empires.",
-        },
         "show_everything": {
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["show_everything"]),
@@ -173,12 +167,6 @@ def settings_page():
             "value": _convert_python_bool_to_lowercase(current_settings["filter_events_by_type"]),
             "name": "Filter historical events by scope",
             "description": "If enabled, only the most relevant historical events are shown to reduce clutter in the event ledger.",
-        },
-        "only_read_player_history": {
-            "type": t_bool,
-            "value": _convert_python_bool_to_lowercase(current_settings["only_read_player_history"]),
-            "name": "Only extract player history",
-            "description": "Only extract your country's history for the event ledger. Reduces workload and database size, but you won't have access to the full game history.",
         },
         "normalize_stacked_plots": {
             "type": t_bool,
@@ -241,22 +229,22 @@ def settings_page():
         "save_file_path": {
             "type": t_str,
             "value": current_settings["save_file_path"],
-            "name": "Save file path (leave empty to restore default, applies after restart)",
+            "name": "Save file path (applies after restart, submit empty to restore default)",
             "description": "This controls the path where the dashboard will look for new or updated Stellaris save files. If you leave this input empty, the value will be reset to the default value. The new value is applied after restarting the dashboard program.",
-        },
-        "save_file_delay": {
-            "type": t_float,
-            "value": current_settings["save_file_delay"],
-            "name": "Save file delay in seconds (applies after restart)",
-            "description": "Sometimes the dashboard may try to read a file before it is completely written to disk. This setting ensures that each file is only read after a delay.",
         },
         "max_file_read_attempts": {
             "type": t_int,
             "value": current_settings["max_file_read_attempts"],
-            "name": "Maximum read attempts per save files",
+            "name": "Maximum read attempts per save file",
             "min": 1,
             "max": 2000,
-            "description": "If an error occurs while reading a save file, the dashboard will do this many retries after a short delay (Save file delay setting above).",
+            "description": "Sometimes the dashboard may try to read a file before it is completely written to disk. The dashboard will attempt to read a bad zip file this many times (see bad save file delay setting below).",
+        },
+        "save_file_delay": {
+            "type": t_float,
+            "value": current_settings["save_file_delay"],
+            "name": "Bad save file delay in seconds (applies after restart)",
+            "description": "This setting controls the delay between attempts to read a bad save file that is not completely written to disk.",
         },
     }
     return render_template(

@@ -66,11 +66,9 @@ DEFAULT_SETTINGS = dict(
     show_everything=False,
     filter_events_by_type=True,
     only_show_default_empires=True,
-    extract_system_ownership=True,
     save_name_filter="",
     read_only_every_nth_save=1,
     plot_time_resolution=200,
-    only_read_player_history=False,
     normalize_stacked_plots=False,
     use_two_y_axes_for_budgets=False,
     plot_width=1150,
@@ -98,7 +96,6 @@ class Config:
     check_version: bool = None
     show_everything: bool = None
     only_show_default_empires: bool = None
-    extract_system_ownership: bool = None
     filter_events_by_type: bool = None
 
     normalize_stacked_plots: bool = None
@@ -108,8 +105,6 @@ class Config:
     read_only_every_nth_save: int = None
     plot_time_resolution: int = None
 
-    only_read_player_history: bool = None
-
     debug_mode: bool = False
 
     PATH_KEYS = {
@@ -118,11 +113,9 @@ class Config:
     }
     BOOL_KEYS = {
         "check_version",
-        "extract_system_ownership",
         "filter_events_by_type",
         "show_everything",
         "only_show_default_empires",
-        "only_read_player_history",
         "normalize_stacked_plots",
         "use_two_y_axes_for_budgets",
     }
@@ -144,11 +137,18 @@ class Config:
         "save_name_filter",
         "log_level",
     }
+    DEPRECATED_KEYS = {
+        "extract_system_ownership",
+        "only_read_player_history",
+    }
     ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS
 
     def apply_dict(self, settings_dict):
         logger.info("Updating settings")
         for key, val in settings_dict.items():
+            if key in Config.DEPRECATED_KEYS:
+                logger.info(f'Ignoring deprecated setting {key} with value {val}.')
+                continue
             if key not in Config.ALL_KEYS:
                 logger.info(f'Ignoring unknown setting {key} with value {val}.')
                 continue
@@ -208,7 +208,6 @@ class Config:
             f"  threads: {repr(self.threads)}",
             f"  show_everything: {repr(self.show_everything)}",
             f"  only_show_default_empires: {repr(self.only_show_default_empires)}",
-            f"  extract_system_ownership: {repr(self.extract_system_ownership)}",
         ]
         return "\n".join(lines)
 
