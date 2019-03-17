@@ -1,2 +1,3 @@
 pytest
 Cython
+pyinstaller
