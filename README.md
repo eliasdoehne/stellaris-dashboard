@@ -90,7 +90,7 @@ The approach of modding the in-game browser was inspired by [this project](https
 
 Development of this project is supported by [JetBrains](http://jetbrains.com/?from=stellarisdashboard) with an open source license:
 
-[<img src="img/jetbrains-logo.png" height="80">](http://jetbrains.com/?from=stellarisdashboard)
+[<img src="img/jetbrains.png" height="80">](http://jetbrains.com/?from=stellarisdashboard)
 
 ---
 
