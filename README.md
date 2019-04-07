@@ -8,7 +8,7 @@ Some screenshots are available on the Steam workshop page: https://steamcommunit
 
 # Features
 
-There are two components: A **timeline dashboard** which shows many graphs (30+) of game statistics and a historical map of the galaxy, and a text-based **event ledger** listing the events that define your game's history.
+There are two components: A graph-based **timeline dashboard** which shows up to 60 graphs of game statistics and a historical map of the galaxy, and a text-based **event ledger** listing the events that define your game's history.
 
 Subscribing to [the mod](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202) on the Steam workshop makes the dashboard directly available in-game through the integrated browser, which can be accessed by the help icon in the bottom right of the Stellaris UI, or with the keyboard shortcut `ALT-B`.
 
@@ -54,7 +54,7 @@ The program should still run even with the Cython error, but it will be much slo
 
 The Hardware requirements depend on several factors including galaxy size, your preferred game speed and autosave frequency.
 
-If you have a quad-core CPU or better, I suggest allowing 2 threads in the settings menu. You can also change the "Only read every n-th save" setting in the settings menu. For example, if you set it to 3, the dashboard will only read every third save, allowing you to keep monthly autosaves, while the dashboard will only read one of them per quarter.
+If you have a quad-core CPU or better, I suggest allowing 1 or 2 threads in the settings menu. You can also change the "Only read every n-th save" setting in the settings menu. For example, if you set it to 3, the dashboard will only read every third save, allowing you to keep monthly autosaves, while the dashboard will only read one of them per quarter.
 
 For disk space, the database itself should require a few megabytes per in-game decade. The data for each game is stored in a separate database in your output folder (for example `output/db/unitednationsofearth6_1643184243.db`), which is named by the game ID, so you can delete them individually. To reduce the database size, you can again change the  "Only read every n-th save" setting described above.
 
@@ -76,7 +76,7 @@ The dashboard may or may not work with other mods, it is developed with the vani
   2. Renaming things in-game after they have been added to the database may or may not work as expected.
   3. The dashboard has so far only been tested for the early- and mid-game (first 100 years or so).
   
-If an error occurs, please try restarting the dashboard program. If you run into problems that don't go away after restarting, please start a new discussion topic [in the Steam workshop page](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
+If an error occurs, please try restarting the dashboard program. If you run into problems that don't go away after restarting, please start a new discussion topic [in the Steam workshop page](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202) or open an issue on github.
    
 
 # Acknowledgements
@@ -86,6 +86,11 @@ First of all, thanks to everyone who directly or indirectly contributed to this 
 Thanks to reddit and Steam user 8igualdos0s for initially maintaining a copy of the browser mod [in the Steam Workshop](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772).
 
 The approach of modding the in-game browser was inspired by [this project](https://github.com/omiddavoodi/StellarisInGameLedger) by reddit user Ariestinak.
+
+
+Development of this project is supported by [JetBrains](http://jetbrains.com/?from=stellarisdashboard) with an open source license:
+
+[<img src="img/jetbrains-logo.png" height="80">](http://jetbrains.com/?from=stellarisdashboard)
 
 ---
 
