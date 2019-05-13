@@ -594,7 +594,7 @@ def _get_raw_data_for_stacked_and_budget_plots(plot_data: visualization_data.Plo
 
 def dict_key_to_legend_label(key: str):
     words = key.split("_")
-    if words[0][0].islower():
+    if len(words[0]) > 0 and words[0][0].islower():
         words[0] = words[0].capitalize()
     return " ".join(words)
 
