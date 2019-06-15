@@ -27,13 +27,11 @@ class PlotStyle(enum.Enum):
 
 @dataclasses.dataclass
 class PlotSpecification:
-    """
-    This class is used to define all available visualizations.
-    """
+    """ This class is used to define all available visualizations. """
     plot_id: str
     title: str
 
-    # This function specifies how the associated data can be obtained from the PlotDataManager instance.
+    # This function specifies which data container class should be used for the plot
     data_container_factory: Callable[[], "AbstractPlotDataContainer"]
     style: PlotStyle
     yrange: Tuple[float, float] = None
@@ -48,8 +46,7 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
 
 
 def get_current_execution_plot_data(game_name: str) -> "PlotDataManager":
-    """
-    Update and retrieve the PlotDataManager object stored for the requested game.
+    """ Update and retrieve the PlotDataManager object stored for the requested game.
 
     :param game_name: The exact name of a game for which a database is available
     :return:
@@ -67,8 +64,7 @@ def get_current_execution_plot_data(game_name: str) -> "PlotDataManager":
 
 
 def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0) -> Tuple[float, float, float]:
-    """
-    Generate RGB values for the given identifier. Some special values (tech categories)
+    """ Generate RGB values for the given identifier. Some special values (tech categories)
     have hardcoded colors to roughly match the game's look and feel.
 
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
@@ -97,8 +93,7 @@ def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0)
 
 
 class PlotDataManager:
-    """
-    Responsible for maintaining a single game's data for every available PlotSpecification.
+    """ Responsible for maintaining a single game's data for every available PlotSpecification.
 
     The data is organized as a dictionary mapping the plot_id of the PlotSpecification class
     to a DataContainer instance (defined below).
@@ -443,7 +438,7 @@ class InfluenceBudgetDataContainer(AbstractEconomyBudgetDataContainer):
         return bi.net_influence
 
 
-PopStatsUnionType = Union[
+PopStatsType = Union[
     models.PopStatsByFaction,
     models.PopStatsByEthos,
     models.PopStatsByStratum,
@@ -460,15 +455,15 @@ class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
             yield (key, val)
 
     @abc.abstractmethod
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[PopStatsUnionType]:
+    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[PopStatsType]:
         pass
 
     @abc.abstractmethod
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         pass
 
     @abc.abstractmethod
-    def _get_value_from_popstats(self, ps: PopStatsUnionType) -> float:
+    def _get_value_from_popstats(self, ps: PopStatsType) -> float:
         pass
 
 
@@ -476,7 +471,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsBySpecies]:
         return iter(cd.pop_stats_species)
 
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PopStatsBySpecies)
         return ps.species.species_name
 
@@ -507,7 +502,7 @@ class AbstractPopStatsByFactionDataContainer(AbstractPopStatsDataContainer, abc.
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByFaction]:
         return iter(cd.pop_stats_faction)
 
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PopStatsByFaction)
         return ps.faction.faction_name
 
@@ -550,7 +545,7 @@ class AbstractPopStatsByJobDataContainer(AbstractPopStatsDataContainer, abc.ABC)
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByJob]:
         return iter(cd.pop_stats_job)
 
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PopStatsByJob)
         return ps.job_description
 
@@ -581,7 +576,7 @@ class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.A
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PlanetStats]:
         return iter(cd.game_state.planet_stats)
 
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PlanetStats)
         return ps.planet.name
 
@@ -632,7 +627,7 @@ class AbstractPopStatsByEthosDataContainer(AbstractPopStatsDataContainer, abc.AB
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByEthos]:
         return iter(cd.pop_stats_ethos)
 
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PopStatsByEthos)
         return ps.ethos
 
@@ -663,7 +658,7 @@ class AbstractPopStatsByStratumDataContainer(AbstractPopStatsDataContainer, abc.
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByStratum]:
         return iter(cd.pop_stats_stratum)
 
-    def _get_key_from_popstats(self, ps: PopStatsUnionType) -> str:
+    def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PopStatsByStratum)
         return ps.stratum
 
@@ -690,369 +685,370 @@ class StratumCrimeDataContainer(AbstractPopStatsByStratumDataContainer):
         return ps.crime
 
 
-### Define PlotSpecifications for all currently supported plots
+""" Define PlotSpecifications for all currently supported plots: """
+
 PLANET_COUNT_GRAPH = PlotSpecification(
     plot_id='planet-count',
     title="Owned Planets",
-    data_container_factory=lambda: PlanetCountDataContainer(),
+    data_container_factory=PlanetCountDataContainer,
     style=PlotStyle.line,
 )
 SYSTEM_COUNT_GRAPH = PlotSpecification(
     plot_id='system-count',
     title="Controlled Systems",
-    data_container_factory=lambda: SystemCountDataContainer(),
+    data_container_factory=SystemCountDataContainer,
     style=PlotStyle.line,
 )
 NET_MINERAL_INCOME_GRAPH = PlotSpecification(
     plot_id='net-mineral-income',
     title="Net Mineral Income",
-    data_container_factory=lambda: TotalMineralsIncomeDataContainer(),
+    data_container_factory=TotalMineralsIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_ENERGY_INCOME_GRAPH = PlotSpecification(
     plot_id='net-energy-income',
     title="Net Energy Income",
-    data_container_factory=lambda: TotalEnergyIncomeDataContainer(),
+    data_container_factory=TotalEnergyIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_ALLOYS_INCOME_GRAPH = PlotSpecification(
     plot_id='net-alloys-income',
     title="Net Alloys Income",
-    data_container_factory=lambda: TotalAlloysIncomeDataContainer(),
+    data_container_factory=TotalAlloysIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
     plot_id='net-consumer-goods-income',
     title="Net Consumer Goods Income",
-    data_container_factory=lambda: TotalConsumerGoodsIncomeDataContainer(),
+    data_container_factory=TotalConsumerGoodsIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_FOOD_INCOME_GRAPH = PlotSpecification(
     plot_id='net-food-income',
     title="Net Food Income",
-    data_container_factory=lambda: TotalFoodIncomeDataContainer(),
+    data_container_factory=TotalFoodIncomeDataContainer,
     style=PlotStyle.line,
 )
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='tech-count',
     title="Researched Technologies",
-    data_container_factory=lambda: TechCountDataContainer(),
+    data_container_factory=TechCountDataContainer,
     style=PlotStyle.line,
 )
 RESEARCH_OUTPUT_BY_CATEGORY_GRAPH = PlotSpecification(
     plot_id='empire-research-output',
     title="Research Output",
-    data_container_factory=lambda: ScienceOutputByFieldDataContainer(),
+    data_container_factory=ScienceOutputByFieldDataContainer,
     style=PlotStyle.stacked,
 )
 RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     plot_id='empire-research-output-comparison',
     title="Total Research Output",
-    data_container_factory=lambda: TotalScienceOutputDataContainer(),
+    data_container_factory=TotalScienceOutputDataContainer,
     style=PlotStyle.line,
 )
 SURVEY_PROGRESS_GRAPH = PlotSpecification(
     plot_id='survey-count',
     title="Exploration",
-    data_container_factory=lambda: ExploredSystemsCountDataContainer(),
+    data_container_factory=ExploredSystemsCountDataContainer,
     style=PlotStyle.line,
 )
 MILITARY_POWER_GRAPH = PlotSpecification(
     plot_id='military-power',
     title="Military Strength",
-    data_container_factory=lambda: MilitaryPowerDataContainer(),
+    data_container_factory=MilitaryPowerDataContainer,
     style=PlotStyle.line,
 )
 FLEET_SIZE_GRAPH = PlotSpecification(
     plot_id='fleet-size',
     title="Fleet Size",
-    data_container_factory=lambda: FleetSizeDataContainer(),
+    data_container_factory=FleetSizeDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-species-distribution',
     title="Species Demographics",
-    data_container_factory=lambda: SpeciesDistributionDataContainer(),
+    data_container_factory=SpeciesDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 SPECIES_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-species-happiness',
     title="Happiness by Species",
-    data_container_factory=lambda: SpeciesHappinessDataContainer(),
+    data_container_factory=SpeciesHappinessDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_POWER_GRAPH = PlotSpecification(
     plot_id='empire-species-power',
     title="Power by Species",
-    data_container_factory=lambda: SpeciesPowerDataContainer(),
+    data_container_factory=SpeciesPowerDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_CRIME_GRAPH = PlotSpecification(
     plot_id='empire-species-crime',
     title="Crime by Species",
-    data_container_factory=lambda: SpeciesCrimeDataContainer(),
+    data_container_factory=SpeciesCrimeDataContainer,
     style=PlotStyle.line,
 )
 FACTION_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-faction-distribution',
     title="Faction Demographics",
-    data_container_factory=lambda: FactionDistributionDataContainer(),
+    data_container_factory=FactionDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 FACTION_SUPPORT_GRAPH = PlotSpecification(
     plot_id='empire-faction-support',
     title="Faction Support",
-    data_container_factory=lambda: FactionSupportDataContainer(),
+    data_container_factory=FactionSupportDataContainer,
     style=PlotStyle.stacked,
 )
 FACTION_APPROVAL_GRAPH = PlotSpecification(
     plot_id='empire-faction-approval',
     title="Faction Approval",
-    data_container_factory=lambda: FactionApprovalDataContainer(),
+    data_container_factory=FactionApprovalDataContainer,
     style=PlotStyle.line,
 )
 FACTION_CRIME_GRAPH = PlotSpecification(
     plot_id='empire-faction-crime',
     title="Crime by Faction",
-    data_container_factory=lambda: FactionCrimeDataContainer(),
+    data_container_factory=FactionCrimeDataContainer,
     style=PlotStyle.line,
 )
 FACTION_POWER_GRAPH = PlotSpecification(
     plot_id='empire-faction-power',
     title="Power by Faction",
-    data_container_factory=lambda: FactionPowerDataContainer(),
+    data_container_factory=FactionPowerDataContainer,
     style=PlotStyle.line,
 )
 FACTION_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-faction-happiness',
     title="Happiness by Faction",
-    data_container_factory=lambda: FactionHappinessDataContainer(),
+    data_container_factory=FactionHappinessDataContainer,
     style=PlotStyle.line,
 )
 PLANET_POP_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-planet-pop-distribution',
     title="Population by Planet",
-    data_container_factory=lambda: PlanetDistributionDataContainer(),
+    data_container_factory=PlanetDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 PLANET_MIGRATION_GRAPH = PlotSpecification(
     plot_id='empire-planet-migration',
     title="Migration by Planet",
-    data_container_factory=lambda: PlanetMigrationDataContainer(),
+    data_container_factory=PlanetMigrationDataContainer,
     style=PlotStyle.line,
 )
 PLANET_AMENITIES_GRAPH = PlotSpecification(
     plot_id='empire-planet-amenities',
     title="Free Amenities by Planet",
-    data_container_factory=lambda: PlanetAmenitiesDataContainer(),
+    data_container_factory=PlanetAmenitiesDataContainer,
     style=PlotStyle.line,
 )
 PLANET_STABILITY_GRAPH = PlotSpecification(
     plot_id='empire-planet-stability',
     title="Stability by Planet",
-    data_container_factory=lambda: PlanetStabilityDataContainer(),
+    data_container_factory=PlanetStabilityDataContainer,
     style=PlotStyle.line,
 )
 PLANET_HOUSING_GRAPH = PlotSpecification(
     plot_id='empire-planet-housing',
     title="Free Housing by Planet",
-    data_container_factory=lambda: PlanetHousingDataContainer(),
+    data_container_factory=PlanetHousingDataContainer,
     style=PlotStyle.line,
 )
 PLANET_CRIME_GRAPH = PlotSpecification(
     plot_id='empire-planet-crime',
     title="Crime by Planet",
-    data_container_factory=lambda: PlanetCrimeDataContainer(),
+    data_container_factory=PlanetCrimeDataContainer,
     style=PlotStyle.line,
 )
 PLANET_POWER_GRAPH = PlotSpecification(
     plot_id='empire-planet-power',
     title="Power by Planet",
-    data_container_factory=lambda: PlanetPowerDataContainer(),
+    data_container_factory=PlanetPowerDataContainer,
     style=PlotStyle.line,
 )
 PLANET_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-planet-happiness',
     title="Happiness by Planet",
-    data_container_factory=lambda: PlanetHappinessDataContainer(),
+    data_container_factory=PlanetHappinessDataContainer,
     style=PlotStyle.line,
 )
 ETHOS_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-ethos-distribution',
     title="Ethos Demographics",
-    data_container_factory=lambda: EthosDistributionDataContainer(),
+    data_container_factory=EthosDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 
 ETHOS_CRIME_GRAPH = PlotSpecification(
     plot_id='empire-ethos-crime',
     title="Crime by Ethos",
-    data_container_factory=lambda: EthosCrimeDataContainer(),
+    data_container_factory=EthosCrimeDataContainer,
     style=PlotStyle.line,
 )
 
 ETHOS_POWER_GRAPH = PlotSpecification(
     plot_id='empire-ethos-power',
     title="Power by Ethos",
-    data_container_factory=lambda: EthosPowerDataContainer(),
+    data_container_factory=EthosPowerDataContainer,
     style=PlotStyle.line,
 )
 ETHOS_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-ethos-happiness',
     title="Happiness by Ethos",
-    data_container_factory=lambda: EthosHappinessDataContainer(),
+    data_container_factory=EthosHappinessDataContainer,
     style=PlotStyle.line,
 )
 STRATA_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-strata-distribution',
     title="Stratum Demographics",
-    data_container_factory=lambda: StratumDistributionDataContainer(),
+    data_container_factory=StratumDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 STRATA_CRIME_GRAPH = PlotSpecification(
     plot_id='empire-strata-crime',
     title="Crime by Stratum",
-    data_container_factory=lambda: StratumCrimeDataContainer(),
+    data_container_factory=StratumCrimeDataContainer,
     style=PlotStyle.line,
 )
 STRATA_POWER_GRAPH = PlotSpecification(
     plot_id='empire-strata-power',
     title="Power by Stratum",
-    data_container_factory=lambda: StratumPowerDataContainer(),
+    data_container_factory=StratumPowerDataContainer,
     style=PlotStyle.line,
 )
 STRATA_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-strata-happiness',
     title="Happiness by Stratum",
-    data_container_factory=lambda: StratumHappinessDataContainer(),
+    data_container_factory=StratumHappinessDataContainer,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
 JOB_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-job-distribution',
     title="Job Demographics",
-    data_container_factory=lambda: JobDistributionDataContainer(),
+    data_container_factory=JobDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 JOB_CRIME_GRAPH = PlotSpecification(
     plot_id='empire-job-crime',
     title="Crime by Job",
-    data_container_factory=lambda: JobCrimeDataContainer(),
+    data_container_factory=JobCrimeDataContainer,
     style=PlotStyle.line,
 )
 JOB_POWER_GRAPH = PlotSpecification(
     plot_id='empire-job-power',
     title="Power by Job",
-    data_container_factory=lambda: JobPowerDataContainer(),
+    data_container_factory=JobPowerDataContainer,
     style=PlotStyle.line,
 )
 JOB_HAPPINESS_GRAPH = PlotSpecification(
     plot_id='empire-job-happiness',
     title="Happiness by Job",
-    data_container_factory=lambda: JobHappinessDataContainer(),
+    data_container_factory=JobHappinessDataContainer,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
 ENERGY_BUDGET = PlotSpecification(
     plot_id='empire-energy-budget',
     title="Energy Budget",
-    data_container_factory=lambda: EnergyBudgetDataContainer(),
+    data_container_factory=EnergyBudgetDataContainer,
     style=PlotStyle.budget,
 )
 MINERAL_BUDGET = PlotSpecification(
     plot_id='empire-mineral-budget',
     title="Mineral Budget",
-    data_container_factory=lambda: MineralsBudgetDataContainer(),
+    data_container_factory=MineralsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 CONSUMER_GOODS_BUDGET = PlotSpecification(
     plot_id='empire-consumer-goods-budget',
     title="Consumer Goods Budget",
-    data_container_factory=lambda: ConsumerGoodsBudgetDataContainer(),
+    data_container_factory=ConsumerGoodsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ALLOYS_BUDGET = PlotSpecification(
     plot_id='empire-alloys-budget',
     title="Alloys Budget",
-    data_container_factory=lambda: AlloysBudgetDataContainer(),
+    data_container_factory=AlloysBudgetDataContainer,
     style=PlotStyle.budget,
 )
 FOOD_BUDGET = PlotSpecification(
     plot_id='empire-food-budget',
     title="Food",
-    data_container_factory=lambda: FoodBudgetDataContainer(),
+    data_container_factory=FoodBudgetDataContainer,
     style=PlotStyle.budget,
 )
 VOLATILE_MOTES_BUDGET = PlotSpecification(
     plot_id='empire-volatile-motes-budget',
     title="Volatile Motes",
-    data_container_factory=lambda: VolatileMotesBudgetDataContainer(),
+    data_container_factory=VolatileMotesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 EXOTIC_GASES_BUDGET = PlotSpecification(
     plot_id='empire-exotic-gas-budget',
     title="Exotic Gases",
-    data_container_factory=lambda: ExoticGasesBudgetDataContainer(),
+    data_container_factory=ExoticGasesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 RARE_CRYSTALS_BUDGET = PlotSpecification(
     plot_id='empire-rare-crystals-budget',
     title="Rare Crystals",
-    data_container_factory=lambda: RareCrystalsBudgetDataContainer(),
+    data_container_factory=RareCrystalsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 LIVING_METAL_BUDGET = PlotSpecification(
     plot_id='empire-living-metal-budget',
     title="Living Metal",
-    data_container_factory=lambda: LivingMetalBudgetDataContainer(),
+    data_container_factory=LivingMetalBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ZRO_BUDGET = PlotSpecification(
     plot_id='empire-zro-budget',
     title="Zro",
-    data_container_factory=lambda: ZroBudgetDataContainer(),
+    data_container_factory=ZroBudgetDataContainer,
     style=PlotStyle.budget,
 )
 DARK_MATTER_BUDGET = PlotSpecification(
     plot_id='empire-dark-matter-budget',
     title="Dark Matter",
-    data_container_factory=lambda: DarkMatterBudgetDataContainer(),
+    data_container_factory=DarkMatterBudgetDataContainer,
     style=PlotStyle.budget,
 )
 NANITES_BUDGET = PlotSpecification(
     plot_id='empire-nanites-budget',
     title="Nanites",
-    data_container_factory=lambda: NanitesBudgetDataContainer(),
+    data_container_factory=NanitesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 INFLUENCE_BUDGET = PlotSpecification(
     plot_id='empire-influence-budget',
     title="Influence",
-    data_container_factory=lambda: InfluenceBudgetDataContainer(),
+    data_container_factory=InfluenceBudgetDataContainer,
     style=PlotStyle.budget,
 )
 UNITY_BUDGET = PlotSpecification(
     plot_id='empire-unity-budget',
     title="Unity",
-    data_container_factory=lambda: UnityBudgetDataContainer(),
+    data_container_factory=UnityBudgetDataContainer,
     style=PlotStyle.stacked,
 )
 VICTORY_RANK_GRAPH = PlotSpecification(
     plot_id='victory-rank',
     title="Victory Rank (Lower is better!)",
-    data_container_factory=lambda: VictoryRankDataContainer(),
+    data_container_factory=VictoryRankDataContainer,
     style=PlotStyle.line,
 )
 VICTORY_SCORE_GRAPH = PlotSpecification(
     plot_id='victory-score',
     title="Victory Score",
-    data_container_factory=lambda: VictoryScoreDataContainer(),
+    data_container_factory=VictoryScoreDataContainer,
     style=PlotStyle.line,
 )
 VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
     plot_id='victory-economy-score',
     title="Victory Economic Score",
-    data_container_factory=lambda: EconomyScoreDataContainer(),
+    data_container_factory=EconomyScoreDataContainer,
     style=PlotStyle.line,
 )
 
@@ -1206,8 +1202,7 @@ _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
 
 
 def get_galaxy_data(game_name: str) -> "GalaxyMapData":
-    """
-    Similar to get_current_execution_plot_data, the GalaxyMapData for
+    """ Similar to get_current_execution_plot_data, the GalaxyMapData for
     each game is cached in the _GALAXY_DATA dictionary.
     """
     if game_name not in _GALAXY_DATA:

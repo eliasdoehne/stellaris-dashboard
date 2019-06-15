@@ -162,7 +162,7 @@ class HistoricalEventType(enum.Enum):
     government_reform = enum.auto()
     species_rights_reform = enum.auto()  # TODO this would be cool!
     capital_relocation = enum.auto()
-    planetary_unrest = enum.auto()
+    planetary_unrest = enum.auto()  # TODO this would be cool!
 
     # diplomacy and war:
     first_contact = enum.auto()
@@ -184,7 +184,7 @@ class HistoricalEventType(enum.Enum):
     army_combat = enum.auto()
 
     terraforming = enum.auto()
-    planet_destroyed = enum.auto()
+    planet_destroyed = enum.auto()  # TODO this would be cool!
 
     def __str__(self):
         return self.name
@@ -478,6 +478,7 @@ class GameState(Base):
     game = relationship("Game", back_populates="game_states")
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
     planet_stats = relationship("PlanetStats", back_populates="gamestate", cascade="all,delete,delete-orphan")
+
 
     def __str__(self):
         return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"

@@ -1061,7 +1061,6 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
         self.ruler_by_country_id: Dict[int, models.Leader] = None
-        self.leader_by_ingame_id: Dict[int, models.Leader] = None
         self.planet_by_ingame_id: Dict[int, models.Planet] = None
 
     def initialize_data(self):
