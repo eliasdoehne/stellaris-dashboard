@@ -364,6 +364,45 @@
                 </span>
             </div>
         </li>
+        {% elif event["event_type"] == "research_agreement" %}
+        <li class="eventitem research_agreement">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
+                <span class="eventtext">
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} entered a research agreement with the {{ links[event["target_country"]] | safe }}.
+                </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "commercial_pact" %}
+        <li class="eventitem commercial_pact">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
+                <span class="eventtext">
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} entered a commercial pact with the {{ links[event["target_country"]] | safe }}.
+                </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "migration_treaty" %}
+        <li class="eventitem migration_treaty">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}} - {{event["end_date"]}}:</span>
+                <span class="eventtext">
+
+                    {% if "leader" in event %} Under ruler {{links[event["leader"]]|safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} entered a migration treaty with the {{ links[event["target_country"]] | safe }}.
+                </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "non_aggression_pact" %}
         <li class="eventitem non_aggression_pact">
             <div class="eventdescription">
