@@ -43,8 +43,7 @@ class TimelineExtractor:
                 self._session.commit()
             except Exception as e:
                 self._session.rollback()
-                logger.error(f"{self.basic_info.logger_str}{e}")
-                logger.error(f"{self.basic_info.logger_str} Rolling back changes to database...")
+                logger.exception(f"{self.basic_info.logger_str} Rolling back changes to database...")
                 if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
 
@@ -831,7 +830,7 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
 
         for country_id, country_model in self._countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
-            country_sectors = country_dict.get("owned_sectors", [])
+            country_sectors = country_dict.get("sectors", {}).get("owned", [])
             # processing all colonies by sector allows reading the responsible sector governor
             for sector_id in country_sectors:
                 sector_info = self._gamestate_dict["sectors"].get(sector_id)
@@ -864,7 +863,7 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
             if not isinstance(planets, list):
                 planets = [planets]
             for planet_id in planets:
-                planet_dict = self._gamestate_dict["planet"].get(planet_id)
+                planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
                 if not isinstance(planet_dict, dict):
                     continue
                 planet_class = planet_dict.get("planet_class")
@@ -925,7 +924,7 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
     def _get_and_update_planet_model(self,
                                      system_model: models.System,
                                      planet_id: int) -> Union[models.Planet, None]:
-        planet_dict = self._gamestate_dict["planet"].get(planet_id)
+        planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
         if not isinstance(planet_dict, dict):
             return None
         planet_class = planet_dict.get("planet_class")
@@ -1997,7 +1996,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
             stats["happiness"] /= stats["pop_count"]
             stats["power"] /= stats["pop_count"]
 
-            planet_dict = self._gamestate_dict["planet"].get(planet_id)
+            planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
             if not isinstance(planet_dict, dict):
                 continue
 
