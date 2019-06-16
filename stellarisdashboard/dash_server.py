@@ -26,7 +26,7 @@ timeline_app = dash.Dash(name="Stellaris Timeline", server=flask_app, compress=F
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.4.1"
+VERSION_ID = "v0.4.2"
 
 
 @flask_app.route("/")
