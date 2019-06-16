@@ -49,8 +49,8 @@ class TimelineExtractor:
 
     def _process_gamestate(self, game_id):
         db_game = self._get_or_add_game_to_db(game_id)
-        game_states_by_date = {gs.date: gs for gs in db_game.game_states}
-        if self.basic_info.date_in_days in game_states_by_date:
+        existing_dates = {gs.date for gs in db_game.game_states}
+        if self.basic_info.date_in_days in existing_dates:
             logger.info(f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting...")
             self._session.rollback()
         else:
@@ -121,7 +121,9 @@ class TimelineExtractor:
         yield CountryDataProcessor()
         yield SpeciesProcessor()
         yield LeaderProcessor()
-        yield PlanetSectorProcessor()
+        yield PlanetModelProcessor()
+        yield SectorColonyEventProcessor()
+        yield PlanetUpdateProcessor()
         yield RulerEventProcessor()
         yield GovernmentProcessor()
         yield FactionProcessor()
@@ -182,58 +184,59 @@ class SystemProcessor(AbstractGamestateDataProcessor):
         super().__init__()
         self.systems_by_ingame_id = None
 
-    def initialize_data(self):
-        self.systems_by_ingame_id = {}
-
     def data(self) -> Dict[int, models.System]:
         return self.systems_by_ingame_id
 
     def extract_data_from_gamestate(self, dependencies):
-        for system_id_in_game in self._gamestate_dict.get("galactic_object", {}):
-            system_model = self._get_or_add_system(system_id_in_game)
-            if system_model is not None:
-                self.systems_by_ingame_id[system_id_in_game] = system_model
+        self.systems_by_ingame_id = {s.system_id_in_game: s
+                                     for s in self._session.query(models.System)}
+        for ingame_id, system_data in self._gamestate_dict["galactic_object"].items():
+            if ingame_id in self.systems_by_ingame_id:
+                self._update_system(system_model=self.systems_by_ingame_id[ingame_id],
+                                    system_data=system_data)
             else:
-                logger.info(f"{self._basic_info.logger_str} Could not add or find system with ID {system_id_in_game} in database.")
+                system = self._add_system(system_id=ingame_id, system_data=system_data)
+                if system is None:
+                    logger.info(f"{self._basic_info.logger_str} Could not add or find system with ID {ingame_id} to database.")
+                    continue
+                self.systems_by_ingame_id[ingame_id] = system
 
-    def _get_or_add_system(self, system_id: int) -> Union[models.System, None]:
-        system_data = self._gamestate_dict.get("galactic_object", {}).get(system_id)
+    def _update_system(self, system_model: models.System, system_data: Dict):
+        system_name = system_data.get("name")
+        if system_name != system_model.name:
+            system_model.name = system_name
+            self._session.add(system_model)
+
+    def _add_system(self, system_id: int, system_data: Dict) -> Optional[models.System]:
         if system_data is None:
             logger.warning(f"{self._basic_info.logger_str} Found no data for system with ID {system_id}!")
             return
         system_name = system_data.get("name")
-        system_model = self._session.query(models.System).filter_by(
+        coordinate_x = system_data.get("coordinate", {}).get("x", 0)
+        coordinate_y = system_data.get("coordinate", {}).get("y", 0)
+        system_model = models.System(
+            game=self._db_game,
             system_id_in_game=system_id,
-        ).one_or_none()
+            star_class=system_data.get("star_class", "Unknown"),
+            name=system_name,
+            coordinate_x=coordinate_x,
+            coordinate_y=coordinate_y,
+        )
 
-        if system_model is None:
-            coordinate_x = system_data.get("coordinate", {}).get("x", 0)
-            coordinate_y = system_data.get("coordinate", {}).get("y", 0)
-            system_model = models.System(
-                game=self._db_game,
-                system_id_in_game=system_id,
-                star_class=system_data.get("star_class", "Unknown"),
-                name=system_name,
-                coordinate_x=coordinate_x,
-                coordinate_y=coordinate_y,
-            )
+        for hl_data in system_data.get("hyperlane", []):
+            neighbor_id = hl_data.get("to")
+            if neighbor_id == system_id:
+                continue  # This can happen in Stellaris 2.1
+            neighbor_model = self._session.query(models.System).filter_by(
+                system_id_in_game=neighbor_id
+            ).one_or_none()
+            if neighbor_model is None:
+                continue  # assume that the hyperlane will be created when adding the neighbor system to DB later
 
-            for hl_data in system_data.get("hyperlane", []):
-                neighbor_id = hl_data.get("to")
-                if neighbor_id == system_id:
-                    continue  # This can happen in Stellaris 2.1
-                neighbor_model = self._session.query(models.System).filter_by(
-                    system_id_in_game=neighbor_id
-                ).one_or_none()
-                if neighbor_model is None:
-                    continue  # assume that the hyperlane will be created when adding the neighbor system to DB later
-
-                self._session.add(models.HyperLane(
-                    system_one=system_model,
-                    system_two=neighbor_model,
-                ))
-        if system_name != system_model.name:
-            system_model.name = system_name
+            self._session.add(models.HyperLane(
+                system_one=system_model,
+                system_two=neighbor_model,
+            ))
 
         self._session.add(system_model)
         return system_model
@@ -258,6 +261,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             if not isinstance(country_data_dict, dict):
                 continue
             country_type = country_data_dict.get("type")
+            country_name = country_data_dict.get("name", "no name")
             country_model = self._session.query(models.Country).filter_by(
                 game=self._db_game,
                 country_id_in_game=country_id
@@ -268,10 +272,14 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                     country_id_in_game=country_id,
                     game=self._db_game,
                     country_type=country_type,
-                    country_name=country_data_dict.get("name", "no name")
+                    country_name=country_name
                 )
                 if country_id == self._basic_info.player_country_id:
                     country_model.first_player_contact_date = 0
+                self._session.add(country_model)
+            if country_name != country_model.country_name or country_type != country_model.country_type:
+                country_model.country_name = country_name
+                country_model.country_type = country_type
                 self._session.add(country_model)
             self.countries_by_ingame_id[country_id] = country_model
 
@@ -657,6 +665,7 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
                 species_class=species_data.get("class", "Unknown Class"),
                 species_id_in_game=species_id_in_game,
                 parent_species_id_in_game=species_data.get("base", -1),
+                home_planet_id=species_data.get("home_planet", -1),
             )
             self._session.add(species)
             traits_dict = species_data.get("traits", {})
@@ -693,73 +702,55 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         countries = dependencies[CountryProcessor.ID]
         self._species_dict, _ = dependencies[SpeciesProcessor.ID]
 
+        db_active_leaders = {leader.leader_id_in_game: leader
+                             for leader in self._session.query(models.Leader).filter_by(is_active=True)}
+
+        self._check_known_leaders(db_active_leaders)
+        self._check_new_leaders(countries, db_active_leaders)
+
+    def _check_known_leaders(self, db_active_leaders: Dict[int, models.Leader]):
+        gs_active_leaders = self._gamestate_dict["leaders"]
+        for ingame_id, leader in db_active_leaders.items():
+            if gs_active_leaders.get(ingame_id, "none") == "none":
+                leader.is_active = False
+                leader.last_date = self._basic_info.date_in_days
+            else:
+                leader_dict = gs_active_leaders[ingame_id]
+                self._update_leader_attributes(leader=leader, leader_dict=leader_dict)
+            if not leader.is_active:
+                country_data = leader.country.get_most_recent_data()
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.leader_died,
+                    country=leader.country,
+                    leader=leader,
+                    start_date_days=self._basic_info.date_in_days,
+                    event_is_known_to_player=(country_data is not None
+                                              and country_data.attitude_towards_player.reveals_economy_info()),
+                ))
+                self._session.add(leader)
+
+    def _check_new_leaders(self, countries: Dict[int, models.Country], db_active_leaders: Dict[int, models.Leader]):
+        gs_leaders = self._gamestate_dict.get("leaders")
+
         for country_id, country_model in countries.items():
             country_data_dict = self._gamestate_dict["country"][country_id]
             owned_leaders = country_data_dict.get("owned_leaders", [])
             if not isinstance(owned_leaders, list):  # if there is only one
                 owned_leaders = [owned_leaders]
-            leaders = self._gamestate_dict.get("leaders")
-            active_leaders = set(owned_leaders)
 
-            # first, check if the known leaders in the DB are still there
-            for leader in self._session.query(models.Leader).filter_by(
-                    country=country_model,
-                    is_active=True,
-            ).all():
-                if leader.leader_id_in_game not in active_leaders:
-                    leader.is_active = False
-                else:
-                    current_leader_name = self.get_leader_name(leaders.get(leader.leader_id_in_game))
-                    leader.is_active = (current_leader_name == leader.leader_name
-                                        or leader.last_date >= self._basic_info.date_in_days - 3 * 360)
-                if not leader.is_active:
-                    country_data = country_model.get_most_recent_data()
-                    self._session.add(models.HistoricalEvent(
-                        event_type=models.HistoricalEventType.leader_died,
-                        country=country_model,
-                        leader=leader,
-                        start_date_days=leader.last_date,
-                        end_date_days=leader.last_date,
-                        event_is_known_to_player=(country_data is not None
-                                                  and country_data.attitude_towards_player.reveals_economy_info()),
-                    ))
-                self._session.add(leader)
-
-            # then, check for changes in leaders
             for leader_id in owned_leaders:
-                leader_dict = leaders.get(leader_id)
+                leader_dict = gs_leaders.get(leader_id)
                 if not isinstance(leader_dict, dict):
                     continue
-                leader = self._session.query(models.Leader).filter_by(game=self._db_game, leader_id_in_game=leader_id).one_or_none()
+                leader = db_active_leaders.get(leader_id)
                 if leader is None:
                     leader = self._add_new_leader(country_model, leader_id, leader_dict)
                 if leader is None:
+                    logging.info("Failed to add leader %d, %s", leader_id, leader_dict)
                     continue
-                leader.is_active = True
-                leader.last_date = self._basic_info.date_in_days
-                level = leader_dict.get("level", -1)
-                if leader.last_level < level:
-                    self._session.add(models.HistoricalEvent(
-                        event_type=models.HistoricalEventType.level_up,
-                        country=country_model,
-                        start_date_days=self._basic_info.date_in_days,
-                        leader=leader,
-                        event_is_known_to_player=country_model.is_player,
-                        db_description=self._get_or_add_shared_description(str(level)),
-                    ))
-                    leader.last_level = level
                 self.leader_model_by_ingame_id[leader_id] = leader
-                self._session.add(leader)
 
-    def _add_new_leader(self, country_model: models.Country, leader_id: int, leader_dict) -> Optional[models.Leader]:
-        if "pre_ruler_class" in leader_dict:
-            leader_class = leader_dict.get("pre_ruler_class", "Unknown class")
-        else:
-            leader_class = leader_dict.get("class", "Unknown class")
-        leader_gender = leader_dict.get("gender", "Other")
-        leader_agenda = leader_dict.get("agenda")
-        leader_name = self.get_leader_name(leader_dict)
-
+    def _add_new_leader(self, country_model: models.Country, leader_id: int, leader_dict: Dict) -> Optional[models.Leader]:
         date_hired = min(
             self._basic_info.date_in_days,
             models.date_to_days(leader_dict.get("date", "10000.01.01")),
@@ -767,26 +758,16 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             models.date_to_days(leader_dict.get("date_added", "10000.01.01")),
         )
         date_born = date_hired - 360 * leader_dict.get("age", 0.0) + self._random_instance.randint(-15, 15)
-        species_id = leader_dict.get("species_index", -1)
-        species = self._species_dict.get(species_id)
-        if species is None:
-            logger.warning(f"{self._basic_info.logger_str} Invalid species index for leader {leader_dict}")
-            return
         leader = models.Leader(
             country=country_model,
             leader_id_in_game=leader_id,
-            leader_class=leader_class,
-            leader_name=leader_name,
-            leader_agenda=leader_agenda,
-            species=species,
             game=self._db_game,
             last_level=leader_dict.get("level", 0),
-            gender=leader_gender,
             date_hired=date_hired,
             date_born=date_born,
             is_active=True,
         )
-        self._session.add(leader)
+        self._update_leader_attributes(leader=leader, leader_dict=leader_dict)  # sets additional attributes
         country_data = country_model.get_most_recent_data()
         event = models.HistoricalEvent(
             event_type=models.HistoricalEventType.leader_recruited,
@@ -805,25 +786,105 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         leader_name = f"{first_name} {last_name}".strip()
         return leader_name
 
+    def _update_leader_attributes(self, leader: models.Leader, leader_dict):
+        if "pre_ruler_class" in leader_dict:
+            leader_class = leader_dict.get("pre_ruler_class", "Unknown class")
+        else:
+            leader_class = leader_dict.get("class", "Unknown class")
+        leader_gender = leader_dict.get("gender", "Other")
+        leader_agenda = leader_dict.get("agenda", "Unknown")
+        leader_name = self.get_leader_name(leader_dict)
+        level = leader_dict.get("level", -1)
+        species_id = leader_dict.get("species_index", -1)
+        leader_species = self._species_dict.get(species_id)
+        if leader_species is None:
+            logger.warning(f"{self._basic_info.logger_str} Invalid species index for leader {leader_dict}")
+        if (leader.leader_name != leader_name
+                or leader.leader_class != leader_class
+                or leader.gender != leader_gender
+                or leader.leader_agenda != leader_agenda
+                or leader.species.species_id_in_game != leader_species.species_id_in_game):
+            if leader.last_level != level:
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.level_up,
+                    country=leader.country,
+                    start_date_days=self._basic_info.date_in_days,
+                    leader=leader,
+                    event_is_known_to_player=leader.country.is_player,
+                    db_description=self._get_or_add_shared_description(str(level)),
+                ))
+            leader.last_level = level
+            leader.leader_name = leader_name
+            leader.leader_class = leader_class
+            leader.gender = leader_gender
+            leader.leader_agenda = leader_agenda
+            leader.species = leader_species
+            self._session.add(leader)
 
-class PlanetSectorProcessor(AbstractGamestateDataProcessor):
-    ID = "sectors_colonies"
-    DEPENDENCIES = [SystemProcessor.ID, CountryProcessor.ID, LeaderProcessor.ID]
+
+class PlanetModelProcessor(AbstractGamestateDataProcessor):
+    ID = "planet_models"
+    DEPENDENCIES = [SystemProcessor.ID]
 
     def __init__(self):
         super().__init__()
-        self.planet_by_ingame_planet_id = None
+        self.planets_by_ingame_id = None
         self._systems_dict = None
         self._countries_dict = None
         self._leaders_dict = None
 
-    def initialize_data(self):
-        self.planet_by_ingame_planet_id = {}
-
     def data(self) -> Any:
-        return self.planet_by_ingame_planet_id
+        return self.planets_by_ingame_id
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        self.planets_by_ingame_id = {p.planet_id_in_game: p for p in self._session.query(models.Planet)}
+        systems_by_id = dependencies[SystemProcessor.ID]
+
+        for system_id, system_dict in self._gamestate_dict["galactic_object"].items():
+            planets = system_dict.get("planet", [])
+            if isinstance(planets, int):
+                planets = [planets]
+            for ingame_id in planets:
+                if ingame_id in self.planets_by_ingame_id:
+                    continue
+                system_model = systems_by_id.get(system_id)
+                self.planets_by_ingame_id[ingame_id] = self._add_planet_model(
+                    planet_id=ingame_id,
+                    system_model=system_model
+                )
+
+    def _add_planet_model(self, system_model: models.System,
+                          planet_id: int) -> models.Planet:
+        planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
+        planet_class = planet_dict.get("planet_class")
+        planet_name = planet_dict.get("name")
+        colonize_date = planet_dict.get("colonize_date")
+        if colonize_date:
+            colonize_date = models.date_to_days(colonize_date)
+        planet_model = models.Planet(
+            planet_name=planet_name,
+            planet_id_in_game=planet_id,
+            system=system_model,
+            planet_class=planet_class,
+            colonized_date=colonize_date,
+        )
+        self._session.add(planet_model)
+        return planet_model
+
+
+class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
+    ID = "sectors_colonies"
+    DEPENDENCIES = [SystemProcessor.ID, PlanetModelProcessor.ID, CountryProcessor.ID, LeaderProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self._planets_dict = None
+        self._systems_dict = None
+        self._countries_dict = None
+        self._leaders_dict = None
 
     def extract_data_from_gamestate(self, dependencies):
+        self._planets_dict = dependencies[PlanetModelProcessor.ID]
         self._countries_dict = dependencies[CountryProcessor.ID]
         self._systems_dict = dependencies[SystemProcessor.ID]
         self._leaders_dict = dependencies[LeaderProcessor.ID]
@@ -850,9 +911,7 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
 
     def _history_add_planetary_events_within_sector(self, country_model: models.Country, sector_dict, governor: models.Leader):
         for system_id in sector_dict.get("systems", []):
-            system_model = self._session.query(models.System).filter_by(
-                system_id_in_game=system_id,
-            ).one_or_none()
+            system_model = self._systems_dict.get(system_id)
             if system_model is None:
                 logger.info(f"{self._basic_info.logger_str}     Could not find system with in-game id {system_id}")
                 continue
@@ -866,110 +925,28 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
                 planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
                 if not isinstance(planet_dict, dict):
                     continue
+
                 planet_class = planet_dict.get("planet_class")
-                is_colonizable = game_info.is_colonizable_planet(planet_class)
+                is_colonizable = game_info.is_colonizable_planet(planet_class) or "colonize_date" in planet_dict
                 is_destroyed = game_info.is_destroyed_planet(planet_class)
                 is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in self._all_planetary_modifiers(planet_dict))
 
-                is_interesting = is_colonizable or is_destroyed or is_terraformable
-                if not is_interesting:
-                    continue
-
-                planet_model = self._get_and_update_planet_model(system_model, planet_id)
+                planet_model = self._planets_dict.get(planet_id)
                 if planet_model is None:
                     continue
                 if is_colonizable:
                     self._history_add_or_update_colonization_events(country_model, system_model, planet_model, planet_dict, governor)
                 if is_terraformable:
                     self._history_add_or_update_terraforming_events(country_model, system_model, planet_model, planet_dict, governor)
-
-    def _history_add_or_update_terraforming_events(self, country_model: models.Country,
-                                                   system_model: models.System,
-                                                   planet_model: models.Planet,
-                                                   planet_dict,
-                                                   governor: models.Leader):
-        terraform_dict = planet_dict.get("terraform_process")
-        if not isinstance(terraform_dict, dict):
-            return
-
-        current_pc = planet_dict.get("planet_class")
-        target_pc = terraform_dict.get("planet_class")
-        if not isinstance(target_pc, str):
-            logger.info(f"{self._basic_info.logger_str} Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}")
-            return
-        text = f"{current_pc},{target_pc}"
-        matching_description = self._get_or_add_shared_description(text)
-        matching_event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.terraforming,
-            db_description=matching_description,
-            system=system_model,
-            planet=planet_model,
-        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
-        if matching_event is None or matching_event.end_date_days < self._basic_info.date_in_days - 5 * 360:
-            matching_event = models.HistoricalEvent(
-                event_type=models.HistoricalEventType.terraforming,
-                country=country_model,
-                system=planet_model.system,
-                planet=planet_model,
-                leader=governor,
-                start_date_days=self._basic_info.date_in_days,
-                end_date_days=self._basic_info.date_in_days,
-                db_description=matching_description,
-                event_is_known_to_player=country_model.has_met_player(),
-            )
-        else:
-            matching_event.end_date_days = self._basic_info.date_in_days
-        self._session.add(matching_event)
-
-    def _get_and_update_planet_model(self,
-                                     system_model: models.System,
-                                     planet_id: int) -> Union[models.Planet, None]:
-        planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
-        if not isinstance(planet_dict, dict):
-            return None
-        planet_class = planet_dict.get("planet_class")
-        planet_name = planet_dict.get("name")
-        planet_model = self._session.query(models.Planet).filter_by(
-            planet_id_in_game=planet_id,
-        ).one_or_none()
-        if planet_model is None:
-            colonize_date = planet_dict.get("colonize_date")
-            if colonize_date:
-                colonize_date = models.date_to_days(colonize_date)
-            planet_model = models.Planet(
-                planet_name=planet_name,
-                planet_id_in_game=planet_id,
-                system=system_model,
-                planet_class=planet_class,
-                colonized_date=colonize_date,
-            )
-        if planet_model.planet_name != planet_name:
-            planet_model.planet_name = planet_name
-        if planet_model.planet_class != planet_class:
-            planet_model.planet_class = planet_class
-        self._session.add(planet_model)
-        self.planet_by_ingame_planet_id[planet_id] = planet_model
-        return planet_model
-
-    def _all_planetary_modifiers(self, planet_dict):
-        modifiers = planet_dict.get("timed_modifiers", [])
-        if not isinstance(modifiers, list):
-            modifiers = [modifiers]
-        for m in modifiers:
-            if not isinstance(m, dict):
-                continue
-            modifier = m.get("modifier", "no modifier")
-            duration = m.get("days")
-            if duration == -1 or not isinstance(duration, int):
-                duration = None
-            yield modifier, duration
-
-        planet_modifiers = planet_dict.get("planet_modifier", [])
-        if not isinstance(planet_modifiers, list):
-            planet_modifiers = [planet_modifiers]
-        for pm in planet_modifiers:
-            if pm is not None:
-                yield pm, None
+                if is_destroyed and planet_class != planet_model.planet_class:
+                    self._session.add(models.HistoricalEvent(
+                        event_type=models.HistoricalEventType.planet_destroyed,
+                        country=country_model,
+                        start_date_days=min(self._basic_info.date_in_days),
+                        planet=planet_model,
+                        system=system_model,
+                        event_is_known_to_player=country_model.has_met_player(),
+                    ))
 
     def _history_add_or_update_colonization_events(self, country_model: models.Country,
                                                    system_model: models.System,
@@ -1018,6 +995,64 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
             event.end_date_days = end_date_days
         self._session.add(event)
 
+    def _history_add_or_update_terraforming_events(self, country_model: models.Country,
+                                                   system_model: models.System,
+                                                   planet_model: models.Planet,
+                                                   planet_dict,
+                                                   governor: models.Leader):
+        terraform_dict = planet_dict.get("terraform_process")
+        if not isinstance(terraform_dict, dict):
+            return
+
+        current_pc = planet_dict.get("planet_class")
+        target_pc = terraform_dict.get("planet_class")
+        if not isinstance(target_pc, str):
+            logger.info(f"{self._basic_info.logger_str} Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}")
+            return
+        text = f"{current_pc},{target_pc}"
+        matching_description = self._get_or_add_shared_description(text)
+        matching_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.terraforming,
+            db_description=matching_description,
+            system=system_model,
+            planet=planet_model,
+        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
+        if matching_event is None or matching_event.end_date_days < self._basic_info.date_in_days - 5 * 360:
+            matching_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.terraforming,
+                country=country_model,
+                system=planet_model.system,
+                planet=planet_model,
+                leader=governor,
+                start_date_days=self._basic_info.date_in_days,
+                end_date_days=self._basic_info.date_in_days,
+                db_description=matching_description,
+                event_is_known_to_player=country_model.has_met_player(),
+            )
+        else:
+            matching_event.end_date_days = self._basic_info.date_in_days
+        self._session.add(matching_event)
+
+    def _all_planetary_modifiers(self, planet_dict):
+        modifiers = planet_dict.get("timed_modifiers", [])
+        if not isinstance(modifiers, list):
+            modifiers = [modifiers]
+        for m in modifiers:
+            if not isinstance(m, dict):
+                continue
+            modifier = m.get("modifier", "no modifier")
+            duration = m.get("days")
+            if duration == -1 or not isinstance(duration, int):
+                duration = None
+            yield modifier, duration
+
+        planet_modifiers = planet_dict.get("planet_modifier", [])
+        if not isinstance(planet_modifiers, list):
+            planet_modifiers = [planet_modifiers]
+        for pm in planet_modifiers:
+            if pm is not None:
+                yield pm, None
+
     def _history_add_or_update_governor_sector_events(self, country_model,
                                                       sector_capital: models.Planet,
                                                       governor: models.Leader,
@@ -1049,12 +1084,34 @@ class PlanetSectorProcessor(AbstractGamestateDataProcessor):
         self._session.add(event)
 
 
+class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
+    ID = "planet_updates"
+    DEPENDENCIES = [PlanetModelProcessor.ID, SectorColonyEventProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        planet_models = dependencies[PlanetModelProcessor.ID]
+        for ingame_id, planet_model in planet_models.items():
+            planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id, {})
+            self._update_planet_model(planet_dict, planet_model)
+
+    def _update_planet_model(self, planet_dict: Dict,
+                             planet_model: models.Planet):
+        planet_class = planet_dict.get("planet_class")
+        planet_name = planet_dict.get("name")
+        if planet_model.planet_name != planet_name:
+            planet_model.planet_name = planet_name
+            self._session.add(planet_model)
+        if planet_model.planet_class != planet_class:
+            planet_model.planet_class = planet_class
+            self._session.add(planet_model)
+
+
 class RulerEventProcessor(AbstractGamestateDataProcessor):
     ID = "ruler"
     DEPENDENCIES = [
         CountryProcessor.ID,
         LeaderProcessor.ID,
-        PlanetSectorProcessor.ID,
+        PlanetModelProcessor.ID,
     ]
 
     def __init__(self):
@@ -1071,7 +1128,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         countries_dict = dependencies[CountryProcessor.ID]
         leader_by_ingame_id = dependencies.get(LeaderProcessor.ID)
-        self.planet_by_ingame_id = dependencies.get(PlanetSectorProcessor.ID)
+        self.planet_by_ingame_id = dependencies.get(PlanetModelProcessor.ID)
 
         for country_id, country_model in countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
@@ -1092,7 +1149,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
 
     def _history_add_or_update_capital(self, country_model: models.Country,
                                        ruler: models.Leader,
-                                       country_dict) -> Union[models.Planet, None]:
+                                       country_dict) -> Optional[models.Planet]:
         capital_id = country_dict.get("capital")
         if not isinstance(capital_id, int):
             return
@@ -1602,7 +1659,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         RulerEventProcessor.ID,
         CountryProcessor.ID,
         SystemProcessor.ID,
-        PlanetSectorProcessor.ID,
+        PlanetModelProcessor.ID,
     ]
 
     def __init__(self):
@@ -1616,7 +1673,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._ruler_dict = dependencies[RulerEventProcessor.ID]
         self._countries_dict = dependencies[CountryProcessor.ID]
         self._system_models_dict = dependencies[SystemProcessor.ID]
-        self._planet_models_dict = dependencies[PlanetSectorProcessor.ID]
+        self._planet_models_dict = dependencies[PlanetModelProcessor.ID]
 
         wars_dict = self._gamestate_dict.get("war")
         if not wars_dict:
@@ -1704,35 +1761,35 @@ class WarProcessor(AbstractGamestateDataProcessor):
         battles = war_dict.get("battles", [])
         if not isinstance(battles, list):
             battles = [battles]
-        for b_dict in battles:
-            if not isinstance(b_dict, dict):
+        for battle_dict in battles:
+            if not isinstance(battle_dict, dict):
                 continue
-            battle_attackers = b_dict.get("attackers")
-            battle_defenders = b_dict.get("defenders")
+            battle_attackers = battle_dict.get("attackers")
+            battle_defenders = battle_dict.get("defenders")
             if not battle_attackers or not battle_defenders:
                 continue
-            if b_dict.get("attacker_victory") not in {"yes", "no"}:
+            if battle_dict.get("attacker_victory") not in {"yes", "no"}:
                 continue
-            attacker_victory = b_dict.get("attacker_victory") == "yes"
+            attacker_victory = battle_dict.get("attacker_victory") == "yes"
 
-            planet_model = self._planet_models_dict.get(b_dict.get("planet"))
+            planet_model = self._planet_models_dict.get(battle_dict.get("planet"))
             if planet_model is None:
-                system_id_in_game = b_dict.get("system")
+                system_id_in_game = battle_dict.get("system")
                 system = self._system_models_dict.get(system_id_in_game)
                 if system is None:
                     continue
             else:
                 system = planet_model.system
 
-            combat_type = models.CombatType.__members__.get(b_dict.get("type"), models.CombatType.other)
+            combat_type = models.CombatType.__members__.get(battle_dict.get("type"), models.CombatType.other)
 
-            date_str = b_dict.get("date")
+            date_str = battle_dict.get("date")
             date_in_days = models.date_to_days(date_str)
             if date_in_days < 0:
                 date_in_days = self._basic_info.date_in_days
 
-            attacker_exhaustion = b_dict.get("attacker_war_exhaustion", 0.0)
-            defender_exhaustion = b_dict.get("defender_war_exhaustion", 0.0)
+            attacker_exhaustion = battle_dict.get("attacker_war_exhaustion", 0.0)
+            defender_exhaustion = battle_dict.get("defender_war_exhaustion", 0.0)
             if defender_exhaustion + attacker_exhaustion <= 0.001 and combat_type != models.CombatType.armies:
                 continue
             combat = self._session.query(models.Combat).filter_by(
@@ -1764,7 +1821,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
             for country_id in itertools.chain(battle_attackers, battle_defenders):
                 db_country = self._countries_dict.get(country_id)
                 if db_country is None:
-                    logger.warning(f"{self._basic_info.logger_str}     Could not find country with ID {country_id} when processing battle {b_dict}")
+                    logger.warning(f"{self._basic_info.logger_str}     Could not find country with ID {country_id} when processing battle {battle_dict}")
                     continue
                 is_known_to_player = is_known_to_player or db_country.has_met_player()
                 war_participant = self._session.query(models.WarParticipant).filter_by(

@@ -967,7 +967,9 @@ class EventTemplateDictBuilder:
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
             "Born": models.days_to_date(leader_model.date_born),
             "Hired": models.days_to_date(leader_model.date_hired),
-            "Last active": models.days_to_date(leader_model.last_date),
+            "Last active": models.days_to_date(get_most_recent_date(self._session)
+                                               if leader_model.is_active
+                                               else leader_model.last_date),
             "Status": "Active" if leader_model.is_active else "Dead or Dismissed",
         }
         return details
