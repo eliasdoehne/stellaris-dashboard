@@ -1,5 +1,5 @@
 """This file contains the code for the flask server hosting the visualizations and the event ledger."""
-
+import itertools
 import logging
 import random
 import time
@@ -946,10 +946,7 @@ class EventTemplateDictBuilder:
         details = {
             "Star Class": star_class,
         }
-        hyperlane_targets = (
-                [hl.system_two for hl in system_model.hyperlanes_one]
-                + [hl.system_one for hl in system_model.hyperlanes_two]
-        )
+        hyperlane_targets = list(system_model.neighbors)
         details["Hyperlanes"] = ", ".join(
             self._preformat_history_url(s.name, system=s.system_id)
             for s in sorted(hyperlane_targets,

@@ -392,6 +392,13 @@ class System(Base):
 
     historical_events = relationship("HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan")
 
+    @property
+    def neighbors(self):
+        for hl in self.hyperlanes_one:
+            yield hl.system_two
+        for hl in self.hyperlanes_two:
+            yield hl.system_one
+
     def get_owner_country_id_at(self, time_in_days: int) -> int:
         """
         Get the (database) country ID of the empire that owned this system.
