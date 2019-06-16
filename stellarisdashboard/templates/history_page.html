@@ -518,6 +518,16 @@
                 </span>
             </div>
         </li>
+        {% elif event["event_type"] == "planet_destroyed" %}
+        <li class="eventitem colonization">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    The planet "{{event["planet"].name}}" in the {{links[event["system"]]|safe}} system, owned by the
+                    {{links[event["country"]]|safe}} was destroyed. It is now a {{ event["planet"].planet_class }} planet.
+                 </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "leader_died" %}
         <li class="eventitem leader_died">
             <div class="eventdescription">
