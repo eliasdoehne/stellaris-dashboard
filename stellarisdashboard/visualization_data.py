@@ -4,7 +4,7 @@ import enum
 import logging
 import random
 import time
-from typing import List, Dict, Callable, Tuple, Iterable, Union
+from typing import List, Dict, Callable, Tuple, Iterable, Union, Set
 
 import networkx as nx
 
@@ -1211,15 +1211,6 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
     return _GALAXY_DATA[game_name]
 
 
-@dataclasses.dataclass
-class _SystemOwnership:
-    """ Minimal representation of SystemOwnership that is not tied to a database session. """
-    country: str
-    system_id: int
-    start: int
-    end: int
-
-
 class GalaxyMapData:
     """ Maintains the data for the historical galaxy map. """
     UNCLAIMED = "Unclaimed Systems"
@@ -1227,16 +1218,12 @@ class GalaxyMapData:
     def __init__(self, game_id: str):
         self.game_id = game_id
         self.galaxy_graph: nx.Graph = None
-        self._game_state_model = None
-        self._cache_valid_date = -1
-        self._owner_cache: Dict[int, List[_SystemOwnership]] = None
 
     def initialize_galaxy_graph(self):
         start_time = time.clock()
-        self._owner_cache = {}
         self.galaxy_graph = nx.Graph()
         with models.get_db_session(self.game_id) as session:
-            for system in session.query(models.System).all():
+            for system in session.query(models.System):
                 assert isinstance(system, models.System)  # to remove pycharm warnings
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
@@ -1251,9 +1238,6 @@ class GalaxyMapData:
 
     def get_graph_for_date(self, time_days: int) -> nx.Graph:
         start_time = time.clock()
-        if time_days > self._cache_valid_date:
-            self._update_cache()
-            logger.debug(f"Updated System Ownership Cache in {time.clock() - start_time} seconds.")
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
         for country, nodes in systems_by_owner.items():
@@ -1272,57 +1256,27 @@ class GalaxyMapData:
         logger.info(f"Updated networkx graph in {time.clock() - start_time:5.3f} seconds.")
         return self.galaxy_graph
 
-    def _get_system_ids_by_owner(self, time_days):
+    def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
         owned_systems = set()
         systems_by_owner = {GalaxyMapData.UNCLAIMED: set()}
-        for system_id, ownership_list in self._owner_cache.items():
-            for ownership in ownership_list:
-                if not ownership.start <= time_days <= ownership.end:
-                    continue
-                owned_systems.add(system_id)
-                if ownership.country not in systems_by_owner:
-                    systems_by_owner[ownership.country] = set()
-                systems_by_owner[ownership.country].add(system_id)
+
+        with models.get_db_session(self.game_id) as session:
+            for system in session.query(models.System):
+                country = system.get_owner_country_at(time_days)
+                country = self._country_display_name(country)
+                owned_systems.add(system.system_id_in_game)
+                if country not in systems_by_owner:
+                    systems_by_owner[country] = set()
+                systems_by_owner[country].add(system.system_id_in_game)
+
         systems_by_owner[GalaxyMapData.UNCLAIMED] |= set(self.galaxy_graph.nodes) - owned_systems
-        self._game_state_model = None
         return systems_by_owner
 
-    def _update_cache(self):
-        logger.info("Updating Cache")
-        # would be nicer to properly update the cache, but for now it is simpler to just rebuild it when we request a new date.
-        self._owner_cache = {}
-        self._cache_valid_date = -1
-        with models.get_db_session(self.game_id) as session:
-            db_ownerships = session.query(models.SystemOwnership).order_by(
-                models.SystemOwnership.start_date_days
-            ).all()
-            for ownership in db_ownerships:
-                self._cache_valid_date = max(self._cache_valid_date, ownership.end_date_days)
-                system_id = ownership.system.system_id_in_game
-                name = self._get_country_name_from_id(ownership, ownership.end_date_days)
-                if system_id not in self._owner_cache:
-                    self._owner_cache[system_id] = []
-                    if ownership.start_date_days > 0:
-                        self._owner_cache[system_id].append(_SystemOwnership(
-                            country=self.UNCLAIMED,
-                            system_id=system_id,
-                            start=0,
-                            end=ownership.start_date_days,
-                        ))
-                self._owner_cache[system_id].append(_SystemOwnership(
-                    country=name,
-                    system_id=system_id,
-                    start=ownership.start_date_days,
-                    end=ownership.end_date_days,
-                ))
-
-    def _get_country_name_from_id(self, db_ownership: models.SystemOwnership, time_days):
-        country = db_ownership.country
+    def _country_display_name(self, country: models.Country) -> str:
         if country is None:
-            logger.warning(f"{db_ownership} has no country!")
             return GalaxyMapData.UNCLAIMED
         if config.CONFIG.show_everything:
             return country.country_name
-        if country.first_player_contact_date is None or country.first_player_contact_date > time_days:
+        if not country.has_met_player():
             return GalaxyMapData.UNCLAIMED
         return country.country_name

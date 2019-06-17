@@ -104,7 +104,7 @@ class TimelineExtractor:
         )
 
     def _identify_player_country(self):
-        players = self._gamestate_dict["player"]
+        players = self._gamestate_dict.get("player")
         if players:
             if len({player["country"] for player in players}) != 1:
                 raise ValueError(f"{self.basic_info.logger_str} Player country is ambiguous!")
@@ -303,64 +303,101 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
         countries_dict = dependencies[CountryProcessor.ID]
         systems_dict = dependencies[SystemProcessor.ID]
 
-        if not isinstance(starbases, dict):
-            return
+        starbase_systems = set()
         for starbase_dict in starbases.values():
             if not isinstance(starbase_dict, dict):
                 continue
-            country_id_in_game = starbase_dict.get("owner")
             system_id_in_game = starbase_dict.get("system")
-            if system_id_in_game is None or country_id_in_game is None:
-                continue
+            country_id_in_game = starbase_dict.get("owner")
             system_model = systems_dict.get(system_id_in_game)
             country_model = countries_dict.get(country_id_in_game)
+
             if country_model is None or system_model is None:
                 logger.warning(f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}")
                 continue
+
+            starbase_systems.add(system_id_in_game)
 
             if country_id_in_game not in self.systems_by_owner_country_id:
                 self.systems_by_owner_country_id[country_id_in_game] = set()
             self.systems_by_owner_country_id[country_id_in_game].add(system_model)
 
+            if country_model != system_model.country:
+                self._update_ownership(current_owner_country=country_model,
+                                       system_model=system_model)
+
+        for system_id, system_model in systems_dict.items():
+            if system_id in starbase_systems:
+                continue
+            if system_model.country is None:
+                continue
+            self._update_ownership(None, system_model)
+
+    def _update_ownership(self, current_owner_country: models.Country, system_model: models.System):
+        owner_changed = False
+        event_type = None
+        target_country = None
+
+        if current_owner_country is None:
+            owner_changed = True
+            current_owner_country = None
+            event_type = models.HistoricalEventType.lost_system
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.lost_system,
+                country=system_model.country,
+                system=system_model,
+                start_date_days=self._basic_info.date_in_days,
+                event_is_known_to_player=system_model.country.has_met_player(),
+            ))
+
+        elif system_model.country is None:
+            owner_changed = True
+            event_type = models.HistoricalEventType.expanded_to_system
+            target_country = None
+
+        elif system_model.country != current_owner_country:
+            owner_changed = True
+            event_type = models.HistoricalEventType.gained_system
+
+        if owner_changed:
+            system_model.country = current_owner_country
+            self._session.add(system_model)
+
             ownership = self._session.query(models.SystemOwnership).filter_by(
                 system=system_model
             ).order_by(models.SystemOwnership.end_date_days.desc()).first()
             if ownership is not None:
-                ownership.end_date_days = self._basic_info.date_in_days
+                ownership.end_date_days = self._basic_info.date_in_days - 1
                 self._session.add(ownership)
-            if ownership is None or ownership.country != country_model:
-                if ownership is None:
-                    event_type = models.HistoricalEventType.expanded_to_system
-                    target_country = None
-                else:
-                    event_type = models.HistoricalEventType.gained_system
-                    target_country = ownership.country
-                    if target_country is not None:
-                        self._session.add(models.HistoricalEvent(
-                            event_type=models.HistoricalEventType.lost_system,
-                            country=target_country,
-                            target_country=country_model,
-                            system=system_model,
-                            start_date_days=self._basic_info.date_in_days,
-                            event_is_known_to_player=country_model.has_met_player()
-                                                     or (target_country is not None and target_country.has_met_player()),
-                        ))
+
+                target_country = ownership.country
+                if target_country is not None:
+                    is_visible = target_country.has_met_player() or (current_owner_country is not None
+                                                                     and current_owner_country.has_met_player())
+                    self._session.add(models.HistoricalEvent(
+                        event_type=models.HistoricalEventType.lost_system,
+                        country=target_country,
+                        target_country=current_owner_country,
+                        system=system_model,
+                        start_date_days=self._basic_info.date_in_days,
+                        event_is_known_to_player=is_visible,
+                    ))
+            if current_owner_country is not None:
+                self._session.add(models.SystemOwnership(
+                    start_date_days=self._basic_info.date_in_days,
+                    end_date_days=self._basic_info.date_in_days + 1,
+                    country=current_owner_country,
+                    system=system_model,
+                ))
                 self._session.add(models.HistoricalEvent(
                     event_type=event_type,
-                    country=country_model,
+                    country=current_owner_country,
                     target_country=target_country,
                     system=system_model,
                     start_date_days=self._basic_info.date_in_days,
-                    event_is_known_to_player=country_model.has_met_player()
+                    event_is_known_to_player=current_owner_country.has_met_player()
                                              or (target_country is not None and target_country.has_met_player()),
                 ))
-                ownership = models.SystemOwnership(
-                    start_date_days=self._basic_info.date_in_days,
-                    end_date_days=self._basic_info.date_in_days + 1,
-                    country=country_model,
-                    system=system_model,
-                )
-                self._session.add(ownership)
 
 
 class DiplomacyProcessor(AbstractGamestateDataProcessor):
