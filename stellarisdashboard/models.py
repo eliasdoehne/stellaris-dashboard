@@ -4,7 +4,7 @@ import enum
 import logging
 import pathlib
 import threading
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -375,6 +375,7 @@ class System(Base):
     __tablename__ = 'systemtable'
     system_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
+    country_id = Column(ForeignKey("countrytable.country_id"), index=True)
 
     name = Column(String(80))
     system_id_in_game = Column(Integer, index=True)
@@ -384,7 +385,9 @@ class System(Base):
     coordinate_y = Column(Float)
 
     game = relationship("Game", back_populates="systems")
-    ownership = relationship("SystemOwnership", back_populates="system", cascade="all,delete,delete-orphan")
+    country = relationship("Country", back_populates="systems")
+    ownership_history = relationship("SystemOwnership", back_populates="system", cascade="all,delete,delete-orphan")
+    planets = relationship("Planet", back_populates="system", cascade="all,delete,delete-orphan")
 
     # this could probably be done better....
     hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
@@ -399,23 +402,22 @@ class System(Base):
         for hl in self.hyperlanes_two:
             yield hl.system_one
 
-    def get_owner_country_id_at(self, time_in_days: int) -> int:
+    def get_owner_country_at(self, time_in_days: int) -> Optional["Country"]:
         """
         Get the (database) country ID of the empire that owned this system.
 
         :param time_in_days:
         :return: Database country ID
         """
-        if not self.ownership:
-            return -1
+        if not self.ownership_history and self.country is None:
+            return None
         # could be slow, but fine for now
-        most_recent_owner = -1
-        most_recent_owner_end = -1
-        for ownership in self.ownership:
-            if most_recent_owner_end <= ownership.start_date_days <= time_in_days:
-                most_recent_owner_end = ownership.end_date_days
-                most_recent_owner = ownership.country.country_id
-        return most_recent_owner
+        for ownership in sorted(self.ownership_history, key=lambda oh: oh.start_date_days):
+            if ownership.start_date_days <= time_in_days <= ownership.end_date_days:
+                return ownership.country
+            elif ownership.start_date_days > time_in_days:
+                return None
+        return self.country
 
     def get_name(self):
         if self.name.startswith("NAME_"):
@@ -432,13 +434,13 @@ class SystemOwnership(Base):
     system_ownership_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), index=True)
-    owner_country_id = Column(ForeignKey("countrytable.country_id"), index=True)
+    owner_country_id = Column(ForeignKey("countrytable.country_id"))
 
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer, index=True)
 
-    system = relationship("System", back_populates="ownership")
-    country = relationship("Country", back_populates="owned_systems")
+    system = relationship("System", back_populates="ownership_history")
+    country = relationship("Country")
 
     def __str__(self):
         return f"SystemOwnership of {self.system_name}: {self.start_date_days} - {self.end_date_days} -- {self.country_name}"
@@ -486,7 +488,6 @@ class GameState(Base):
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
     planet_stats = relationship("PlanetStats", back_populates="gamestate", cascade="all,delete,delete-orphan")
 
-
     def __str__(self):
         return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"
 
@@ -507,7 +508,7 @@ class Country(Base):
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan", order_by="CountryData.date")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
-    owned_systems = relationship(SystemOwnership, back_populates="country", cascade="all,delete,delete-orphan")
+    systems = relationship(System, back_populates="country")
     leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
     historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
 
@@ -902,11 +903,11 @@ class Planet(Base):
     planet_name = Column(String(50))
     planet_class = Column(String(20))
     planet_id_in_game = Column(Integer, index=True)
-    system_id = Column(ForeignKey(System.system_id), nullable=False)
+    system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
     colonized_date = Column(Integer)
 
     historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
-    system = relationship("System")
+    system = relationship("System", back_populates="planets")
 
     @property
     def name(self):
