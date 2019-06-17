@@ -952,6 +952,12 @@ class EventTemplateDictBuilder:
             for s in sorted(hyperlane_targets,
                             key=lambda s: s.name)
         )
+        if system_model.country is not None and (system_model.country.has_met_player()
+                                                 or config.CONFIG.show_everything):
+            details["Owner"] = self._get_url_for(system_model.country)
+
+        details["Planets"] = ", ".join(p.name for p in system_model.planets)
+
         return details
 
     def leader_details(self, leader_model: models.Leader) -> Dict[str, str]:
