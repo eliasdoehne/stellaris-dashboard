@@ -911,7 +911,11 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
 
 class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
     ID = "sectors_colonies"
-    DEPENDENCIES = [SystemProcessor.ID, PlanetModelProcessor.ID, CountryProcessor.ID, LeaderProcessor.ID]
+    DEPENDENCIES = [SystemProcessor.ID,
+                    SystemOwnershipProcessor.ID,
+                    PlanetModelProcessor.ID,
+                    CountryProcessor.ID,
+                    LeaderProcessor.ID]
 
     def __init__(self):
         super().__init__()
@@ -919,71 +923,77 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         self._systems_dict = None
         self._countries_dict = None
         self._leaders_dict = None
+        self._systems_by_owner = None
 
     def extract_data_from_gamestate(self, dependencies):
         self._planets_dict = dependencies[PlanetModelProcessor.ID]
         self._countries_dict = dependencies[CountryProcessor.ID]
         self._systems_dict = dependencies[SystemProcessor.ID]
         self._leaders_dict = dependencies[LeaderProcessor.ID]
+        self._systems_by_owner = dependencies[SystemOwnershipProcessor.ID]
 
         for country_id, country_model in self._countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
             country_sectors = country_dict.get("sectors", {}).get("owned", [])
+            unprocessed_systems = set(s.system_id_in_game for s in self._systems_by_owner.get(country_id, []))
+
             # processing all colonies by sector allows reading the responsible sector governor
             for sector_id in country_sectors:
                 sector_info = self._gamestate_dict["sectors"].get(sector_id)
                 if not isinstance(sector_info, dict):
                     continue
                 sector_description = self._get_or_add_shared_description(text=(sector_info.get("name", "Unnamed")))
-
                 governor_model = self._leaders_dict.get(sector_info.get("governor"))
 
-                self._history_add_planetary_events_within_sector(country_model, sector_info, governor_model)
+                for system_id in sector_info.get("systems", []):
+                    self._history_add_planetary_events_within_sector(country_model, system_id, governor_model)
+                    if system_id in unprocessed_systems:
+                        unprocessed_systems.remove(system_id)
 
-                sector_capital = self._session.query(models.Planet).filter_by(
-                    planet_id_in_game=sector_info.get("local_capital")
-                ).one_or_none()
+                sector_capital = self._planets_dict.get(sector_info.get("local_capital"))
                 if governor_model is not None and sector_capital is not None:
                     self._history_add_or_update_governor_sector_events(country_model, sector_capital, governor_model, sector_description)
 
-    def _history_add_planetary_events_within_sector(self, country_model: models.Country, sector_dict, governor: models.Leader):
-        for system_id in sector_dict.get("systems", []):
-            system_model = self._systems_dict.get(system_id)
-            if system_model is None:
-                logger.info(f"{self._basic_info.logger_str}     Could not find system with in-game id {system_id}")
+            for system_id in unprocessed_systems:
+                self._history_add_planetary_events_within_sector(country_model, system_id, None)
+
+    def _history_add_planetary_events_within_sector(self, country_model: models.Country, system_id: int, governor: Optional[models.Leader]):
+        system_model = self._systems_dict.get(system_id)
+        if system_model is None:
+            logger.info(f"{self._basic_info.logger_str}     Could not find system with in-game id {system_id}")
+            return
+
+        system_dict = self._gamestate_dict["galactic_object"].get(system_id, {})
+
+        planets = system_dict.get("planet", [])
+        if not isinstance(planets, list):
+            planets = [planets]
+        for planet_id in planets:
+            planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
+            if not isinstance(planet_dict, dict):
                 continue
 
-            system_dict = self._gamestate_dict["galactic_object"].get(system_id, {})
+            planet_class = planet_dict.get("planet_class")
+            is_colonizable = game_info.is_colonizable_planet(planet_class) or "colonize_date" in planet_dict
+            is_destroyed = game_info.is_destroyed_planet(planet_class)
+            is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in self._all_planetary_modifiers(planet_dict))
 
-            planets = system_dict.get("planet", [])
-            if not isinstance(planets, list):
-                planets = [planets]
-            for planet_id in planets:
-                planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
-                if not isinstance(planet_dict, dict):
-                    continue
-
-                planet_class = planet_dict.get("planet_class")
-                is_colonizable = game_info.is_colonizable_planet(planet_class) or "colonize_date" in planet_dict
-                is_destroyed = game_info.is_destroyed_planet(planet_class)
-                is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in self._all_planetary_modifiers(planet_dict))
-
-                planet_model = self._planets_dict.get(planet_id)
-                if planet_model is None:
-                    continue
-                if is_colonizable:
-                    self._history_add_or_update_colonization_events(country_model, system_model, planet_model, planet_dict, governor)
-                if is_terraformable:
-                    self._history_add_or_update_terraforming_events(country_model, system_model, planet_model, planet_dict, governor)
-                if is_destroyed and planet_class != planet_model.planet_class:
-                    self._session.add(models.HistoricalEvent(
-                        event_type=models.HistoricalEventType.planet_destroyed,
-                        country=country_model,
-                        start_date_days=min(self._basic_info.date_in_days),
-                        planet=planet_model,
-                        system=system_model,
-                        event_is_known_to_player=country_model.has_met_player(),
-                    ))
+            planet_model = self._planets_dict.get(planet_id)
+            if planet_model is None:
+                continue
+            if is_colonizable:
+                self._history_add_or_update_colonization_events(country_model, system_model, planet_model, planet_dict, governor)
+            if is_terraformable:
+                self._history_add_or_update_terraforming_events(country_model, system_model, planet_model, planet_dict, governor)
+            if is_destroyed and planet_class != planet_model.planet_class:
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.planet_destroyed,
+                    country=country_model,
+                    start_date_days=min(self._basic_info.date_in_days),
+                    planet=planet_model,
+                    system=system_model,
+                    event_is_known_to_player=country_model.has_met_player(),
+                ))
 
     def _history_add_or_update_colonization_events(self, country_model: models.Country,
                                                    system_model: models.System,
