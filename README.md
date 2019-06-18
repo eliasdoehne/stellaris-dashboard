@@ -19,7 +19,16 @@ For game balance and immersion, only some information about AI empires is shown 
 
 If you experience any problems, please start [a new discussion topic in the steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202).
 
-Before following the instructions below, subscribe to the mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202). Remember to activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz). To access the dashboard, you can open the in-game internet browser by clicking on the help icon in the lower right, or pressing shortcut `ALT-B`. The dashboard can then be accessed with the buttons in the top right corner of the browser window.
+Before following the instructions below, subscribe to the mod [in the Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202). Remember to activate the mod [in the Stellaris Launcher](https://imgur.com/g7XeZIz). To access the dashboard, you can open the in-game internet browser by clicking on the help icon in the lower right, or pressing shortcut `ALT-B`. If the help button is not accessible, click the "More" button to reveal it:
+
+ <img src="https://steamuserimages-a.akamaihd.net/ugc/940589883945878302/66874C499AB7088E309D95FFB5A720F80E229BE0/" height="120">
+
+The dashboard can then be accessed with the buttons in the top right corner of the browser window:
+
+
+ <img src="https://steamuserimages-a.akamaihd.net/ugc/940589883947546239/330A856DDDEFB565C299CC45D6B2C3CE2B33A9A5/" height="60">
+
+Alternatively, you can access the dashboard by opening [http://localhost:28053](http://localhost:28053) in any web browser (e.g. if you want to use it one a second monitor).
 
 ### Windows
 
