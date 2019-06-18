@@ -185,6 +185,12 @@ def settings_page():
             "name": "Save file name filter",
             "description": "Saves whose file names do not contain this string are ignored. For example, you can use this to filter yearly autosaves, by setting the value to \".01.01.sav\".",
         },
+        "read_non_player_countries": {
+            "type": t_bool,
+            "value": _convert_python_bool_to_lowercase(current_settings["show_everything"]),
+            "name": "Read everything (big performance impact!)",
+            "description": "Read budgets and pop stats of all countries. This will result in much larger database files and slow things down quite a bit. Consider adjusting the budget frequency parameter below to compensate.",
+        },
         "read_only_every_nth_save": {
             "type": t_int,
             "value": current_settings["read_only_every_nth_save"],
@@ -311,6 +317,15 @@ HEADER_STYLE = {
     "margin-bottom": "10px",
     "text-align": "center",
 }
+DROPDOWN_STYLE = {
+    "width": "50%",
+    "font-family": "verdana",
+    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "margin-top": "10px",
+    "margin-bottom": "10px",
+    "text-align": "center",
+    "background": DARK_THEME_BACKGROUND,
+}
 TEXT_STYLE = {
     "font-family": "verdana",
     "color": "rgba(217, 217, 217, 1)",
@@ -351,7 +366,6 @@ timeline_app.layout = html.Div([
             html.A(f'Go to Event Ledger', id='ledger-link', href="/history", style=BUTTON_STYLE),
         ]),
         html.H1(children="Unknown Game", id="game-name-header", style=HEADER_STYLE),
-
         dcc.Checklist(
             id="dash-plot-checklist",
             options=[
@@ -360,6 +374,13 @@ timeline_app.layout = html.Div([
             values=['normalize_stacked_plots'] if config.CONFIG.normalize_stacked_plots else [],
             labelStyle=dict(color=DARK_THEME_TEXT_COLOR),
             style={"text-align": "center"},
+        ),
+        dcc.Dropdown(
+            id='country-perspective-dropdown',
+            options=[],
+            placeholder="Select a country ",
+            value=None,
+            style=DROPDOWN_STYLE,
         ),
         dcc.Tabs(
             id='tabs-container',
@@ -385,7 +406,6 @@ timeline_app.layout = html.Div([
             max=100,
             step=0.01,
             value=100,
-            # updatemode='drag',
             marks={i: '{}%'.format(i) for i in range(0, 110, 10)},
         ),
     ], style={
@@ -447,14 +467,31 @@ def update_ledger_link(search):
     return "/history"
 
 
+@timeline_app.callback(Output('country-perspective-dropdown', 'options'),
+                       [Input('url', 'search')])
+def update_country_select_options(search):
+    game_id, _ = _get_game_ids_matching_url(search)
+    games_dict = models.get_available_games_dict()
+    if game_id not in games_dict:
+        logger.warning(f"Game ID {game_id} does not match any known game!")
+        return []
+
+    with models.get_db_session(game_id) as session:
+        return [{
+            'label': c.country_name,
+            'value': c.country_id_in_game,
+        } for c in session.query(models.Country)]
+
+
 @timeline_app.callback(Output('tab-content', 'children'),
                        [
                            Input('tabs-container', 'value'),
                            Input('url', 'search'),
                            Input('dateslider', 'value'),
-                           Input('dash-plot-checklist', 'values')
+                           Input('dash-plot-checklist', 'values'),
+                           Input('country-perspective-dropdown', 'value'),
                        ])
-def update_content(tab_value, search, date_fraction, dash_plot_checklist):
+def update_content(tab_value, search, date_fraction, dash_plot_checklist, country_perspective):
     config.CONFIG.normalize_stacked_plots = "normalize_stacked_plots" in dash_plot_checklist
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
@@ -474,7 +511,7 @@ def update_content(tab_value, search, date_fraction, dash_plot_checklist):
     children = []
     if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
         plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
-        plot_data = visualization_data.get_current_execution_plot_data(game_id)
+        plot_data = visualization_data.get_current_execution_plot_data(game_id, country_perspective)
         for plot_spec in plots:
             figure_data = get_figure_data(plot_data, plot_spec)
             if not figure_data:
