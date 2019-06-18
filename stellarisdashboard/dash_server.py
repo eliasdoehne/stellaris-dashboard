@@ -1014,7 +1014,7 @@ class EventTemplateDictBuilder:
         wars = []
         links = {}
         for war in self._session.query(models.War).order_by(models.War.start_date_days).all():
-            if not config.Config.show_everything:
+            if not config.CONFIG.show_everything:
                 is_visible_to_player = any(wp.country.has_met_player() for wp in war.participants)
                 if not is_visible_to_player:
                     continue
