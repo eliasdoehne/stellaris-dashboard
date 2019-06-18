@@ -348,7 +348,7 @@ timeline_app.layout = html.Div([
         html.Div([
             html.A("Go to Game Selection", id='index-link', href="/", style=BUTTON_STYLE),
             html.A(f'Settings', id='settings-link', href="/settings/", style=BUTTON_STYLE),
-            html.A(f'Go to Event Ledger', id='ledger-link', href="/", style=BUTTON_STYLE),
+            html.A(f'Go to Event Ledger', id='ledger-link', href="/history", style=BUTTON_STYLE),
         ]),
         html.H1(children="Unknown Game", id="game-name-header", style=HEADER_STYLE),
 
@@ -438,6 +438,15 @@ def update_game_header(search):
     return f"{country} ({game_id})"
 
 
+@timeline_app.callback(Output('ledger-link', 'href'),
+                       [Input('url', 'search')])
+def update_ledger_link(search):
+    game_id, _ = _get_game_ids_matching_url(search)
+    if game_id:
+        return f"/history/{game_id}"
+    return "/history"
+
+
 @timeline_app.callback(Output('tab-content', 'children'),
                        [
                            Input('tabs-container', 'value'),
@@ -494,8 +503,12 @@ def update_content(tab_value, search, date_fraction, dash_plot_checklist):
     return children
 
 
+def _get_url_params(url: str) -> Dict[str, List[str]]:
+    return parse.parse_qs(parse.urlparse(url).query)
+
+
 def _get_game_ids_matching_url(url):
-    game_id = parse.parse_qs(parse.urlparse(url).query).get("game_name", [None])[0]
+    game_id = _get_url_params(url).get("game_name", [None])[0]
     if game_id is None:
         game_id = ""
     matches = models.get_known_games(game_id)
