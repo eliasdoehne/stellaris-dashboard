@@ -5,7 +5,7 @@ import itertools
 import logging
 import random
 import time
-from typing import Dict, Any, Union, Set, Iterable, Optional
+from typing import Dict, Any, Set, Iterable, Optional
 
 from stellarisdashboard import models, game_info, config
 
@@ -31,12 +31,12 @@ class TimelineExtractor:
         self._session = None
         self._gamestate_dict = None
 
-    def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any]):
+    def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any], debug=False):
         self._gamestate_dict = gamestate_dict
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.clock()
-        with models.get_db_session(game_id) as self._session:
+        with models.get_db_session(game_id=game_id, debug=debug) as self._session:
             try:
                 self._process_gamestate(game_id)
                 logger.info(f"{self.basic_info.logger_str} Processed Gamestate in {time.clock() - t_start_gs:.3f} s, writing changes to database")
@@ -79,7 +79,10 @@ class TimelineExtractor:
         game = self._session.query(models.Game).filter_by(game_name=game_id).first()
         if game is None:
             logger.info(f"{self.basic_info.logger_str} Adding new game {game_id} to database.")
-            player_country_name = self._gamestate_dict["country"][self.basic_info.player_country_id]["name"]
+            if self.basic_info.player_country_id is not None:
+                player_country_name = self._gamestate_dict["country"][self.basic_info.player_country_id]["name"]
+            else:
+                player_country_name = "Observer Mode"
             galaxy_info = self._gamestate_dict["galaxy"]
             game = models.Game(
                 game_name=game_id,
@@ -94,23 +97,28 @@ class TimelineExtractor:
         return game
 
     def _read_basic_game_info(self, game_id: str):
-        player_country_id = self._identify_player_country()
         date_str = self._gamestate_dict["date"]
         date_in_days = models.date_to_days(date_str)
         self.basic_info = BasicGameInfo(
             game_id=game_id,
             date_in_days=date_in_days,
-            player_country_id=player_country_id,
+            player_country_id=self._identify_player_country(),
         )
 
     def _identify_player_country(self):
         players = self._gamestate_dict.get("player")
         if players:
-            if len({player["country"] for player in players}) != 1:
-                raise ValueError(f"{self.basic_info.logger_str} Player country is ambiguous!")
-            return players[0]["country"]
-        else:
-            return 0
+            if len(players) == 1:
+                return players[0]["country"]
+            else:
+                if not config.CONFIG.steam_username:
+                    raise ValueError("Please configure your Steam username in the Dashboard settings for multiplayer games.")
+                for player in players:
+                    if player["name"] == config.CONFIG.steam_username:
+                        return player["country"]
+                raise ValueError(f"Could not find player matching Steam username {config.CONFIG.steam_username}")
+        # observer mode
+        return None
 
     def _data_processors(self) -> Iterable["AbstractGamestateDataProcessor"]:
         yield SystemProcessor()
@@ -525,7 +533,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data_dict = self._gamestate_dict["country"][country_id]
 
             has_sensor_link_with_player = (country_model.is_player
-                                           or country_id in sensor_links[self._basic_info.player_country_id])
+                                           or country_id in sensor_links.get(self._basic_info.player_country_id, []))
             if country_model.is_player:
                 attitude_towards_player = models.Attitude.is_player
             else:
@@ -989,7 +997,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.planet_destroyed,
                     country=country_model,
-                    start_date_days=min(self._basic_info.date_in_days),
+                    start_date_days=self._basic_info.date_in_days,
                     planet=planet_model,
                     system=system_model,
                     event_is_known_to_player=country_model.has_met_player(),
@@ -1968,200 +1976,201 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         species_dict, robot_species = dependencies[SpeciesProcessor.ID]
 
         # TODO: Maybe make it possible to read other countries' pop stats??
-        country_id_in_game, country_model = next(
-            (cid, cm) for (cid, cm) in countries_dict.items() if cm.is_player
-        )
-        country_data = country_data_dict[country_id_in_game]
-        stats_by_species = {}
-        stats_by_faction = {}
-        stats_by_job = {}
-        stats_by_stratum = {}
-        stats_by_ethos = {}
-        stats_by_planet = {}
-
-        for pop_dict in self._gamestate_dict["pop"].values():
-            if not isinstance(pop_dict, dict):
-                continue
-            planet_id = pop_dict.get("planet")
-            planet_country_id_in_game = self.country_by_planet_id.get(planet_id)
-            if planet_country_id_in_game != country_id_in_game:
-                continue
-            country_model = countries_dict.get(planet_country_id_in_game)
-
-            species_id = pop_dict.get("species_index")
-            job = pop_dict.get("job", "unemployed")
-            stratum = pop_dict.get("category", "unknown stratum")
-            faction_id = pop_dict.get("pop_faction")
-
-            if faction_id is None:
-                if stratum == "slave":
-                    faction_id = FactionProcessor.SLAVE_FACTION_ID
-                elif species_id in robot_species:
-                    faction_id = FactionProcessor.NON_SENTIENT_ROBOT_FACTION_ID
-                elif stratum == "purge":
-                    faction_id = FactionProcessor.PURGE_FACTION_ID
-                else:
-                    faction_id = FactionProcessor.NO_FACTION_ID
-
-            ethos = pop_dict.get("ethos", {}).get("ethic")
-            if not isinstance(ethos, str):
-                ethos = "ethic_no_ethos"
-
-            crime = pop_dict.get("crime", 0.0)
-            happiness = pop_dict.get("happiness", 0.0)
-            power = pop_dict.get("power", 0.0)
-
-            if species_id not in stats_by_species:
-                stats_by_species[species_id] = init_dict()
-            if faction_id not in stats_by_faction:
-                stats_by_faction[faction_id] = init_dict()
-            if job not in stats_by_job:
-                stats_by_job[job] = init_dict()
-            if stratum not in stats_by_stratum:
-                stats_by_stratum[stratum] = init_dict()
-            if ethos not in stats_by_ethos:
-                stats_by_ethos[ethos] = init_dict()
-            if planet_id not in stats_by_planet:
-                stats_by_planet[planet_id] = init_dict()
-
-            stats_by_species[species_id]["pop_count"] += 1
-            stats_by_faction[faction_id]["pop_count"] += 1
-            stats_by_job[job]["pop_count"] += 1
-            stats_by_stratum[stratum]["pop_count"] += 1
-            stats_by_ethos[ethos]["pop_count"] += 1
-            stats_by_planet[planet_id]["pop_count"] += 1
-
-            stats_by_species[species_id]["crime"] += crime
-            stats_by_faction[faction_id]["crime"] += crime
-            stats_by_job[job]["crime"] += crime
-            stats_by_stratum[stratum]["crime"] += crime
-            stats_by_ethos[ethos]["crime"] += crime
-            stats_by_planet[planet_id]["crime"] += crime
-
-            stats_by_species[species_id]["happiness"] += happiness
-            stats_by_faction[faction_id]["happiness"] += happiness
-            stats_by_job[job]["happiness"] += happiness
-            stats_by_stratum[stratum]["happiness"] += happiness
-            stats_by_ethos[ethos]["happiness"] += happiness
-            stats_by_planet[planet_id]["happiness"] += happiness
-
-            stats_by_species[species_id]["power"] += power
-            stats_by_faction[faction_id]["power"] += power
-            stats_by_job[job]["power"] += power
-            stats_by_stratum[stratum]["power"] += power
-            stats_by_ethos[ethos]["power"] += power
-            stats_by_planet[planet_id]["power"] += power
-
-        for species_id, stats in stats_by_species.items():
-            if stats["pop_count"] == 0:
-                continue
-            stats["crime"] /= stats["pop_count"]
-            stats["happiness"] /= stats["pop_count"]
-            stats["power"] /= stats["pop_count"]
-
-            species = species_dict[species_id]
-            self._session.add(models.PopStatsBySpecies(
-                country_data=country_data,
-                species=species,
-                **stats,
-            ))
-
-        gamestate_dict_factions = self._gamestate_dict.get("pop_factions", {})
-        if not isinstance(gamestate_dict_factions, dict):
-            gamestate_dict_factions = {}
-        for faction_id, stats in stats_by_faction.items():
-            if stats["pop_count"] == 0:
-                continue
-            faction_dict = gamestate_dict_factions.get(faction_id, {})
-            if not isinstance(faction_dict, dict):
-                faction_dict = {}
-            stats["crime"] /= stats["pop_count"]
-            stats["happiness"] /= stats["pop_count"]
-            stats["power"] /= stats["pop_count"]
-            stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
-            stats["support"] = faction_dict.get("support", 0.0)
-
-            faction = self._session.query(models.PoliticalFaction).filter_by(
-                country=country_model,
-                faction_id_in_game=faction_id,
-            ).one_or_none()
-            if faction is None:
-                continue
-            self._session.add(models.PopStatsByFaction(
-                country_data=country_data,
-                faction=faction,
-                **stats,
-            ))
-
-        for planet_id, stats in stats_by_planet.items():
-            if stats["pop_count"] == 0:
-                continue
-            stats["crime"] /= stats["pop_count"]
-            stats["happiness"] /= stats["pop_count"]
-            stats["power"] /= stats["pop_count"]
-
-            planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
-            if not isinstance(planet_dict, dict):
+        for country_id_in_game, country_model in countries_dict.items():
+            if not country_model.is_player:
                 continue
 
-            stats["migration"] = planet_dict.get("migration", 0.0)
-            stats["free_amenities"] = planet_dict.get("free_amenities", 0.0)
-            stats["free_housing"] = planet_dict.get("free_housing", 0.0)
-            stats["stability"] = planet_dict.get("stability", 0.0)
+            country_data = country_data_dict[country_id_in_game]
+            stats_by_species = {}
+            stats_by_faction = {}
+            stats_by_job = {}
+            stats_by_stratum = {}
+            stats_by_ethos = {}
+            stats_by_planet = {}
 
-            planet = self._session.query(models.Planet).filter_by(
-                planet_id_in_game=planet_id
-            ).one_or_none()
-            if planet is None:
-                logger.warning(f"{self._basic_info.logger_str}     Could not find planet with ID {planet_id}!")
-                continue
-            self._session.add(models.PlanetStats(
-                gamestate=self._db_gamestate,
-                planet=planet,
-                **stats,
-            ))
+            for pop_dict in self._gamestate_dict["pop"].values():
+                if not isinstance(pop_dict, dict):
+                    continue
+                planet_id = pop_dict.get("planet")
+                planet_country_id_in_game = self.country_by_planet_id.get(planet_id)
+                if planet_country_id_in_game != country_id_in_game:
+                    continue
+                country_model = countries_dict.get(planet_country_id_in_game)
 
-        for job, stats in stats_by_job.items():
-            if stats["pop_count"] == 0:
-                continue
-            stats["crime"] /= stats["pop_count"]
-            stats["happiness"] /= stats["pop_count"]
-            stats["power"] /= stats["pop_count"]
+                species_id = pop_dict.get("species_index")
+                job = pop_dict.get("job", "unemployed")
+                stratum = pop_dict.get("category", "unknown stratum")
+                faction_id = pop_dict.get("pop_faction")
 
-            job = self._get_or_add_shared_description(job)
-            self._session.add(models.PopStatsByJob(
-                country_data=country_data,
-                db_job_description=job,
-                **stats,
-            ))
+                if faction_id is None:
+                    if stratum == "slave":
+                        faction_id = FactionProcessor.SLAVE_FACTION_ID
+                    elif species_id in robot_species:
+                        faction_id = FactionProcessor.NON_SENTIENT_ROBOT_FACTION_ID
+                    elif stratum == "purge":
+                        faction_id = FactionProcessor.PURGE_FACTION_ID
+                    else:
+                        faction_id = FactionProcessor.NO_FACTION_ID
 
-        for stratum, stats in stats_by_stratum.items():
-            if stats["pop_count"] == 0:
-                continue
-            stats["crime"] /= stats["pop_count"]
-            stats["happiness"] /= stats["pop_count"]
-            stats["power"] /= stats["pop_count"]
+                ethos = pop_dict.get("ethos", {}).get("ethic")
+                if not isinstance(ethos, str):
+                    ethos = "ethic_no_ethos"
 
-            stratum = self._get_or_add_shared_description(stratum)
-            self._session.add(models.PopStatsByStratum(
-                country_data=country_data,
-                db_stratum_description=stratum,
-                **stats,
-            ))
+                crime = pop_dict.get("crime", 0.0)
+                happiness = pop_dict.get("happiness", 0.0)
+                power = pop_dict.get("power", 0.0)
 
-        for ethos, stats in stats_by_ethos.items():
-            if stats["pop_count"] == 0:
-                continue
-            stats["crime"] /= stats["pop_count"]
-            stats["happiness"] /= stats["pop_count"]
-            stats["power"] /= stats["pop_count"]
+                if species_id not in stats_by_species:
+                    stats_by_species[species_id] = init_dict()
+                if faction_id not in stats_by_faction:
+                    stats_by_faction[faction_id] = init_dict()
+                if job not in stats_by_job:
+                    stats_by_job[job] = init_dict()
+                if stratum not in stats_by_stratum:
+                    stats_by_stratum[stratum] = init_dict()
+                if ethos not in stats_by_ethos:
+                    stats_by_ethos[ethos] = init_dict()
+                if planet_id not in stats_by_planet:
+                    stats_by_planet[planet_id] = init_dict()
 
-            ethos = self._get_or_add_shared_description(ethos)
-            self._session.add(models.PopStatsByEthos(
-                country_data=country_data,
-                db_ethos_description=ethos,
-                **stats,
-            ))
+                stats_by_species[species_id]["pop_count"] += 1
+                stats_by_faction[faction_id]["pop_count"] += 1
+                stats_by_job[job]["pop_count"] += 1
+                stats_by_stratum[stratum]["pop_count"] += 1
+                stats_by_ethos[ethos]["pop_count"] += 1
+                stats_by_planet[planet_id]["pop_count"] += 1
+
+                stats_by_species[species_id]["crime"] += crime
+                stats_by_faction[faction_id]["crime"] += crime
+                stats_by_job[job]["crime"] += crime
+                stats_by_stratum[stratum]["crime"] += crime
+                stats_by_ethos[ethos]["crime"] += crime
+                stats_by_planet[planet_id]["crime"] += crime
+
+                stats_by_species[species_id]["happiness"] += happiness
+                stats_by_faction[faction_id]["happiness"] += happiness
+                stats_by_job[job]["happiness"] += happiness
+                stats_by_stratum[stratum]["happiness"] += happiness
+                stats_by_ethos[ethos]["happiness"] += happiness
+                stats_by_planet[planet_id]["happiness"] += happiness
+
+                stats_by_species[species_id]["power"] += power
+                stats_by_faction[faction_id]["power"] += power
+                stats_by_job[job]["power"] += power
+                stats_by_stratum[stratum]["power"] += power
+                stats_by_ethos[ethos]["power"] += power
+                stats_by_planet[planet_id]["power"] += power
+
+            for species_id, stats in stats_by_species.items():
+                if stats["pop_count"] == 0:
+                    continue
+                stats["crime"] /= stats["pop_count"]
+                stats["happiness"] /= stats["pop_count"]
+                stats["power"] /= stats["pop_count"]
+
+                species = species_dict[species_id]
+                self._session.add(models.PopStatsBySpecies(
+                    country_data=country_data,
+                    species=species,
+                    **stats,
+                ))
+
+            gamestate_dict_factions = self._gamestate_dict.get("pop_factions", {})
+            if not isinstance(gamestate_dict_factions, dict):
+                gamestate_dict_factions = {}
+            for faction_id, stats in stats_by_faction.items():
+                if stats["pop_count"] == 0:
+                    continue
+                faction_dict = gamestate_dict_factions.get(faction_id, {})
+                if not isinstance(faction_dict, dict):
+                    faction_dict = {}
+                stats["crime"] /= stats["pop_count"]
+                stats["happiness"] /= stats["pop_count"]
+                stats["power"] /= stats["pop_count"]
+                stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
+                stats["support"] = faction_dict.get("support", 0.0)
+
+                faction = self._session.query(models.PoliticalFaction).filter_by(
+                    country=country_model,
+                    faction_id_in_game=faction_id,
+                ).one_or_none()
+                if faction is None:
+                    continue
+                self._session.add(models.PopStatsByFaction(
+                    country_data=country_data,
+                    faction=faction,
+                    **stats,
+                ))
+
+            for planet_id, stats in stats_by_planet.items():
+                if stats["pop_count"] == 0:
+                    continue
+                stats["crime"] /= stats["pop_count"]
+                stats["happiness"] /= stats["pop_count"]
+                stats["power"] /= stats["pop_count"]
+
+                planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
+                if not isinstance(planet_dict, dict):
+                    continue
+
+                stats["migration"] = planet_dict.get("migration", 0.0)
+                stats["free_amenities"] = planet_dict.get("free_amenities", 0.0)
+                stats["free_housing"] = planet_dict.get("free_housing", 0.0)
+                stats["stability"] = planet_dict.get("stability", 0.0)
+
+                planet = self._session.query(models.Planet).filter_by(
+                    planet_id_in_game=planet_id
+                ).one_or_none()
+                if planet is None:
+                    logger.warning(f"{self._basic_info.logger_str}     Could not find planet with ID {planet_id}!")
+                    continue
+                self._session.add(models.PlanetStats(
+                    gamestate=self._db_gamestate,
+                    planet=planet,
+                    **stats,
+                ))
+
+            for job, stats in stats_by_job.items():
+                if stats["pop_count"] == 0:
+                    continue
+                stats["crime"] /= stats["pop_count"]
+                stats["happiness"] /= stats["pop_count"]
+                stats["power"] /= stats["pop_count"]
+
+                job = self._get_or_add_shared_description(job)
+                self._session.add(models.PopStatsByJob(
+                    country_data=country_data,
+                    db_job_description=job,
+                    **stats,
+                ))
+
+            for stratum, stats in stats_by_stratum.items():
+                if stats["pop_count"] == 0:
+                    continue
+                stats["crime"] /= stats["pop_count"]
+                stats["happiness"] /= stats["pop_count"]
+                stats["power"] /= stats["pop_count"]
+
+                stratum = self._get_or_add_shared_description(stratum)
+                self._session.add(models.PopStatsByStratum(
+                    country_data=country_data,
+                    db_stratum_description=stratum,
+                    **stats,
+                ))
+
+            for ethos, stats in stats_by_ethos.items():
+                if stats["pop_count"] == 0:
+                    continue
+                stats["crime"] /= stats["pop_count"]
+                stats["happiness"] /= stats["pop_count"]
+                stats["power"] /= stats["pop_count"]
+
+                ethos = self._get_or_add_shared_description(ethos)
+                self._session.add(models.PopStatsByEthos(
+                    country_data=country_data,
+                    db_ethos_description=ethos,
+                    **stats,
+                ))
 
     def _initialize_planet_owner_dict(self):
         self.country_by_planet_id = {}
