@@ -31,12 +31,12 @@ class TimelineExtractor:
         self._session = None
         self._gamestate_dict = None
 
-    def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any], debug=False):
+    def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any]):
         self._gamestate_dict = gamestate_dict
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.clock()
-        with models.get_db_session(game_id=game_id, debug=debug) as self._session:
+        with models.get_db_session(game_id=game_id) as self._session:
             try:
                 self._process_gamestate(game_id)
                 logger.info(f"{self.basic_info.logger_str} Processed Gamestate in {time.clock() - t_start_gs:.3f} s, writing changes to database")
@@ -647,7 +647,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_society_research += society
             country_data.net_engineering_research += engineering
 
-            if country_data.country.is_player:  # TODO add CONFIG setting to enable for non-player countries
+            if country_data.country.is_player or config.CONFIG.read_non_player_countries:
                 description = self._get_or_add_shared_description(item_name)
                 self._session.add(models.BudgetItem(
                     country_data=country_data,
@@ -1771,7 +1771,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 war_goal_defender = None
 
             attackers = {p["country"] for p in war_dict["attackers"]}
-            for war_party_info in itertools.chain(war_dict["attackers"], war_dict["defenders"]):
+            for war_party_info in itertools.chain(war_dict.get("attackers", []), war_dict.get("defenders", [])):
                 if not isinstance(war_party_info, dict):
                     continue  # just in case
                 country_id_ingame = war_party_info.get("country")
@@ -1977,7 +1977,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
         # TODO: Maybe make it possible to read other countries' pop stats??
         for country_id_in_game, country_model in countries_dict.items():
-            if not country_model.is_player:
+            if not config.CONFIG.read_non_player_countries and not country_model.is_player:
                 continue
 
             country_data = country_data_dict[country_id_in_game]
@@ -2125,7 +2125,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                     logger.warning(f"{self._basic_info.logger_str}     Could not find planet with ID {planet_id}!")
                     continue
                 self._session.add(models.PlanetStats(
-                    gamestate=self._db_gamestate,
+                    country_data=country_data,
                     planet=planet,
                     **stats,
                 ))

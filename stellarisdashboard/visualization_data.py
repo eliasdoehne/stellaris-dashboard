@@ -4,7 +4,7 @@ import enum
 import logging
 import random
 import time
-from typing import List, Dict, Callable, Tuple, Iterable, Union, Set
+from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
 
 import networkx as nx
 
@@ -31,8 +31,9 @@ class PlotSpecification:
     plot_id: str
     title: str
 
-    # This function specifies which data container class should be used for the plot
-    data_container_factory: Callable[[], "AbstractPlotDataContainer"]
+    # This function specifies which data container class should be used for the plot.
+    # The int argument is the country ID for which budgets and pop stats are shown.
+    data_container_factory: Callable[[Optional[int]], "AbstractPlotDataContainer"]
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
@@ -45,7 +46,7 @@ class PlotSpecification:
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
 
 
-def get_current_execution_plot_data(game_name: str) -> "PlotDataManager":
+def get_current_execution_plot_data(game_name: str, country_perspective: Optional[int]=None) -> "PlotDataManager":
     """ Update and retrieve the PlotDataManager object stored for the requested game.
 
     :param game_name: The exact name of a game for which a database is available
@@ -59,6 +60,7 @@ def get_current_execution_plot_data(game_name: str) -> "PlotDataManager":
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(game_name)
         _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
+    _CURRENT_EXECUTION_PLOT_DATA[game_name].country_perspective=country_perspective
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
@@ -99,7 +101,9 @@ class PlotDataManager:
     to a DataContainer instance (defined below).
     """
 
-    def __init__(self, game_name: str, plot_specifications: Dict[str, List[PlotSpecification]] = None):
+    def __init__(self, game_name: str,
+                 plot_specifications: Dict[str, List[PlotSpecification]] = None,
+                 country_perspective: Optional[int] = None):
         if plot_specifications is None:
             plot_specifications = THEMATICALLY_GROUPED_PLOTS
         self.game_name: str = game_name
@@ -111,9 +115,12 @@ class PlotDataManager:
         self.only_show_default_empires: bool = None
         self.plot_time_resolution: bool = None
 
+        self._country_perspective: int = country_perspective
+
         self.data_containers_by_plot_id: Dict[str, AbstractPlotDataContainer] = None
 
     def initialize(self):
+        print(f"perspective: {self._country_perspective}")
         self.last_date = -float("inf")
         self._loaded_gamestates = 0
         self.show_everything = config.CONFIG.show_everything
@@ -123,7 +130,18 @@ class PlotDataManager:
         self.data_containers_by_plot_id = {}
         for ps_list in self.plot_specifications.values():
             for plot_spec in ps_list:
-                self.data_containers_by_plot_id[plot_spec.plot_id] = plot_spec.data_container_factory()
+                self.data_containers_by_plot_id[plot_spec.plot_id] = plot_spec.data_container_factory(self.country_perspective)
+
+    @property
+    def country_perspective(self) -> Optional[int]:
+        return self._country_perspective
+
+    @country_perspective.setter
+    def country_perspective(self, value: Optional[int]):
+        if value != self._country_perspective:
+            logger.info(f"Switching perspective to Country {value if value is not None else 'Observer'}")
+            self._country_perspective = value
+            self.initialize()
 
     def update_with_new_gamestate(self):
         if (self.show_everything != config.CONFIG.show_everything
@@ -135,6 +153,7 @@ class PlotDataManager:
             self.show_everything = config.CONFIG.show_everything
             self.only_show_default_empires = config.CONFIG.only_show_default_empires
             self.plot_time_resolution = config.CONFIG.plot_time_resolution
+
         num_new_gs = models.count_gamestates_since(self.game_name, self.last_date)
         if self.plot_time_resolution == 0 or num_new_gs < self.plot_time_resolution:
             use_every_nth_gamestate = 1
@@ -175,9 +194,10 @@ class PlotDataManager:
 class AbstractPlotDataContainer(abc.ABC):
     DEFAULT_VAL = float("nan")
 
-    def __init__(self):
+    def __init__(self, country_perspective: Optional[int]):
         self.dates: List[float] = []
         self.data_dict: Dict[str, List[float]] = {}
+        self._country_perspective = country_perspective
 
     def iterate_traces(self) -> Iterable[Tuple[str, List[int], List[float]]]:
         for key, values in self.data_dict.items():
@@ -189,7 +209,7 @@ class AbstractPlotDataContainer(abc.ABC):
                 return
             self.data_dict[key] = [default_val for _ in range(len(self.dates) - 1)]
         if len(self.data_dict[key]) >= len(self.dates):
-            logger.info(f"Ignoring duplicate value for {key}.")
+            logger.info(f"{self.__class__.__qualname__} Ignoring duplicate value for {key}.")
             return
         self.data_dict[key].append(new_val)
 
@@ -322,11 +342,10 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
     def extract_data_from_gamestate(self, gs: models.GameState):
         player_cd = None
         for cd in gs.country_data:
-            if cd.country.is_player:
+            if cd.country.is_player or cd.country.country_id_in_game == self._country_perspective:
                 player_cd = cd
                 break
         if player_cd is None:
-            logger.error("Could not identify player country! Abort...")
             return
 
         self.dates.append(gs.date / 360.0)
@@ -473,7 +492,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PopStatsBySpecies)
-        return ps.species.species_name
+        return f"{ps.species.species_name} ({ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):
@@ -574,11 +593,11 @@ class JobCrimeDataContainer(AbstractPopStatsByJobDataContainer):
 
 class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.ABC):
     def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PlanetStats]:
-        return iter(cd.game_state.planet_stats)
+        return iter(cd.pop_stats_planets)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PlanetStats)
-        return ps.planet.name
+        return f"{ps.planet.name} ({ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):

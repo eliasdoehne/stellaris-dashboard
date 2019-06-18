@@ -68,6 +68,7 @@ DEFAULT_SETTINGS = dict(
     filter_events_by_type=True,
     only_show_default_empires=True,
     save_name_filter="",
+    read_non_player_countries=False,
     read_only_every_nth_save=1,
     plot_time_resolution=200,
     normalize_stacked_plots=False,
@@ -97,6 +98,7 @@ class Config:
 
     check_version: bool = None
     show_everything: bool = None
+    read_non_player_countries: bool = None
     only_show_default_empires: bool = None
     filter_events_by_type: bool = None
 
@@ -117,6 +119,7 @@ class Config:
         "check_version",
         "filter_events_by_type",
         "show_everything",
+        "read_non_player_countries",
         "only_show_default_empires",
         "normalize_stacked_plots",
         "use_two_y_axes_for_budgets",

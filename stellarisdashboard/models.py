@@ -486,7 +486,6 @@ class GameState(Base):
 
     game = relationship("Game", back_populates="game_states")
     country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
-    planet_stats = relationship("PlanetStats", back_populates="gamestate", cascade="all,delete,delete-orphan")
 
     def __str__(self):
         return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"
@@ -662,6 +661,7 @@ class CountryData(Base):
     pop_stats_job = relationship("PopStatsByJob", back_populates="country_data", cascade="all,delete,delete-orphan")
     pop_stats_stratum = relationship("PopStatsByStratum", back_populates="country_data", cascade="all,delete,delete-orphan")
     pop_stats_ethos = relationship("PopStatsByEthos", back_populates="country_data", cascade="all,delete,delete-orphan")
+    pop_stats_planets = relationship("PlanetStats", back_populates="country_data", cascade="all,delete,delete-orphan")
 
     def show_geography_info(self):
         return self.country.is_player or self.attitude_towards_player.is_known()
@@ -1013,7 +1013,7 @@ class PopStatsByEthos(Base):
 class PlanetStats(Base):
     __tablename__ = "planetstats_table"
     planet_stats_id = Column(Integer, primary_key=True)
-    gamestate_id = Column(ForeignKey(GameState.gamestate_id), index=True)
+    countrydata_id = Column(ForeignKey(CountryData.country_data_id), index=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id))
 
@@ -1028,7 +1028,7 @@ class PlanetStats(Base):
     stability = Column(Float)
 
     planet = relationship(Planet)
-    gamestate = relationship(GameState, back_populates="planet_stats")
+    country_data = relationship(CountryData, back_populates="pop_stats_planets")
 
 
 class HistoricalEvent(Base):
