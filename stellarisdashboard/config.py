@@ -54,6 +54,7 @@ def _get_default_base_output_path():
 
 DEFAULT_SETTINGS = dict(
     save_file_path=_get_default_save_path(),
+    steam_username="",
     base_output_path=_get_default_base_output_path(),
     threads=_get_default_thread_count(),
     port=28053,
@@ -80,6 +81,7 @@ DEFAULT_SETTINGS = dict(
 class Config:
     """ Stores the settings for the dashboard. """
     save_file_path: pathlib.Path = None
+    steam_username: str = None
     base_output_path: pathlib.Path = None
     threads: int = None
 
@@ -133,6 +135,7 @@ class Config:
         "save_file_delay",
     }
     STR_KEYS = {
+        "steam_username",
         "colormap",
         "save_name_filter",
         "log_level",
