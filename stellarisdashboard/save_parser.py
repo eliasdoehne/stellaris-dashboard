@@ -100,7 +100,6 @@ class SavePathMonitor(abc.ABC):
     def _valid_save_files(self) -> List[pathlib.Path]:
         prefiltered_files = (save_file for save_file in self.save_parent_dir.glob("**/*.sav")
                              if save_file not in self.processed_saves
-                             and not str(save_file.parent.stem).startswith("mp")
                              and str(save_file.parent.stem).startswith(self.game_name_prefix))
         modified_files = sorted(f for f in prefiltered_files
                                 if m_or_c_time(f) > self._last_checked_time)
