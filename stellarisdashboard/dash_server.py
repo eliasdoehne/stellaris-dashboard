@@ -176,7 +176,7 @@ def settings_page():
         "use_two_y_axes_for_budgets": {
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["use_two_y_axes_for_budgets"]),
-            "name": "Use separate y-axis for budget net income.",
+            "name": "Use separate y-axis for budget net income",
             "description": "If enabled, the net income lines of budget graphs are drawn on a separate y-axis.",
         },
         "save_name_filter": {
@@ -188,7 +188,7 @@ def settings_page():
         "read_non_player_countries": {
             "type": t_bool,
             "value": _convert_python_bool_to_lowercase(current_settings["show_everything"]),
-            "name": "Read everything (big performance impact!)",
+            "name": "Read everything (Warning: might have big performance impact!)",
             "description": "Read budgets and pop stats of all countries. This will result in much larger database files and slow things down quite a bit. Consider adjusting the budget frequency parameter below to compensate.",
         },
         "read_only_every_nth_save": {
@@ -196,8 +196,16 @@ def settings_page():
             "value": current_settings["read_only_every_nth_save"],
             "min": 1,
             "max": 10000,
-            "name": "Only read every n-th save to the database",
+            "name": "Save file import frequency (set 1 to import every save)",
             "description": "Reading every save file may result in a fairly large database file. This setting allows to skip reading save files, at the cost of storing fewer details. Set to 1 to read every save, to 2 to ignore every other save, to 3 to ignore 2/3 of saves, and so on. This filter is applied after all other filters.",
+        },
+        "budget_pop_stats_frequency": {
+            "type": t_int,
+            "value": current_settings["budget_pop_stats_frequency"],
+            "min": 1,
+            "max": 10000,
+            "name": "Pop stats/budget import frequency (set 1 to import data every time)",
+            "description": "Sets the number read budgets and pop stats only for some save files. Note: this is applied on top of the save file import frequency.",
         },
         "plot_time_resolution": {
             "type": t_int,
@@ -318,7 +326,7 @@ HEADER_STYLE = {
     "text-align": "center",
 }
 DROPDOWN_STYLE = {
-    "width": "50%",
+    "width": "100%",
     "font-family": "verdana",
     "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
     "margin-top": "10px",
@@ -477,10 +485,8 @@ def update_country_select_options(search):
         return []
 
     with models.get_db_session(game_id) as session:
-        return [{
-            'label': c.country_name,
-            'value': c.country_id_in_game,
-        } for c in session.query(models.Country)]
+        return [{'label': c.country_name, 'value': c.country_id_in_game}
+                for c in session.query(models.Country) if c.is_real_country()]
 
 
 @timeline_app.callback(Output('tab-content', 'children'),

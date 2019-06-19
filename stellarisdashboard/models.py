@@ -1,10 +1,9 @@
 import contextlib
-import datetime
 import enum
 import logging
 import pathlib
 import threading
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, Iterable
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -326,8 +325,8 @@ class Game(Base):
     __tablename__ = 'gametable'
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
-    player_country_name = Column(String(100))
 
+    player_country_name = Column(String(100))
     db_galaxy_template = Column(String(100))
     db_galaxy_shape = Column(String(100))
     db_difficulty = Column(String(100))

@@ -17,17 +17,27 @@ class BasicGameInfo:
     game_id: str
     date_in_days: int
     player_country_id: int
+    number_of_parsed_saves: int
+    _logged_pop_stats_skip: bool = False
 
     @property
     def logger_str(self) -> str:
         return f"{self.game_id} {models.days_to_date(self.date_in_days)}"
 
+    def skip_budget_pop_stats(self):
+        pop_stats_frequency = config.CONFIG.budget_pop_stats_frequency
+        result = self.number_of_parsed_saves % pop_stats_frequency != 0
+        if result and not self._logged_pop_stats_skip:
+            self._logged_pop_stats_skip = True
+            logger.info(f"{self.logger_str}         Skipping Pop stats and Budgets due to budget_pop_stats_frequency = {pop_stats_frequency}")
+        return result
 
 class TimelineExtractor:
     def __init__(self):
         self.basic_info: BasicGameInfo = None
         self._session = None
         self._gamestate_dict = None
+        self.number_of_parsed_saves = 0
 
     def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any]):
         self._gamestate_dict = gamestate_dict
@@ -39,6 +49,7 @@ class TimelineExtractor:
                 self._process_gamestate(game_id)
                 logger.info(f"{self.basic_info.logger_str} Processed Gamestate in {time.clock() - t_start_gs:.3f} s, writing changes to database")
                 self._session.commit()
+                self.number_of_parsed_saves += 1
             except Exception as e:
                 self._session.rollback()
                 logger.exception(f"{self.basic_info.logger_str} Rolling back changes to database...")
@@ -90,6 +101,8 @@ class TimelineExtractor:
                 db_difficulty=galaxy_info.get("difficulty", "Unknown"),
                 db_last_updated=datetime.datetime.now(),
             )
+
+        game.player_country_id = self.basic_info.player_country_id
         game.db_last_updated = datetime.datetime.now()
         self._session.add(game)
         return game
@@ -101,6 +114,7 @@ class TimelineExtractor:
             game_id=game_id,
             date_in_days=date_in_days,
             player_country_id=self._identify_player_country(),
+            number_of_parsed_saves=self.number_of_parsed_saves,
         )
 
     def _identify_player_country(self):
@@ -688,6 +702,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_physics_research += physics
             country_data.net_society_research += society
             country_data.net_engineering_research += engineering
+
+            if self._basic_info.skip_budget_pop_stats():
+                continue
 
             if country_data.country.is_player or config.CONFIG.read_non_player_countries:
                 description = self._get_or_add_shared_description(item_name)
@@ -1656,7 +1673,6 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                     if reverse_event_type is not None:
                         country_tuples.append((reverse_event_type, target_country_model, country_model, self._ruler_dict.get(target_country_id)))
 
-
                     is_now_active = target_country_id in self._diplo_dict[country_id][diplo_dict_key]
                     was_active = relation.is_active(diplo_dict_key)
 
@@ -1667,26 +1683,26 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
 
                     if is_now_active:  # Create new historical event entry
                         for (et, c_model, tc_model, c_ruler) in country_tuples:
-                                matching_event = models.HistoricalEvent(
-                                    event_type=et,
-                                    country=c_model,
-                                    target_country=tc_model,
-                                    leader=c_ruler,
-                                    start_date_days=self._basic_info.date_in_days,
-                                    event_is_known_to_player=is_known_to_player,
-                                )
-                                self._session.add(matching_event)
+                            matching_event = models.HistoricalEvent(
+                                event_type=et,
+                                country=c_model,
+                                target_country=tc_model,
+                                leader=c_ruler,
+                                start_date_days=self._basic_info.date_in_days,
+                                event_is_known_to_player=is_known_to_player,
+                            )
+                            self._session.add(matching_event)
                     elif was_active:  # Set end date of existing historical event entry
                         for (et, c_model, tc_model, _) in country_tuples:
-                                matching_event = self._query_event(
-                                    event_type=et, country=c_model, target_country=tc_model
-                                )
-                                if matching_event is not None:
-                                    matching_event.end_date_days = self._basic_info.date_in_days
-                                    matching_event.event_is_known_to_player = is_known_to_player
-                                    self._session.add(matching_event)
-                                else:
-                                    logger.warning(f"Could not find event matching {relation}, {diplo_dict_key}")
+                            matching_event = self._query_event(
+                                event_type=et, country=c_model, target_country=tc_model
+                            )
+                            if matching_event is not None:
+                                matching_event.end_date_days = self._basic_info.date_in_days
+                                matching_event.event_is_known_to_player = is_known_to_player
+                                self._session.add(matching_event)
+                            else:
+                                logger.warning(f"Could not find event matching {relation}, {diplo_dict_key}")
 
     def _query_event(self, event_type: models.HistoricalEventType,
                      country: models.Country,
@@ -2041,6 +2057,10 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         self._initialize_planet_owner_dict()
 
     def extract_data_from_gamestate(self, dependencies):
+        if self._basic_info.skip_budget_pop_stats():
+            logger.info(f"Skipping pop stats due to budget_pop_stats_frequency = {config.CONFIG.budget_pop_stats_frequency}")
+            return
+
         def init_dict():
             return dict(pop_count=0, crime=0, happiness=0, power=0)
 

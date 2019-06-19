@@ -46,7 +46,7 @@ class PlotSpecification:
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
 
 
-def get_current_execution_plot_data(game_name: str, country_perspective: Optional[int]=None) -> "PlotDataManager":
+def get_current_execution_plot_data(game_name: str, country_perspective: Optional[int] = None) -> "PlotDataManager":
     """ Update and retrieve the PlotDataManager object stored for the requested game.
 
     :param game_name: The exact name of a game for which a database is available
@@ -60,7 +60,7 @@ def get_current_execution_plot_data(game_name: str, country_perspective: Optiona
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(game_name)
         _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
-    _CURRENT_EXECUTION_PLOT_DATA[game_name].country_perspective=country_perspective
+    _CURRENT_EXECUTION_PLOT_DATA[game_name].country_perspective = country_perspective
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
@@ -340,11 +340,11 @@ class VictoryRankDataContainer(AbstractPerCountryDataContainer):
 
 class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
     def extract_data_from_gamestate(self, gs: models.GameState):
-        player_cd = None
-        for cd in gs.country_data:
-            if cd.country.is_player or cd.country.country_id_in_game == self._country_perspective:
-                player_cd = cd
-                break
+        player_cd = self._get_player_countrdata(gs)
+
+        if player_cd is None or not self._include(player_cd):
+            return
+
         if player_cd is None:
             return
 
@@ -358,9 +358,20 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
             print(player_cd.country.country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
 
+    def _get_player_countrdata(self, gs: models.GameState) -> models.CountryData:
+        player_cd = None
+        for cd in gs.country_data:
+            if cd.country.is_player or cd.country.country_id_in_game == self._country_perspective:
+                player_cd = cd
+                break
+        return player_cd
+
     @abc.abstractmethod
     def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
         pass
+
+    def _include(self, player_cd: models.CountryData) -> bool:
+        return True
 
 
 class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
@@ -385,6 +396,9 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
     @abc.abstractmethod
     def _get_value_from_budgetitem(self, bi: models.BudgetItem) -> float:
         pass
+
+    def _include(self, player_cd):
+        return len(player_cd.budget) != 0
 
 
 class EnergyBudgetDataContainer(AbstractEconomyBudgetDataContainer):
@@ -484,6 +498,13 @@ class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     @abc.abstractmethod
     def _get_value_from_popstats(self, ps: PopStatsType) -> float:
         pass
+
+    def _include(self, player_cd):
+        try:
+            next(self._iterate_popstats(player_cd))
+            return True
+        except StopIteration:
+            return False
 
 
 class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.ABC):

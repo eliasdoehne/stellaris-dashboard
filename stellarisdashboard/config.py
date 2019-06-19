@@ -69,6 +69,7 @@ DEFAULT_SETTINGS = dict(
     only_show_default_empires=True,
     save_name_filter="",
     read_non_player_countries=False,
+    budget_pop_stats_frequency=1,
     read_only_every_nth_save=1,
     plot_time_resolution=200,
     normalize_stacked_plots=False,
@@ -99,6 +100,7 @@ class Config:
     check_version: bool = None
     show_everything: bool = None
     read_non_player_countries: bool = None
+    budget_pop_stats_frequency: int = None
     only_show_default_empires: bool = None
     filter_events_by_type: bool = None
 
@@ -128,6 +130,7 @@ class Config:
         "port",
         "read_only_every_nth_save",
         "plot_time_resolution",
+        "budget_pop_stats_frequency",
         "threads",
         "plot_width",
         "plot_height",
