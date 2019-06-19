@@ -902,7 +902,7 @@ class EventTemplateDictBuilder:
                         continue
                 start = models.days_to_date(event.start_date_days)
                 end_date = None
-                is_active = False
+                is_active = True
                 if event.end_date_days is not None:
                     end_date = models.days_to_date(event.end_date_days)
                     is_active = event.end_date_days >= most_recent_date
@@ -1045,24 +1045,11 @@ class EventTemplateDictBuilder:
                 "Ethics": ", ".join([game_info.convert_id_to_name(e, remove_prefix="ethic") for e in sorted(gov.ethics)]),
                 "Civics": ", ".join([game_info.convert_id_to_name(c, remove_prefix="civic") for c in sorted(gov.civics)]),
             })
-        if not country_model.is_player:
-            country_data = country_model.get_most_recent_data()
-            if country_data:
-                details["Attitude"] = country_data.attitude_towards_player
-                agreements = [
-                    ("Communication", country_data.has_communications_with_player),
-                    ("Sensor Link", country_data.has_sensor_link_with_player),
-                    ("Research Agreement", country_data.has_research_agreement_with_player),
-                    ("Closed Borders", country_data.has_closed_borders_with_player),
-                    ("Rivalry", country_data.has_rivalry_with_player),
-                    ("Non-aggression Pact", country_data.has_non_aggression_pact_with_player),
-                    ("Defensive Pact", country_data.has_defensive_pact_with_player),
-                    ("Migration Treaty", country_data.has_migration_treaty_with_player),
-                    ("Federation", country_data.has_federation_with_player),
-                ]
-                details["Diplomatic Status"] = ", ".join(a for (a, x) in agreements if x) or "None"
-        else:
-            details["Attitude"] = "Player Country"
+        for key, countries in country_model.diplo_relation_details().items():
+            details[game_info.convert_id_to_name(key)] = ", ".join(
+                self._get_url_for(c) for c in sorted(countries, key=lambda c: c.country_name)
+                if c.has_met_player() or config.CONFIG.show_everything
+            )
         return details
 
     def get_war_dicts(self):

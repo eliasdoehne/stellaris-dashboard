@@ -511,6 +511,11 @@ class Country(Base):
     leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
     historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
 
+    outgoing_relations = relationship("DiplomaticRelation",
+                                      foreign_keys=lambda: [DiplomaticRelation.country_id])
+    incoming_relations = relationship("DiplomaticRelation",
+                                      foreign_keys=lambda: [DiplomaticRelation.target_country_id])
+
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
         for gov in self.governments:
@@ -529,6 +534,22 @@ class Country(Base):
 
     def has_met_player(self) -> bool:
         return self.is_player or self.first_player_contact_date is not None
+
+    def is_real_country(self):
+        return (
+                self.country_type == "default"
+                or self.country_type == "fallen_empire"
+                or self.country_type == "awakened_fallen_empire"
+        )
+
+    def diplo_relation_details(self):
+        countries_by_relation = {}
+        for relation in self.outgoing_relations:
+            for key in relation.active_relations():
+                if key not in countries_by_relation:
+                    countries_by_relation[key] = []
+                countries_by_relation[key].append(relation.target)
+        return countries_by_relation
 
 
 class Government(Base):
@@ -601,6 +622,69 @@ class Government(Base):
 
     def __str__(self):
         return f"{self.authority} {self.gov_type} {self.civics} {self.ethics}"
+
+
+class DiplomaticRelation(Base):
+    __tablename__ = 'diplo_relation_table'
+
+    diplo_relation_id = Column(Integer, primary_key=True)
+
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+    target_country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+
+    rivalry = Column(Boolean, default=False)
+    defensive_pact = Column(Boolean, default=False)
+    federation = Column(Boolean, default=False)
+    non_aggression_pact = Column(Boolean, default=False)
+    closed_borders = Column(Boolean, default=False)
+    communations = Column(Boolean, default=False)
+    migration_treaty = Column(Boolean, default=False)
+    commercial_pact = Column(Boolean, default=False)
+    neighbor = Column(Boolean, default=False)
+    research_agreement = Column(Boolean, default=False)
+
+    owner = relationship(
+        Country,
+        back_populates="outgoing_relations",
+        foreign_keys=[country_id],
+    )
+    target = relationship(
+        Country,
+        back_populates="incoming_relations",
+        foreign_keys=[target_country_id],
+    )
+
+    _dict_key_attr_mapping = dict(
+        rivalries="rivalry",
+        defensive_pacts="defensive_pact",
+        federations="federation",
+        non_aggression_pacts="non_aggression_pact",
+        closed_borders="closed_borders",
+        communations="communations",
+        migration_treaties="migration_treaty",
+        commercial_pacts="commercial_pact",
+        neighbors="neighbor",
+        research_agreements="research_agreement",
+    )
+
+    def is_active(self, key: str) -> bool:
+        if key in self._dict_key_attr_mapping:
+            return getattr(self, self._dict_key_attr_mapping[key])
+        else:
+            logger.warning(f"Queried unknown diplo relation key {key}")
+            return False
+
+    def toggle(self, key: str):
+        if key in self._dict_key_attr_mapping:
+            current_state = self.is_active(key)
+            setattr(self, self._dict_key_attr_mapping[key], not current_state)
+        else:
+            logger.warning(f"Attempted toggling unknown diplo relation key {key}")
+
+    def active_relations(self) -> Iterable[str]:
+        for key in self._dict_key_attr_mapping:
+            if self.is_active(key):
+                yield key
 
 
 class CountryData(Base):
@@ -817,6 +901,8 @@ class WarParticipant(Base):
     combat_participation = relationship("CombatParticipant", back_populates="war_participant")
 
     def get_war_goal(self):
+        if self.war_goal is None:
+            return "Unknown"
         return game_info.convert_id_to_name(self.war_goal, remove_prefix="wg")
 
 

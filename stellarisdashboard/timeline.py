@@ -24,8 +24,6 @@ class BasicGameInfo:
 
 
 class TimelineExtractor:
-    SUPPORTED_COUNTRY_TYPES = {"default", "fallen_empire", "awakened_fallen_empire"}
-
     def __init__(self):
         self.basic_info: BasicGameInfo = None
         self._session = None
@@ -124,7 +122,8 @@ class TimelineExtractor:
         yield SystemProcessor()
         yield CountryProcessor()
         yield SystemOwnershipProcessor()
-        yield DiplomacyProcessor()
+        yield DiplomacyDictProcessor()
+        yield DiplomacyRelationsProcessor()
         yield SensorLinkProcessor()
         yield CountryDataProcessor()
         yield SpeciesProcessor()
@@ -135,7 +134,7 @@ class TimelineExtractor:
         yield RulerEventProcessor()
         yield GovernmentProcessor()
         yield FactionProcessor()
-        yield DiplomacyHistoricalEventProcessor()
+        yield DiplomacyUpdatesProcessor()
         yield ScientistEventProcessor()
         yield WarProcessor()
         yield PopStatsProcessor()
@@ -408,7 +407,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 ))
 
 
-class DiplomacyProcessor(AbstractGamestateDataProcessor):
+class DiplomacyDictProcessor(AbstractGamestateDataProcessor):
     ID = "diplomacy"
     DEPENDENCIES = [CountryProcessor.ID]
 
@@ -470,6 +469,49 @@ class DiplomacyProcessor(AbstractGamestateDataProcessor):
                         self.diplomacy_dict[country_id][key].add(target)
 
 
+class DiplomacyRelationsProcessor(AbstractGamestateDataProcessor):
+    ID = "diplomacy_relatioons"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self.diplo_relations: Dict[int, Dict[int, models.DiplomaticRelation]] = None
+
+    def data(self):
+        return self.diplo_relations
+
+    def extract_data_from_gamestate(self, dependencies):
+        countries_dict: Dict[int, models.Country] = dependencies[CountryProcessor.ID]
+
+        self.diplo_relations: Dict[int, Dict[int, models.DiplomaticRelation]] = {}
+        all_relations = self._session.query(models.DiplomaticRelation).all()
+
+        for r in all_relations:
+            owner_id = r.owner.country_id_in_game
+            if owner_id not in self.diplo_relations:
+                self.diplo_relations[owner_id] = {}
+            target_id = r.target.country_id_in_game
+            self.diplo_relations[owner_id][target_id] = r
+
+        for c_id_1, c_model_1 in countries_dict.items():
+            if not c_model_1.is_real_country():
+                continue
+            if c_id_1 not in self.diplo_relations:
+                self.diplo_relations[c_id_1] = {}
+            for c_id_2, c_model_2 in countries_dict.items():
+                if not c_model_2.is_real_country():
+                    continue
+                elif c_id_1 == c_id_2:
+                    continue
+                if c_id_2 not in self.diplo_relations[c_id_1]:
+                    r = models.DiplomaticRelation(
+                        country_id=c_model_1.country_id,
+                        target_country_id=c_model_2.country_id,
+                    )
+                    self.diplo_relations[c_id_1][c_id_2] = r
+                    self._session.add(r)
+
+
 class SensorLinkProcessor(AbstractGamestateDataProcessor):
     ID = "sensor_links"
     DEPENDENCIES = [CountryProcessor.ID]
@@ -510,7 +552,7 @@ class SensorLinkProcessor(AbstractGamestateDataProcessor):
 
 class CountryDataProcessor(AbstractGamestateDataProcessor):
     ID = "country_data"
-    DEPENDENCIES = [CountryProcessor.ID, DiplomacyProcessor.ID, SensorLinkProcessor.ID, SystemOwnershipProcessor.ID]
+    DEPENDENCIES = [CountryProcessor.ID, DiplomacyDictProcessor.ID, SensorLinkProcessor.ID, SystemOwnershipProcessor.ID]
 
     def __init__(self):
         super().__init__()
@@ -526,7 +568,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
         countries_dict = dependencies[CountryProcessor.ID]
         sensor_links = dependencies[SensorLinkProcessor.ID]
 
-        diplomacy_dict = dependencies[DiplomacyProcessor.ID]
+        diplomacy_dict = dependencies[DiplomacyDictProcessor.ID]
         systems_by_country_id = dependencies[SystemOwnershipProcessor.ID]
 
         for country_id, country_model in countries_dict.items():
@@ -1190,7 +1232,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
             if not isinstance(country_dict, dict):
                 return None
             ruler_id = country_dict.get("ruler")
-            if ruler_id is None and country_model.country_type in TimelineExtractor.SUPPORTED_COUNTRY_TYPES:
+            if ruler_id is None and country_model.is_real_country():
                 logger.info(f"{self._basic_info.logger_str}         Country {country_dict['name']} has no ruler ID")
             ruler = leader_by_ingame_id.get(ruler_id)
 
@@ -1529,99 +1571,131 @@ class FactionProcessor(AbstractGamestateDataProcessor):
         self._session.add(matching_event)
 
 
-class DiplomacyHistoricalEventProcessor(AbstractGamestateDataProcessor):
+class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
     ID = "diplomacy_events"
-    DEPENDENCIES = [DiplomacyProcessor.ID, CountryProcessor.ID, RulerEventProcessor.ID]
+    DEPENDENCIES = [DiplomacyDictProcessor.ID,
+                    DiplomacyRelationsProcessor.ID,
+                    CountryProcessor.ID,
+                    RulerEventProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self._diplo_dict = None
+        self._country_dict = None
+        self._ruler_dict = None
+        self._outgoing_relations = None
 
     def extract_data_from_gamestate(self, dependencies):
-        diplo_dict = dependencies[DiplomacyProcessor.ID]
-        country_dict = dependencies[CountryProcessor.ID]
-        ruler_dict = dependencies[RulerEventProcessor.ID]
+        self._diplo_dict = dependencies[DiplomacyDictProcessor.ID]
+        self._country_dict = dependencies[CountryProcessor.ID]
+        self._ruler_dict = dependencies[RulerEventProcessor.ID]
+        self._outgoing_relations = dependencies[DiplomacyRelationsProcessor.ID]
 
-        for country_id, country_model in country_dict.items():
-            if country_model.country_type not in TimelineExtractor.SUPPORTED_COUNTRY_TYPES:
+        diplo_relations = [
+            (
+                models.HistoricalEventType.sent_rivalry,
+                models.HistoricalEventType.received_rivalry,
+                "rivalries",
+            ),
+            (
+                models.HistoricalEventType.closed_borders,
+                models.HistoricalEventType.received_closed_borders,
+                "closed_borders",
+            ),
+            (
+                models.HistoricalEventType.defensive_pact,
+                None,
+                "defensive_pacts",
+            ),
+            (
+                models.HistoricalEventType.formed_federation,
+                None,
+                "federations",
+            ),
+            (
+                models.HistoricalEventType.non_aggression_pact,
+                None,
+                "non_aggression_pacts",
+            ),
+            (
+                models.HistoricalEventType.first_contact,
+                None,
+                "communations",
+            ),
+            (
+                models.HistoricalEventType.commercial_pact,
+                None,
+                "commercial_pacts",
+            ),
+            (
+                models.HistoricalEventType.research_agreement,
+                None,
+                "research_agreements",
+            ),
+            (
+                models.HistoricalEventType.migration_treaty,
+                None,
+                "migration_treaties",
+            ),
+        ]
+
+        for country_id, country_model in self._country_dict.items():
+            if not country_model.is_real_country():
                 continue
-            diplo_relations = [
-                (
-                    models.HistoricalEventType.sent_rivalry,
-                    models.HistoricalEventType.received_rivalry,
-                    "rivalries",
-                ),
-                (
-                    models.HistoricalEventType.closed_borders,
-                    models.HistoricalEventType.received_closed_borders,
-                    "closed_borders",
-                ),
-                (
-                    models.HistoricalEventType.defensive_pact,
-                    models.HistoricalEventType.defensive_pact,
-                    "defensive_pacts",
-                ),
-                (
-                    models.HistoricalEventType.formed_federation,
-                    models.HistoricalEventType.formed_federation,
-                    "federations",
-                ),
-                (
-                    models.HistoricalEventType.non_aggression_pact,
-                    models.HistoricalEventType.non_aggression_pact,
-                    "non_aggression_pacts",
-                ),
-                (
-                    models.HistoricalEventType.first_contact,
-                    models.HistoricalEventType.first_contact,
-                    "communations",
-                ),
-                (
-                    models.HistoricalEventType.commercial_pact,
-                    models.HistoricalEventType.commercial_pact,
-                    "commercial_pacts",
-                ),
-                (
-                    models.HistoricalEventType.research_agreement,
-                    models.HistoricalEventType.research_agreement,
-                    "research_agreements",
-                ),
-                (
-                    models.HistoricalEventType.migration_treaty,
-                    models.HistoricalEventType.migration_treaty,
-                    "migration_treaties",
-                ),
-            ]
-            for event_type, reverse_event_type, diplo_dict_key in diplo_relations:
-                for target_country_id in diplo_dict[country_id][diplo_dict_key]:
-                    target_country_model = country_dict.get(target_country_id)
-                    if target_country_model.country_type not in TimelineExtractor.SUPPORTED_COUNTRY_TYPES:
-                        continue
-                    if target_country_model is None:
-                        continue
-                    is_known_to_player = (country_model.is_player or target_country_model.is_player
-                                          or (country_model.has_met_player() and target_country_model.has_met_player()))
-                    country_tuples = [
-                        (event_type, country_model, target_country_model, ruler_dict.get(country_id)),
-                        (reverse_event_type, target_country_model, country_model, ruler_dict.get(target_country_id))
-                    ]
-                    for (et, c_model, tc_model, c_ruler) in country_tuples:
-                        matching_event = self._session.query(models.HistoricalEvent).filter_by(
-                            event_type=et,
-                            country=c_model,
-                            target_country=tc_model,
-                        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
 
-                        if matching_event is None or matching_event.end_date_days < self._basic_info.date_in_days - 9 * 360:
-                            matching_event = models.HistoricalEvent(
-                                event_type=et,
-                                country=c_model,
-                                target_country=tc_model,
-                                leader=c_ruler,
-                                start_date_days=self._basic_info.date_in_days,
-                                end_date_days=self._basic_info.date_in_days,
-                                event_is_known_to_player=is_known_to_player,
-                            )
-                        else:
-                            matching_event.end_date_days = self._basic_info.date_in_days
-                            matching_event.is_known_to_player = is_known_to_player
-                        self._session.add(matching_event)
+            for target_country_id, relation in self._outgoing_relations[country_id].items():
+                target_country_model = self._country_dict.get(target_country_id)
+                if target_country_model is None or not target_country_model.is_real_country():
+                    continue
+
+                is_known_to_player = country_model.has_met_player() and target_country_model.has_met_player()
+                for event_type, reverse_event_type, diplo_dict_key in diplo_relations:
+                    country_tuples = [
+                        (event_type, country_model, target_country_model, self._ruler_dict.get(country_id)),
+                    ]
+                    if reverse_event_type is not None:
+                        country_tuples.append((reverse_event_type, target_country_model, country_model, self._ruler_dict.get(target_country_id)))
+
+
+                    is_now_active = target_country_id in self._diplo_dict[country_id][diplo_dict_key]
+                    was_active = relation.is_active(diplo_dict_key)
+
+                    if is_now_active == was_active:  # no change
+                        continue
+                    else:  # update the relation
+                        relation.toggle(diplo_dict_key)
+
+                    if is_now_active:  # Create new historical event entry
+                        for (et, c_model, tc_model, c_ruler) in country_tuples:
+                                matching_event = models.HistoricalEvent(
+                                    event_type=et,
+                                    country=c_model,
+                                    target_country=tc_model,
+                                    leader=c_ruler,
+                                    start_date_days=self._basic_info.date_in_days,
+                                    event_is_known_to_player=is_known_to_player,
+                                )
+                                self._session.add(matching_event)
+                    elif was_active:  # Set end date of existing historical event entry
+                        for (et, c_model, tc_model, _) in country_tuples:
+                                matching_event = self._query_event(
+                                    event_type=et, country=c_model, target_country=tc_model
+                                )
+                                if matching_event is not None:
+                                    matching_event.end_date_days = self._basic_info.date_in_days
+                                    matching_event.event_is_known_to_player = is_known_to_player
+                                    self._session.add(matching_event)
+                                else:
+                                    logger.warning(f"Could not find event matching {relation}, {diplo_dict_key}")
+
+    def _query_event(self, event_type: models.HistoricalEventType,
+                     country: models.Country,
+                     target_country: models.Country) -> Optional[models.HistoricalEvent]:
+        return self._session.query(models.HistoricalEvent).filter_by(
+            event_type=event_type,
+            country=country,
+            target_country=target_country,
+        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
 
 
 class ScientistEventProcessor(AbstractGamestateDataProcessor):
@@ -1739,10 +1813,9 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 continue
             war_name = war_dict.get("name", "Unnamed war")
             war_model = self._session.query(models.War).order_by(models.War.start_date_days.desc()).filter_by(
-                game=self._db_game, name=war_name
+                war_id_in_game=war_id
             ).first()
-            if war_model is None or (war_model.outcome != models.WarOutcome.in_progress
-                                     and war_model.end_date_days < self._basic_info.date_in_days - 5 * 360):
+            if war_model is None:
                 start_date_days = models.date_to_days(war_dict["start_date"])
                 war_model = models.War(
                     war_id_in_game=war_id,
