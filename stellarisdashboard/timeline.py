@@ -859,7 +859,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 if leader is None:
                     leader = self._add_new_leader(country_model, leader_id, leader_dict)
                 if leader is None:
-                    logging.info("Failed to add leader %d, %s", leader_id, leader_dict)
+                    logger.info("Failed to add leader %d, %s", leader_id, leader_dict)
                     continue
                 self.leader_model_by_ingame_id[leader_id] = leader
 

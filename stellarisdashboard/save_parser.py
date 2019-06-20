@@ -217,7 +217,7 @@ def parse_save(filename) -> Dict[str, Any]:
             if not remaining:
                 raise
             delay = config.CONFIG.save_file_delay
-            logging.info(f"Encountered BadZipFile error {e}. Next attempt in {delay} seconds, {remaining} attempts remaining.")
+            logger.info(f"Encountered BadZipFile error {e}. Next attempt in {delay} seconds, {remaining} attempts remaining.")
             time.sleep(delay)
     return gamestate
 
@@ -302,13 +302,13 @@ class SaveFileParser:
         :return: A dictionary representing the gamestate of the savefile.
         """
         self.save_filename = filename
-        logging.info(f"Parsing Save File {self.save_filename}...")
+        logger.info(f"Parsing Save File {self.save_filename}...")
         start_time = time.time()
         with zipfile.ZipFile(self.save_filename) as save_zip:
             gamestate = save_zip.read("gamestate").decode()
         self.parse_from_string(gamestate)
         end_time = time.time()
-        logging.info(f"Parsed save file {self.save_filename} in {end_time - start_time} seconds.")
+        logger.info(f"Parsed save file {self.save_filename} in {end_time - start_time} seconds.")
         return self.gamestate_dict
 
     def parse_from_string(self, s: str):
