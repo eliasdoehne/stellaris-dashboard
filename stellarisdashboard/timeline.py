@@ -1153,7 +1153,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 event_is_known_to_player=country_model.has_met_player(),
             )
         else:
-            matching_event.end_date_days = self._basic_info.date_in_days
+            matching_event.end_date_days = self._basic_info.date_in_days - 1
         self._session.add(matching_event)
 
     def _all_planetary_modifiers(self, planet_dict):
@@ -1188,7 +1188,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         if (event is not None
                 and event.leader == governor
                 and event.end_date_days > self._basic_info.date_in_days - 5 * 360):  # if the governor ruled this sector less than 5 years ago, re-use the event...
-            event.end_date_days = self._basic_info.date_in_days
+            event.end_date_days = self._basic_info.date_in_days - 1
         else:
             country_data = country_model.get_most_recent_data()
             event = models.HistoricalEvent(
@@ -1587,7 +1587,7 @@ class FactionProcessor(AbstractGamestateDataProcessor):
             )
         else:
             matching_event.is_known_to_player = is_known
-            matching_event.end_date_days = self._basic_info.date_in_days
+            matching_event.end_date_days = self._basic_info.date_in_days - 1
         self._session.add(matching_event)
 
 
@@ -1701,7 +1701,7 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                 event_type=et, country=c_model, target_country=tc_model
                             )
                             if matching_event is not None:
-                                matching_event.end_date_days = self._basic_info.date_in_days
+                                matching_event.end_date_days = self._basic_info.date_in_days - 1
                                 matching_event.event_is_known_to_player = is_known_to_player
                                 self._session.add(matching_event)
                             else:
@@ -1954,7 +1954,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             if previous_event is not None:
                 if previous_event.fleet == new_fleet_command:
                     continue
-                previous_event.end_date_days = self._basic_info.date_in_days
+                previous_event.end_date_days = self._basic_info.date_in_days - 1
                 self._session.add(previous_event)
 
             if leader_id in self._new_fleet_commands:
@@ -2022,7 +2022,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
             elif war_model.outcome != models.WarOutcome.in_progress:
                 continue
             else:
-                war_model.end_date_days = self._basic_info.date_in_days
+                war_model.end_date_days = self._basic_info.date_in_days - 1
             self._session.add(war_model)
             war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
             war_goal_defender = war_dict.get("defender_war_goal", {})
