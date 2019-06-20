@@ -388,11 +388,11 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
 
     def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
         yield "corvettes", cd.ship_count_corvette
-        yield "destroyers", cd.ship_count_destroyer
-        yield "cruisers", cd.ship_count_cruiser
-        yield "battleships", cd.ship_count_battleship
-        yield "titans", cd.ship_count_titan
-        yield "colossi", cd.ship_count_colossus
+        yield "destroyers", cd.ship_count_destroyer * 2
+        yield "cruisers", cd.ship_count_cruiser * 4
+        yield "battleships", cd.ship_count_battleship * 8
+        yield "titans", cd.ship_count_titan * 16
+        yield "colossi", cd.ship_count_colossus * 32
 
 
 class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):

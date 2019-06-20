@@ -1817,17 +1817,19 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
 
     def __init__(self):
         super().__init__()
+        self._new_fleet_commands = None
         self._fleet_compos = None
+        self._leaders = None
+        self._country_datas = None
 
     def initialize_data(self):
+        self._new_fleet_commands = {}
         self._fleet_compos = {}
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         countries = dependencies[CountryProcessor.ID]
-        leaders = dependencies[LeaderProcessor.ID]
-        country_datas = dependencies[CountryDataProcessor.ID]
-
-        new_fleet_commands = {}
+        self._leaders = dependencies[LeaderProcessor.ID]
+        self._country_datas = dependencies[CountryDataProcessor.ID]
 
         for fleet_id, fleet_dict in self._gamestate_dict["fleet"].items():
             if not isinstance(fleet_dict, dict):
@@ -1836,6 +1838,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             country = countries.get(owner_id)
             if country is None:
                 continue
+
             ships = fleet_dict.get("ships", [])
             name = fleet_dict.get("name", "Unnamed Fleet")
 
@@ -1844,52 +1847,62 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(ship_dict, dict):
                     continue
 
-                leader_id = ship_dict.get("leader")
-                if leader_id is not None:
-                    fleet_model = self._session.query(models.Fleet).filter_by(
-                        fleet_id_in_game=fleet_id
-                    ).one_or_none()
-                    if fleet_model is None:
-                        fleet_model = models.Fleet(name=name, fleet_id_in_game=fleet_id)
-                        self._session.add(fleet_model)
-                    elif fleet_model.name != name:
-                        fleet_model.name = name
-                        self._session.add(fleet_model)
+                self._check_ship_command(fleet_id, name, ship_dict)
+                self._count_ship_for_fleet_composition(owner_id, ship_dict)
 
-                    new_fleet_commands[leader_id] = fleet_model
+        self._store_fleet_composition()
+        self._update_leader_fleet_commands()
 
-                design_dict = self._gamestate_dict["ship_design"].get(ship_dict.get("ship_design"), {})
-                ship_class = design_dict.get("ship_size")
-                if isinstance(ship_class, str):
-                    if owner_id not in self._fleet_compos:
-                        self._fleet_compos[owner_id] = dict(
-                            ship_count_corvette=0,
-                            ship_count_destroyer=0,
-                            ship_count_cruiser=0,
-                            ship_count_battleship=0,
-                            ship_count_titan=0,
-                            ship_count_colossus=0,
-                        )
-                    if ship_class == "corvette":
-                        self._fleet_compos[owner_id]["ship_count_corvette"] += 1
-                    elif ship_class == "destroyer":
-                        self._fleet_compos[owner_id]["ship_count_destroyer"] += 1
-                    elif ship_class == "cruiser":
-                        self._fleet_compos[owner_id]["ship_count_cruiser"] += 1
-                    elif ship_class == "battleship":
-                        self._fleet_compos[owner_id]["ship_count_battleship"] += 1
-                    elif ship_class == "titan":
-                        self._fleet_compos[owner_id]["ship_count_titan"] += 1
-                    elif ship_class == "colossus":
-                        self._fleet_compos[owner_id]["ship_count_colossus"] += 1
+    def _check_ship_command(self, fleet_id, fleet_name, ship_dict):
+        leader_id = ship_dict.get("leader")
+        if leader_id is not None:
+            fleet_model = self._session.query(models.Fleet).filter_by(
+                fleet_id_in_game=fleet_id
+            ).one_or_none()
+            if fleet_model is None:
+                fleet_model = models.Fleet(name=fleet_name, fleet_id_in_game=fleet_id)
+                self._session.add(fleet_model)
+            elif fleet_model.name != fleet_name:
+                fleet_model.name = fleet_name
+                self._session.add(fleet_model)
+            self._new_fleet_commands[leader_id] = fleet_model
+
+    def _count_ship_for_fleet_composition(self, owner_id, ship_dict):
+        design_dict = self._gamestate_dict["ship_design"].get(ship_dict.get("ship_design"), {})
+        ship_class = design_dict.get("ship_size")
+        if isinstance(ship_class, str):
+            if owner_id not in self._fleet_compos:
+                self._fleet_compos[owner_id] = dict(
+                    ship_count_corvette=0,
+                    ship_count_destroyer=0,
+                    ship_count_cruiser=0,
+                    ship_count_battleship=0,
+                    ship_count_titan=0,
+                    ship_count_colossus=0,
+                )
+            if ship_class == "corvette":
+                self._fleet_compos[owner_id]["ship_count_corvette"] += 1
+            elif ship_class == "destroyer":
+                self._fleet_compos[owner_id]["ship_count_destroyer"] += 1
+            elif ship_class == "cruiser":
+                self._fleet_compos[owner_id]["ship_count_cruiser"] += 1
+            elif ship_class == "battleship":
+                self._fleet_compos[owner_id]["ship_count_battleship"] += 1
+            elif ship_class == "titan":
+                self._fleet_compos[owner_id]["ship_count_titan"] += 1
+            elif ship_class == "colossus":
+                self._fleet_compos[owner_id]["ship_count_colossus"] += 1
+
+    def _store_fleet_composition(self):
         for cid, composition in self._fleet_compos.items():
-            country_data = country_datas[cid]
+            country_data = self._country_datas[cid]
             for key, value in composition.items():
                 setattr(country_data, key, value)
             self._session.add(country_data)
 
-        for leader_id, leader_model in leaders.items():
-            new_fleet_command = new_fleet_commands.get(leader_id)
+    def _update_leader_fleet_commands(self):
+        for leader_id, leader_model in self._leaders.items():
+            new_fleet_command = self._new_fleet_commands.get(leader_id)
             if new_fleet_command == leader_model.fleet_command:
                 continue
 
@@ -1903,12 +1916,12 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 previous_event.end_date_days = self._basic_info.date_in_days
                 self._session.add(previous_event)
 
-            if leader_id in new_fleet_commands:
+            if leader_id in self._new_fleet_commands:
                 self._session.add(models.HistoricalEvent(
                     start_date_days=self._basic_info.date_in_days,
                     country=leader_model.country,
                     leader=leader_model,
-                    fleet=new_fleet_commands[leader_id],
+                    fleet=self._new_fleet_commands[leader_id],
                     event_type=models.HistoricalEventType.fleet_command,
                 ))
             elif leader_model.fleet_command is not None:
