@@ -925,6 +925,7 @@ class EventTemplateDictBuilder:
                     faction=event.faction,
                     target_country=event.target_country,
                     description=event.description,
+                    fleet=event.fleet,
                 )
                 if event.planet and event_dict["system"] is None:
                     event_dict["system"] = event.planet.system

@@ -383,6 +383,18 @@ class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
         yield "Engineering", cd.net_engineering_research
 
 
+class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
+    DEFAULT_VAL = 0.0
+
+    def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
+        yield "corvettes", cd.ship_count_corvette
+        yield "destroyers", cd.ship_count_destroyer
+        yield "cruisers", cd.ship_count_cruiser
+        yield "battleships", cd.ship_count_battleship
+        yield "titans", cd.ship_count_titan
+        yield "colossi", cd.ship_count_colossus
+
+
 class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     DEFAULT_VAL = 0.0
 
@@ -805,6 +817,12 @@ FLEET_SIZE_GRAPH = PlotSpecification(
     data_container_factory=FleetSizeDataContainer,
     style=PlotStyle.line,
 )
+FLEET_COMPOSITION_GRAPH = PlotSpecification(
+    plot_id='empire-fleet-composition',
+    title="Fleet Composition",
+    data_container_factory=FleetCompositionDataContainer,
+    style=PlotStyle.stacked,
+)
 SPECIES_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id='empire-species-distribution',
     title="Species Demographics",
@@ -1106,6 +1124,7 @@ ALL_PLOT_SPECIFICATIONS = [
     SURVEY_PROGRESS_GRAPH,
     MILITARY_POWER_GRAPH,
     FLEET_SIZE_GRAPH,
+    FLEET_COMPOSITION_GRAPH,
     SPECIES_DISTRIBUTION_GRAPH,
     SPECIES_HAPPINESS_GRAPH,
     SPECIES_POWER_GRAPH,
@@ -1230,6 +1249,7 @@ THEMATICALLY_GROUPED_PLOTS = {
     "Military": [
         FLEET_SIZE_GRAPH,
         MILITARY_POWER_GRAPH,
+        FLEET_COMPOSITION_GRAPH,
     ],
     "Victory": [
         VICTORY_RANK_GRAPH,

@@ -32,6 +32,7 @@ class BasicGameInfo:
             logger.info(f"{self.logger_str}         Skipping Pop stats and Budgets due to budget_pop_stats_frequency = {pop_stats_frequency}")
         return result
 
+
 class TimelineExtractor:
     def __init__(self):
         self.basic_info: BasicGameInfo = None
@@ -150,6 +151,7 @@ class TimelineExtractor:
         yield FactionProcessor()
         yield DiplomacyUpdatesProcessor()
         yield ScientistEventProcessor()
+        yield FleetInfoProcessor()
         yield WarProcessor()
         yield PopStatsProcessor()
 
@@ -806,11 +808,18 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         countries = dependencies[CountryProcessor.ID]
         self._species_dict, _ = dependencies[SpeciesProcessor.ID]
 
-        db_active_leaders = {leader.leader_id_in_game: leader
-                             for leader in self._session.query(models.Leader).filter_by(is_active=True)}
+        db_active_leaders = {}
+        db_inactive_leaders = {}
+        for leader in self._session.query(models.Leader):
+            if leader.is_active:
+                db_active_leaders[leader.leader_id_in_game] = leader
+            else:
+                db_inactive_leaders[leader.leader_id_in_game] = leader
 
         self._check_known_leaders(db_active_leaders)
         self._check_new_leaders(countries, db_active_leaders)
+
+        self.leader_model_by_ingame_id.update(db_inactive_leaders)
 
     def _check_known_leaders(self, db_active_leaders: Dict[int, models.Leader]):
         gs_active_leaders = self._gamestate_dict["leaders"]
@@ -1798,6 +1807,115 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
             self._session.add(matching_event)
 
 
+class FleetInfoProcessor(AbstractGamestateDataProcessor):
+    ID = "fleets"
+    DEPENDENCIES = [
+        CountryProcessor.ID,
+        LeaderProcessor.ID,
+        CountryDataProcessor.ID,
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self._fleet_compos = None
+
+    def initialize_data(self):
+        self._fleet_compos = {}
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        leaders = dependencies[LeaderProcessor.ID]
+        country_datas = dependencies[CountryDataProcessor.ID]
+
+        new_fleet_commands = {}
+
+        for fleet_id, fleet_dict in self._gamestate_dict["fleet"].items():
+            if not isinstance(fleet_dict, dict):
+                continue
+            owner_id = fleet_dict.get("owner")
+            country = countries.get(owner_id)
+            if country is None:
+                continue
+            ships = fleet_dict.get("ships", [])
+            name = fleet_dict.get("name", "Unnamed Fleet")
+
+            for ship_id in ships:
+                ship_dict = self._gamestate_dict["ships"].get(ship_id)
+                if not isinstance(ship_dict, dict):
+                    continue
+
+                leader_id = ship_dict.get("leader")
+                if leader_id is not None:
+                    fleet_model = self._session.query(models.Fleet).filter_by(
+                        fleet_id_in_game=fleet_id
+                    ).one_or_none()
+                    if fleet_model is None:
+                        fleet_model = models.Fleet(name=name, fleet_id_in_game=fleet_id)
+                        self._session.add(fleet_model)
+                    elif fleet_model.name != name:
+                        fleet_model.name = name
+                        self._session.add(fleet_model)
+
+                    new_fleet_commands[leader_id] = fleet_model
+
+                design_dict = self._gamestate_dict["ship_design"].get(ship_dict.get("ship_design"), {})
+                ship_class = design_dict.get("ship_size")
+                if isinstance(ship_class, str):
+                    if owner_id not in self._fleet_compos:
+                        self._fleet_compos[owner_id] = dict(
+                            ship_count_corvette=0,
+                            ship_count_destroyer=0,
+                            ship_count_cruiser=0,
+                            ship_count_battleship=0,
+                            ship_count_titan=0,
+                            ship_count_colossus=0,
+                        )
+                    if ship_class == "corvette":
+                        self._fleet_compos[owner_id]["ship_count_corvette"] += 1
+                    elif ship_class == "destroyer":
+                        self._fleet_compos[owner_id]["ship_count_destroyer"] += 1
+                    elif ship_class == "cruiser":
+                        self._fleet_compos[owner_id]["ship_count_cruiser"] += 1
+                    elif ship_class == "battleship":
+                        self._fleet_compos[owner_id]["ship_count_battleship"] += 1
+                    elif ship_class == "titan":
+                        self._fleet_compos[owner_id]["ship_count_titan"] += 1
+                    elif ship_class == "colossus":
+                        self._fleet_compos[owner_id]["ship_count_colossus"] += 1
+        for cid, composition in self._fleet_compos.items():
+            country_data = country_datas[cid]
+            for key, value in composition.items():
+                setattr(country_data, key, value)
+            self._session.add(country_data)
+
+        for leader_id, leader_model in leaders.items():
+            new_fleet_command = new_fleet_commands.get(leader_id)
+            if new_fleet_command == leader_model.fleet_command:
+                continue
+
+            previous_event = self._session.query(models.HistoricalEvent).filter_by(
+                event_type=models.HistoricalEventType.fleet_command,
+                leader=leader_model,
+            ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
+            if previous_event is not None:
+                if previous_event.fleet == new_fleet_command:
+                    continue
+                previous_event.end_date_days = self._basic_info.date_in_days
+                self._session.add(previous_event)
+
+            if leader_id in new_fleet_commands:
+                self._session.add(models.HistoricalEvent(
+                    start_date_days=self._basic_info.date_in_days,
+                    country=leader_model.country,
+                    leader=leader_model,
+                    fleet=new_fleet_commands[leader_id],
+                    event_type=models.HistoricalEventType.fleet_command,
+                ))
+            elif leader_model.fleet_command is not None:
+                leader_model.fleet_command = None
+            self._session.add(leader_model)
+
+
 class WarProcessor(AbstractGamestateDataProcessor):
     ID = "wars"
     DEPENDENCIES = [
@@ -2058,7 +2176,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
     def extract_data_from_gamestate(self, dependencies):
         if self._basic_info.skip_budget_pop_stats():
-            logger.info(f"Skipping pop stats due to budget_pop_stats_frequency = {config.CONFIG.budget_pop_stats_frequency}")
             return
 
         def init_dict():

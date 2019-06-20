@@ -139,6 +139,7 @@ class HistoricalEventType(enum.Enum):
     leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
     level_up = enum.auto()
+    fleet_command = enum.auto()
 
     # empire progress:
     researched_technology = enum.auto()
@@ -721,6 +722,13 @@ class CountryData(Base):
     net_society_research = Column(Float, nullable=False, default=0.0)
     net_engineering_research = Column(Float, nullable=False, default=0.0)
 
+    ship_count_corvette = Column(Integer, default=0)
+    ship_count_destroyer = Column(Integer, default=0)
+    ship_count_cruiser = Column(Integer, default=0)
+    ship_count_battleship = Column(Integer, default=0)
+    ship_count_titan = Column(Integer, default=0)
+    ship_count_colossus = Column(Integer, default=0)
+
     # Diplomacy towards player
     attitude_towards_player = Column(Enum(Attitude))
     has_research_agreement_with_player = Column(Boolean)
@@ -966,10 +974,12 @@ class Leader(Base):
     date_born = Column(Integer)  # estimated birthday
     last_date = Column(Integer)  # estimated death / dismissal
     is_active = Column(Boolean, index=True)
+    fleet_id = Column(ForeignKey("fleettable.fleet_id"), nullable=True)
 
     game = relationship("Game", back_populates="leaders")
     country = relationship("Country", back_populates="leaders")
     species = relationship("Species")
+    fleet_command = relationship("Fleet", back_populates="commander")
     historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
 
     def get_name(self):
@@ -1116,6 +1126,16 @@ class PlanetStats(Base):
     country_data = relationship(CountryData, back_populates="pop_stats_planets")
 
 
+class Fleet(Base):
+    __tablename__ = "fleettable"
+    fleet_id = Column(Integer, primary_key=True)
+
+    fleet_id_in_game = Column(Integer, nullable=False, index=True)
+    name = Column(String(80))
+
+    commander = relationship(Leader)
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -1138,6 +1158,7 @@ class HistoricalEvent(Base):
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
     description_id = Column(ForeignKey(SharedDescription.description_id), nullable=True)
     target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
+    fleet_id = Column(ForeignKey(Fleet.fleet_id), nullable=True)
     end_date_days = Column(Integer)
 
     country = relationship(Country, back_populates="historical_events", foreign_keys=[country_id])
@@ -1147,6 +1168,7 @@ class HistoricalEvent(Base):
     system = relationship(System, back_populates="historical_events")
     planet = relationship(Planet, back_populates="historical_events")
     faction = relationship(PoliticalFaction, back_populates="historical_events")
+    fleet = relationship(Fleet)
     db_description = relationship(SharedDescription)
 
     def __str__(self):
