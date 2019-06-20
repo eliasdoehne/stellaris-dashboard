@@ -495,6 +495,9 @@ class Country(Base):
     __tablename__ = 'countrytable'
     country_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
+    capital_planet_id = Column(ForeignKey("planettable.planet_id"))
+
+    ruler_id = Column(ForeignKey("leadertable.leader_id"))
 
     is_player = Column(Boolean)
     country_name = Column(String(80))
@@ -503,12 +506,19 @@ class Country(Base):
     country_type = Column(String(50))
 
     game = relationship("Game", back_populates="countries")
+    capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)
+
+    ruler = relationship("Leader", foreign_keys=[ruler_id])
     governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan", order_by="CountryData.date")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
     war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
     systems = relationship(System, back_populates="country")
-    leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan")
+    leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan", foreign_keys=lambda: [Leader.country_id])
+
+    traditions = relationship("Tradition", cascade="all,delete,delete-orphan")
+    ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
+
     historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
 
     outgoing_relations = relationship("DiplomaticRelation",
@@ -550,6 +560,34 @@ class Country(Base):
                     countries_by_relation[key] = []
                 countries_by_relation[key].append(relation.target)
         return countries_by_relation
+
+
+class Tradition(Base):
+    __tablename__ = 'traditionstable'
+    tradition_id = Column(Integer, primary_key=True)
+    country_id = Column(ForeignKey(Country.country_id), index=True)
+    tradition_name_id = Column(ForeignKey(SharedDescription.description_id))
+
+    db_description = relationship("SharedDescription")
+    country = relationship("Country", back_populates="traditions")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text)
+
+
+class AscensionPerk(Base):
+    __tablename__ = 'ascensionperkstable'
+    tradition_id = Column(Integer, primary_key=True)
+    country_id = Column(ForeignKey(Country.country_id), index=True)
+    perk_name_id = Column(ForeignKey(SharedDescription.description_id))
+
+    db_description = relationship("SharedDescription")
+    country = relationship("Country", back_populates="ascension_perks")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text)
 
 
 class Government(Base):
@@ -977,7 +1015,7 @@ class Leader(Base):
     fleet_id = Column(ForeignKey("fleettable.fleet_id"), nullable=True)
 
     game = relationship("Game", back_populates="leaders")
-    country = relationship("Country", back_populates="leaders")
+    country = relationship("Country", back_populates="leaders", foreign_keys=[country_id], post_update=True)
     species = relationship("Species")
     fleet_command = relationship("Fleet", back_populates="commander")
     historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
@@ -1131,6 +1169,7 @@ class Fleet(Base):
     fleet_id = Column(Integer, primary_key=True)
 
     fleet_id_in_game = Column(Integer, nullable=False, index=True)
+    is_civilian_fleet = Column(Boolean, nullable=False)
     name = Column(String(80))
 
     commander = relationship(Leader)

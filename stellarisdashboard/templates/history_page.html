@@ -541,7 +541,9 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} commanded the {{ event["fleet"].name }} fleet.
+                    {{ event["leader"].leader_class.capitalize() }} {{links[event["leader"]]|safe}} commanded the
+                    {% if event["fleet"].is_civilian_fleet %} science ship {% else %} fleet {% endif %}
+                    "{{ event["fleet"].name }}".
                 </span>
             </div>
         </li>

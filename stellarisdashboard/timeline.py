@@ -1240,7 +1240,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
         self.ruler_by_country_id: Dict[int, models.Leader] = None
-        self.planet_by_ingame_id: Dict[int, models.Planet] = None
+        self._planet_by_ingame_id: Dict[int, models.Planet] = None
 
     def initialize_data(self):
         self.ruler_by_country_id = {}
@@ -1251,7 +1251,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         countries_dict = dependencies[CountryProcessor.ID]
         leader_by_ingame_id = dependencies.get(LeaderProcessor.ID)
-        self.planet_by_ingame_id = dependencies.get(PlanetModelProcessor.ID)
+        self._planet_by_ingame_id = dependencies.get(PlanetModelProcessor.ID)
 
         for country_id, country_model in countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
@@ -1265,10 +1265,10 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
             self.ruler_by_country_id[country_id] = ruler
             if ruler is not None:
                 capital_planet = self._history_add_or_update_capital(country_model, ruler, country_dict)
-                self._history_add_or_update_ruler(ruler, country_model, capital_planet)
-            self._history_extract_tradition_events(ruler, country_model, country_dict)
-            self._history_extract_ascension_events(ruler, country_model, country_dict)
-            self._history_extract_edict_events(ruler, country_model, country_dict)
+                self._update_ruler(ruler, country_model, capital_planet)
+            self._extract_tradition_events(ruler, country_model, country_dict)
+            self._extract_ascension_events(ruler, country_model, country_dict)
+            self._extract_edict_events(ruler, country_model, country_dict)
 
     def _history_add_or_update_capital(self, country_model: models.Country,
                                        ruler: models.Leader,
@@ -1276,97 +1276,93 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
         capital_id = country_dict.get("capital")
         if not isinstance(capital_id, int):
             return
-        capital = self.planet_by_ingame_id.get(capital_id)
-        if capital is None:
-            return
-        capital_event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.capital_relocation,
-            country=country_model,
-        ).order_by(
-            models.HistoricalEvent.start_date_days.desc()
-        ).first()
-        if (capital_event is None
-                or (capital_event.planet is None and capital is not None)
-                or capital_event.planet.planet_id != capital.planet_id):
-            self._session.add(models.HistoricalEvent(
-                event_type=models.HistoricalEventType.capital_relocation,
-                country=country_model,
-                leader=ruler,
-                start_date_days=self._basic_info.date_in_days,
-                planet=capital,
-                system=capital.system if capital else None,
-                event_is_known_to_player=country_model.has_met_player(),
-            ))
-        return capital
+        capital = self._planet_by_ingame_id.get(capital_id)
+        if capital != country_model.capital:
+            country_model.capital = capital
+            self._session.add(country_model)
+            if capital is not None:
+                self._session.add(models.HistoricalEvent(
+                    event_type=models.HistoricalEventType.capital_relocation,
+                    country=country_model,
+                    leader=ruler,
+                    start_date_days=self._basic_info.date_in_days,
+                    planet=capital,
+                    system=capital.system,
+                    event_is_known_to_player=country_model.has_met_player(),
+                ))
 
-    def _history_add_or_update_ruler(self, ruler: models.Leader, country_model: models.Country, capital_planet: models.Planet):
-        most_recent_ruler_event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.ruled_empire,
-            country=country_model,
-            leader=ruler,
-        ).order_by(
-            models.HistoricalEvent.start_date_days.desc()
-        ).first()
-        capital_system = capital_planet.system if capital_planet else None
-        if most_recent_ruler_event is None:
-            start_date = self._basic_info.date_in_days
-            if start_date < 100:
-                start_date = 0
-            most_recent_ruler_event = models.HistoricalEvent(
+    def _update_ruler(self, current_ruler: models.Leader,
+                      country_model: models.Country,
+                      capital_planet: models.Planet):
+        previous_ruler = country_model.ruler
+        if current_ruler == previous_ruler:
+            return  # no change
+
+        country_model.ruler = current_ruler
+        self._session.add(country_model)
+
+        if previous_ruler is not None:
+            previous_ruler_event = self._session.query(models.HistoricalEvent).filter_by(
                 event_type=models.HistoricalEventType.ruled_empire,
                 country=country_model,
-                leader=ruler,
-                start_date_days=start_date,
+                leader=previous_ruler,
+            ).order_by(
+                models.HistoricalEvent.start_date_days.desc()
+            ).first()
+            if previous_ruler_event is not None:
+                previous_ruler_event.end_date_days = self._basic_info.date_in_days - 1
+                previous_ruler_event.is_known_to_player = country_model.has_met_player()
+                self._session.add(previous_ruler_event)
+        if current_ruler is not None:
+            new_ruler_event = models.HistoricalEvent(
+                event_type=models.HistoricalEventType.ruled_empire,
+                country=country_model,
+                leader=current_ruler,
+                start_date_days=self._basic_info.date_in_days,
                 planet=capital_planet,
-                system=capital_system,
-                end_date_days=self._basic_info.date_in_days,
+                system=capital_planet.system if capital_planet else None,
                 event_is_known_to_player=country_model.has_met_player(),
             )
-        else:
-            most_recent_ruler_event.end_date_days = self._basic_info.date_in_days - 1
-            most_recent_ruler_event.is_known_to_player = country_model.has_met_player()
-        self._session.add(most_recent_ruler_event)
+            self._session.add(new_ruler_event)
 
-    def _history_extract_tradition_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+    def _extract_tradition_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+        known_traditions = {t.db_description.text for t in country_model.traditions}
         for tradition in country_dict.get("traditions", []):
-            matching_description = self._get_or_add_shared_description(text=tradition)
-            matching_event = self._session.query(models.HistoricalEvent).filter_by(
-                country=country_model,
-                event_type=models.HistoricalEventType.tradition,
-                db_description=matching_description,
-            ).one_or_none()
-            if matching_event is None:
+            if tradition not in known_traditions:
+                matching_description = self._get_or_add_shared_description(text=tradition)
+                self._session.add(models.Tradition(
+                    country=country_model,
+                    db_description=matching_description,
+                ))
                 country_data = country_model.get_most_recent_data()
                 self._session.add(models.HistoricalEvent(
                     leader=ruler,
                     country=country_model,
                     event_type=models.HistoricalEventType.tradition,
                     start_date_days=self._basic_info.date_in_days,
-                    end_date_days=self._basic_info.date_in_days,
                     db_description=matching_description,
                     event_is_known_to_player=country_data is not None and country_data.attitude_towards_player.reveals_economy_info(),
                 ))
 
-    def _history_extract_ascension_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+    def _extract_ascension_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+        known_aps = {t.db_description.text for t in country_model.ascension_perks}
         for ascension_perk in country_dict.get("ascension_perks", []):
-            matching_description = self._get_or_add_shared_description(text=ascension_perk)
-            matching_event = self._session.query(models.HistoricalEvent).filter_by(
-                country=country_model,
-                event_type=models.HistoricalEventType.ascension_perk,
-                db_description=matching_description,
-            ).one_or_none()
-            if matching_event is None:
+            if ascension_perk not in known_aps:
+                matching_description = self._get_or_add_shared_description(text=ascension_perk)
+                self._session.add(models.AscensionPerk(
+                    country=country_model,
+                    db_description=matching_description,
+                ))
                 self._session.add(models.HistoricalEvent(
                     leader=ruler,
                     country=country_model,
                     event_type=models.HistoricalEventType.ascension_perk,
                     start_date_days=self._basic_info.date_in_days,
-                    end_date_days=self._basic_info.date_in_days,
                     db_description=matching_description,
                     event_is_known_to_player=country_model.has_met_player(),
                 ))
 
-    def _history_extract_edict_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
+    def _extract_edict_events(self, ruler: models.Leader, country_model: models.Country, country_dict):
         edict_list = country_dict.get("edicts", [])
         if not isinstance(edict_list, list):
             edict_list = [edict_list]
@@ -1374,10 +1370,8 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
             if not isinstance(edict, dict):
                 continue
             expiry_date = models.date_to_days(edict.get("date"))
-            description = self._get_or_add_shared_description(text=(edict.get("edict")))
-            matching_event = self._session.query(
-                models.HistoricalEvent
-            ).filter_by(
+            description = self._get_or_add_shared_description(text=edict.get("edict"))
+            matching_event = self._session.query(models.HistoricalEvent).filter_by(
                 event_type=models.HistoricalEventType.edict,
                 country=country_model,
                 db_description=description,
@@ -1860,7 +1854,11 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 fleet_id_in_game=fleet_id
             ).one_or_none()
             if fleet_model is None:
-                fleet_model = models.Fleet(name=fleet_name, fleet_id_in_game=fleet_id)
+                fleet_model = models.Fleet(
+                    name=fleet_name,
+                    fleet_id_in_game=fleet_id,
+                    is_civilian_fleet=self._get_ship_class(ship_dict) == 'science',
+                )
                 self._session.add(fleet_model)
             elif fleet_model.name != fleet_name:
                 fleet_model.name = fleet_name
@@ -1868,8 +1866,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             self._new_fleet_commands[leader_id] = fleet_model
 
     def _count_ship_for_fleet_composition(self, owner_id, ship_dict):
-        design_dict = self._gamestate_dict["ship_design"].get(ship_dict.get("ship_design"), {})
-        ship_class = design_dict.get("ship_size")
+        ship_class = self._get_ship_class(ship_dict)
         if isinstance(ship_class, str):
             if owner_id not in self._fleet_compos:
                 self._fleet_compos[owner_id] = dict(
@@ -1892,6 +1889,11 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 self._fleet_compos[owner_id]["ship_count_titan"] += 1
             elif ship_class == "colossus":
                 self._fleet_compos[owner_id]["ship_count_colossus"] += 1
+
+    def _get_ship_class(self, ship_dict):
+        design_dict = self._gamestate_dict["ship_design"].get(ship_dict.get("ship_design"), {})
+        ship_class = design_dict.get("ship_size")
+        return ship_class
 
     def _store_fleet_composition(self):
         for cid, composition in self._fleet_compos.items():
