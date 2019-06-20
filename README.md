@@ -25,8 +25,7 @@ Before following the instructions below, subscribe to the mod [in the Steam Work
 
 The dashboard can then be accessed with the buttons in the top right corner of the browser window:
 
-
- <img src="https://steamuserimages-a.akamaihd.net/ugc/940589883947546239/330A856DDDEFB565C299CC45D6B2C3CE2B33A9A5/" height="60">
+<img src="https://steamuserimages-a.akamaihd.net/ugc/940589883947546239/330A856DDDEFB565C299CC45D6B2C3CE2B33A9A5/" height="60">
 
 Alternatively, you can access the dashboard by opening [http://localhost:28053](http://localhost:28053) in any web browser (e.g. if you want to use it one a second monitor).
 
@@ -68,9 +67,10 @@ If you have a quad-core CPU or better, I suggest allowing 1 or 2 threads in the 
 For disk space, the database itself should require a few megabytes per in-game decade. The data for each game is stored in a separate database in your output folder (for example `output/db/unitednationsofearth6_1643184243.db`), which is named by the game ID, so you can delete them individually. To reduce the database size, you can again change the  "Only read every n-th save" setting described above.
 
 ## Update notifications
-Since the dashboard is still a work in progress, I release updates fairly regularly. If a new version of the dashboard program is released I also release an update in the Steam workshop, and you will then see a notification in the dashboard UI.
+If a new version of the dashboard program is released I also release an update in the Steam workshop, and you will then see a notification in the dashboard UI:
+<img src=https://i.imgur.com/x2voRoz.png height=100></img>
 
-This notification is shown because the workshop mod has a version ID, allowing the dashboard to compare its own version to this ID. The dashboard program itself does not send any data. It only runs locally on your computer. You can disable the update notifications in the settings menu.
+This notification is shown because the workshop mod has a version ID, allowing the dashboard to compare its own version to this ID. The dashboard program itself does not send any data. It only runs locally on your computer.
 
 ## Why a separate program?
 The dashboard is quite complex and to my knowledge, making a mod with these features by editing the game files would be impossible, or at least much more difficult. This is why you have to run the external program to use the dashboard.
