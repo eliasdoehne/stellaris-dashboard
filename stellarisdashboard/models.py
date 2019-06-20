@@ -498,6 +498,9 @@ class Country(Base):
     capital_planet_id = Column(ForeignKey("planettable.planet_id"))
 
     ruler_id = Column(ForeignKey("leadertable.leader_id"))
+    scientist_physics_id = Column(ForeignKey("leadertable.leader_id"))
+    scientist_society_id = Column(ForeignKey("leadertable.leader_id"))
+    scientist_engineering_id = Column(ForeignKey("leadertable.leader_id"))
 
     is_player = Column(Boolean)
     country_name = Column(String(80))
@@ -509,6 +512,10 @@ class Country(Base):
     capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)
 
     ruler = relationship("Leader", foreign_keys=[ruler_id])
+    scientist_physics = relationship("Leader", foreign_keys=[scientist_physics_id])
+    scientist_society = relationship("Leader", foreign_keys=[scientist_society_id])
+    scientist_engineering = relationship("Leader", foreign_keys=[scientist_engineering_id])
+
     governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
     country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan", order_by="CountryData.date")
     political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
@@ -518,6 +525,7 @@ class Country(Base):
 
     traditions = relationship("Tradition", cascade="all,delete,delete-orphan")
     ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
+    technologies = relationship("Technology", cascade="all,delete,delete-orphan")
 
     historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
 
@@ -552,6 +560,27 @@ class Country(Base):
                 or self.country_type == "awakened_fallen_empire"
         )
 
+    def get_research_leader(self, key: str):
+        if key == "physics":
+            return self.scientist_physics
+        elif key == "society":
+            return self.scientist_society
+        elif key == "engineering":
+            return self.scientist_engineering
+        else:
+            logger.warning(f"Unknown research leader ID: {key}")
+            return None
+
+    def set_research_leader(self, key: str, new_leader: "Leader"):
+        if key == "physics":
+            self.scientist_physics = new_leader
+        elif key == "society":
+            self.scientist_society = new_leader
+        elif key == "engineering":
+            self.scientist_engineering = new_leader
+        else:
+            logger.warning(f"Could not set research leader for {key}")
+
     def diplo_relation_details(self):
         countries_by_relation = {}
         for relation in self.outgoing_relations:
@@ -584,6 +613,22 @@ class AscensionPerk(Base):
 
     db_description = relationship("SharedDescription")
     country = relationship("Country", back_populates="ascension_perks")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text)
+
+
+class Technology(Base):
+    __tablename__ = 'technologytable'
+    technology_id = Column(Integer, primary_key=True)
+
+    country_id = Column(ForeignKey(Country.country_id), index=True)
+    technology_name_id = Column(ForeignKey(SharedDescription.description_id))
+    is_completed = Column(Boolean, index=True, default=False)
+
+    db_description = relationship("SharedDescription")
+    country = relationship("Country", back_populates="technologies")
 
     @property
     def name(self):

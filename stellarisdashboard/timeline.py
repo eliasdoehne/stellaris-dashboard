@@ -1732,6 +1732,15 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
             self._history_add_tech_events(country_model, self._gamestate_dict["country"][country_id])
 
     def _history_add_tech_events(self, country_model: models.Country, country_dict):
+        in_progress_techs = {}
+        completed_techs = {}
+        for t in country_model.technologies:
+            tech_id = t.db_description.text
+            if t.is_completed:
+                completed_techs[tech_id] = t
+            else:
+                in_progress_techs[tech_id] = t
+
         tech_status_dict = country_dict.get("tech_status")
         if not isinstance(tech_status_dict, dict):
             return
@@ -1745,60 +1754,90 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
                 progress_dict = progress_dict[0]
             if not isinstance(progress_dict, dict):
                 continue
+
             tech_name = progress_dict.get("technology")
             if not isinstance(tech_name, str):
                 continue
-            matching_description = self._get_or_add_shared_description(text=tech_name)
-            # TODO CHECK IF THIS WORKS FOR REPEATABLE TECH
-            matching_event = self._session.query(models.HistoricalEvent).filter_by(
-                event_type=models.HistoricalEventType.researched_technology,
-                country=country_model,
-                db_description=matching_description,
-            ).one_or_none()
-            if matching_event is None:
+
+            level = progress_dict.get("level", 1)
+            if level > 1:
+                tech_name = f"{tech_name}_level_{level}"
+
+            if tech_name in completed_techs:
+                continue
+
+            if tech_name in in_progress_techs:
+                del in_progress_techs[tech_name]
+            else:
+                matching_description = self._get_or_add_shared_description(text=tech_name)
+                self._session.add(models.Technology(
+                    country=country_model,
+                    db_description=matching_description,
+                    is_completed=False,
+                ))
                 date_str = progress_dict.get("date")
                 start_date = models.date_to_days(date_str) if date_str else self._basic_info.date_in_days
-                matching_event = models.HistoricalEvent(
+                self._session.add(models.HistoricalEvent(
                     event_type=models.HistoricalEventType.researched_technology,
                     country=country_model,
                     leader=scientist,
                     start_date_days=start_date,
-                    end_date_days=self._basic_info.date_in_days,
                     db_description=matching_description,
                     event_is_known_to_player=country_model.has_met_player(),
-                )
-            else:
-                matching_event.end_date_days = self._basic_info.date_in_days
-            self._session.add(matching_event)
+                ))
+
+        technologies = tech_status_dict.get("technology", [])
+        levels = tech_status_dict.get("level", [])
+        if isinstance(technologies, list) and isinstance(levels, list):
+            for tech_name, level in zip(technologies, levels):
+                if level > 1:
+                    tech_name = f"{tech_name}_level_{level}"
+                if tech_name in in_progress_techs:
+                    matching_event = self._get_matching_historical_event(country_model, tech_name)
+                    matching_event.end_date_days = self._basic_info.date_in_days - 1
+                    self._session.add(matching_event)
+                    tech_model = in_progress_techs[tech_name]
+                    tech_model.is_completed = True
+                    self._session.add(tech_model)
+
+    def _get_matching_historical_event(self, country_model, tech_name):
+        matching_description = self._get_or_add_shared_description(text=tech_name)
+        matching_event = self._session.query(models.HistoricalEvent).filter_by(
+            event_type=models.HistoricalEventType.researched_technology,
+            country=country_model,
+            db_description=matching_description,
+        ).one_or_none()
+        return matching_event
 
     def history_add_research_leader_events(self, country_model: models.Country,
-                                           scientist: models.Leader,
+                                           current_research_leader: models.Leader,
                                            tech_type: str):
-        """ Record which scientist was in charge of leading research for a given tech type. """
-        if scientist is None:
+        previous_research_leader = country_model.get_research_leader(tech_type)
+        if current_research_leader == previous_research_leader:
             return
 
-        description = self._get_or_add_shared_description(text=tech_type.capitalize())
-        matching_event = self._session.query(models.HistoricalEvent).filter_by(
-            event_type=models.HistoricalEventType.research_leader,
-            country=country_model,
-            db_description=description,
-        ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
-        if matching_event is None:
-            is_known_to_player = country_model.has_met_player()
-            new_event = models.HistoricalEvent(
+        country_model.set_research_leader(tech_type, current_research_leader)
+        self._session.add(country_model)
+
+        if previous_research_leader is not None:
+            matching_event = self._session.query(models.HistoricalEvent).filter_by(
                 event_type=models.HistoricalEventType.research_leader,
                 country=country_model,
-                leader=scientist,
-                start_date_days=self._basic_info.date_in_days,
-                end_date_days=self._basic_info.date_in_days,
-                db_description=description,
-                event_is_known_to_player=is_known_to_player,
-            )
-            self._session.add(new_event)
-        elif matching_event.leader == scientist:
-            matching_event.end_date_days = self._basic_info.date_in_days
+                leader=previous_research_leader,
+            ).order_by(models.HistoricalEvent.start_date_days.desc()).first()
+            matching_event.end_date_days = self._basic_info.date_in_days - 1
+            matching_event.event_is_known_to_player = matching_event.event_is_known_to_player or country_model.has_met_player()
             self._session.add(matching_event)
+        if current_research_leader is not None:
+            description = self._get_or_add_shared_description(text=tech_type.capitalize())
+            self._session.add(models.HistoricalEvent(
+                event_type=models.HistoricalEventType.research_leader,
+                country=country_model,
+                leader=current_research_leader,
+                start_date_days=self._basic_info.date_in_days,
+                db_description=description,
+                event_is_known_to_player=country_model.has_met_player(),
+            ))
 
 
 class FleetInfoProcessor(AbstractGamestateDataProcessor):
