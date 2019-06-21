@@ -1969,12 +1969,20 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 self._session.add(previous_event)
 
             if leader_id in self._new_fleet_commands:
+                country = leader_model.country
+                cd = self._country_datas.get(country.country_id_in_game)
+                event_is_known = (
+                        country.is_player
+                        or cd is not None and (new_fleet_command.is_civilian_fleet and cd.show_tech_info())
+                        or cd is not None and (not new_fleet_command.is_civilian_fleet and cd.show_military_info())
+                )
                 self._session.add(models.HistoricalEvent(
                     start_date_days=self._basic_info.date_in_days,
-                    country=leader_model.country,
+                    country=country,
                     leader=leader_model,
                     fleet=self._new_fleet_commands[leader_id],
                     event_type=models.HistoricalEventType.fleet_command,
+                    event_is_known_to_player=event_is_known
                 ))
             elif leader_model.fleet_command is not None:
                 leader_model.fleet_command = None
