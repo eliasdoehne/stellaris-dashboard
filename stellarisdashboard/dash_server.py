@@ -863,8 +863,8 @@ class EventFilter:
             self.scope_threshold = min([
                 models.HistoricalEventScope.galaxy,
                 models.HistoricalEventScope.country if self.country_filter is not None else float('inf'),
-                models.HistoricalEventScope.all if self.leader_filter is not None else float('inf'),
-                models.HistoricalEventScope.all if self.system_filter is not None else float('inf'),
+                models.HistoricalEventScope.leader if self.leader_filter is not None else float('inf'),
+                models.HistoricalEventScope.system if self.system_filter is not None else float('inf'),
                 models.HistoricalEventScope.all if self.planet_filter is not None else float('inf'),
                 models.HistoricalEventScope.all if self.war_filter is not None else float('inf'),
             ])

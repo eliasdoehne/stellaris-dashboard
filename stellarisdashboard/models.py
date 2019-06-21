@@ -195,9 +195,6 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.ruled_empire,
             HistoricalEventType.habitat_ringworld_construction,
             HistoricalEventType.megastructure_construction,
-            HistoricalEventType.colonization,
-            HistoricalEventType.gained_system,
-            HistoricalEventType.lost_system,
             HistoricalEventType.new_faction,
             HistoricalEventType.government_reform,
             HistoricalEventType.species_rights_reform,
@@ -205,6 +202,8 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.non_aggression_pact,
             HistoricalEventType.defensive_pact,
             HistoricalEventType.formed_federation,
+            HistoricalEventType.migration_treaty,
+            HistoricalEventType.research_agreement,
             HistoricalEventType.commercial_pact,
             HistoricalEventType.closed_borders,
             HistoricalEventType.received_closed_borders,
@@ -218,6 +217,8 @@ class HistoricalEventType(enum.Enum):
             return HistoricalEventScope.galaxy
         elif self in {
             HistoricalEventType.discovered_new_system,
+            HistoricalEventType.colonization,
+            HistoricalEventType.fleet_command,
             HistoricalEventType.expanded_to_system,
             HistoricalEventType.capital_relocation,
             HistoricalEventType.sector_creation,
@@ -231,6 +232,8 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.tradition,
             HistoricalEventType.ascension_perk,
             HistoricalEventType.edict,
+            HistoricalEventType.gained_system,
+            HistoricalEventType.lost_system,
         }:
             return HistoricalEventScope.country
         elif self in {
