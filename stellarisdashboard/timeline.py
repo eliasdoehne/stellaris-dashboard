@@ -17,6 +17,7 @@ class BasicGameInfo:
     game_id: str
     date_in_days: int
     player_country_id: int
+    other_players: Set[int]
     number_of_parsed_saves: int
     _logged_pop_stats_skip: bool = False
 
@@ -39,6 +40,7 @@ class TimelineExtractor:
         self._session = None
         self._gamestate_dict = None
         self.number_of_parsed_saves = 0
+        self._other_players = set()
 
     def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any]):
         self._gamestate_dict = gamestate_dict
@@ -115,6 +117,7 @@ class TimelineExtractor:
             game_id=game_id,
             date_in_days=date_in_days,
             player_country_id=self._identify_player_country(),
+            other_players=self._other_players,
             number_of_parsed_saves=self.number_of_parsed_saves,
         )
 
@@ -124,12 +127,17 @@ class TimelineExtractor:
             if len(players) == 1:
                 return players[0]["country"]
             else:
-                if not config.CONFIG.steam_username:
-                    raise ValueError("Please configure your Steam username in the Dashboard settings for multiplayer games.")
+                playercountry = None
+                if not config.CONFIG.mp_username:
+                    raise ValueError("Please configure your Multiplayer username in the Dashboard settings for multiplayer games.")
                 for player in players:
-                    if player["name"] == config.CONFIG.steam_username:
-                        return player["country"]
-                raise ValueError(f"Could not find player matching Steam username {config.CONFIG.steam_username}")
+                    if player["name"] == config.CONFIG.mp_username:
+                        playercountry = player["country"]
+                    else:
+                        self._other_players.add(player["country"])
+                if playercountry is None:
+                    raise ValueError(f"Could not find player matching Multiplayer username {config.CONFIG.mp_username}")
+                return playercountry
         # observer mode
         return None
 
@@ -293,6 +301,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                 country_model = models.Country(
                     is_player=(country_id == self._basic_info.player_country_id),
                     country_id_in_game=country_id,
+                    is_other_player=country_id in self._basic_info.other_players,
                     game=self._db_game,
                     country_type=country_type,
                     country_name=country_name
@@ -708,7 +717,8 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
 
             if not country.is_player and self._basic_info.skip_budget_pop_stats():
                 continue
-
+            if country.country_id_in_game in self._basic_info.other_players:
+                continue
             if country.is_player or config.CONFIG.read_non_player_countries:
                 self._session.add(models.BudgetItem(
                     country_data=country_data,
@@ -2240,6 +2250,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         # TODO: Maybe make it possible to read other countries' pop stats??
         for country_id_in_game, country_model in countries_dict.items():
             if not config.CONFIG.read_non_player_countries and not country_model.is_player:
+                continue
+            if country_id_in_game in self._basic_info.other_players:
                 continue
             if not country_model.is_player and self._basic_info.skip_budget_pop_stats():
                 continue

@@ -503,6 +503,7 @@ class Country(Base):
     scientist_engineering_id = Column(ForeignKey("leadertable.leader_id"))
 
     is_player = Column(Boolean)
+    is_other_player = Column(Boolean)
     country_name = Column(String(80))
     country_id_in_game = Column(Integer)
     first_player_contact_date = Column(Integer)

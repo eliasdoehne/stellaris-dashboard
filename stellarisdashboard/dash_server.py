@@ -245,10 +245,10 @@ def settings_page():
             "name": "Save file path (applies after restart, submit empty to restore default)",
             "description": "This controls the path where the dashboard will look for new or updated Stellaris save files. If you leave this input empty, the value will be reset to the default value. The new value is applied after restarting the dashboard program.",
         },
-        "steam_username": {
+        "mp_username": {
             "type": t_str,
-            "value": current_settings["steam_username"],
-            "name": "Your Steam username (required for multiplayer)",
+            "value": current_settings["mp_username"],
+            "name": "Your Multiplayer username",
             "description": "",
         },
         "max_file_read_attempts": {

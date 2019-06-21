@@ -236,8 +236,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
                     added_new_val = True
                     self._add_new_value_to_data_dict(cd.country.country_name, new_val, default_val=self.DEFAULT_VAL)
             except Exception as e:
-                print(e)
-                print(cd.country.country_name)
+                logger.exception(cd.country.country_name)
         if not added_new_val:
             self.dates.pop()  # if nothing was added, we don't need to remember the date.
         self._pad_data_dict(default_val=self.DEFAULT_VAL)
@@ -249,91 +248,91 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
 
 class PlanetCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_geography_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
             return cd.owned_planets
 
 
 class SystemCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_geography_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
             return cd.controlled_systems
 
 
 class TotalEnergyIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_economic_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
             return cd.net_energy
 
 
 class TotalMineralsIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_economic_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
             return cd.net_minerals
 
 
 class TotalAlloysIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_economic_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
             return cd.net_alloys
 
 
 class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_economic_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
             return cd.net_consumer_goods
 
 
 class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_economic_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
             return cd.net_food
 
 
 class TechCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_tech_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_tech_info():
             return cd.tech_count
 
 
 class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_tech_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_tech_info():
             return cd.exploration_progress
 
 
 class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_tech_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_tech_info():
             return cd.net_physics_research + cd.net_society_research + cd.net_engineering_research
 
 
 class FleetSizeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_military_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_military_info():
             return cd.fleet_size
 
 
 class MilitaryPowerDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_military_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_military_info():
             return cd.military_power
 
 
 class VictoryScoreDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_geography_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
             return cd.victory_score
 
 
 class EconomyScoreDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_geography_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
             return cd.economy_power
 
 
 class VictoryRankDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if config.CONFIG.show_everything or cd.show_geography_info():
+        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
             return cd.victory_rank
 
 
@@ -344,22 +343,20 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
         if player_cd is None or not self._include(player_cd):
             return
 
-        if player_cd is None:
-            return
-
         self.dates.append(gs.date / 360.0)
         try:
             for key, new_val in self._iterate_budgetitems(player_cd):
                 if new_val is not None:
                     self._add_new_value_to_data_dict(key, new_val, default_val=self.DEFAULT_VAL)
         except Exception as e:
-            print(e)
-            print(player_cd.country.country_name)
+            logger.exception(player_cd.country.country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
 
     def _get_player_countrydata(self, gs: models.GameState) -> models.CountryData:
         player_cd = None
         for cd in gs.country_data:
+            if cd.country.is_other_player:
+                continue
             if (self._country_perspective is None and cd.country.is_player) or cd.country.country_id_in_game == self._country_perspective:
                 player_cd = cd
                 break
