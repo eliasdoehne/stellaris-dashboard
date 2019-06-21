@@ -488,7 +488,7 @@ def update_country_select_options(search):
     options = [{'label': 'None', 'value': None}]
     with models.get_db_session(game_id) as session:
         for c in session.query(models.Country):
-            if c.is_real_country() and (c.has_met_player() or config.CONFIG.show_everything):
+            if c.is_real_country() and (c.has_met_player() or config.CONFIG.show_everything) and not c.is_other_player:
                 options.append({'label': c.country_name, 'value': c.country_id_in_game})
     return options
 
@@ -907,6 +907,8 @@ class EventTemplateDictBuilder:
                     continue
                 if not config.CONFIG.show_everything and not event.event_is_known_to_player:
                     continue
+                if event.country.is_other_player and not event.event_is_known_to_player:
+                    continue
                 country_type = event.country.country_type if event.country is not None else None
                 if config.CONFIG.only_show_default_empires:
                     if country_type not in ["default", "fallen_empire", "awakened_fallen_empire"]:
@@ -1020,7 +1022,8 @@ class EventTemplateDictBuilder:
                             key=lambda s: s.name)
         )
         if system_model.country is not None and (system_model.country.has_met_player()
-                                                 or config.CONFIG.show_everything):
+                                                 or (config.CONFIG.show_everything
+                                                     and not system_model.country.is_other_player)):
             details["Owner"] = self._get_url_for(system_model.country)
 
         details["Planets"] = ", ".join(p.name for p in system_model.planets)
@@ -1060,7 +1063,7 @@ class EventTemplateDictBuilder:
         for key, countries in country_model.diplo_relation_details().items():
             details[game_info.convert_id_to_name(key)] = ", ".join(
                 self._get_url_for(c) for c in sorted(countries, key=lambda c: c.country_name)
-                if c.has_met_player() or config.CONFIG.show_everything
+                if c.has_met_player() or (config.CONFIG.show_everything and not c.is_other_player)
             )
         return details
 
