@@ -120,7 +120,6 @@ class PlotDataManager:
         self.data_containers_by_plot_id: Dict[str, AbstractPlotDataContainer] = None
 
     def initialize(self):
-        print(f"perspective: {self._country_perspective}")
         self.last_date = -float("inf")
         self._loaded_gamestates = 0
         self.show_everything = config.CONFIG.show_everything
@@ -340,7 +339,7 @@ class VictoryRankDataContainer(AbstractPerCountryDataContainer):
 
 class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
     def extract_data_from_gamestate(self, gs: models.GameState):
-        player_cd = self._get_player_countrdata(gs)
+        player_cd = self._get_player_countrydata(gs)
 
         if player_cd is None or not self._include(player_cd):
             return
@@ -358,10 +357,10 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
             print(player_cd.country.country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
 
-    def _get_player_countrdata(self, gs: models.GameState) -> models.CountryData:
+    def _get_player_countrydata(self, gs: models.GameState) -> models.CountryData:
         player_cd = None
         for cd in gs.country_data:
-            if cd.country.is_player or cd.country.country_id_in_game == self._country_perspective:
+            if (self._country_perspective is None and cd.country.is_player) or cd.country.country_id_in_game == self._country_perspective:
                 player_cd = cd
                 break
         return player_cd

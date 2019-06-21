@@ -138,7 +138,7 @@ class TimelineExtractor:
         yield CountryProcessor()
         yield SystemOwnershipProcessor()
         yield DiplomacyDictProcessor()
-        yield DiplomacyRelationsProcessor()
+        yield DiplomaticRelationsProcessor()
         yield SensorLinkProcessor()
         yield CountryDataProcessor()
         yield SpeciesProcessor()
@@ -485,8 +485,8 @@ class DiplomacyDictProcessor(AbstractGamestateDataProcessor):
                         self.diplomacy_dict[country_id][key].add(target)
 
 
-class DiplomacyRelationsProcessor(AbstractGamestateDataProcessor):
-    ID = "diplomacy_relatioons"
+class DiplomaticRelationsProcessor(AbstractGamestateDataProcessor):
+    ID = "diplomatic_relations"
     DEPENDENCIES = [CountryProcessor.ID]
 
     def __init__(self):
@@ -678,6 +678,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
     def _extract_country_economy(self, country_data: models.CountryData, country_data_dict):
         budget_dict = country_data_dict.get("budget", {}).get("current_month", {}).get("balance", {})
 
+        country = country_data.country
         for item_name, values in budget_dict.items():
             if item_name == "none":
                 continue
@@ -705,14 +706,13 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_society_research += society
             country_data.net_engineering_research += engineering
 
-            if self._basic_info.skip_budget_pop_stats():
+            if not country.is_player and self._basic_info.skip_budget_pop_stats():
                 continue
 
-            if country_data.country.is_player or config.CONFIG.read_non_player_countries:
-                description = self._get_or_add_shared_description(item_name)
+            if country.is_player or config.CONFIG.read_non_player_countries:
                 self._session.add(models.BudgetItem(
                     country_data=country_data,
-                    db_budget_item_name=description,
+                    db_budget_item_name=self._get_or_add_shared_description(item_name),
                     net_energy=energy,
                     net_minerals=minerals,
                     net_food=food,
@@ -1235,6 +1235,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
         CountryProcessor.ID,
         LeaderProcessor.ID,
         PlanetModelProcessor.ID,
+        PlanetModelProcessor.ID,
     ]
 
     def __init__(self):
@@ -1594,7 +1595,7 @@ class FactionProcessor(AbstractGamestateDataProcessor):
 class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
     ID = "diplomacy_events"
     DEPENDENCIES = [DiplomacyDictProcessor.ID,
-                    DiplomacyRelationsProcessor.ID,
+                    DiplomaticRelationsProcessor.ID,
                     CountryProcessor.ID,
                     RulerEventProcessor.ID]
 
@@ -1609,7 +1610,7 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
         self._diplo_dict = dependencies[DiplomacyDictProcessor.ID]
         self._country_dict = dependencies[CountryProcessor.ID]
         self._ruler_dict = dependencies[RulerEventProcessor.ID]
-        self._outgoing_relations = dependencies[DiplomacyRelationsProcessor.ID]
+        self._outgoing_relations = dependencies[DiplomaticRelationsProcessor.ID]
 
         diplo_relations = [
             (
@@ -2229,9 +2230,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         self._initialize_planet_owner_dict()
 
     def extract_data_from_gamestate(self, dependencies):
-        if self._basic_info.skip_budget_pop_stats():
-            return
-
         def init_dict():
             return dict(pop_count=0, crime=0, happiness=0, power=0)
 
@@ -2243,7 +2241,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         for country_id_in_game, country_model in countries_dict.items():
             if not config.CONFIG.read_non_player_countries and not country_model.is_player:
                 continue
-
+            if not country_model.is_player and self._basic_info.skip_budget_pop_stats():
+                continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}
             stats_by_faction = {}

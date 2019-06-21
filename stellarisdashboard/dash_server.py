@@ -386,7 +386,7 @@ timeline_app.layout = html.Div([
         dcc.Dropdown(
             id='country-perspective-dropdown',
             options=[],
-            placeholder="Select a country ",
+            placeholder="Select a country",
             value=None,
             style=DROPDOWN_STYLE,
         ),
@@ -480,13 +480,17 @@ def update_ledger_link(search):
 def update_country_select_options(search):
     game_id, _ = _get_game_ids_matching_url(search)
     games_dict = models.get_available_games_dict()
+
     if game_id not in games_dict:
         logger.warning(f"Game ID {game_id} does not match any known game!")
         return []
 
+    options = [{'label': 'None', 'value': None}]
     with models.get_db_session(game_id) as session:
-        return [{'label': c.country_name, 'value': c.country_id_in_game}
-                for c in session.query(models.Country) if c.is_real_country()]
+        for c in session.query(models.Country):
+            if c.is_real_country() and (c.has_met_player() or config.CONFIG.show_everything):
+                options.append({'label': c.country_name, 'value': c.country_id_in_game})
+    return options
 
 
 @timeline_app.callback(Output('tab-content', 'children'),
@@ -551,7 +555,8 @@ def _get_url_params(url: str) -> Dict[str, List[str]]:
 
 
 def _get_game_ids_matching_url(url):
-    game_id = _get_url_params(url).get("game_name", [None])[0]
+    url_params = _get_url_params(url)
+    game_id = url_params.get("game_name", [None])[0]
     if game_id is None:
         game_id = ""
     matches = models.get_known_games(game_id)
