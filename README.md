@@ -4,7 +4,6 @@ The Stellaris Dashboard reads your Stellaris save files while you play the game 
 
 Some screenshots are available on the Steam workshop page: https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202 
 
-**Important**: This program only works for **singleplayer** games. Ironman mode should work. Loading old save files is not supported and may or may not work as expected.
 
 # Features
 
@@ -12,8 +11,9 @@ There are two components: A graph-based **timeline dashboard** which shows up to
 
 Subscribing to [the mod](https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202) on the Steam workshop makes the dashboard directly available in-game through the integrated browser, which can be accessed by the help icon in the bottom right of the Stellaris UI, or with the keyboard shortcut `ALT-B`.
 
-For game balance and immersion, only some information about AI empires is shown by default. If you want, you can also configure the program to show everything in the settings menu.
+For game balance and immersion, only some information about other empires is shown by default. If you want, you can also configure the program to show everything in the settings menu.
 
+Support for Multiplayer mode is **experimental**. The dashboard will avoid showing information about other player controlled empires, even if the "Show all empires checkbox" is ticked in the settings. To use the dashboard in multiplayer, you must first configure your multiplayer username in the dashboard settings menu.
 
 # Installation
 
@@ -24,7 +24,6 @@ Before following the instructions below, subscribe to the mod [in the Steam Work
  <img src="https://steamuserimages-a.akamaihd.net/ugc/940589883945878302/66874C499AB7088E309D95FFB5A720F80E229BE0/" height="120">
 
 The dashboard can then be accessed with the buttons in the top right corner of the browser window:
-
 
  <img src="https://steamuserimages-a.akamaihd.net/ugc/940589883947546239/330A856DDDEFB565C299CC45D6B2C3CE2B33A9A5/" height="60">
 
