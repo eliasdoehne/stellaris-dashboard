@@ -44,4 +44,4 @@ coll = COLLECT(exe,
                a.datas,
                strip=False,
                upx=True,
-               name='stellarisdashboard-win64')
+               name='stellarisdashboard-win')
