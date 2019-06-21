@@ -12,16 +12,26 @@ import dataclasses
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 CPU_COUNT = mp.cpu_count()
 
+LOG_FORMAT = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 
 def initialize_logger():
     # Add a stream handler for stdout output
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch.setFormatter(formatter)
-    root_logger.addHandler(ch)
+    stdout_ch = logging.StreamHandler(sys.stdout)
+    stdout_ch.setLevel(logging.INFO)
+    stdout_ch.setFormatter(LOG_FORMAT)
+    root_logger.addHandler(stdout_ch)
+
+
+def _add_file_handler():
+    if CONFIG.log_to_file:
+        root_logger = logging.getLogger()
+        file_ch = logging.FileHandler(CONFIG.base_output_path / "logs.txt")
+        file_ch.setLevel(logging.WARN)
+        file_ch.setFormatter(LOG_FORMAT)
+        root_logger.addHandler(file_ch)
 
 
 initialize_logger()
@@ -74,6 +84,7 @@ DEFAULT_SETTINGS = dict(
     plot_time_resolution=200,
     normalize_stacked_plots=False,
     use_two_y_axes_for_budgets=False,
+    log_to_file=False,
     plot_width=1150,
     plot_height=640,
 )
@@ -112,6 +123,7 @@ class Config:
     plot_time_resolution: int = None
 
     debug_mode: bool = False
+    log_to_file: bool = False
 
     PATH_KEYS = {
         "base_output_path",
@@ -125,6 +137,7 @@ class Config:
         "only_show_default_empires",
         "normalize_stacked_plots",
         "use_two_y_axes_for_budgets",
+        "log_to_file",
     }
     INT_KEYS = {
         "port",
@@ -259,3 +272,4 @@ if not CONFIG.base_output_path.exists():
     (CONFIG.base_output_path / "db").mkdir(parents=True)
     (CONFIG.base_output_path / "output").mkdir(parents=True)
 update_log_level()
+_add_file_handler()
