@@ -1,11 +1,13 @@
 import abc
 import dataclasses
 import datetime
+import functools
 import itertools
 import logging
 import random
 import time
-from typing import Dict, Any, Set, Iterable, Optional
+import collections
+from typing import Dict, Any, Set, Iterable, Optional, Counter, Union, Collection
 
 from stellarisdashboard import models, game_info, config
 
@@ -197,6 +199,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         pass
 
+    @functools.lru_cache()
     def _get_or_add_shared_description(self, text: str) -> models.SharedDescription:
         matching_description = self._session.query(models.SharedDescription).filter_by(
             text=text,
@@ -271,6 +274,15 @@ class SystemProcessor(AbstractGamestateDataProcessor):
 
         self._session.add(system_model)
         return system_model
+
+
+class BypassProcessor(AbstractGamestateDataProcessor):
+    """Process Wormholes and LGates"""
+    ID = "bypass"
+    DEPENDENCIES = [SystemProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        pass  # TODO
 
 
 class CountryProcessor(AbstractGamestateDataProcessor):
@@ -968,17 +980,48 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
             if isinstance(planets, int):
                 planets = [planets]
             for ingame_id in planets:
-                if ingame_id in self.planets_by_ingame_id:
+                planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id)
+                if not isinstance(planet_dict, dict):
                     continue
-                system_model = systems_by_id.get(system_id)
-                self.planets_by_ingame_id[ingame_id] = self._add_planet_model(
-                    planet_id=ingame_id,
-                    system_model=system_model
+
+                if ingame_id not in self.planets_by_ingame_id:
+                    system_model = systems_by_id.get(system_id)
+                    self.planets_by_ingame_id[ingame_id] = self._add_planet_model(
+                        planet_dict=planet_dict,
+                        planet_id=ingame_id,
+                        system_model=system_model,
+                    )
+
+                planet_model = self.planets_by_ingame_id[ingame_id]
+                self._update_countable_planet_attributes(
+                    planet_model=planet_model,
+                    db_entities=planet_model.districts,
+                    current_entities=planet_dict.get('district', []),
+                    db_entity_factory=models.PlanetDistrict,
+                )
+                buildings = planet_dict.get('building', [])
+                if not isinstance(buildings, list):
+                    buildings = [buildings]
+                self._update_countable_planet_attributes(
+                    planet_model=planet_model,
+                    db_entities=planet_model.buildings,
+                    current_entities=buildings,
+                    db_entity_factory=models.PlanetBuilding,
+                )
+                self._update_countable_planet_attributes(
+                    planet_model=planet_model,
+                    db_entities=planet_model.deposits,
+                    current_entities=self._get_deposits(planet_dict),
+                    db_entity_factory=models.PlanetDeposit,
+                )
+                self._update_planet_modifiers(
+                    planet_model=planet_model,
+                    planet_dict=planet_dict,
                 )
 
     def _add_planet_model(self, system_model: models.System,
-                          planet_id: int) -> models.Planet:
-        planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
+                          planet_id: int,
+                          planet_dict: Dict) -> models.Planet:
         planet_class = planet_dict.get("planet_class")
         planet_name = planet_dict.get("name")
         colonize_date = planet_dict.get("colonize_date")
@@ -993,6 +1036,57 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
         )
         self._session.add(planet_model)
         return planet_model
+
+    def _update_countable_planet_attributes(
+            self, planet_model: models.Planet,
+            db_entities: Iterable[Union[models.PlanetDistrict, models.PlanetBuilding, models.PlanetDeposit]],
+            current_entities: Iterable[str],
+            db_entity_factory
+    ):
+        current_entity_counter = collections.Counter(current_entities)
+        for entity_model in db_entities:
+            text = entity_model.db_description.text
+            if current_entity_counter[text] != entity_model.count:
+                entity_model.count = current_entity_counter[text]
+                self._session.add(entity_model)
+            del current_entity_counter[text]
+
+        for entity, count in current_entity_counter.items():
+            db_description = self._get_or_add_shared_description(entity)
+            self._session.add(db_entity_factory(
+                db_description=db_description,
+                planet=planet_model,
+                count=count,
+            ))
+
+    def _update_planet_modifiers(self, planet_model: models.Planet, planet_dict: Dict):
+        current_modifiers = dict(_all_planetary_modifiers(planet_dict))
+
+        for db_modifier in planet_model.modifiers:
+            assert isinstance(db_modifier, models.PlanetModifier)
+            expiration = db_modifier.expiry_date
+            modifier_text = db_modifier.db_description.text
+            if modifier_text not in current_modifiers:
+                self._session.delete(db_modifier)
+            else:
+                if expiration != current_modifiers[modifier_text]:
+                    db_modifier.expiry_date = expiration
+                    self._session.add(db_modifier)
+                del current_modifiers[modifier_text]
+
+        for modifier, expiration in current_modifiers.items():
+            db_description = self._get_or_add_shared_description(modifier)
+            self._session.add(models.PlanetModifier(
+                planet=planet_model,
+                expiry_date=expiration,
+                db_description=db_description,
+            ))
+
+    def _get_deposits(self, planet_dict):
+        for deposit in planet_dict.get('deposits', []):
+            d_dict = self._gamestate_dict.get('deposit', {}).get(deposit)
+            if isinstance(d_dict, dict) and 'type' in d_dict:
+                yield d_dict.get('type', 'deposit_unknown')
 
 
 class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
@@ -1062,7 +1156,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
             planet_class = planet_dict.get("planet_class")
             is_colonizable = game_info.is_colonizable_planet(planet_class) or "colonize_date" in planet_dict
             is_destroyed = game_info.is_destroyed_planet(planet_class)
-            is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in self._all_planetary_modifiers(planet_dict))
+            is_terraformable = is_colonizable or any(m == "terraforming_candidate" for (m, _) in _all_planetary_modifiers(planet_dict))
 
             planet_model = self._planets_dict.get(planet_id)
             if planet_model is None:
@@ -1165,26 +1259,6 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         else:
             matching_event.end_date_days = self._basic_info.date_in_days - 1
         self._session.add(matching_event)
-
-    def _all_planetary_modifiers(self, planet_dict):
-        modifiers = planet_dict.get("timed_modifiers", [])
-        if not isinstance(modifiers, list):
-            modifiers = [modifiers]
-        for m in modifiers:
-            if not isinstance(m, dict):
-                continue
-            modifier = m.get("modifier", "no modifier")
-            duration = m.get("days")
-            if duration == -1 or not isinstance(duration, int):
-                duration = None
-            yield modifier, duration
-
-        planet_modifiers = planet_dict.get("planet_modifier", [])
-        if not isinstance(planet_modifiers, list):
-            planet_modifiers = [planet_modifiers]
-        for pm in planet_modifiers:
-            if pm is not None:
-                yield pm, None
 
     def _history_add_or_update_governor_sector_events(self, country_model,
                                                       sector_capital: models.Planet,
@@ -2462,3 +2536,24 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 continue
             for planet_id in country_dict.get("owned_planets", []):
                 self.country_by_planet_id[planet_id] = country_id
+
+
+def _all_planetary_modifiers(planet_dict):
+    modifiers = planet_dict.get("timed_modifiers", [])
+    if not isinstance(modifiers, list):
+        modifiers = [modifiers]
+    for m in modifiers:
+        if not isinstance(m, dict):
+            continue
+        modifier = m.get("modifier", "no modifier")
+        duration = m.get("days")
+        if duration == -1 or not isinstance(duration, int):
+            duration = None
+        yield modifier, duration
+
+    planet_modifiers = planet_dict.get("planet_modifier", [])
+    if not isinstance(planet_modifiers, list):
+        planet_modifiers = [planet_modifiers]
+    for pm in planet_modifiers:
+        if pm is not None:
+            yield pm, None

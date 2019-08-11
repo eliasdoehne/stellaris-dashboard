@@ -1091,6 +1091,11 @@ class Planet(Base):
     historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
     system = relationship("System", back_populates="planets")
 
+    districts = relationship('PlanetDistrict', back_populates='planet')
+    deposits = relationship('PlanetDeposit', back_populates='planet')
+    buildings = relationship('PlanetBuilding', back_populates='planet')
+    modifiers = relationship('PlanetModifier', back_populates='planet')
+
     @property
     def name(self):
         if self.planet_name.startswith("NAME_"):
@@ -1100,6 +1105,74 @@ class Planet(Base):
     @property
     def planetclass(self):
         return game_info.convert_id_to_name(self.planet_class, remove_prefix="pc")
+
+
+class PlanetDistrict(Base):
+    __tablename__ = 'planet_district_table'
+    district_id = Column(Integer, primary_key=True)
+
+    planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
+    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+
+    db_description = relationship("SharedDescription")
+    count = Column(Integer, default=0)
+
+    planet = relationship(Planet, back_populates="districts")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text, 'district')
+
+
+class PlanetDeposit(Base):
+    __tablename__ = 'planet_deposit_table'
+    deposit_id = Column(Integer, primary_key=True)
+
+    planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
+    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+
+    db_description = relationship("SharedDescription")
+    count = Column(Integer, default=0)
+
+    planet = relationship(Planet, back_populates="deposits")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text, 'd')
+
+
+class PlanetBuilding(Base):
+    __tablename__ = 'planet_building_table'
+    building_id = Column(Integer, primary_key=True)
+
+    planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
+    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+
+    db_description = relationship("SharedDescription")
+    count = Column(Integer, default=0)
+
+    planet = relationship(Planet, back_populates="buildings")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text, 'building')
+
+
+class PlanetModifier(Base):
+    __tablename__ = 'planet_modifier_table'
+    modifier_id = Column(Integer, primary_key=True)
+
+    planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
+    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+
+    expiry_date = Column(Integer)
+    db_description = relationship("SharedDescription")
+
+    planet = relationship(Planet, back_populates="modifiers")
+
+    @property
+    def name(self):
+        return game_info.convert_id_to_name(self.db_description.text, 'planet')
 
 
 class PopStatsBySpecies(Base):
