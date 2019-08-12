@@ -1140,6 +1140,13 @@ class PlanetDeposit(Base):
     def name(self):
         return game_info.convert_id_to_name(self.db_description.text, 'd')
 
+    @property
+    def is_resource_deposit(self):
+        return any(
+            self.db_description.text.endswith(f'_{amount}')
+            for amount in range(31)
+        )
+
 
 class PlanetBuilding(Base):
     __tablename__ = 'planet_building_table'
@@ -1172,7 +1179,7 @@ class PlanetModifier(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, 'planet')
+        return game_info.convert_id_to_name(self.db_description.text, 'pm')
 
 
 class PopStatsBySpecies(Base):

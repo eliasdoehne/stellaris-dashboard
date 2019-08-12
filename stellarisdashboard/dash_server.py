@@ -1,4 +1,5 @@
 """This file contains the code for the flask server hosting the visualizations and the event ledger."""
+import collections
 import logging
 import random
 import time
@@ -879,7 +880,6 @@ class EventTemplateDictBuilder:
         self.event_filter = event_filter
         self.game_id = game_id
         self._session = db_session
-        self._random_instance = random.Random("EventTemplateDictBuilder")
 
     def get_event_and_link_dicts(self):
         events = {}
@@ -894,6 +894,7 @@ class EventTemplateDictBuilder:
         key_objects = self._session.query(key_object_class).filter_by(
             **key_obj_filter_dict
         ).order_by(key_object_order_column)
+
         for key in key_objects:
             events[key] = []
             details[key] = self.get_details(key)
@@ -970,7 +971,7 @@ class EventTemplateDictBuilder:
         elif isinstance(key, models.War):
             return {}
         elif isinstance(key, models.Planet):
-            return {"foo": "Planet"}
+            return self.planet_details(key)
         else:
             return {}
 
@@ -1026,8 +1027,15 @@ class EventTemplateDictBuilder:
                                                      and not system_model.country.is_other_player)):
             details["Owner"] = self._get_url_for(system_model.country)
 
-        details["Planets"] = ", ".join(p.name for p in system_model.planets)
+        details["Planets"] = ", ".join(self._get_url_for(p) for p in system_model.planets)
 
+        deposits = collections.Counter()
+        for p in system_model.planets:
+            for d in p.deposits:
+                if d.is_resource_deposit:
+                    deposits[d.name] += d.count
+
+        details["Resource Deposits"] = ", ".join(f"{key}: {val}" for key, val in sorted(deposits.items()))
         return details
 
     def leader_details(self, leader_model: models.Leader) -> Dict[str, str]:
@@ -1065,6 +1073,45 @@ class EventTemplateDictBuilder:
                 self._get_url_for(c) for c in sorted(countries, key=lambda c: c.country_name)
                 if c.has_met_player() or (config.CONFIG.show_everything and not c.is_other_player)
             )
+        return details
+
+    def planet_details(self, planet_model: models.Planet):
+        details = {}
+
+        modifiers = []
+        for modifier in planet_model.modifiers:
+            if modifier.expiry_date is not None:
+                m = f"{modifier.name} (expires {models.days_to_date(modifier.expiry_date)})"
+            else:
+                m = modifier.name
+            modifiers.append(m)
+        if modifiers:
+            details["Modifiers"] = ", ".join(sorted(modifiers))
+
+        resource_deposits = []
+        other_deposits = []
+        for d in planet_model.deposits:
+            if d.is_resource_deposit:
+                resource_deposits.append(d.name)
+            else:
+                other_deposits.append(d.name)
+        if resource_deposits:
+            details["Resource Deposits"] = ", ".join(f"{d}" for d in sorted(resource_deposits))
+        if other_deposits:
+            details["Blockers and Features"] = ", ".join(f"{d}" for d in sorted(other_deposits))
+
+        districts = collections.Counter()
+        for district in planet_model.districts:
+            districts[district.name] += district.count
+        if districts:
+            details["Districts"] = ", ".join(f"{k}: {v}" for k, v in sorted(districts.items()))
+
+        buildings = collections.Counter()
+        for building in planet_model.buildings:
+            buildings[building.name] += building.count
+        if buildings:
+            details["Buildings"] = ", ".join(f"{k}: {v}" for k, v in sorted(buildings.items()))
+
         return details
 
     def get_war_dicts(self):
