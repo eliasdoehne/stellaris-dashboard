@@ -85,9 +85,11 @@ class SavePathMonitor(abc.ABC):
             return new_files
         new_files_str = ", ".join(f.stem for f in new_files[:10])
         logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
-        if (config.CONFIG.read_only_every_nth_save is not None) and (config.CONFIG.read_only_every_nth_save > 1):
-            new_files = [f for (i, f) in enumerate(new_files) if (i + self.num_encountered_saves) % config.CONFIG.read_only_every_nth_save == 0]
-            self.num_encountered_saves += len(new_files)
+        if (config.CONFIG.read_only_every_nth_save or 0) > 1:
+            num_new_files = len(new_files)
+            new_files = [f for (i, f) in enumerate(new_files)
+                         if (self.num_encountered_saves + i) % config.CONFIG.read_only_every_nth_save == 0]
+            self.num_encountered_saves += num_new_files
             self.num_encountered_saves %= config.CONFIG.read_only_every_nth_save
             logger.info(f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}...")
         return new_files
