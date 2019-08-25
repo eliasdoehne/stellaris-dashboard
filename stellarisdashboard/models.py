@@ -396,6 +396,8 @@ class System(Base):
     hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
     hyperlanes_two = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_two_id])
 
+    bypasses = relationship("Bypass")
+
     historical_events = relationship("HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan")
 
     @property
@@ -478,6 +480,29 @@ class HyperLane(Base):
         back_populates="hyperlanes_two",
         foreign_keys=[system_two_id],
     )
+
+
+class Bypass(Base):
+    """
+    Represent bypasses.
+     """
+    __tablename__ = "bypasstable"
+    bypass_id = Column(Integer, primary_key=True)
+
+    system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
+    bypass_type_description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+
+    network_id = Column(Integer, nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False)
+
+    system = relationship(System, back_populates="bypasses", foreign_keys=[system_id])
+    db_description = relationship(SharedDescription)
+
+    @property
+    def name(self):
+        bypass_type = game_info.convert_id_to_name(self.db_description.text)
+        status_str = '' if self.is_active else ' (inactive)'
+        return f"{self.system.name} {bypass_type}{status_str}"
 
 
 class GameState(Base):

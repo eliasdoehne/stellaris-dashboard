@@ -1,4 +1,5 @@
 import abc
+import collections
 import dataclasses
 import datetime
 import functools
@@ -6,8 +7,7 @@ import itertools
 import logging
 import random
 import time
-import collections
-from typing import Dict, Any, Set, Iterable, Optional, Counter, Union, Collection
+from typing import Dict, Any, Set, Iterable, Optional, Union, List
 
 from stellarisdashboard import models, game_info, config
 
@@ -145,6 +145,7 @@ class TimelineExtractor:
 
     def _data_processors(self) -> Iterable["AbstractGamestateDataProcessor"]:
         yield SystemProcessor()
+        yield BypassProcessor()
         yield CountryProcessor()
         yield SystemOwnershipProcessor()
         yield DiplomacyDictProcessor()
@@ -282,7 +283,45 @@ class BypassProcessor(AbstractGamestateDataProcessor):
     DEPENDENCIES = [SystemProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        pass  # TODO
+        systems_dict = dependencies[SystemProcessor.ID]
+
+        bypasses = self._gamestate_dict.get('bypasses', {})
+        if not isinstance(bypasses, dict):
+            return
+
+        galactic_objects = self._gamestate_dict['galactic_object']
+        bypass_systems = {sys_id: sys_dict for sys_id, sys_dict in galactic_objects.items()
+                          if 'bypasses' in sys_dict}
+
+        # Number of bypasses should be manageable. It would be tricky to update changing networks, so let's delete 'em
+
+        self._session.query(models.Bypass).delete()
+        for sys_id, sys_dict in bypass_systems.items():
+            if sys_id not in systems_dict:
+                continue
+            for bypass_id in sys_dict['bypasses']:
+                bypass_dict = bypasses.get(bypass_id)
+                if not isinstance(bypass_dict, dict):
+                    continue
+                bypass_type = bypass_dict.get('type', 'unknown')
+                connections = bypass_dict.get('connections')
+
+                if bypass_type == 'lgate':
+                    network_id = hash('lgate')
+                elif bypass_type == 'gateway':
+                    network_id = hash(frozenset(connections) | {bypass_id})
+                elif bypass_type == 'wormhole':
+                    network_id = hash(frozenset(connections) | {bypass_id})
+                else:
+                    continue
+
+                bypass_type_description = self._get_or_add_shared_description(bypass_type)
+                self._session.add(models.Bypass(
+                    system=systems_dict[sys_id],
+                    network_id=network_id,
+                    db_description=bypass_type_description,
+                    is_active=bypass_dict.get('active') != 'no',
+                ))
 
 
 class CountryProcessor(AbstractGamestateDataProcessor):
