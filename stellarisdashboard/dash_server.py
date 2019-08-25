@@ -1,5 +1,6 @@
 """This file contains the code for the flask server hosting the visualizations and the event ledger."""
 import collections
+import functools
 import logging
 import random
 import time
@@ -1022,6 +1023,24 @@ class EventTemplateDictBuilder:
             for s in sorted(hyperlane_targets,
                             key=lambda s: s.name)
         )
+
+        bypasses = []
+        for bp in system_model.bypasses:
+            if bp.db_description.text == 'lgate':
+                bypasses.append(bp.name)
+            if bp.is_active:
+                targets = self._session.query(models.Bypass).filter_by(
+                    network_id=bp.network_id
+                ).all()
+                details[bp.name] = ", ".join(
+                    self._preformat_history_url(t.system.name, system=t.system.system_id)
+                    for t in targets if t != bp
+                )
+            else:
+                bypasses.append(bp.name)
+        if bypasses:
+            details["Unknown Bypasses"] = ", ".join(bypasses)
+
         if system_model.country is not None and (system_model.country.has_met_player()
                                                  or (config.CONFIG.show_everything
                                                      and not system_model.country.is_other_player)):
@@ -1170,6 +1189,7 @@ class EventTemplateDictBuilder:
 
         return wars, links
 
+    @functools.lru_cache()
     def _preformat_history_url(self, text, a_class="textlink", **kwargs):
         return f'<a class="{a_class}" href={flask.url_for("history_page", game_id=self.game_id, **kwargs)}>{text}</a>'
 
