@@ -1096,6 +1096,12 @@ class Planet(Base):
     buildings = relationship('PlanetBuilding', back_populates='planet')
     modifiers = relationship('PlanetModifier', back_populates='planet')
 
+    # Add some integer attributes so we can cheaply detect updates
+    districts_hash = Column(Integer, default=0)
+    deposits_hash = Column(Integer, default=0)
+    buildings_hash = Column(Integer, default=0)
+    modifiers_hash = Column(Integer, default=0)
+
     @property
     def name(self):
         if self.planet_name.startswith("NAME_"):

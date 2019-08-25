@@ -993,31 +993,37 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
                     )
 
                 planet_model = self.planets_by_ingame_id[ingame_id]
-                self._update_countable_planet_attributes(
+                was_updated = False
+                was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
-                    db_entities=planet_model.districts,
+                    entity_attribute_name='districts',
+                    entity_hash_attribute='districts_hash',
                     current_entities=planet_dict.get('district', []),
                     db_entity_factory=models.PlanetDistrict,
                 )
                 buildings = planet_dict.get('building', [])
                 if not isinstance(buildings, list):
                     buildings = [buildings]
-                self._update_countable_planet_attributes(
+                was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
-                    db_entities=planet_model.buildings,
+                    entity_attribute_name='buildings',
+                    entity_hash_attribute='buildings_hash',
                     current_entities=buildings,
                     db_entity_factory=models.PlanetBuilding,
                 )
-                self._update_countable_planet_attributes(
+                was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
-                    db_entities=planet_model.deposits,
+                    entity_attribute_name='deposits',
+                    entity_hash_attribute='deposits_hash',
                     current_entities=self._get_deposits(planet_dict),
                     db_entity_factory=models.PlanetDeposit,
                 )
-                self._update_planet_modifiers(
+                was_updated |= self._update_planet_modifiers(
                     planet_model=planet_model,
                     planet_dict=planet_dict,
                 )
+                if was_updated:
+                    self._session.add(planet_model)
 
     def _add_planet_model(self, system_model: models.System,
                           planet_id: int,
@@ -1039,12 +1045,42 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
 
     def _update_countable_planet_attributes(
             self, planet_model: models.Planet,
-            db_entities: Iterable[Union[models.PlanetDistrict, models.PlanetBuilding, models.PlanetDeposit]],
-            current_entities: Iterable[str],
+            entity_attribute_name: str,
+            entity_hash_attribute: str,
+            current_entities: Union[str, List[str]],
             db_entity_factory
-    ):
+    ) -> bool:
+        """
+        Update any of the planets' entities that are represented by counting a single value,
+        e.g. districts can be represented by storing how often "district_generator" occurs in
+        the planet dictionary.
+
+        :param planet_model: models.Planet instance
+        :param entity_attribute_name: Name of the attribute which should be updated
+        :param entity_hash_attribute:
+        :param current_entities: List containing the individual instances of the entity,
+                                 e.g. ['district_generator', 'district_generator', 'district_city']
+        :param db_entity_factory:
+        :return: True, if the planet model was updated, False otherwise
+        """
+        if isinstance(current_entities, list):
+            pass
+        elif isinstance(current_entities, str):
+            current_entities = [current_entities]
+        else:
+            logger.warning(f"{self._basic_info.logger_str}: Expected str or list, got {current_entities} while updating {entity_attribute_name}")
+            return False
+
         current_entity_counter = collections.Counter(current_entities)
-        for entity_model in db_entities:
+
+        entities_changed = self._check_and_update_hash(
+            planet_model, current_entity_counter, entity_hash_attribute
+        )
+        if not entities_changed:
+            return False
+
+        entities = getattr(planet_model, entity_attribute_name)
+        for entity_model in entities:
             text = entity_model.db_description.text
             if current_entity_counter[text] != entity_model.count:
                 entity_model.count = current_entity_counter[text]
@@ -1058,9 +1094,17 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
                 planet=planet_model,
                 count=count,
             ))
+        return True
 
-    def _update_planet_modifiers(self, planet_model: models.Planet, planet_dict: Dict):
+    def _update_planet_modifiers(self, planet_model: models.Planet, planet_dict: Dict) -> bool:
+        """ Modifiers are represented differently, hence a new function. """
         current_modifiers = dict(_all_planetary_modifiers(planet_dict))
+
+        modifiers_changed = self._check_and_update_hash(
+            planet_model, current_modifiers, 'modifiers_hash'
+        )
+        if not modifiers_changed:
+            return False
 
         for db_modifier in planet_model.modifiers:
             assert isinstance(db_modifier, models.PlanetModifier)
@@ -1081,12 +1125,24 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
                 expiry_date=expiration,
                 db_description=db_description,
             ))
+        return True
 
     def _get_deposits(self, planet_dict):
+        result = []
         for deposit in planet_dict.get('deposits', []):
             d_dict = self._gamestate_dict.get('deposit', {}).get(deposit)
             if isinstance(d_dict, dict) and 'type' in d_dict:
-                yield d_dict.get('type', 'deposit_unknown')
+                result.append(d_dict.get('type', 'deposit_unknown'))
+        return result
+
+    def _check_and_update_hash(self, planet_model: models.Planet, entity_dict, hash_attribute: str) -> bool:
+        current_hash = hash(frozenset(entity_dict.items()))
+        if current_hash == getattr(planet_model, hash_attribute):
+            return False
+
+        setattr(planet_model, hash_attribute, current_hash)
+        self._session.add(planet_model)
+        return True
 
 
 class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
