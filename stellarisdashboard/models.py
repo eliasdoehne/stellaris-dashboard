@@ -31,7 +31,7 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
         db_file = DB_PATH / f"{game_id}.db"
         if not db_file.exists():
             logger.info(f"Creating database for game {game_id} in file {db_file}.")
-        engine = sqlalchemy.create_engine(f'sqlite:///{db_file}', echo=False)
+        engine = sqlalchemy.create_engine(f"sqlite:///{db_file}", echo=False)
         Base.metadata.create_all(bind=engine)
         _ENGINES[game_id] = engine
         _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
@@ -79,16 +79,28 @@ class Attitude(enum.Enum):
     other = enum.auto()
 
     def reveals_military_info(self) -> bool:
-        return self in {Attitude.friendly, Attitude.loyal, Attitude.disloyal, Attitude.overlord, Attitude.is_player}
+        return self in {
+            Attitude.friendly,
+            Attitude.loyal,
+            Attitude.disloyal,
+            Attitude.overlord,
+            Attitude.is_player,
+        }
 
     def reveals_technology_info(self) -> bool:
-        return self.reveals_military_info() or (self in {Attitude.protective, Attitude.disloyal})
+        return self.reveals_military_info() or (
+            self in {Attitude.protective, Attitude.disloyal}
+        )
 
     def reveals_economy_info(self) -> bool:
-        return self.reveals_technology_info() or (self in {Attitude.cordial, Attitude.receptive})
+        return self.reveals_technology_info() or (
+            self in {Attitude.cordial, Attitude.receptive}
+        )
 
     def reveals_demographic_info(self) -> bool:
-        return self.reveals_economy_info() or (self in {Attitude.neutral, Attitude.wary})
+        return self.reveals_economy_info() or (
+            self in {Attitude.neutral, Attitude.wary}
+        )
 
     def is_known(self) -> bool:
         return self != Attitude.unknown
@@ -283,8 +295,11 @@ def get_last_modified_time(path: pathlib.Path) -> int:
 
 
 def get_known_games(game_name_prefix: str = "") -> List[str]:
-    files = sorted(DB_PATH.glob(f"{game_name_prefix}*.db"),
-                   key=get_last_modified_time, reverse=True)
+    files = sorted(
+        DB_PATH.glob(f"{game_name_prefix}*.db"),
+        key=get_last_modified_time,
+        reverse=True,
+    )
     return [fname.stem for fname in files]
 
 
@@ -296,7 +311,9 @@ def get_available_games_dict() -> Dict[str, Dict[str, str]]:
             game = session.query(Game).one_or_none()
             if game is None:
                 continue
-            most_recent_gamestate = session.query(GameState).order_by(GameState.date.desc()).first()
+            most_recent_gamestate = (
+                session.query(GameState).order_by(GameState.date.desc()).first()
+            )
             games[game_id] = dict(
                 game_id=game_id,
                 game_date=days_to_date(most_recent_gamestate.date),
@@ -317,16 +334,19 @@ def count_gamestates_since(game_name: str, date: float) -> int:
 def get_gamestates_since(game_name: str, date: float):
     with get_db_session(game_name) as session:
         game = session.query(Game).one()
-        for gs in session.query(GameState).filter(
-                GameState.game == game,
-                GameState.date > date
-        ).order_by(GameState.date).all():
+        for gs in (
+            session.query(GameState)
+            .filter(GameState.game == game, GameState.date > date)
+            .order_by(GameState.date)
+            .all()
+        ):
             yield gs
 
 
 class Game(Base):
     """Root object representing an entire game."""
-    __tablename__ = 'gametable'
+
+    __tablename__ = "gametable"
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
 
@@ -337,12 +357,24 @@ class Game(Base):
 
     db_last_updated = Column(sqlalchemy.DateTime, default=None)
 
-    systems = relationship("System", back_populates="game", cascade="all,delete,delete-orphan")
-    countries = relationship("Country", back_populates="game", cascade="all,delete,delete-orphan")
-    species = relationship("Species", back_populates="game", cascade="all,delete,delete-orphan")
-    game_states = relationship("GameState", back_populates="game", cascade="all,delete,delete-orphan")
-    wars = relationship("War", back_populates="game", cascade="all,delete,delete-orphan")
-    leaders = relationship("Leader", back_populates="game", cascade="all,delete,delete-orphan")
+    systems = relationship(
+        "System", back_populates="game", cascade="all,delete,delete-orphan"
+    )
+    countries = relationship(
+        "Country", back_populates="game", cascade="all,delete,delete-orphan"
+    )
+    species = relationship(
+        "Species", back_populates="game", cascade="all,delete,delete-orphan"
+    )
+    game_states = relationship(
+        "GameState", back_populates="game", cascade="all,delete,delete-orphan"
+    )
+    wars = relationship(
+        "War", back_populates="game", cascade="all,delete,delete-orphan"
+    )
+    leaders = relationship(
+        "Leader", back_populates="game", cascade="all,delete,delete-orphan"
+    )
 
     @property
     def galaxy(self):
@@ -367,6 +399,7 @@ class Game(Base):
 
 class SharedDescription(Base):
     """ Represents short descriptions like technology names that are likely to occur many times for various empires. """
+
     __tablename__ = "shareddescriptiontable"
     description_id = Column(Integer, primary_key=True)
 
@@ -375,7 +408,8 @@ class SharedDescription(Base):
 
 class System(Base):
     """ Represents a single star system/galactic_object. """
-    __tablename__ = 'systemtable'
+
+    __tablename__ = "systemtable"
     system_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     country_id = Column(ForeignKey("countrytable.country_id"), index=True)
@@ -389,16 +423,26 @@ class System(Base):
 
     game = relationship("Game", back_populates="systems")
     country = relationship("Country", back_populates="systems")
-    ownership_history = relationship("SystemOwnership", back_populates="system", cascade="all,delete,delete-orphan")
-    planets = relationship("Planet", back_populates="system", cascade="all,delete,delete-orphan")
+    ownership_history = relationship(
+        "SystemOwnership", back_populates="system", cascade="all,delete,delete-orphan"
+    )
+    planets = relationship(
+        "Planet", back_populates="system", cascade="all,delete,delete-orphan"
+    )
 
     # this could probably be done better....
-    hyperlanes_one = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_one_id])
-    hyperlanes_two = relationship("HyperLane", foreign_keys=lambda: [HyperLane.system_two_id])
+    hyperlanes_one = relationship(
+        "HyperLane", foreign_keys=lambda: [HyperLane.system_one_id]
+    )
+    hyperlanes_two = relationship(
+        "HyperLane", foreign_keys=lambda: [HyperLane.system_two_id]
+    )
 
     bypasses = relationship("Bypass")
 
-    historical_events = relationship("HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan")
+    historical_events = relationship(
+        "HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan"
+    )
 
     @property
     def neighbors(self):
@@ -417,7 +461,9 @@ class System(Base):
         if not self.ownership_history and self.country is None:
             return None
         # could be slow, but fine for now
-        for ownership in sorted(self.ownership_history, key=lambda oh: oh.start_date_days):
+        for ownership in sorted(
+            self.ownership_history, key=lambda oh: oh.start_date_days
+        ):
             if ownership.start_date_days <= time_in_days <= ownership.end_date_days:
                 return ownership.country
             elif ownership.start_date_days > time_in_days:
@@ -435,7 +481,8 @@ class System(Base):
 
 class SystemOwnership(Base):
     """ Represent the timespan during which some empire owned a given system. """
-    __tablename__ = 'systemownershiptable'
+
+    __tablename__ = "systemownershiptable"
     system_ownership_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), index=True)
@@ -464,6 +511,7 @@ class HyperLane(Base):
     Represent hyperlane connections between systems. While the HyperLane is
     represented as a directed edge, it should be interpreted as undirected.
      """
+
     __tablename__ = "hyperlanetable"
     hyperlane_id = Column(Integer, primary_key=True)
 
@@ -471,14 +519,10 @@ class HyperLane(Base):
     system_two_id = Column(ForeignKey(System.system_id))
 
     system_one = relationship(
-        "System",
-        back_populates="hyperlanes_one",
-        foreign_keys=[system_one_id],
+        "System", back_populates="hyperlanes_one", foreign_keys=[system_one_id],
     )
     system_two = relationship(
-        "System",
-        back_populates="hyperlanes_two",
-        foreign_keys=[system_two_id],
+        "System", back_populates="hyperlanes_two", foreign_keys=[system_two_id],
     )
 
 
@@ -486,11 +530,14 @@ class Bypass(Base):
     """
     Represent bypasses.
      """
+
     __tablename__ = "bypasstable"
     bypass_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
-    bypass_type_description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+    bypass_type_description_id = Column(
+        ForeignKey(SharedDescription.description_id), nullable=False
+    )
 
     network_id = Column(Integer, nullable=False, index=True)
     is_active = Column(Boolean, nullable=False)
@@ -501,26 +548,29 @@ class Bypass(Base):
     @property
     def name(self):
         bypass_type = game_info.convert_id_to_name(self.db_description.text)
-        status_str = '' if self.is_active else ' (inactive)'
+        status_str = "" if self.is_active else " (inactive)"
         return f"{self.system.name} {bypass_type}{status_str}"
 
 
 class GameState(Base):
     """Represents the state of the game at a specific moment."""
-    __tablename__ = 'gamestatetable'
+
+    __tablename__ = "gamestatetable"
     gamestate_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     date = Column(Integer, index=True, nullable=False)  # Days since 2200.1.1
 
     game = relationship("Game", back_populates="game_states")
-    country_data = relationship("CountryData", back_populates="game_state", cascade="all,delete,delete-orphan")
+    country_data = relationship(
+        "CountryData", back_populates="game_state", cascade="all,delete,delete-orphan"
+    )
 
     def __str__(self):
         return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"
 
 
 class Country(Base):
-    __tablename__ = 'countrytable'
+    __tablename__ = "countrytable"
     country_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     capital_planet_id = Column(ForeignKey("planettable.planet_id"))
@@ -543,25 +593,51 @@ class Country(Base):
     ruler = relationship("Leader", foreign_keys=[ruler_id])
     scientist_physics = relationship("Leader", foreign_keys=[scientist_physics_id])
     scientist_society = relationship("Leader", foreign_keys=[scientist_society_id])
-    scientist_engineering = relationship("Leader", foreign_keys=[scientist_engineering_id])
+    scientist_engineering = relationship(
+        "Leader", foreign_keys=[scientist_engineering_id]
+    )
 
-    governments = relationship("Government", back_populates="country", cascade="all,delete,delete-orphan")
-    country_data = relationship("CountryData", back_populates="country", cascade="all,delete,delete-orphan", order_by="CountryData.date")
-    political_factions = relationship("PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan")
-    war_participation = relationship("WarParticipant", back_populates="country", cascade="all,delete,delete-orphan")
+    governments = relationship(
+        "Government", back_populates="country", cascade="all,delete,delete-orphan"
+    )
+    country_data = relationship(
+        "CountryData",
+        back_populates="country",
+        cascade="all,delete,delete-orphan",
+        order_by="CountryData.date",
+    )
+    political_factions = relationship(
+        "PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan"
+    )
+    war_participation = relationship(
+        "WarParticipant", back_populates="country", cascade="all,delete,delete-orphan"
+    )
     systems = relationship(System, back_populates="country")
-    leaders = relationship("Leader", back_populates="country", cascade="all,delete,delete-orphan", foreign_keys=lambda: [Leader.country_id])
+    leaders = relationship(
+        "Leader",
+        back_populates="country",
+        cascade="all,delete,delete-orphan",
+        foreign_keys=lambda: [Leader.country_id],
+    )
 
     traditions = relationship("Tradition", cascade="all,delete,delete-orphan")
     ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
     technologies = relationship("Technology", cascade="all,delete,delete-orphan")
 
-    historical_events = relationship("HistoricalEvent", back_populates="country", foreign_keys=lambda: [HistoricalEvent.country_id], cascade="all,delete,delete-orphan")
+    historical_events = relationship(
+        "HistoricalEvent",
+        back_populates="country",
+        foreign_keys=lambda: [HistoricalEvent.country_id],
+        cascade="all,delete,delete-orphan",
+    )
 
-    outgoing_relations = relationship("DiplomaticRelation",
-                                      foreign_keys=lambda: [DiplomaticRelation.country_id])
-    incoming_relations = relationship("DiplomaticRelation",
-                                      foreign_keys=lambda: [DiplomaticRelation.target_country_id])
+    outgoing_relations = relationship(
+        "DiplomaticRelation", foreign_keys=lambda: [DiplomaticRelation.country_id]
+    )
+    incoming_relations = relationship(
+        "DiplomaticRelation",
+        foreign_keys=lambda: [DiplomaticRelation.target_country_id],
+    )
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -584,9 +660,9 @@ class Country(Base):
 
     def is_real_country(self):
         return (
-                self.country_type == "default"
-                or self.country_type == "fallen_empire"
-                or self.country_type == "awakened_fallen_empire"
+            self.country_type == "default"
+            or self.country_type == "fallen_empire"
+            or self.country_type == "awakened_fallen_empire"
         )
 
     def get_research_leader(self, key: str):
@@ -621,7 +697,7 @@ class Country(Base):
 
 
 class Tradition(Base):
-    __tablename__ = 'traditionstable'
+    __tablename__ = "traditionstable"
     tradition_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     tradition_name_id = Column(ForeignKey(SharedDescription.description_id))
@@ -635,7 +711,7 @@ class Tradition(Base):
 
 
 class AscensionPerk(Base):
-    __tablename__ = 'ascensionperkstable'
+    __tablename__ = "ascensionperkstable"
     tradition_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     perk_name_id = Column(ForeignKey(SharedDescription.description_id))
@@ -649,7 +725,7 @@ class AscensionPerk(Base):
 
 
 class Technology(Base):
-    __tablename__ = 'technologytable'
+    __tablename__ = "technologytable"
     technology_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -671,7 +747,8 @@ class Government(Base):
     authority (e.g. "Democracy"), the date range, as well as the governing ethics
     and civics.
     """
-    __tablename__ = 'govtable'
+
+    __tablename__ = "govtable"
     gov_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -705,7 +782,13 @@ class Government(Base):
 
     @property
     def ethics(self):
-        civics = {self.ethics_1, self.ethics_2, self.ethics_3, self.ethics_4, self.ethics_5}
+        civics = {
+            self.ethics_1,
+            self.ethics_2,
+            self.ethics_3,
+            self.ethics_4,
+            self.ethics_5,
+        }
         return civics - {None}
 
     def get_reform_description_dict(self, old_gov: "Government") -> Dict[str, str]:
@@ -719,17 +802,29 @@ class Government(Base):
         if old_gov.authority != self.authority:
             old_authority = str(old_gov.authority)
             new_authority = str(self.authority)
-            reform_dict["Authority changed"] = [f'from "{old_authority}" to "{new_authority}"']
+            reform_dict["Authority changed"] = [
+                f'from "{old_authority}" to "{new_authority}"'
+            ]
 
         new_civics = self.civics - old_gov.civics
         removed_civics = old_gov.civics - self.civics
-        reform_dict["Removed civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in removed_civics)
-        reform_dict["Adopted civics"] = sorted(game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics)
+        reform_dict["Removed civics"] = sorted(
+            game_info.convert_id_to_name(c, remove_prefix="civic")
+            for c in removed_civics
+        )
+        reform_dict["Adopted civics"] = sorted(
+            game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics
+        )
 
         new_ethics = self.ethics - old_gov.ethics
         removed_ethics = old_gov.ethics - self.ethics
-        reform_dict["Abandoned ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in removed_ethics)
-        reform_dict["Embraced ethics"] = sorted(game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics)
+        reform_dict["Abandoned ethics"] = sorted(
+            game_info.convert_id_to_name(e, remove_prefix="ethic")
+            for e in removed_ethics
+        )
+        reform_dict["Embraced ethics"] = sorted(
+            game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics
+        )
         return {k: v for k, v in reform_dict.items() if v}
 
     def __str__(self):
@@ -737,12 +832,14 @@ class Government(Base):
 
 
 class DiplomaticRelation(Base):
-    __tablename__ = 'diplo_relation_table'
+    __tablename__ = "diplo_relation_table"
 
     diplo_relation_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
-    target_country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+    target_country_id = Column(
+        ForeignKey(Country.country_id), nullable=False, index=True
+    )
 
     rivalry = Column(Boolean, default=False)
     defensive_pact = Column(Boolean, default=False)
@@ -756,14 +853,10 @@ class DiplomaticRelation(Base):
     research_agreement = Column(Boolean, default=False)
 
     owner = relationship(
-        Country,
-        back_populates="outgoing_relations",
-        foreign_keys=[country_id],
+        Country, back_populates="outgoing_relations", foreign_keys=[country_id],
     )
     target = relationship(
-        Country,
-        back_populates="incoming_relations",
-        foreign_keys=[target_country_id],
+        Country, back_populates="incoming_relations", foreign_keys=[target_country_id],
     )
 
     _dict_key_attr_mapping = dict(
@@ -801,7 +894,8 @@ class DiplomaticRelation(Base):
 
 class CountryData(Base):
     """ Representation of the state of a single country at a specific time. """
-    __tablename__ = 'countrydatatable'
+
+    __tablename__ = "countrydatatable"
     country_data_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
@@ -859,38 +953,68 @@ class CountryData(Base):
     game_state = relationship("GameState", back_populates="country_data")
 
     budget = relationship("BudgetItem", cascade="all,delete,delete-orphan")
-    pop_stats_species = relationship("PopStatsBySpecies", back_populates="country_data", cascade="all,delete,delete-orphan")
-    pop_stats_faction = relationship("PopStatsByFaction", back_populates="country_data", cascade="all,delete,delete-orphan")
-    pop_stats_job = relationship("PopStatsByJob", back_populates="country_data", cascade="all,delete,delete-orphan")
-    pop_stats_stratum = relationship("PopStatsByStratum", back_populates="country_data", cascade="all,delete,delete-orphan")
-    pop_stats_ethos = relationship("PopStatsByEthos", back_populates="country_data", cascade="all,delete,delete-orphan")
-    pop_stats_planets = relationship("PlanetStats", back_populates="country_data", cascade="all,delete,delete-orphan")
+    pop_stats_species = relationship(
+        "PopStatsBySpecies",
+        back_populates="country_data",
+        cascade="all,delete,delete-orphan",
+    )
+    pop_stats_faction = relationship(
+        "PopStatsByFaction",
+        back_populates="country_data",
+        cascade="all,delete,delete-orphan",
+    )
+    pop_stats_job = relationship(
+        "PopStatsByJob",
+        back_populates="country_data",
+        cascade="all,delete,delete-orphan",
+    )
+    pop_stats_stratum = relationship(
+        "PopStatsByStratum",
+        back_populates="country_data",
+        cascade="all,delete,delete-orphan",
+    )
+    pop_stats_ethos = relationship(
+        "PopStatsByEthos",
+        back_populates="country_data",
+        cascade="all,delete,delete-orphan",
+    )
+    pop_stats_planets = relationship(
+        "PlanetStats", back_populates="country_data", cascade="all,delete,delete-orphan"
+    )
 
     def show_geography_info(self):
         return self.country.is_player or self.attitude_towards_player.is_known()
 
     def show_tech_info(self):
-        return (self.country.is_player
-                or self.has_research_agreement_with_player
-                or self.attitude_towards_player.reveals_technology_info())
+        return (
+            self.country.is_player
+            or self.has_research_agreement_with_player
+            or self.attitude_towards_player.reveals_technology_info()
+        )
 
     def show_economic_info(self):
-        return (self.country.is_player
-                or self.has_sensor_link_with_player
-                or self.attitude_towards_player.reveals_economy_info())
+        return (
+            self.country.is_player
+            or self.has_sensor_link_with_player
+            or self.attitude_towards_player.reveals_economy_info()
+        )
 
     def show_demographic_info(self):
-        return (self.country.is_player
-                or self.attitude_towards_player.reveals_demographic_info()
-                or self.has_sensor_link_with_player
-                or self.has_migration_treaty_with_player)
+        return (
+            self.country.is_player
+            or self.attitude_towards_player.reveals_demographic_info()
+            or self.has_sensor_link_with_player
+            or self.has_migration_treaty_with_player
+        )
 
     def show_military_info(self):
-        return (self.country.is_player
-                or self.has_sensor_link_with_player
-                or self.attitude_towards_player.reveals_military_info()
-                or self.has_defensive_pact_with_player
-                or self.has_federation_with_player)
+        return (
+            self.country.is_player
+            or self.has_sensor_link_with_player
+            or self.attitude_towards_player.reveals_military_info()
+            or self.has_defensive_pact_with_player
+            or self.has_federation_with_player
+        )
 
 
 class BudgetItem(Base):
@@ -898,7 +1022,9 @@ class BudgetItem(Base):
     budget_item_id = Column(Integer, primary_key=True)
 
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
-    budget_item_description_id = Column(ForeignKey(SharedDescription.description_id))  # e.g. "trade_routes", "ships", etc
+    budget_item_description_id = Column(
+        ForeignKey(SharedDescription.description_id)
+    )  # e.g. "trade_routes", "ships", etc
 
     net_energy = Column(Float, default=0.0)
     net_minerals = Column(Float, default=0.0)
@@ -932,7 +1058,8 @@ class BudgetItem(Base):
 
 class Species(Base):
     """Represents a species in a game. Not tied to any specific time."""
-    __tablename__ = 'speciestable'
+
+    __tablename__ = "speciestable"
     species_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     species_id_in_game = Column(Integer)
@@ -943,7 +1070,9 @@ class Species(Base):
     parent_species_id_in_game = Column(Integer)
 
     game = relationship("Game", back_populates="species")
-    db_traits = relationship("SpeciesTrait", back_populates="species", cascade="all,delete,delete-orphan")
+    db_traits = relationship(
+        "SpeciesTrait", back_populates="species", cascade="all,delete,delete-orphan"
+    )
 
     @property
     def traits(self):
@@ -951,7 +1080,7 @@ class Species(Base):
 
 
 class SpeciesTrait(Base):
-    __tablename__ = 'speciestraittable'
+    __tablename__ = "speciestraittable"
     trait_id = Column(Integer, primary_key=True)
 
     description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -967,7 +1096,8 @@ class SpeciesTrait(Base):
 
 class PoliticalFaction(Base):
     """Represents a single political faction in a game. Not tied to any specific time."""
-    __tablename__ = 'factiontable'
+
+    __tablename__ = "factiontable"
     faction_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -978,7 +1108,9 @@ class PoliticalFaction(Base):
 
     db_faction_type = relationship("SharedDescription")
     country = relationship("Country", back_populates="political_factions")
-    historical_events = relationship("HistoricalEvent", back_populates="faction", cascade="all,delete,delete-orphan")
+    historical_events = relationship(
+        "HistoricalEvent", back_populates="faction", cascade="all,delete,delete-orphan"
+    )
 
     @property
     def type(self):
@@ -987,7 +1119,8 @@ class PoliticalFaction(Base):
 
 class War(Base):
     """ Wars are represented by a list of participants and a list of combat events. """
-    __tablename__ = 'wartable'
+
+    __tablename__ = "wartable"
     war_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
 
@@ -1002,12 +1135,16 @@ class War(Base):
     outcome = Column(Enum(WarOutcome))
 
     game = relationship("Game", back_populates="wars")
-    combat = relationship("Combat", back_populates="war", cascade="all,delete,delete-orphan")
-    participants = relationship("WarParticipant", back_populates="war", cascade="all,delete,delete-orphan")
+    combat = relationship(
+        "Combat", back_populates="war", cascade="all,delete,delete-orphan"
+    )
+    participants = relationship(
+        "WarParticipant", back_populates="war", cascade="all,delete,delete-orphan"
+    )
 
 
 class WarParticipant(Base):
-    __tablename__ = 'warparticipanttable'
+    __tablename__ = "warparticipanttable"
     warparticipant_id = Column(Integer, primary_key=True)
 
     war_id = Column(ForeignKey(War.war_id), index=True)
@@ -1017,7 +1154,9 @@ class WarParticipant(Base):
 
     war = relationship("War", back_populates="participants")
     country = relationship("Country", back_populates="war_participation")
-    combat_participation = relationship("CombatParticipant", back_populates="war_participant")
+    combat_participation = relationship(
+        "CombatParticipant", back_populates="war_participant"
+    )
 
     def get_war_goal(self):
         if self.war_goal is None:
@@ -1044,8 +1183,14 @@ class Combat(Base):
     system = relationship("System")
     planet = relationship("Planet")
     war = relationship("War", back_populates="combat")
-    attackers = relationship("CombatParticipant", primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)")
-    defenders = relationship("CombatParticipant", primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)")
+    attackers = relationship(
+        "CombatParticipant",
+        primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)",
+    )
+    defenders = relationship(
+        "CombatParticipant",
+        primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)",
+    )
 
 
 class CombatParticipant(Base):
@@ -1054,15 +1199,20 @@ class CombatParticipant(Base):
     more than two combatants, and the attacker in a single combat may be the defender in the
     overall war.
     """
-    __tablename__ = 'combatparticipant'
+
+    __tablename__ = "combatparticipant"
     combat_participant_id = Column(Integer, primary_key=True)
 
     combat_id = Column(ForeignKey(Combat.combat_id), index=True)
-    war_participant_id = Column(ForeignKey(WarParticipant.warparticipant_id), index=True)
+    war_participant_id = Column(
+        ForeignKey(WarParticipant.warparticipant_id), index=True
+    )
 
     is_attacker = Column(Boolean)
 
-    war_participant = relationship("WarParticipant", back_populates="combat_participation")
+    war_participant = relationship(
+        "WarParticipant", back_populates="combat_participation"
+    )
     combat = relationship("Combat")
 
 
@@ -1089,10 +1239,14 @@ class Leader(Base):
     fleet_id = Column(ForeignKey("fleettable.fleet_id"), nullable=True)
 
     game = relationship("Game", back_populates="leaders")
-    country = relationship("Country", back_populates="leaders", foreign_keys=[country_id], post_update=True)
+    country = relationship(
+        "Country", back_populates="leaders", foreign_keys=[country_id], post_update=True
+    )
     species = relationship("Species")
     fleet_command = relationship("Fleet", back_populates="commander")
-    historical_events = relationship("HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan")
+    historical_events = relationship(
+        "HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan"
+    )
 
     def get_name(self):
         result = f"{self.leader_class.capitalize()} {self.leader_name}"
@@ -1113,13 +1267,15 @@ class Planet(Base):
     system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
     colonized_date = Column(Integer)
 
-    historical_events = relationship("HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan")
+    historical_events = relationship(
+        "HistoricalEvent", back_populates="planet", cascade="all,delete,delete-orphan"
+    )
     system = relationship("System", back_populates="planets")
 
-    districts = relationship('PlanetDistrict', back_populates='planet')
-    deposits = relationship('PlanetDeposit', back_populates='planet')
-    buildings = relationship('PlanetBuilding', back_populates='planet')
-    modifiers = relationship('PlanetModifier', back_populates='planet')
+    districts = relationship("PlanetDistrict", back_populates="planet")
+    deposits = relationship("PlanetDeposit", back_populates="planet")
+    buildings = relationship("PlanetBuilding", back_populates="planet")
+    modifiers = relationship("PlanetModifier", back_populates="planet")
 
     # Add some integer attributes so we can cheaply detect updates
     districts_hash = Column(Integer, default=0)
@@ -1139,11 +1295,13 @@ class Planet(Base):
 
 
 class PlanetDistrict(Base):
-    __tablename__ = 'planet_district_table'
+    __tablename__ = "planet_district_table"
     district_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
-    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+    description_id = Column(
+        ForeignKey(SharedDescription.description_id), nullable=False
+    )
 
     db_description = relationship("SharedDescription")
     count = Column(Integer, default=0)
@@ -1152,15 +1310,17 @@ class PlanetDistrict(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, 'district')
+        return game_info.convert_id_to_name(self.db_description.text, "district")
 
 
 class PlanetDeposit(Base):
-    __tablename__ = 'planet_deposit_table'
+    __tablename__ = "planet_deposit_table"
     deposit_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
-    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+    description_id = Column(
+        ForeignKey(SharedDescription.description_id), nullable=False
+    )
 
     db_description = relationship("SharedDescription")
     count = Column(Integer, default=0)
@@ -1169,22 +1329,23 @@ class PlanetDeposit(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, 'd')
+        return game_info.convert_id_to_name(self.db_description.text, "d")
 
     @property
     def is_resource_deposit(self):
         return any(
-            self.db_description.text.endswith(f'_{amount}')
-            for amount in range(31)
+            self.db_description.text.endswith(f"_{amount}") for amount in range(31)
         )
 
 
 class PlanetBuilding(Base):
-    __tablename__ = 'planet_building_table'
+    __tablename__ = "planet_building_table"
     building_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
-    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+    description_id = Column(
+        ForeignKey(SharedDescription.description_id), nullable=False
+    )
 
     db_description = relationship("SharedDescription")
     count = Column(Integer, default=0)
@@ -1193,15 +1354,17 @@ class PlanetBuilding(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, 'building')
+        return game_info.convert_id_to_name(self.db_description.text, "building")
 
 
 class PlanetModifier(Base):
-    __tablename__ = 'planet_modifier_table'
+    __tablename__ = "planet_modifier_table"
     modifier_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
-    description_id = Column(ForeignKey(SharedDescription.description_id), nullable=False)
+    description_id = Column(
+        ForeignKey(SharedDescription.description_id), nullable=False
+    )
 
     expiry_date = Column(Integer)
     db_description = relationship("SharedDescription")
@@ -1210,11 +1373,11 @@ class PlanetModifier(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, 'pm')
+        return game_info.convert_id_to_name(self.db_description.text, "pm")
 
 
 class PopStatsBySpecies(Base):
-    __tablename__ = 'popstats_species_table'
+    __tablename__ = "popstats_species_table"
     pop_stats_species_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     species_id = Column(ForeignKey(Species.species_id))
@@ -1229,7 +1392,7 @@ class PopStatsBySpecies(Base):
 
 
 class PopStatsByFaction(Base):
-    __tablename__ = 'popstats_faction_table'
+    __tablename__ = "popstats_faction_table"
     pop_stats_faction_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id))
@@ -1247,7 +1410,7 @@ class PopStatsByFaction(Base):
 
 
 class PopStatsByJob(Base):
-    __tablename__ = 'popstats_job_table'
+    __tablename__ = "popstats_job_table"
     pop_stats_job_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     job_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1266,7 +1429,7 @@ class PopStatsByJob(Base):
 
 
 class PopStatsByStratum(Base):
-    __tablename__ = 'popstats_stratum_table'
+    __tablename__ = "popstats_stratum_table"
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     stratum_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1285,7 +1448,7 @@ class PopStatsByStratum(Base):
 
 
 class PopStatsByEthos(Base):
-    __tablename__ = 'popstats_ethos_table'
+    __tablename__ = "popstats_ethos_table"
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     ethos_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1341,6 +1504,7 @@ class HistoricalEvent(Base):
     The event_type specifies which event is encoded, depending on which
     certain columns may be null.
     """
+
     __tablename__ = "historicaleventtable"
     historical_event_id = Column(Integer, primary_key=True)
 
@@ -1360,7 +1524,9 @@ class HistoricalEvent(Base):
     fleet_id = Column(ForeignKey(Fleet.fleet_id), nullable=True)
     end_date_days = Column(Integer)
 
-    country = relationship(Country, back_populates="historical_events", foreign_keys=[country_id])
+    country = relationship(
+        Country, back_populates="historical_events", foreign_keys=[country_id]
+    )
     target_country = relationship(Country, foreign_keys=[target_country_id])
     war = relationship(War)
     leader = relationship(Leader, back_populates="historical_events")
@@ -1372,26 +1538,39 @@ class HistoricalEvent(Base):
 
     def __str__(self):
         start_date = days_to_date(self.start_date_days)
-        end_date = days_to_date(self.end_date_days)
-        text = f"{start_date} - {end_date}: {str(self.event_type)} {self.description}"
+        text = f"{start_date} (A): {str(self.event_type)} {self.description}"
+        if self.end_date_days:
+            end_date = days_to_date(self.end_date_days)
+            text = (
+                f"{start_date} - {end_date}: {str(self.event_type)} {self.description}"
+            )
         return text
 
     @property
     def description(self) -> str:
         """ A brief description associated with the event, e.g. technology name or changes in government reform. """
         if self.event_type == HistoricalEventType.tradition:
-            return game_info.convert_id_to_name(self.db_description.text, remove_prefix="tr")
+            return game_info.convert_id_to_name(
+                self.db_description.text, remove_prefix="tr"
+            )
         elif self.event_type == HistoricalEventType.researched_technology:
-            return game_info.convert_id_to_name(self.db_description.text, remove_prefix="tech")
+            return game_info.convert_id_to_name(
+                self.db_description.text, remove_prefix="tech"
+            )
         elif self.event_type == HistoricalEventType.edict:
             return game_info.convert_id_to_name(self.db_description.text)
         elif self.event_type == HistoricalEventType.ascension_perk:
-            return game_info.convert_id_to_name(self.db_description.text, remove_prefix="ap")
+            return game_info.convert_id_to_name(
+                self.db_description.text, remove_prefix="ap"
+            )
         elif self.event_type == HistoricalEventType.government_reform:
             old_gov = self.country.get_government_for_date(self.start_date_days - 1)
             new_gov = self.country.get_government_for_date(self.start_date_days)
             reform_dict = new_gov.get_reform_description_dict(old_gov)
-            reform_lines = [f"{cat} " + ", ".join(reforms) + "." for (cat, reforms) in reform_dict.items()]
+            reform_lines = [
+                f"{cat} " + ", ".join(reforms) + "."
+                for (cat, reforms) in reform_dict.items()
+            ]
             ref = " ".join(reform_lines)
             return ref
         elif self.event_type == HistoricalEventType.terraforming:

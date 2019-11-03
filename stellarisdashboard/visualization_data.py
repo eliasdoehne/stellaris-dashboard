@@ -20,6 +20,7 @@ COLOR_ENGINEERING = (0.75, 0.59, 0.12)
 @enum.unique
 class PlotStyle(enum.Enum):
     """ Defines the kind of visualization associated with a given PlotSpecification (defined below)"""
+
     line = 0
     stacked = 1
     budget = 2
@@ -28,6 +29,7 @@ class PlotStyle(enum.Enum):
 @dataclasses.dataclass
 class PlotSpecification:
     """ This class is used to define all available visualizations. """
+
     plot_id: str
     title: str
 
@@ -46,7 +48,9 @@ class PlotSpecification:
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
 
 
-def get_current_execution_plot_data(game_name: str, country_perspective: Optional[int] = None) -> "PlotDataManager":
+def get_current_execution_plot_data(
+    game_name: str, country_perspective: Optional[int] = None
+) -> "PlotDataManager":
     """ Update and retrieve the PlotDataManager object stored for the requested game.
 
     :param game_name: The exact name of a game for which a database is available
@@ -65,7 +69,9 @@ def get_current_execution_plot_data(game_name: str, country_perspective: Optiona
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
-def get_color_vals(key_str: str, range_min: float = 0.1, range_max: float = 1.0) -> Tuple[float, float, float]:
+def get_color_vals(
+    key_str: str, range_min: float = 0.1, range_max: float = 1.0
+) -> Tuple[float, float, float]:
     """ Generate RGB values for the given identifier. Some special values (tech categories)
     have hardcoded colors to roughly match the game's look and feel.
 
@@ -101,9 +107,12 @@ class PlotDataManager:
     to a DataContainer instance (defined below).
     """
 
-    def __init__(self, game_name: str,
-                 plot_specifications: Dict[str, List[PlotSpecification]] = None,
-                 country_perspective: Optional[int] = None):
+    def __init__(
+        self,
+        game_name: str,
+        plot_specifications: Dict[str, List[PlotSpecification]] = None,
+        country_perspective: Optional[int] = None,
+    ):
         if plot_specifications is None:
             plot_specifications = THEMATICALLY_GROUPED_PLOTS
         self.game_name: str = game_name
@@ -129,7 +138,9 @@ class PlotDataManager:
         self.data_containers_by_plot_id = {}
         for ps_list in self.plot_specifications.values():
             for plot_spec in ps_list:
-                self.data_containers_by_plot_id[plot_spec.plot_id] = plot_spec.data_container_factory(self.country_perspective)
+                self.data_containers_by_plot_id[
+                    plot_spec.plot_id
+                ] = plot_spec.data_container_factory(self.country_perspective)
 
     @property
     def country_perspective(self) -> Optional[int]:
@@ -138,14 +149,18 @@ class PlotDataManager:
     @country_perspective.setter
     def country_perspective(self, value: Optional[int]):
         if value != self._country_perspective:
-            logger.info(f"Switching perspective to Country {value if value is not None else 'Observer'}")
+            logger.info(
+                f"Switching perspective to Country {value if value is not None else 'Observer'}"
+            )
             self._country_perspective = value
             self.initialize()
 
     def update_with_new_gamestate(self):
-        if (self.show_everything != config.CONFIG.show_everything
-                or self.only_show_default_empires != config.CONFIG.only_show_default_empires
-                or self.plot_time_resolution != config.CONFIG.plot_time_resolution):
+        if (
+            self.show_everything != config.CONFIG.show_everything
+            or self.only_show_default_empires != config.CONFIG.only_show_default_empires
+            or self.plot_time_resolution != config.CONFIG.plot_time_resolution
+        ):
             # reset everything due to changed setting: This forces the program to redraw all plots with the appropriate data:
             logger.info("Detected changed visibility settings: Reassembling plot data")
             self.initialize()
@@ -160,22 +175,33 @@ class PlotDataManager:
             use_every_nth_gamestate = (num_new_gs // self.plot_time_resolution) + 1
         t_start = time.time()
         num_loaded_gs = 0
-        for i, gs in enumerate(models.get_gamestates_since(self.game_name, self.last_date)):
+        for i, gs in enumerate(
+            models.get_gamestates_since(self.game_name, self.last_date)
+        ):
             if gs.date <= self.last_date:
-                logger.warning(f"Received gamestate with date {models.days_to_date(gs.date)}, last known date is {models.days_to_date(self.last_date)}")
+                logger.warning(
+                    f"Received gamestate with date {models.days_to_date(gs.date)}, last known date is {models.days_to_date(self.last_date)}"
+                )
                 continue
-            if (self.plot_time_resolution == 0
-                    or num_new_gs < self.plot_time_resolution
-                    or i % use_every_nth_gamestate == 0
-                    or (num_new_gs - i + self._loaded_gamestates) <= self.plot_time_resolution):
+            if (
+                self.plot_time_resolution == 0
+                or num_new_gs < self.plot_time_resolution
+                or i % use_every_nth_gamestate == 0
+                or (num_new_gs - i + self._loaded_gamestates)
+                <= self.plot_time_resolution
+            ):
                 num_loaded_gs += 1
                 self._loaded_gamestates += 1
                 for data_container in self.data_containers_by_plot_id.values():
                     data_container.extract_data_from_gamestate(gs)
             self.last_date = gs.date
-        logger.info(f"Loaded {num_loaded_gs} new gamestates from the database in {time.time() - t_start:5.3f} seconds. ({self._loaded_gamestates} gamestates in total)")
+        logger.info(
+            f"Loaded {num_loaded_gs} new gamestates from the database in {time.time() - t_start:5.3f} seconds. ({self._loaded_gamestates} gamestates in total)"
+        )
 
-    def get_data_for_plot(self, ps: PlotSpecification) -> Iterable[Tuple[str, List[int], List[float]]]:
+    def get_data_for_plot(
+        self, ps: PlotSpecification
+    ) -> Iterable[Tuple[str, List[int], List[float]]]:
         """
         Used to access the raw data for the provided plot specification. Individual traces to be plotted are
         yielded one-by-one as tuples in the form (legend key, x values, y values).
@@ -208,7 +234,9 @@ class AbstractPlotDataContainer(abc.ABC):
                 return
             self.data_dict[key] = [default_val for _ in range(len(self.dates) - 1)]
         if len(self.data_dict[key]) >= len(self.dates):
-            logger.info(f"{self.__class__.__qualname__} Ignoring duplicate value for {key}.")
+            logger.info(
+                f"{self.__class__.__qualname__} Ignoring duplicate value for {key}."
+            )
             return
         self.data_dict[key].append(new_val)
 
@@ -229,12 +257,17 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         self.dates.append(gs.date / 360.0)
         for cd in gs.country_data:
             try:
-                if config.CONFIG.only_show_default_empires and cd.country.country_type != "default":
+                if (
+                    config.CONFIG.only_show_default_empires
+                    and cd.country.country_type != "default"
+                ):
                     continue
                 new_val = self._get_value_from_countrydata(cd)
                 if new_val is not None:
                     added_new_val = True
-                    self._add_new_value_to_data_dict(cd.country.country_name, new_val, default_val=self.DEFAULT_VAL)
+                    self._add_new_value_to_data_dict(
+                        cd.country.country_name, new_val, default_val=self.DEFAULT_VAL
+                    )
             except Exception as e:
                 logger.exception(cd.country.country_name)
         if not added_new_val:
@@ -248,91 +281,125 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
 
 class PlanetCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_geography_info():
             return cd.owned_planets
 
 
 class SystemCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_geography_info():
             return cd.controlled_systems
 
 
 class TotalEnergyIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_economic_info():
             return cd.net_energy
 
 
 class TotalMineralsIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_economic_info():
             return cd.net_minerals
 
 
 class TotalAlloysIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_economic_info():
             return cd.net_alloys
 
 
 class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_economic_info():
             return cd.net_consumer_goods
 
 
 class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_economic_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_economic_info():
             return cd.net_food
 
 
 class TechCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_tech_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_tech_info():
             return cd.tech_count
 
 
 class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_tech_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_tech_info():
             return cd.exploration_progress
 
 
 class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_tech_info():
-            return cd.net_physics_research + cd.net_society_research + cd.net_engineering_research
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_tech_info():
+            return (
+                cd.net_physics_research
+                + cd.net_society_research
+                + cd.net_engineering_research
+            )
 
 
 class FleetSizeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_military_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_military_info():
             return cd.fleet_size
 
 
 class MilitaryPowerDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_military_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_military_info():
             return cd.military_power
 
 
 class VictoryScoreDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_geography_info():
             return cd.victory_score
 
 
 class EconomyScoreDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_geography_info():
             return cd.economy_power
 
 
 class VictoryRankDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: models.CountryData):
-        if (not cd.country.is_other_player and config.CONFIG.show_everything) or cd.show_geography_info():
+        if (
+            not cd.country.is_other_player and config.CONFIG.show_everything
+        ) or cd.show_geography_info():
             return cd.victory_rank
 
 
@@ -347,7 +414,9 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
         try:
             for key, new_val in self._iterate_budgetitems(player_cd):
                 if new_val is not None:
-                    self._add_new_value_to_data_dict(key, new_val, default_val=self.DEFAULT_VAL)
+                    self._add_new_value_to_data_dict(
+                        key, new_val, default_val=self.DEFAULT_VAL
+                    )
         except Exception as e:
             logger.exception(player_cd.country.country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
@@ -357,13 +426,17 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
         for cd in gs.country_data:
             if cd.country.is_other_player:
                 continue
-            if (self._country_perspective is None and cd.country.is_player) or cd.country.country_id_in_game == self._country_perspective:
+            if (
+                self._country_perspective is None and cd.country.is_player
+            ) or cd.country.country_id_in_game == self._country_perspective:
                 player_cd = cd
                 break
         return player_cd
 
     @abc.abstractmethod
-    def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
+    def _iterate_budgetitems(
+        self, cd: models.CountryData
+    ) -> Iterable[Tuple[str, float]]:
         pass
 
     def _include(self, player_cd: models.CountryData) -> bool:
@@ -373,7 +446,9 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
 class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
+    def _iterate_budgetitems(
+        self, cd: models.CountryData
+    ) -> Iterable[Tuple[str, float]]:
         yield "Physics", cd.net_physics_research
         yield "Society", cd.net_society_research
         yield "Engineering", cd.net_engineering_research
@@ -382,7 +457,9 @@ class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
 class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
+    def _iterate_budgetitems(
+        self, cd: models.CountryData
+    ) -> Iterable[Tuple[str, float]]:
         yield "corvettes", cd.ship_count_corvette
         yield "destroyers", cd.ship_count_destroyer * 2
         yield "cruisers", cd.ship_count_cruiser * 4
@@ -394,7 +471,9 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
 class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     DEFAULT_VAL = 0.0
 
-    def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
+    def _iterate_budgetitems(
+        self, cd: models.CountryData
+    ) -> Iterable[Tuple[str, float]]:
         for budget_item in cd.budget:
             val = self._get_value_from_budgetitem(budget_item)
             if val == 0.0:
@@ -489,7 +568,9 @@ PopStatsType = Union[
 
 
 class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
-    def _iterate_budgetitems(self, cd: models.CountryData) -> Iterable[Tuple[str, float]]:
+    def _iterate_budgetitems(
+        self, cd: models.CountryData
+    ) -> Iterable[Tuple[str, float]]:
         for pop_stats in self._iterate_popstats(cd):
             key = self._get_key_from_popstats(pop_stats)
             val = self._get_value_from_popstats(pop_stats)
@@ -516,7 +597,9 @@ class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
 
 
 class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.ABC):
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsBySpecies]:
+    def _iterate_popstats(
+        self, cd: models.CountryData
+    ) -> Iterable[models.PopStatsBySpecies]:
         return iter(cd.pop_stats_species)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
@@ -547,7 +630,9 @@ class SpeciesCrimeDataContainer(AbstractPopStatsBySpeciesDataContainer):
 
 
 class AbstractPopStatsByFactionDataContainer(AbstractPopStatsDataContainer, abc.ABC):
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByFaction]:
+    def _iterate_popstats(
+        self, cd: models.CountryData
+    ) -> Iterable[models.PopStatsByFaction]:
         return iter(cd.pop_stats_faction)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
@@ -590,7 +675,9 @@ class FactionCrimeDataContainer(AbstractPopStatsByFactionDataContainer):
 
 
 class AbstractPopStatsByJobDataContainer(AbstractPopStatsDataContainer, abc.ABC):
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByJob]:
+    def _iterate_popstats(
+        self, cd: models.CountryData
+    ) -> Iterable[models.PopStatsByJob]:
         return iter(cd.pop_stats_job)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
@@ -672,7 +759,9 @@ class PlanetStabilityDataContainer(AbstractPopStatsByPlanetDataContainer):
 
 
 class AbstractPopStatsByEthosDataContainer(AbstractPopStatsDataContainer, abc.ABC):
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByEthos]:
+    def _iterate_popstats(
+        self, cd: models.CountryData
+    ) -> Iterable[models.PopStatsByEthos]:
         return iter(cd.pop_stats_ethos)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
@@ -703,7 +792,9 @@ class EthosCrimeDataContainer(AbstractPopStatsByEthosDataContainer):
 
 
 class AbstractPopStatsByStratumDataContainer(AbstractPopStatsDataContainer, abc.ABC):
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PopStatsByStratum]:
+    def _iterate_popstats(
+        self, cd: models.CountryData
+    ) -> Iterable[models.PopStatsByStratum]:
         return iter(cd.pop_stats_stratum)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
@@ -736,371 +827,371 @@ class StratumCrimeDataContainer(AbstractPopStatsByStratumDataContainer):
 """ Define PlotSpecifications for all currently supported plots: """
 
 PLANET_COUNT_GRAPH = PlotSpecification(
-    plot_id='planet-count',
+    plot_id="planet-count",
     title="Owned Planets",
     data_container_factory=PlanetCountDataContainer,
     style=PlotStyle.line,
 )
 SYSTEM_COUNT_GRAPH = PlotSpecification(
-    plot_id='system-count',
+    plot_id="system-count",
     title="Controlled Systems",
     data_container_factory=SystemCountDataContainer,
     style=PlotStyle.line,
 )
 NET_MINERAL_INCOME_GRAPH = PlotSpecification(
-    plot_id='net-mineral-income',
+    plot_id="net-mineral-income",
     title="Net Mineral Income",
     data_container_factory=TotalMineralsIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_ENERGY_INCOME_GRAPH = PlotSpecification(
-    plot_id='net-energy-income',
+    plot_id="net-energy-income",
     title="Net Energy Income",
     data_container_factory=TotalEnergyIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_ALLOYS_INCOME_GRAPH = PlotSpecification(
-    plot_id='net-alloys-income',
+    plot_id="net-alloys-income",
     title="Net Alloys Income",
     data_container_factory=TotalAlloysIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
-    plot_id='net-consumer-goods-income',
+    plot_id="net-consumer-goods-income",
     title="Net Consumer Goods Income",
     data_container_factory=TotalConsumerGoodsIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_FOOD_INCOME_GRAPH = PlotSpecification(
-    plot_id='net-food-income',
+    plot_id="net-food-income",
     title="Net Food Income",
     data_container_factory=TotalFoodIncomeDataContainer,
     style=PlotStyle.line,
 )
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
-    plot_id='tech-count',
+    plot_id="tech-count",
     title="Researched Technologies",
     data_container_factory=TechCountDataContainer,
     style=PlotStyle.line,
 )
 RESEARCH_OUTPUT_BY_CATEGORY_GRAPH = PlotSpecification(
-    plot_id='empire-research-output',
+    plot_id="empire-research-output",
     title="Research Output",
     data_container_factory=ScienceOutputByFieldDataContainer,
     style=PlotStyle.stacked,
 )
 RESEARCH_OUTPUT_GRAPH = PlotSpecification(
-    plot_id='empire-research-output-comparison',
+    plot_id="empire-research-output-comparison",
     title="Total Research Output",
     data_container_factory=TotalScienceOutputDataContainer,
     style=PlotStyle.line,
 )
 SURVEY_PROGRESS_GRAPH = PlotSpecification(
-    plot_id='survey-count',
+    plot_id="survey-count",
     title="Exploration",
     data_container_factory=ExploredSystemsCountDataContainer,
     style=PlotStyle.line,
 )
 MILITARY_POWER_GRAPH = PlotSpecification(
-    plot_id='military-power',
+    plot_id="military-power",
     title="Military Strength",
     data_container_factory=MilitaryPowerDataContainer,
     style=PlotStyle.line,
 )
 FLEET_SIZE_GRAPH = PlotSpecification(
-    plot_id='fleet-size',
+    plot_id="fleet-size",
     title="Fleet Size",
     data_container_factory=FleetSizeDataContainer,
     style=PlotStyle.line,
 )
 FLEET_COMPOSITION_GRAPH = PlotSpecification(
-    plot_id='empire-fleet-composition',
+    plot_id="empire-fleet-composition",
     title="Fleet Composition",
     data_container_factory=FleetCompositionDataContainer,
     style=PlotStyle.stacked,
 )
 SPECIES_DISTRIBUTION_GRAPH = PlotSpecification(
-    plot_id='empire-species-distribution',
+    plot_id="empire-species-distribution",
     title="Species Demographics",
     data_container_factory=SpeciesDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 SPECIES_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-species-happiness',
+    plot_id="empire-species-happiness",
     title="Happiness by Species",
     data_container_factory=SpeciesHappinessDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_POWER_GRAPH = PlotSpecification(
-    plot_id='empire-species-power',
+    plot_id="empire-species-power",
     title="Power by Species",
     data_container_factory=SpeciesPowerDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_CRIME_GRAPH = PlotSpecification(
-    plot_id='empire-species-crime',
+    plot_id="empire-species-crime",
     title="Crime by Species",
     data_container_factory=SpeciesCrimeDataContainer,
     style=PlotStyle.line,
 )
 FACTION_DISTRIBUTION_GRAPH = PlotSpecification(
-    plot_id='empire-faction-distribution',
+    plot_id="empire-faction-distribution",
     title="Faction Demographics",
     data_container_factory=FactionDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 FACTION_SUPPORT_GRAPH = PlotSpecification(
-    plot_id='empire-faction-support',
+    plot_id="empire-faction-support",
     title="Faction Support",
     data_container_factory=FactionSupportDataContainer,
     style=PlotStyle.stacked,
 )
 FACTION_APPROVAL_GRAPH = PlotSpecification(
-    plot_id='empire-faction-approval',
+    plot_id="empire-faction-approval",
     title="Faction Approval",
     data_container_factory=FactionApprovalDataContainer,
     style=PlotStyle.line,
 )
 FACTION_CRIME_GRAPH = PlotSpecification(
-    plot_id='empire-faction-crime',
+    plot_id="empire-faction-crime",
     title="Crime by Faction",
     data_container_factory=FactionCrimeDataContainer,
     style=PlotStyle.line,
 )
 FACTION_POWER_GRAPH = PlotSpecification(
-    plot_id='empire-faction-power',
+    plot_id="empire-faction-power",
     title="Power by Faction",
     data_container_factory=FactionPowerDataContainer,
     style=PlotStyle.line,
 )
 FACTION_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-faction-happiness',
+    plot_id="empire-faction-happiness",
     title="Happiness by Faction",
     data_container_factory=FactionHappinessDataContainer,
     style=PlotStyle.line,
 )
 PLANET_POP_DISTRIBUTION_GRAPH = PlotSpecification(
-    plot_id='empire-planet-pop-distribution',
+    plot_id="empire-planet-pop-distribution",
     title="Population by Planet",
     data_container_factory=PlanetDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 PLANET_MIGRATION_GRAPH = PlotSpecification(
-    plot_id='empire-planet-migration',
+    plot_id="empire-planet-migration",
     title="Migration by Planet",
     data_container_factory=PlanetMigrationDataContainer,
     style=PlotStyle.line,
 )
 PLANET_AMENITIES_GRAPH = PlotSpecification(
-    plot_id='empire-planet-amenities',
+    plot_id="empire-planet-amenities",
     title="Free Amenities by Planet",
     data_container_factory=PlanetAmenitiesDataContainer,
     style=PlotStyle.line,
 )
 PLANET_STABILITY_GRAPH = PlotSpecification(
-    plot_id='empire-planet-stability',
+    plot_id="empire-planet-stability",
     title="Stability by Planet",
     data_container_factory=PlanetStabilityDataContainer,
     style=PlotStyle.line,
 )
 PLANET_HOUSING_GRAPH = PlotSpecification(
-    plot_id='empire-planet-housing',
+    plot_id="empire-planet-housing",
     title="Free Housing by Planet",
     data_container_factory=PlanetHousingDataContainer,
     style=PlotStyle.line,
 )
 PLANET_CRIME_GRAPH = PlotSpecification(
-    plot_id='empire-planet-crime',
+    plot_id="empire-planet-crime",
     title="Crime by Planet",
     data_container_factory=PlanetCrimeDataContainer,
     style=PlotStyle.line,
 )
 PLANET_POWER_GRAPH = PlotSpecification(
-    plot_id='empire-planet-power',
+    plot_id="empire-planet-power",
     title="Power by Planet",
     data_container_factory=PlanetPowerDataContainer,
     style=PlotStyle.line,
 )
 PLANET_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-planet-happiness',
+    plot_id="empire-planet-happiness",
     title="Happiness by Planet",
     data_container_factory=PlanetHappinessDataContainer,
     style=PlotStyle.line,
 )
 ETHOS_DISTRIBUTION_GRAPH = PlotSpecification(
-    plot_id='empire-ethos-distribution',
+    plot_id="empire-ethos-distribution",
     title="Ethos Demographics",
     data_container_factory=EthosDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 
 ETHOS_CRIME_GRAPH = PlotSpecification(
-    plot_id='empire-ethos-crime',
+    plot_id="empire-ethos-crime",
     title="Crime by Ethos",
     data_container_factory=EthosCrimeDataContainer,
     style=PlotStyle.line,
 )
 
 ETHOS_POWER_GRAPH = PlotSpecification(
-    plot_id='empire-ethos-power',
+    plot_id="empire-ethos-power",
     title="Power by Ethos",
     data_container_factory=EthosPowerDataContainer,
     style=PlotStyle.line,
 )
 ETHOS_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-ethos-happiness',
+    plot_id="empire-ethos-happiness",
     title="Happiness by Ethos",
     data_container_factory=EthosHappinessDataContainer,
     style=PlotStyle.line,
 )
 STRATA_DISTRIBUTION_GRAPH = PlotSpecification(
-    plot_id='empire-strata-distribution',
+    plot_id="empire-strata-distribution",
     title="Stratum Demographics",
     data_container_factory=StratumDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 STRATA_CRIME_GRAPH = PlotSpecification(
-    plot_id='empire-strata-crime',
+    plot_id="empire-strata-crime",
     title="Crime by Stratum",
     data_container_factory=StratumCrimeDataContainer,
     style=PlotStyle.line,
 )
 STRATA_POWER_GRAPH = PlotSpecification(
-    plot_id='empire-strata-power',
+    plot_id="empire-strata-power",
     title="Power by Stratum",
     data_container_factory=StratumPowerDataContainer,
     style=PlotStyle.line,
 )
 STRATA_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-strata-happiness',
+    plot_id="empire-strata-happiness",
     title="Happiness by Stratum",
     data_container_factory=StratumHappinessDataContainer,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
 JOB_DISTRIBUTION_GRAPH = PlotSpecification(
-    plot_id='empire-job-distribution',
+    plot_id="empire-job-distribution",
     title="Job Demographics",
     data_container_factory=JobDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 JOB_CRIME_GRAPH = PlotSpecification(
-    plot_id='empire-job-crime',
+    plot_id="empire-job-crime",
     title="Crime by Job",
     data_container_factory=JobCrimeDataContainer,
     style=PlotStyle.line,
 )
 JOB_POWER_GRAPH = PlotSpecification(
-    plot_id='empire-job-power',
+    plot_id="empire-job-power",
     title="Power by Job",
     data_container_factory=JobPowerDataContainer,
     style=PlotStyle.line,
 )
 JOB_HAPPINESS_GRAPH = PlotSpecification(
-    plot_id='empire-job-happiness',
+    plot_id="empire-job-happiness",
     title="Happiness by Job",
     data_container_factory=JobHappinessDataContainer,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
 ENERGY_BUDGET = PlotSpecification(
-    plot_id='empire-energy-budget',
+    plot_id="empire-energy-budget",
     title="Energy Budget",
     data_container_factory=EnergyBudgetDataContainer,
     style=PlotStyle.budget,
 )
 MINERAL_BUDGET = PlotSpecification(
-    plot_id='empire-mineral-budget',
+    plot_id="empire-mineral-budget",
     title="Mineral Budget",
     data_container_factory=MineralsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 CONSUMER_GOODS_BUDGET = PlotSpecification(
-    plot_id='empire-consumer-goods-budget',
+    plot_id="empire-consumer-goods-budget",
     title="Consumer Goods Budget",
     data_container_factory=ConsumerGoodsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ALLOYS_BUDGET = PlotSpecification(
-    plot_id='empire-alloys-budget',
+    plot_id="empire-alloys-budget",
     title="Alloys Budget",
     data_container_factory=AlloysBudgetDataContainer,
     style=PlotStyle.budget,
 )
 FOOD_BUDGET = PlotSpecification(
-    plot_id='empire-food-budget',
+    plot_id="empire-food-budget",
     title="Food",
     data_container_factory=FoodBudgetDataContainer,
     style=PlotStyle.budget,
 )
 VOLATILE_MOTES_BUDGET = PlotSpecification(
-    plot_id='empire-volatile-motes-budget',
+    plot_id="empire-volatile-motes-budget",
     title="Volatile Motes",
     data_container_factory=VolatileMotesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 EXOTIC_GASES_BUDGET = PlotSpecification(
-    plot_id='empire-exotic-gas-budget',
+    plot_id="empire-exotic-gas-budget",
     title="Exotic Gases",
     data_container_factory=ExoticGasesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 RARE_CRYSTALS_BUDGET = PlotSpecification(
-    plot_id='empire-rare-crystals-budget',
+    plot_id="empire-rare-crystals-budget",
     title="Rare Crystals",
     data_container_factory=RareCrystalsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 LIVING_METAL_BUDGET = PlotSpecification(
-    plot_id='empire-living-metal-budget',
+    plot_id="empire-living-metal-budget",
     title="Living Metal",
     data_container_factory=LivingMetalBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ZRO_BUDGET = PlotSpecification(
-    plot_id='empire-zro-budget',
+    plot_id="empire-zro-budget",
     title="Zro",
     data_container_factory=ZroBudgetDataContainer,
     style=PlotStyle.budget,
 )
 DARK_MATTER_BUDGET = PlotSpecification(
-    plot_id='empire-dark-matter-budget',
+    plot_id="empire-dark-matter-budget",
     title="Dark Matter",
     data_container_factory=DarkMatterBudgetDataContainer,
     style=PlotStyle.budget,
 )
 NANITES_BUDGET = PlotSpecification(
-    plot_id='empire-nanites-budget',
+    plot_id="empire-nanites-budget",
     title="Nanites",
     data_container_factory=NanitesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 INFLUENCE_BUDGET = PlotSpecification(
-    plot_id='empire-influence-budget',
+    plot_id="empire-influence-budget",
     title="Influence",
     data_container_factory=InfluenceBudgetDataContainer,
     style=PlotStyle.budget,
 )
 UNITY_BUDGET = PlotSpecification(
-    plot_id='empire-unity-budget',
+    plot_id="empire-unity-budget",
     title="Unity",
     data_container_factory=UnityBudgetDataContainer,
     style=PlotStyle.stacked,
 )
 VICTORY_RANK_GRAPH = PlotSpecification(
-    plot_id='victory-rank',
+    plot_id="victory-rank",
     title="Victory Rank (Lower is better!)",
     data_container_factory=VictoryRankDataContainer,
     style=PlotStyle.line,
 )
 VICTORY_SCORE_GRAPH = PlotSpecification(
-    plot_id='victory-score',
+    plot_id="victory-score",
     title="Victory Score",
     data_container_factory=VictoryScoreDataContainer,
     style=PlotStyle.line,
 )
 VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
-    plot_id='victory-economy-score',
+    plot_id="victory-economy-score",
     title="Victory Economic Score",
     data_container_factory=EconomyScoreDataContainer,
     style=PlotStyle.line,
@@ -1242,16 +1333,8 @@ THEMATICALLY_GROUPED_PLOTS = {
         RESEARCH_OUTPUT_GRAPH,
         RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
     ],
-    "Military": [
-        FLEET_SIZE_GRAPH,
-        MILITARY_POWER_GRAPH,
-        FLEET_COMPOSITION_GRAPH,
-    ],
-    "Victory": [
-        VICTORY_RANK_GRAPH,
-        VICTORY_SCORE_GRAPH,
-        VICTORY_ECONOMY_SCORE_GRAPH,
-    ],
+    "Military": [FLEET_SIZE_GRAPH, MILITARY_POWER_GRAPH, FLEET_COMPOSITION_GRAPH,],
+    "Victory": [VICTORY_RANK_GRAPH, VICTORY_SCORE_GRAPH, VICTORY_ECONOMY_SCORE_GRAPH,],
 }
 
 _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
@@ -1269,6 +1352,7 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
 
 class GalaxyMapData:
     """ Maintains the data for the historical galaxy map. """
+
     UNCLAIMED = "Unclaimed Systems"
 
     def __init__(self, game_id: str):
@@ -1288,9 +1372,14 @@ class GalaxyMapData:
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
             for hl in session.query(models.HyperLane).all():
-                sys_one, sys_two = hl.system_one.system_id_in_game, hl.system_two.system_id_in_game
+                sys_one, sys_two = (
+                    hl.system_one.system_id_in_game,
+                    hl.system_two.system_id_in_game,
+                )
                 self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
-        logger.debug(f"Initialized galaxy graph in {time.clock() - start_time} seconds.")
+        logger.debug(
+            f"Initialized galaxy graph in {time.clock() - start_time} seconds."
+        )
 
     def get_graph_for_date(self, time_days: int) -> nx.Graph:
         start_time = time.clock()
@@ -1309,7 +1398,9 @@ class GalaxyMapData:
                 self.galaxy_graph.edges[edge]["country"] = i_country
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
-        logger.info(f"Updated networkx graph in {time.clock() - start_time:5.3f} seconds.")
+        logger.info(
+            f"Updated networkx graph in {time.clock() - start_time:5.3f} seconds."
+        )
         return self.galaxy_graph
 
     def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
@@ -1325,7 +1416,9 @@ class GalaxyMapData:
                     systems_by_owner[country] = set()
                 systems_by_owner[country].add(system.system_id_in_game)
 
-        systems_by_owner[GalaxyMapData.UNCLAIMED] |= set(self.galaxy_graph.nodes) - owned_systems
+        systems_by_owner[GalaxyMapData.UNCLAIMED] |= (
+            set(self.galaxy_graph.nodes) - owned_systems
+        )
         return systems_by_owner
 
     def _country_display_name(self, country: models.Country) -> str:

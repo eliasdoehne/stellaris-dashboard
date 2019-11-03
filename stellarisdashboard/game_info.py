@@ -315,9 +315,11 @@ COLONIZABLE_PLANET_CLASSES_PD_PLANETS = {
     "pc_methane",
     "pc_ammonia",
 }
-COLONIZABLE_PLANET_CLASSES = (COLONIZABLE_PLANET_CLASSES_PLANETS
-                              | COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES
-                              | COLONIZABLE_PLANET_CLASSES_PD_PLANETS)
+COLONIZABLE_PLANET_CLASSES = (
+    COLONIZABLE_PLANET_CLASSES_PLANETS
+    | COLONIZABLE_PLANET_CLASSES_MEGA_STRUCTURES
+    | COLONIZABLE_PLANET_CLASSES_PD_PLANETS
+)
 
 DESTROYED_BY_WEAPONS_PLANET_CLASSES = {
     "pc_shattered",
@@ -333,7 +335,9 @@ DESTROYED_BY_EVENTS_AND_CRISES_PLANET_CLASSES = {
     "pc_infested",
     "pc_gray_goo",
 }
-DESTROYED_PLANET_CLASSES = DESTROYED_BY_WEAPONS_PLANET_CLASSES | DESTROYED_BY_EVENTS_AND_CRISES_PLANET_CLASSES
+DESTROYED_PLANET_CLASSES = (
+    DESTROYED_BY_WEAPONS_PLANET_CLASSES | DESTROYED_BY_EVENTS_AND_CRISES_PLANET_CLASSES
+)
 
 
 def is_destroyed_planet(planet_class):
@@ -358,7 +362,8 @@ WORD_REPLACEMENT = {
 
 def convert_id_to_name(object_id: str, remove_prefix="") -> str:
     words = [word for word in object_id.split("_") if word != remove_prefix]
-    words = [word.capitalize() if word not in LOWERCASE_WORDS else word
-             for word in words]
+    words = [
+        word.capitalize() if word not in LOWERCASE_WORDS else word for word in words
+    ]
     words = [WORD_REPLACEMENT.get(word, word) for word in words]
     return " ".join(words)

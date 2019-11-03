@@ -1,13 +1,13 @@
 import re
 
-WHITESPACE = re.compile(r'[\t\n ]*')
-EQ = re.compile(r'=')
-BR_OPEN = re.compile(r'{')
-BR_CLOSE = re.compile(r'}')
+WHITESPACE = re.compile(r"[\t\n ]*")
+EQ = re.compile(r"=")
+BR_OPEN = re.compile(r"{")
+BR_CLOSE = re.compile(r"}")
 Q_STR = re.compile(r'"((\\")|[^"])*"')
-IDENTIFIER = re.compile(r'[0-9_]*[a-zA-Z_]+[a-zA-Z0-9_:]*')
-FLOAT = re.compile(r'-?[0-9]+\.[0-9]*')
-INT = re.compile(r'-?[0-9]+')
+IDENTIFIER = re.compile(r"[0-9_]*[a-zA-Z_]+[a-zA-Z0-9_:]*")
+FLOAT = re.compile(r"-?[0-9]+\.[0-9]*")
+INT = re.compile(r"-?[0-9]+")
 
 REG_EXES = [
     BR_OPEN,

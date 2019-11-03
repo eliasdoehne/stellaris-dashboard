@@ -23,6 +23,6 @@ def main():
         stop_event.set()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     mp.freeze_support()
     main()

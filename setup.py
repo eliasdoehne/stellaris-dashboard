@@ -28,9 +28,13 @@ try:
     # Try to build the cython extension locally
     from Cython.Build import cythonize
 
-    extension_modules = cythonize("stellarisdashboard/cython_ext/token_value_stream.pyx")
+    extension_modules = cythonize(
+        "stellarisdashboard/cython_ext/token_value_stream.pyx"
+    )
 except ImportError:
-    print("Cython is not installed, using pre-built C-extension if available, or (slow) fallback solution.")
+    print(
+        "Cython is not installed, using pre-built C-extension if available, or (slow) fallback solution."
+    )
     extension_modules = []
 except RuntimeError as e:
     print(f"Warning: RuntimeError while building Cython extension: {e}")
@@ -50,8 +54,8 @@ setup(
         "dataclasses",
         "networkx",
         "plotly",
-        'sqlalchemy',
-        'pyyaml',
+        "sqlalchemy",
+        "pyyaml",
     ],
     entry_points={
         "console_scripts": [

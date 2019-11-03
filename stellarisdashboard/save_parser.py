@@ -11,7 +11,18 @@ import time
 import traceback
 import zipfile
 from collections import namedtuple
-from typing import Any, Dict, Tuple, Set, Iterable, List, TypeVar, Iterator, Deque, Optional
+from typing import (
+    Any,
+    Dict,
+    Tuple,
+    Set,
+    Iterable,
+    List,
+    TypeVar,
+    Iterator,
+    Deque,
+    Optional,
+)
 
 from stellarisdashboard import config
 from stellarisdashboard.token_value_stream_re import INT, FLOAT
@@ -21,13 +32,16 @@ try:
     # try to load the cython-compiled C-extension
     from stellarisdashboard.cython_ext import token_value_stream
 except ImportError as import_error:
-    logger.info(f"Cython extensions not available, using slow parser. Error message: \"{import_error}\"")
+    logger.info(
+        f'Cython extensions not available, using slow parser. Error message: "{import_error}"'
+    )
     from stellarisdashboard import token_value_stream_re as token_value_stream
 
 FilePosition = namedtuple("FilePosition", "line col")
 
 
-class StellarisFileFormatError(Exception): pass
+class StellarisFileFormatError(Exception):
+    pass
 
 
 T = TypeVar("T")
@@ -53,7 +67,9 @@ class SavePathMonitor(abc.ABC):
         self._last_checked_time = float("-inf")
 
     @abc.abstractmethod
-    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(
+        self,
+    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
         """
         Check the save path for new save files and yield results that are ready. Depending on the implementation,
         it files may be skipped if all parser threads are busy. Results are always returned in the correct order.
@@ -75,9 +91,15 @@ class SavePathMonitor(abc.ABC):
             unfiltered_count = len(new_files)
             filter_string = config.CONFIG.save_name_filter
             if filter_string:
-                new_files = [f for (i, f) in enumerate(new_files) if f.stem.lower().find(filter_string.lower()) >= 0]
+                new_files = [
+                    f
+                    for (i, f) in enumerate(new_files)
+                    if f.stem.lower().find(filter_string.lower()) >= 0
+                ]
             if filter_string:
-                logger.info(f'Applying filename filter: "{config.CONFIG.save_name_filter}", reduced from {unfiltered_count} to {len(new_files)} files.')
+                logger.info(
+                    f'Applying filename filter: "{config.CONFIG.save_name_filter}", reduced from {unfiltered_count} to {len(new_files)} files.'
+                )
         return new_files
 
     def _apply_skip_savefiles_filter(self, new_files):
@@ -87,24 +109,37 @@ class SavePathMonitor(abc.ABC):
         logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
         if (config.CONFIG.read_only_every_nth_save or 0) > 1:
             num_new_files = len(new_files)
-            new_files = [f for (i, f) in enumerate(new_files)
-                         if (self.num_encountered_saves + i) % config.CONFIG.read_only_every_nth_save == 0]
+            new_files = [
+                f
+                for (i, f) in enumerate(new_files)
+                if (self.num_encountered_saves + i)
+                % config.CONFIG.read_only_every_nth_save
+                == 0
+            ]
             self.num_encountered_saves += num_new_files
             self.num_encountered_saves %= config.CONFIG.read_only_every_nth_save
-            logger.info(f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}...")
+            logger.info(
+                f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}..."
+            )
         return new_files
 
     def mark_all_existing_saves_processed(self) -> None:
         """ Ensure that existing files are not re-parsed. """
-        self.processed_saves |= {f for f in self._valid_save_files() if f.stem != "ironman"}
+        self.processed_saves |= {
+            f for f in self._valid_save_files() if f.stem != "ironman"
+        }
         self._last_checked_time = time.time()
 
     def _valid_save_files(self) -> List[pathlib.Path]:
-        prefiltered_files = (save_file for save_file in self.save_parent_dir.glob("**/*.sav")
-                             if save_file not in self.processed_saves
-                             and str(save_file.parent.stem).startswith(self.game_name_prefix))
-        modified_files = sorted(f for f in prefiltered_files
-                                if m_or_c_time(f) > self._last_checked_time)
+        prefiltered_files = (
+            save_file
+            for save_file in self.save_parent_dir.glob("**/*.sav")
+            if save_file not in self.processed_saves
+            and str(save_file.parent.stem).startswith(self.game_name_prefix)
+        )
+        modified_files = sorted(
+            f for f in prefiltered_files if m_or_c_time(f) > self._last_checked_time
+        )
         self._last_checked_time = time.time()
         return modified_files
 
@@ -123,10 +158,14 @@ class ContinuousSavePathMonitor(SavePathMonitor):
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
         super().__init__(save_parent_dir, game_name_prefix)
         self._num_threads = config.CONFIG.threads
-        self._pool = mp.Pool(processes=config.CONFIG.threads, initializer=_pool_worker_init)
+        self._pool = mp.Pool(
+            processes=config.CONFIG.threads, initializer=_pool_worker_init
+        )
         self._pending_results: Deque[Tuple[pathlib.PurePath, Any]] = collections.deque()
 
-    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(
+        self,
+    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
@@ -163,7 +202,9 @@ class BatchSavePathMonitor(SavePathMonitor):
     the CLI command `stellarisdashboardcli --parse-saves`.
     """
 
-    def get_gamestates_and_check_for_new_files(self) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(
+        self,
+    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
         """
         Check the save directory for new files. If any are found, parse them and
         return the results as gamestate dictionaries as they come in.
@@ -177,10 +218,17 @@ class BatchSavePathMonitor(SavePathMonitor):
         if config.CONFIG.threads > 1 and len(new_files) > 1:
             all_game_ids = [f.parent.stem for f in new_files]
             chunksize = min(16, int(2 * config.CONFIG.threads))
-            for chunk in BatchSavePathMonitor.split_into_chunks(zip(all_game_ids, new_files), chunksize):
+            for chunk in BatchSavePathMonitor.split_into_chunks(
+                zip(all_game_ids, new_files), chunksize
+            ):
                 chunk_game_ids, chunk_files = zip(*chunk)
-                with concurrent.futures.ProcessPoolExecutor(max_workers=config.CONFIG.threads) as executor:
-                    futures = [executor.submit(parse_save, save_file) for save_file in chunk_files]
+                with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=config.CONFIG.threads
+                ) as executor:
+                    futures = [
+                        executor.submit(parse_save, save_file)
+                        for save_file in chunk_files
+                    ]
                     for i, (game_id, future) in enumerate(zip(chunk_game_ids, futures)):
                         result = future.result()
                         yield game_id, result
@@ -219,7 +267,9 @@ def parse_save(filename) -> Dict[str, Any]:
             if not remaining:
                 raise
             delay = config.CONFIG.save_file_delay
-            logger.info(f"Encountered BadZipFile error {e}. Next attempt in {delay} seconds, {remaining} attempts remaining.")
+            logger.info(
+                f"Encountered BadZipFile error {e}. Next attempt in {delay} seconds, {remaining} attempts remaining."
+            )
             time.sleep(delay)
     return gamestate
 
@@ -234,7 +284,11 @@ class TokenType(enum.Enum):
     EOF = enum.auto()
 
     def is_literal(self):
-        return self == TokenType.STRING or self == TokenType.INTEGER or self == TokenType.FLOAT
+        return (
+            self == TokenType.STRING
+            or self == TokenType.INTEGER
+            or self == TokenType.FLOAT
+        )
 
 
 Token = namedtuple("Token", ["token_type", "value", "pos"])
@@ -310,7 +364,9 @@ class SaveFileParser:
             gamestate = save_zip.read("gamestate").decode()
         self.parse_from_string(gamestate)
         end_time = time.time()
-        logger.info(f"Parsed save file {self.save_filename} in {end_time - start_time} seconds.")
+        logger.info(
+            f"Parsed save file {self.save_filename} in {end_time - start_time} seconds."
+        )
         return self.gamestate_dict
 
     def parse_from_string(self, s: str):
@@ -320,7 +376,10 @@ class SaveFileParser:
 
     def _parse_key_value_pair(self):
         key_token = self._lookahead()
-        if key_token.token_type != TokenType.STRING and key_token.token_type != TokenType.INTEGER:
+        if (
+            key_token.token_type != TokenType.STRING
+            and key_token.token_type != TokenType.INTEGER
+        ):
             raise StellarisFileFormatError(
                 f"Line {key_token.pos}: Expected a string or Integer as key, found {key_token}"
             )
@@ -349,9 +408,13 @@ class SaveFileParser:
     def _parse_composite_game_object_or_list(self):
         brace = self._next_token()
         if brace.token_type != TokenType.BRACE_OPEN:
-            raise StellarisFileFormatError(f"Line {brace.pos}: Expected {{ token, found {brace}")
+            raise StellarisFileFormatError(
+                f"Line {brace.pos}: Expected {{ token, found {brace}"
+            )
         tt = self._lookahead().token_type
-        if tt == TokenType.BRACE_OPEN:  # indicates that this is a list since composite objects and lists cannot be keys
+        if (
+            tt == TokenType.BRACE_OPEN
+        ):  # indicates that this is a list since composite objects and lists cannot be keys
             result = self._parse_list()
         elif tt == TokenType.BRACE_CLOSE:  # immediate closing brace => empty list
             self._next_token()
@@ -361,7 +424,10 @@ class SaveFileParser:
             next_token = self._lookahead()
             if next_token.token_type == TokenType.EQUAL:
                 result = self._parse_key_value_pair_list(token)
-            elif next_token.token_type.is_literal() or next_token.token_type == TokenType.BRACE_CLOSE:
+            elif (
+                next_token.token_type.is_literal()
+                or next_token.token_type == TokenType.BRACE_CLOSE
+            ):
                 result = self._parse_list(token.value)
             else:
                 raise StellarisFileFormatError(f"Unexpected token: {next_token}")
@@ -370,7 +436,9 @@ class SaveFileParser:
     def _parse_key_value_pair_list(self, first_key_token):
         eq_token = self._next_token()
         if eq_token.token_type != TokenType.EQUAL:
-            raise StellarisFileFormatError(f"Line {eq_token.pos}: Expected =, found {eq_token}")
+            raise StellarisFileFormatError(
+                f"Line {eq_token.pos}: Expected =, found {eq_token}"
+            )
 
         next_token = self._lookahead()
         if next_token.token_type.is_literal():
@@ -378,11 +446,16 @@ class SaveFileParser:
         elif next_token.token_type == TokenType.BRACE_OPEN:
             first_value = self._parse_composite_game_object_or_list()
         else:
-            raise StellarisFileFormatError(f"Line {next_token.pos}: Expected literal or {{, found {eq_token}")
+            raise StellarisFileFormatError(
+                f"Line {next_token.pos}: Expected literal or {{, found {eq_token}"
+            )
         result = {first_key_token.value: first_value}
         next_token = self._lookahead()
         handled_duplicate_keys = set()
-        while next_token.token_type != TokenType.BRACE_CLOSE and next_token.token_type != TokenType.EOF:
+        while (
+            next_token.token_type != TokenType.BRACE_CLOSE
+            and next_token.token_type != TokenType.EOF
+        ):
             key, value = self._parse_key_value_pair()
             convert_to_list = key in result and key not in handled_duplicate_keys
             self._add_key_value_pair_or_convert_to_list(

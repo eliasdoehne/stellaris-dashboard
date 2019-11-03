@@ -12,7 +12,7 @@ import dataclasses
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 CPU_COUNT = mp.cpu_count()
 
-LOG_FORMAT = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
 def initialize_logger():
@@ -51,11 +51,18 @@ def _get_default_thread_count():
 def _get_default_save_path():
     # according to https://stellaris.paradoxwikis.com/Save-game_editing
     if platform.system() == "Windows":
-        return pathlib.Path.home() / "Documents/Paradox Interactive/Stellaris/save games/"
+        return (
+            pathlib.Path.home() / "Documents/Paradox Interactive/Stellaris/save games/"
+        )
     elif platform.system() == "Linux":
-        return pathlib.Path.home() / ".local/share/Paradox Interactive/Stellaris/save games/"
+        return (
+            pathlib.Path.home()
+            / ".local/share/Paradox Interactive/Stellaris/save games/"
+        )
     else:
-        return pathlib.Path.home() / "Documents/Paradox Interactive/Stellaris/save games/"
+        return (
+            pathlib.Path.home() / "Documents/Paradox Interactive/Stellaris/save games/"
+        )
 
 
 def _get_default_base_output_path():
@@ -93,6 +100,7 @@ DEFAULT_SETTINGS = dict(
 @dataclasses.dataclass
 class Config:
     """ Stores the settings for the dashboard. """
+
     save_file_path: pathlib.Path = None
     mp_username: str = None
     base_output_path: pathlib.Path = None
@@ -169,10 +177,10 @@ class Config:
         logger.info("Updating settings")
         for key, val in settings_dict.items():
             if key in Config.DEPRECATED_KEYS:
-                logger.info(f'Ignoring deprecated setting {key} with value {val}.')
+                logger.info(f"Ignoring deprecated setting {key} with value {val}.")
                 continue
             if key not in Config.ALL_KEYS:
-                logger.info(f'Ignoring unknown setting {key} with value {val}.')
+                logger.info(f"Ignoring unknown setting {key} with value {val}.")
                 continue
             old_val = self.__dict__.get(key)
             if key in Config.BOOL_KEYS:
@@ -186,20 +194,26 @@ class Config:
                 if key == "base_output_path":
                     try:
                         if not val.exists():
-                            logger.info(f'Creating new {key} directory at {val}')
+                            logger.info(f"Creating new {key} directory at {val}")
                             val.mkdir(parents=True)
                         elif not val.is_dir():
-                            logger.warning(f'Ignoring path setting {key} with value {val}, as the provided value exists and is not a directory!')
+                            logger.warning(
+                                f"Ignoring path setting {key} with value {val}, as the provided value exists and is not a directory!"
+                            )
                             continue
                     except Exception:
-                        logger.warning(f"Error during path creation while updating {key} option with value {val}:")
+                        logger.warning(
+                            f"Error during path creation while updating {key} option with value {val}:"
+                        )
                         logger.error(traceback.format_exc())
                         logger.info(f"Ignoring setting {key} with value {val}.")
                         continue
 
             self.__setattr__(key, val)
             if val != old_val:
-                logger.info(f'Updated setting {key.ljust(28)} {str(old_val).rjust(8)} -> {str(val).ljust(8)}')
+                logger.info(
+                    f"Updated setting {key.ljust(28)} {str(old_val).rjust(8)} -> {str(val).ljust(8)}"
+                )
 
     def write_to_file(self):
         fname = _get_settings_file_path()
@@ -240,7 +254,9 @@ class Config:
             return True
         elif val == "false":
             return False
-        raise ValueError(f"Expected either true or false for bool value, received {val}.")
+        raise ValueError(
+            f"Expected either true or false for bool value, received {val}."
+        )
 
 
 def _apply_existing_settings(config: Config):

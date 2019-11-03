@@ -17,18 +17,24 @@ from stellarisdashboard import config, save_parser, timeline, visualization_data
 logger = logging.getLogger(__name__)
 
 # These messages are shown by the CLI
-save_path_help_string = 'The path where the Stellaris save files are stored. This should be the path to the folder containing the save folders for each game.'
+save_path_help_string = "The path where the Stellaris save files are stored. This should be the path to the folder containing the save folders for each game."
 game_name_help_string = 'An identifier of the game that you want to visualize. It matches prefixes, such that "--game-name uni" matches the game id "unitednationsofearth_-15512622", but not "lokkenmechanists_1256936305"'
-showeverything_help_string = 'Use this flag if you want to include all empires regardless of visibility.'
-threads_help_string = 'The number of threads that run in parallel when reading save games.'
+showeverything_help_string = (
+    "Use this flag if you want to include all empires regardless of visibility."
+)
+
+threads_help_string = (
+    "The number of threads that run in parallel when reading save games."
+)
 
 
 @click.group()
 def cli():
     pass
 
+
 @cli.command()
-@click.option('--save-path', type=click.Path(exists=True, file_okay=False))
+@click.option("--save-path", type=click.Path(exists=True, file_okay=False))
 def monitor_saves(save_path):
     f_monitor_saves(save_path=save_path)
 
@@ -53,7 +59,10 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
     show_wait_message = True
     while not stop_event.is_set():
         nothing_new = True
-        for game_name, gamestate_dict in save_reader.get_gamestates_and_check_for_new_files():
+        for (
+            game_name,
+            gamestate_dict,
+        ) in save_reader.get_gamestates_and_check_for_new_files():
             if stop_event.is_set():
                 save_reader.shutdown()
                 break
@@ -72,9 +81,13 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
 
 
 @cli.command()
-@click.option('--threads', type=click.INT, help=threads_help_string)
-@click.option('--save-path', type=click.Path(exists=True, file_okay=False), help=save_path_help_string)
-@click.option('--game-name', type=click.STRING, help=game_name_help_string, default="")
+@click.option("--threads", type=click.INT, help=threads_help_string)
+@click.option(
+    "--save-path",
+    type=click.Path(exists=True, file_okay=False),
+    help=save_path_help_string,
+)
+@click.option("--game-name", type=click.STRING, help=game_name_help_string, default="")
 def parse_saves(threads, save_path, game_name):
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
@@ -85,15 +98,20 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
         config.CONFIG.threads = threads
     if save_path is None:
         save_path = config.CONFIG.save_file_path
-    save_reader = save_parser.BatchSavePathMonitor(save_path, game_name_prefix=game_name_prefix)
+    save_reader = save_parser.BatchSavePathMonitor(
+        save_path, game_name_prefix=game_name_prefix,
+    )
     tle = timeline.TimelineExtractor()
-    for game_name, gamestate_dict in save_reader.get_gamestates_and_check_for_new_files():
+    for (
+        game_name,
+        gamestate_dict,
+    ) in save_reader.get_gamestates_and_check_for_new_files():
         if gamestate_dict is None:
             continue
         tle.process_gamestate(game_name, gamestate_dict)
         del gamestate_dict
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     mp.freeze_support()
     cli()

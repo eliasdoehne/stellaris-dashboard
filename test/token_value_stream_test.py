@@ -9,7 +9,9 @@ from stellarisdashboard.cython_ext import token_value_stream
 import token_value_stream_test_data
 
 
-@pytest.mark.parametrize("test_data", token_value_stream_test_data.VALID_TOKEN_SEQUENCE_TEST_DATA)
+@pytest.mark.parametrize(
+    "test_data", token_value_stream_test_data.VALID_TOKEN_SEQUENCE_TEST_DATA
+)
 def test_token_value_stream(test_data):
     input, expected = test_data
     tok_re = list(token_value_stream_re.token_value_stream(input))
