@@ -713,7 +713,7 @@ class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.A
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, models.PlanetStats)
-        return f"{ps.planet.name} ({ps.planet.planet_id_in_game})"
+        return f"{ps.planet.name} (ID {ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):
