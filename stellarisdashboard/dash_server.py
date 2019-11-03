@@ -1397,7 +1397,7 @@ def get_most_recent_date(session):
 
 
 def start_server():
-    timeline_app.run_server(port=config.CONFIG.port, debug=True)
+    timeline_app.run_server(port=config.CONFIG.port)
 
 
 if __name__ == "__main__":
