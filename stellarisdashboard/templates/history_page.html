@@ -7,70 +7,21 @@
 {% endif %}
 {% if not is_filtered_page %}
 <div class="ledgerbox">
-    <h2>Index</h2>
     {% if wars %}
     <a href="#wars">War logs</a>
     <ul>
         {% for war in wars %}
-        <li class="toc-item"><a href={{ links[war["war_model"]] }}> {{ war["start"] }} - {{ war["end"] }}: {{ war["war"] }}</a></li>
+        <li class="toc-item">{{ links[war] | safe }}</li>
         {% endfor %}
     </ul>
     {% endif %}
-    <a href="#events">Country logs</a>
+    <a href="#events">Country Logs</a>
     <ul>
         {% for country in events %}
         <li class="toc-item">{{ links[country] | safe }}</li>
         {% endfor %}
     </ul>
 </div>
-<hr>
-{% endif %}
-
-{% if wars %}
-<a name="wars"></a>
-<h1>Wars</h1>
-{% for war in wars %}
-<div class="ledgerbox">
-    <a name={{"war_{}".format(war["war"].war_id)}}></a>
-    <h2 class="war-header">{{ war["war"].name }} ({{ war["start"] }} - {{ war["end"] }}) </h2>
-    <h4>Attackers:</h4>
-    <ul>
-        {% for wp in war["attackers"] %}
-        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].get_war_goal()}}" war goal</li>
-        {% endfor %}
-    </ul>
-    <h4>Defenders:</h4>
-    <ul>
-        {% for wp in war["defenders"] %}
-        <li class="eventitem">{{links[wp["country"]]|safe}}: "{{wp["wp"].get_war_goal()}}" war goal</li>
-        {% endfor %}
-    </ul>
-    {% if war["combat"] %}
-    <h4>Combat Log: </h4>
-    <ul class="event_list">
-        {% for engagement in war["combat"] %}
-        <li class="eventitem">
-            <div class="eventdescription">
-                <span class="dateblock war">{{engagement["date"]}}:</span>
-                <span class="eventtext">
-                {% if engagement["type"] == "armies" %}
-                    Invasion of planet {{ links[engagement["planet"]] | safe}} in the {{ links[engagement["system"]] | safe}} system:
-                {% elif engagement["type"] == "ships" %}
-                    Space battle in the {{ links[engagement["system"]] | safe}} system:
-                {% else %}
-                    {{engagement["combat"].combat_type}} in the {{ links[engagement["system"]] | safe}} system:
-                {% endif %}
-                    Attackers {{ engagement["attackers"] | safe }} ({{engagement["attacker_war_exhaustion"]}} exhaustion)
-                    {% if engagement["combat"].attacker_victory %} defeated {% else %} were defeated by {% endif %}
-                    {{ engagement["defenders"] | safe }} (exhaustion {{engagement["defender_war_exhaustion"]}}).
-                </span>
-        </li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-</div>
-<center><a class="button" href="#index">Return to Top</a></center>
-{% endfor %}
 <hr>
 {% endif %}
 
@@ -93,7 +44,7 @@
         {% endfor %}
     </ul>
 
-    <center><div><span>
+    <div style="text-align: center;"><div><span>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('researched_technology');">Technologies</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('edict');">Edicts</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('tradition');">Traditions</a>
@@ -105,7 +56,7 @@
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('level_up');">Leader Promotion</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="show_all_ledgeritems();">Show all events</a>
         </span></div>
-    </center>
+    </div>
 
     <ul class="event_list">
         {% for event in events %}

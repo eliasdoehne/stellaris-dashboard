@@ -74,9 +74,8 @@ def history_page(game_id="", version=None):
 
     with models.get_db_session(game_id) as session:
         dict_builder = EventTemplateDictBuilder(session, game_id, event_filter)
-        wars = []
         events, title, details, links = dict_builder.get_event_and_link_dicts()
-
+        wars = dict_builder.get_war_list()
     return render_template(
         "history_page.html",
         page_title=event_filter.page_title,
@@ -1100,6 +1099,11 @@ class EventTemplateDictBuilder:
         if not self._events[key_object] and self.event_filter.is_empty_filter:
             del self._events[key_object]
 
+    def get_war_list(self):
+        if not self.event_filter.is_empty_filter:
+            return []
+        return [key for key in self._formatted_urls if isinstance(key, models.War)]
+
     def _get_details(self, key) -> Dict[str, str]:
         if isinstance(key, models.Country):
             return self.country_details(key)
@@ -1124,9 +1128,7 @@ class EventTemplateDictBuilder:
         if event.system:
             self._formatted_urls[event.system] = self._get_url_for(event.system)
         if event.war:
-            self._formatted_urls[event.war] = self._preformat_history_url(
-                event.war.name, war=event.war.war_id
-            )
+            self._formatted_urls[event.war] = self._get_url_for(event.war)
 
     def _get_title(self, key) -> str:
         if isinstance(key, models.Country):
@@ -1177,10 +1179,9 @@ class EventTemplateDictBuilder:
         details = {
             "Star Class": star_class,
         }
-        hyperlane_targets = list(system_model.neighbors)
+        hyperlane_targets = sorted(system_model.neighbors, key=models.System.get_name)
         details["Hyperlanes"] = ", ".join(
-            self._preformat_history_url(s.get_name(), system=s.system_id)
-            for s in sorted(hyperlane_targets, key=models.System.get_name)
+            self._get_url_for(s) for s in hyperlane_targets
         )
 
         bypasses = []
@@ -1194,11 +1195,7 @@ class EventTemplateDictBuilder:
                     .all()
                 )
                 details[bp.name] = ", ".join(
-                    self._preformat_history_url(
-                        t.system.name, system=t.system.system_id
-                    )
-                    for t in targets
-                    if t != bp
+                    self._get_url_for(t.system) for t in targets if t != bp
                 )
             else:
                 bypasses.append(bp.name)
@@ -1230,9 +1227,7 @@ class EventTemplateDictBuilder:
         return details
 
     def leader_details(self, leader_model: models.Leader) -> Dict[str, str]:
-        country_url = self._preformat_history_url(
-            leader_model.country.country_name, country=leader_model.country.country_id
-        )
+        country_url = self._get_url_for(leader_model.country)
         details = {
             "Leader Name": leader_model.leader_name,
             "Gender": game_info.convert_id_to_name(leader_model.gender),
@@ -1402,7 +1397,7 @@ def get_most_recent_date(session):
 
 
 def start_server():
-    timeline_app.run_server(port=config.CONFIG.port)
+    timeline_app.run_server(port=config.CONFIG.port, debug=True)
 
 
 if __name__ == "__main__":
