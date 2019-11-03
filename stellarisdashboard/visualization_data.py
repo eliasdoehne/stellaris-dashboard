@@ -204,7 +204,7 @@ class PlotDataManager:
     ) -> Iterable[Tuple[str, List[int], List[float]]]:
         """
         Used to access the raw data for the provided plot specification. Individual traces to be plotted are
-        yielded one-by-one as tuples in the form (legend key, x values, y values).
+        yielded one-by-one as tuples in the form (legend key_object, x values, y values).
 
         :param ps:
         :return:

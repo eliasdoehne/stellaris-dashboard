@@ -7,19 +7,19 @@
 {% endif %}
 {% if not is_filtered_page %}
 <div class="ledgerbox">
-    <h2>Contents</h2>
+    <h2>Index</h2>
     {% if wars %}
     <a href="#wars">War logs</a>
     <ul>
         {% for war in wars %}
-        <li class="toc-item"><a href={{"#war_{}".format(war["war"].war_id)}}>{{ war["start"] }} - {{ war["end"] }}: {{war["war"].name}}</a></li>
+        <li class="toc-item"><a href={{ links[war["war_model"]] }}> {{ war["start"] }} - {{ war["end"] }}: {{ war["war"] }}</a></li>
         {% endfor %}
     </ul>
     {% endif %}
     <a href="#events">Country logs</a>
     <ul>
         {% for country in events %}
-        <li class="toc-item"><a href=#country_{{ country.country_id }}>{{country.country_name}}</a></li>
+        <li class="toc-item">{{ links[country] | safe }}</li>
         {% endfor %}
     </ul>
 </div>
@@ -54,11 +54,11 @@
                 <span class="dateblock war">{{engagement["date"]}}:</span>
                 <span class="eventtext">
                 {% if engagement["type"] == "armies" %}
-                    Planetary invasion of planet {{ links[engagement["planet"]] | safe}} in the {{ links[engagement["system"]] | safe}} system:
+                    Invasion of planet {{ links[engagement["planet"]] | safe}} in the {{ links[engagement["system"]] | safe}} system:
                 {% elif engagement["type"] == "ships" %}
-                    Fleet combat in the {{ links[engagement["system"]] | safe}} system:
+                    Space battle in the {{ links[engagement["system"]] | safe}} system:
                 {% else %}
-                    {{engagement["combat"].combat_type}}
+                    {{engagement["combat"].combat_type}} in the {{ links[engagement["system"]] | safe}} system:
                 {% endif %}
                     Attackers {{ engagement["attackers"] | safe }} ({{engagement["attacker_war_exhaustion"]}} exhaustion)
                     {% if engagement["combat"].attacker_victory %} defeated {% else %} were defeated by {% endif %}
@@ -149,7 +149,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    Invasion of planet {{ links[event["planet"]] | safe}} in the {{links[event["system"]]|safe}}
+                    The {{ event["attackers"] | safe }} invaded the planet {{ links[event["planet"]] | safe}} in the {{links[event["system"]]|safe}}
                     system during the {{links[event["war"]]|safe}} conflict.
                  </span>
             </div>
@@ -159,7 +159,11 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    Fleet combat engagement in the {{links[event["system"]]|safe}} system during the {{links[event["war"]]|safe}} conflict.
+                    Space battle in the {{ links[event["system"]] | safe}} system:
+                    Attackers {{ event["attackers"] | safe }} ({{event["attacker_exhaustion"]}} exhaustion)
+                    {% if event["attacker_victory"] %} defeated {% else %} were defeated by {% endif %}
+                    {{ event["defenders"] | safe }} (exhaustion {{event["defender_exhaustion"]}}) in the
+                    {{ links[event["war"]] | safe }}.
                  </span>
             </div>
         </li>

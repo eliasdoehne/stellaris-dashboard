@@ -2543,97 +2543,93 @@ class WarProcessor(AbstractGamestateDataProcessor):
         for war_id, war_dict in wars_dict.items():
             if not isinstance(war_dict, dict):
                 continue
-            war_name = war_dict.get("name", "Unnamed war")
-            war_model = (
-                self._session.query(models.War)
-                .order_by(models.War.start_date_days.desc())
-                .filter_by(war_id_in_game=war_id)
-                .first()
+            self._update_war(war_id, war_dict)
+        self._settle_finished_wars()
+
+    def _update_war(self, war_id: int, war_dict):
+        war_name = war_dict.get("name", "Unnamed war")
+        war_model = (
+            self._session.query(models.War)
+            .order_by(models.War.start_date_days.desc())
+            .filter_by(war_id_in_game=war_id)
+            .first()
+        )
+        if war_model is None:
+            start_date_days = models.date_to_days(war_dict["start_date"])
+            war_model = models.War(
+                war_id_in_game=war_id,
+                game=self._db_game,
+                start_date_days=start_date_days,
+                end_date_days=self._basic_info.date_in_days,
+                name=war_name,
+                outcome=models.WarOutcome.in_progress,
             )
-            if war_model is None:
-                start_date_days = models.date_to_days(war_dict["start_date"])
-                war_model = models.War(
-                    war_id_in_game=war_id,
-                    game=self._db_game,
-                    start_date_days=start_date_days,
-                    end_date_days=self._basic_info.date_in_days,
-                    name=war_name,
-                    outcome=models.WarOutcome.in_progress,
+        elif war_model.outcome != models.WarOutcome.in_progress:
+            # skip already finished wars
+            return
+        else:
+            war_model.end_date_days = self._basic_info.date_in_days - 1
+        self._session.add(war_model)
+
+        war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
+        war_goal_defender = war_dict.get("defender_war_goal", {})
+        if isinstance(war_goal_defender, dict):
+            war_goal_defender = war_goal_defender.get("type")
+        elif not war_goal_defender or war_goal_defender == "none":
+            war_goal_defender = None
+
+        attackers = {p["country"] for p in war_dict["attackers"]}
+        for war_party_info in itertools.chain(
+            war_dict.get("attackers", []), war_dict.get("defenders", [])
+        ):
+            if not isinstance(war_party_info, dict):
+                continue  # just in case
+            country_id_ingame = war_party_info.get("country")
+            db_country = (
+                self._session.query(models.Country)
+                .filter_by(game=self._db_game, country_id_in_game=country_id_ingame)
+                .one_or_none()
+            )
+
+            country_dict = self._gamestate_dict["country"][country_id_ingame]
+            if db_country is None:
+                country_name = country_dict["name"]
+                logger.warning(
+                    f"{self._basic_info.logger_str}     Could not find country matching war participant {country_name}"
                 )
-            elif war_dict.get("defender_force_peace") == "yes":
-                war_model.outcome = models.WarOutcome.status_quo
-                war_model.end_date_days = models.date_to_days(
-                    war_dict.get("defender_force_peace_date")
-                )
-            elif war_dict.get("attacker_force_peace") == "yes":
-                war_model.outcome = models.WarOutcome.status_quo
-                war_model.end_date_days = models.date_to_days(
-                    war_dict.get("attacker_force_peace_date")
-                )
-            elif war_model.outcome != models.WarOutcome.in_progress:
                 continue
-            else:
-                war_model.end_date_days = self._basic_info.date_in_days - 1
-            self._session.add(war_model)
-            war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
-            war_goal_defender = war_dict.get("defender_war_goal", {})
-            if isinstance(war_goal_defender, dict):
-                war_goal_defender = war_goal_defender.get("type")
-            elif not war_goal_defender or war_goal_defender == "none":
-                war_goal_defender = None
 
-            attackers = {p["country"] for p in war_dict["attackers"]}
-            for war_party_info in itertools.chain(
-                war_dict.get("attackers", []), war_dict.get("defenders", [])
-            ):
-                if not isinstance(war_party_info, dict):
-                    continue  # just in case
-                country_id_ingame = war_party_info.get("country")
-                db_country = (
-                    self._session.query(models.Country)
-                    .filter_by(game=self._db_game, country_id_in_game=country_id_ingame)
-                    .one_or_none()
+            is_attacker = country_id_ingame in attackers
+
+            war_participant = (
+                self._session.query(models.WarParticipant)
+                .filter_by(war=war_model, country=db_country)
+                .one_or_none()
+            )
+            if war_participant is None:
+                war_goal = war_goal_attacker if is_attacker else war_goal_defender
+                war_participant = models.WarParticipant(
+                    war=war_model,
+                    war_goal=war_goal,
+                    country=db_country,
+                    is_attacker=is_attacker,
                 )
-
-                country_dict = self._gamestate_dict["country"][country_id_ingame]
-                if db_country is None:
-                    country_name = country_dict["name"]
-                    logger.warning(
-                        f"{self._basic_info.logger_str}     Could not find country matching war participant {country_name}"
-                    )
-                    continue
-
-                is_attacker = country_id_ingame in attackers
-
-                war_participant = (
-                    self._session.query(models.WarParticipant)
-                    .filter_by(war=war_model, country=db_country)
-                    .one_or_none()
-                )
-                if war_participant is None:
-                    war_goal = war_goal_attacker if is_attacker else war_goal_defender
-                    war_participant = models.WarParticipant(
+                self._session.add(
+                    models.HistoricalEvent(
+                        event_type=models.HistoricalEventType.war,
+                        country=war_participant.country,
+                        leader=self._ruler_dict.get(country_id_ingame),
+                        start_date_days=self._basic_info.date_in_days,
+                        end_date_days=self._basic_info.date_in_days,
                         war=war_model,
-                        war_goal=war_goal,
-                        country=db_country,
-                        is_attacker=is_attacker,
+                        event_is_known_to_player=war_participant.country.has_met_player(),
                     )
-                    self._session.add(
-                        models.HistoricalEvent(
-                            event_type=models.HistoricalEventType.war,
-                            country=war_participant.country,
-                            leader=self._ruler_dict.get(country_id_ingame),
-                            start_date_days=self._basic_info.date_in_days,
-                            end_date_days=self._basic_info.date_in_days,
-                            war=war_model,
-                            event_is_known_to_player=war_participant.country.has_met_player(),
-                        )
-                    )
-                if war_participant.war_goal is None:
-                    war_participant.war_goal = war_goal_defender
-                self._session.add(war_participant)
+                )
+            if war_participant.war_goal is None:
+                war_participant.war_goal = war_goal_defender
+            self._session.add(war_participant)
 
-            self._extract_combat_victories(war_dict, war_model)
+        self._extract_combat_victories(war_dict, war_model)
 
     def _extract_combat_victories(self, war_dict, war: models.War):
 
@@ -2714,7 +2710,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                         f"{self._basic_info.logger_str}     Could not find country with ID {country_id} when processing battle {battle_dict}"
                     )
                     continue
-                is_known_to_player = is_known_to_player or db_country.has_met_player()
+                is_known_to_player |= db_country.has_met_player()
                 war_participant = (
                     self._session.query(models.WarParticipant)
                     .filter_by(war=war, country=db_country)
@@ -2741,6 +2737,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
             self._session.add(
                 models.HistoricalEvent(
                     event_type=event_type,
+                    combat=combat,
                     system=system,
                     planet=planet_model,
                     war=war,
@@ -2756,10 +2753,16 @@ class WarProcessor(AbstractGamestateDataProcessor):
         #  resolve wars based on truces...
         for truce_id, truce_info in truces_dict.items():
             if not isinstance(truce_info, dict):
+                logger.warning(
+                    f"{self._basic_info.logger_str} Skipping truce {truce_info} for invalid type"
+                )
                 continue
             war_name = truce_info.get("name")
             truce_type = truce_info.get("truce_type", "other")
             if not war_name or truce_type != "war":
+                logger.warning(
+                    f"{self._basic_info.logger_str} Skipping truce {truce_info} as it is not a war truce"
+                )
                 continue  # truce is due to diplomatic agreements or similar
             matching_war = (
                 self._session.query(models.War)
@@ -2768,12 +2771,17 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 .first()
             )
             if matching_war is None:
+                logger.warning(
+                    f"{self._basic_info.logger_str}     Could not find war matching {repr(war_name)}"
+                )
                 continue
             end_date = truce_info.get("start_date")  # start of truce => end of war
             if isinstance(end_date, str) and end_date != None:
                 matching_war.end_date_days = models.date_to_days(end_date)
-
+            else:
+                matching_war.end_date_days = self._basic_info.date_in_days - 1
             if matching_war.outcome == models.WarOutcome.in_progress:
+                # Heuristically guess winner by war exhaustion
                 if (
                     matching_war.attacker_war_exhaustion
                     < matching_war.defender_war_exhaustion
@@ -2788,7 +2796,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                     matching_war.outcome = models.WarOutcome.status_quo
                 self._history_add_peace_events(matching_war)
             self._session.add(matching_war)
-        #  resolve wars that are no longer in the save files...
+        #  resolve wars that are no longer in the save files after 5 years...
         for war in (
             self._session.query(models.War)
             .filter_by(outcome=models.WarOutcome.in_progress)
@@ -2798,6 +2806,9 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 war.outcome = models.WarOutcome.unknown
                 self._session.add(war)
                 self._history_add_peace_events(war)
+                logger.warning(
+                    f"{self._basic_info.logger_str} Ending war {war.name}, as it has been inactive since {models.days_to_date(war.end_date_days)}"
+                )
 
     def _history_add_peace_events(self, war: models.War):
         for wp in war.participants:

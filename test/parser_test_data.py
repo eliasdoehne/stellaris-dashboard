@@ -10,18 +10,18 @@ PARSER_TEST_CASES = dict(
     ),
     multiple_mixed_values_for_same_key=dict(
         input="""
-                key=value
-                key={}
-                key={ innerkey=val } 
-                key={ {} {1 2 3} }""",
+                key_object=value
+                key_object={}
+                key_object={ innerkey=val } 
+                key_object={ {} {1 2 3} }""",
         expected=dict(key=["value", [], dict(innerkey="val"), [[], [1, 2, 3]]]),
     ),
     multiple_mixed_values_list_first=dict(
         input="""
-                key={}
-                key=value
-                key={ innerkey=val } 
-                key={ {} {1 2 3} }""",
+                key_object={}
+                key_object=value
+                key_object={ innerkey=val } 
+                key_object={ {} {1 2 3} }""",
         expected=dict(key=[[], "value", dict(innerkey="val"), [[], [1, 2, 3]]]),
     ),
     multiple_list_values_for_same_key=dict(

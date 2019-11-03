@@ -1,9 +1,10 @@
 import contextlib
 import enum
+import itertools
 import logging
 import pathlib
 import threading
-from typing import Dict, List, Union, Optional, Iterable
+from typing import Dict, List, Union, Optional, Iterable, Collection
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -130,7 +131,7 @@ class WarOutcome(enum.Enum):
     other = enum.auto()
 
     def __str__(self):
-        return self.name.capitalize()
+        return game_info.convert_id_to_name(self.name)
 
 
 @enum.unique
@@ -1192,6 +1193,13 @@ class Combat(Base):
         primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)",
     )
 
+    def involved_countries(self) -> Iterable[Country]:
+        for cp in itertools.chain(self.attackers, self.defenders):
+            yield cp.country
+
+    def involved_country_ids(self) -> Collection[int]:
+        return {cp.country_id for cp in itertools.chain(self.attackers, self.defenders)}
+
 
 class CombatParticipant(Base):
     """
@@ -1214,6 +1222,10 @@ class CombatParticipant(Base):
         "WarParticipant", back_populates="combat_participation"
     )
     combat = relationship("Combat")
+
+    @property
+    def country(self):
+        return self.war_participant.country
 
 
 class Leader(Base):
@@ -1516,6 +1528,7 @@ class HistoricalEvent(Base):
     country_id = Column(ForeignKey(Country.country_id), index=True)
     leader_id = Column(ForeignKey(Leader.leader_id), nullable=True, index=True)
     war_id = Column(ForeignKey(War.war_id), nullable=True)
+    combat_id = Column(ForeignKey(Combat.combat_id), nullable=True)
     system_id = Column(ForeignKey(System.system_id), nullable=True)
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=True)
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id), nullable=True)
@@ -1529,6 +1542,7 @@ class HistoricalEvent(Base):
     )
     target_country = relationship(Country, foreign_keys=[target_country_id])
     war = relationship(War)
+    combat = relationship(Combat)
     leader = relationship(Leader, back_populates="historical_events")
     system = relationship(System, back_populates="historical_events")
     planet = relationship(Planet, back_populates="historical_events")
@@ -1582,3 +1596,11 @@ class HistoricalEvent(Base):
             return game_info.convert_id_to_name(self.db_description.text)
         else:
             return "Unknown Event"
+
+    def involved_countries(self):
+        if self.country_id is not None:
+            yield self.country
+        if self.target_country_id is not None:
+            yield self.target_country
+        if self.combat_id is not None:
+            yield from self.combat.involved_countries()
