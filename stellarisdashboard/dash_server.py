@@ -1085,8 +1085,11 @@ class EventTemplateDictBuilder:
                     description=event.description,
                     fleet=event.fleet,
                 )
-                if event.planet and event_dict["system"] is None:
-                    event_dict["system"] = event.planet.system
+                if event.planet:
+                    preformatted_links[event.planet] = self._get_url_for(event.planet)
+                    if event_dict["system"] is None:
+                        event_dict["system"] = event.planet.system
+
                 event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
                 events[key].append(event_dict)
                 if "faction" in event_dict:
