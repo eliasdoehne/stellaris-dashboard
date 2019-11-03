@@ -47,7 +47,7 @@ def index_page(version=None):
         show_old_version_notice = _is_old_version(version)
     games = models.get_available_games_dict().values()
     return render_template(
-        "index.html",
+        "game_index.html",
         games=games,
         show_old_version_notice=show_old_version_notice,
         version=VERSION_ID,
@@ -59,12 +59,8 @@ def index_page(version=None):
 @flask_app.route("/history/<game_id>")
 @flask_app.route("/checkversion/<version>/history")
 @flask_app.route("/checkversion/<version>/history/<game_id>")
-def history_page(game_id=None, version=None):
-    show_old_version_notice = False
-    if version is not None:
-        show_old_version_notice = _is_old_version(version)
-    if game_id is None:
-        game_id = ""
+def history_page(game_id="", version=None):
+    show_old_version_notice = version is not None and _is_old_version(version)
 
     matches = models.get_known_games(game_id)
     if not matches:
@@ -78,10 +74,9 @@ def history_page(game_id=None, version=None):
 
     with models.get_db_session(game_id) as session:
         dict_builder = EventTemplateDictBuilder(session, game_id, event_filter)
-        preformatted_links = {}
         wars = []
-        events, details, links, title = dict_builder.get_event_and_link_dicts()
-        preformatted_links.update(links)
+        events, title, details, links = dict_builder.get_event_and_link_dicts()
+
     return render_template(
         "history_page.html",
         page_title=event_filter.page_title,
@@ -90,7 +85,7 @@ def history_page(game_id=None, version=None):
         wars=wars,
         events=events,
         details=details,
-        links=preformatted_links,
+        links=links,
         title=title,
         is_filtered_page=not event_filter.is_empty_filter,
         show_old_version_notice=show_old_version_notice,
@@ -1041,7 +1036,7 @@ class EventTemplateDictBuilder:
                 .all()
             )
             self.collect_event_dicts(event_list, key)
-        return self._events, self._details, self._formatted_urls, self._titles
+        return self._events, self._titles, self._details, self._formatted_urls
 
     def collect_event_dicts(self, event_list, key_object):
         self._events[key_object] = []
