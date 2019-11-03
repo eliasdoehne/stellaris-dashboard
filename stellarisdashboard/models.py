@@ -801,10 +801,14 @@ class Government(Base):
             reform_dict["Type changed"] = [f'from "{ogt}" to "{ngt}"']
 
         if old_gov.authority != self.authority:
-            old_authority = str(old_gov.authority)
-            new_authority = str(self.authority)
+            old_authority = game_info.convert_id_to_name(
+                old_gov.authority, remove_prefix="auth"
+            )
+            new_authority = game_info.convert_id_to_name(
+                self.authority, remove_prefix="auth"
+            )
             reform_dict["Authority changed"] = [
-                f'from "{old_authority}" to "{new_authority}"'
+                f"from {old_authority} to {new_authority}"
             ]
 
         new_civics = self.civics - old_gov.civics
