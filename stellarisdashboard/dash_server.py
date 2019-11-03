@@ -1139,11 +1139,11 @@ class EventTemplateDictBuilder:
         if isinstance(key, models.Country):
             return self._get_url_for(key, a_class="titlelink")
         elif isinstance(key, models.System):
-            return f"{key.name} System"
+            return f"{key.get_name()} System"
         elif isinstance(key, models.Leader):
             return key.get_name()
         elif isinstance(key, models.Planet):
-            return key.name
+            return f"Planet {key.name}"
         else:
             return ""
 
@@ -1184,8 +1184,8 @@ class EventTemplateDictBuilder:
         }
         hyperlane_targets = list(system_model.neighbors)
         details["Hyperlanes"] = ", ".join(
-            self._preformat_history_url(s.name, system=s.system_id)
-            for s in sorted(hyperlane_targets, key=lambda s: s.name)
+            self._preformat_history_url(s.get_name(), system=s.system_id)
+            for s in sorted(hyperlane_targets, key=models.System.get_name)
         )
 
         bypasses = []
