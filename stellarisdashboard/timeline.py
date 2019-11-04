@@ -2753,16 +2753,10 @@ class WarProcessor(AbstractGamestateDataProcessor):
         #  resolve wars based on truces...
         for truce_id, truce_info in truces_dict.items():
             if not isinstance(truce_info, dict):
-                logger.warning(
-                    f"{self._basic_info.logger_str} Skipping truce {truce_info} for invalid type"
-                )
                 continue
             war_name = truce_info.get("name")
             truce_type = truce_info.get("truce_type", "other")
             if not war_name or truce_type != "war":
-                logger.warning(
-                    f"{self._basic_info.logger_str} Skipping truce {truce_info} as it is not a war truce"
-                )
                 continue  # truce is due to diplomatic agreements or similar
             matching_war = (
                 self._session.query(models.War)
