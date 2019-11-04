@@ -31,7 +31,7 @@ timeline_app = dash.Dash(
 timeline_app.css.config.serve_locally = True
 timeline_app.scripts.config.serve_locally = True
 
-VERSION_ID = "v0.5.0"
+VERSION_ID = "v0.6.0"
 
 
 @flask_app.route("/")
