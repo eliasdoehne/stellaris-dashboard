@@ -487,23 +487,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
 
         if current_owner_country is None:
             owner_changed = True
-            current_owner_country = None
-            event_type = models.HistoricalEventType.lost_system
-            self._session.add(
-                models.HistoricalEvent(
-                    event_type=models.HistoricalEventType.lost_system,
-                    country=system_model.country,
-                    system=system_model,
-                    start_date_days=self._basic_info.date_in_days,
-                    event_is_known_to_player=system_model.country.has_met_player(),
-                )
-            )
-
         elif system_model.country is None:
             owner_changed = True
             event_type = models.HistoricalEventType.expanded_to_system
-            target_country = None
-
         elif system_model.country != current_owner_country:
             owner_changed = True
             event_type = models.HistoricalEventType.conquered_system
@@ -547,6 +533,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                         system=system_model,
                     )
                 )
+                is_visible = current_owner_country.has_met_player() or (
+                    target_country is not None and target_country.has_met_player()
+                )
                 self._session.add(
                     models.HistoricalEvent(
                         event_type=event_type,
@@ -554,11 +543,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                         target_country=target_country,
                         system=system_model,
                         start_date_days=self._basic_info.date_in_days,
-                        event_is_known_to_player=current_owner_country.has_met_player()
-                        or (
-                            target_country is not None
-                            and target_country.has_met_player()
-                        ),
+                        event_is_known_to_player=is_visible,
                     )
                 )
 
