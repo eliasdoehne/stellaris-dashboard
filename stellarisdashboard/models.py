@@ -245,7 +245,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.tradition,
             HistoricalEventType.ascension_perk,
             HistoricalEventType.edict,
-            HistoricalEventType.gained_system,
+            HistoricalEventType.conquered_system,
             HistoricalEventType.lost_system,
         }:
             return HistoricalEventScope.country
