@@ -3,7 +3,7 @@ import collections
 import functools
 import logging
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union, Iterable
 from urllib import parse
 
 import dash
@@ -78,7 +78,6 @@ def history_page(game_id="", version=None):
         wars = dict_builder.get_war_list()
     return render_template(
         "history_page.html",
-        page_title=event_filter.page_title,
         game_name=game_id,
         country=country,
         wars=wars,
@@ -915,23 +914,6 @@ class EventFilter:
             and self.faction_filter is None
         )
 
-    @property
-    def page_title(self) -> str:
-        if self.is_empty_filter:
-            return "Global Event Ledger"
-        elif self.country_filter is not None:
-            return "Empire history"
-        elif self.war_filter is not None:
-            return "War log"
-        elif self.system_filter is not None:
-            return "System history"
-        elif self.planet_filter is not None:
-            return "Planet history"
-        elif self.leader_filter is not None:
-            return "Leader Biography"
-        elif self.faction_filter is not None:
-            return "Faction history"
-
     def include_event(self, event: models.HistoricalEvent) -> bool:
         result = all(
             [
@@ -1004,6 +986,9 @@ class EventTemplateDictBuilder:
         self._session = db_session
         self._formatted_urls = None
         self._most_recent_date = None
+        self._events = None
+        self._details = None
+        self._titles = None
 
     def get_event_and_link_dicts(self):
         self._formatted_urls = {}

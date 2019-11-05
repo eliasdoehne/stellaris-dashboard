@@ -167,8 +167,6 @@ class HistoricalEventType(enum.Enum):
     megastructure_construction = enum.auto()
     sector_creation = enum.auto()
     expanded_to_system = enum.auto()
-    gained_system = enum.auto()
-    lost_system = enum.auto()
 
     # related to internal politics:
     new_faction = enum.auto()
@@ -195,6 +193,8 @@ class HistoricalEventType(enum.Enum):
     peace = enum.auto()
     fleet_combat = enum.auto()
     army_combat = enum.auto()
+    conquered_system = enum.auto()
+    lost_system = enum.auto()
 
     terraforming = enum.auto()
     planet_destroyed = enum.auto()  # TODO this would be cool!

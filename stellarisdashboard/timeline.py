@@ -53,7 +53,15 @@ class TimelineExtractor:
         t_start_gs = time.clock()
         with models.get_db_session(game_id=game_id) as self._session:
             try:
-                self._process_gamestate(game_id)
+                db_game = self._get_or_add_game_to_db(game_id)
+                if self._check_if_gamestate_exists(db_game):
+                    logger.info(
+                        f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
+                    )
+                    self._session.rollback()
+                    return
+                else:
+                    self._process_gamestate(db_game)
                 logger.info(
                     f"{self.basic_info.logger_str} Processed Gamestate in {time.clock() - t_start_gs:.3f} s, writing changes to database"
                 )
@@ -67,53 +75,46 @@ class TimelineExtractor:
                 if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
 
-    def _process_gamestate(self, game_id):
-        db_game = self._get_or_add_game_to_db(game_id)
+    def _check_if_gamestate_exists(self, db_game):
         existing_dates = {gs.date for gs in db_game.game_states}
-        if self.basic_info.date_in_days in existing_dates:
-            logger.info(
-                f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
-            )
-            self._session.rollback()
-        else:
-            db_game_state = models.GameState(
-                game=db_game, date=self.basic_info.date_in_days,
-            )
-            self._session.add(db_game_state)
-            all_dependencies = {}
-            for data_processor in self._data_processors():
-                t_start = time.clock()
-                data_processor.initialize(
-                    db_game,
-                    self._gamestate_dict,
-                    db_game_state,
-                    self.basic_info,
-                    self._session,
-                )
+        return self.basic_info.date_in_days in existing_dates
 
-                missing_dependencies = sorted(
-                    dep
-                    for dep in data_processor.DEPENDENCIES
-                    if dep not in all_dependencies
+    def _process_gamestate(self, db_game):
+        db_game_state = models.GameState(
+            game=db_game, date=self.basic_info.date_in_days,
+        )
+        self._session.add(db_game_state)
+        all_dependencies = {}
+        for data_processor in self._data_processors():
+            t_start = time.clock()
+            data_processor.initialize(
+                db_game,
+                self._gamestate_dict,
+                db_game_state,
+                self.basic_info,
+                self._session,
+            )
+
+            missing_dependencies = sorted(
+                dep
+                for dep in data_processor.DEPENDENCIES
+                if dep not in all_dependencies
+            )
+            if missing_dependencies:
+                logger.info(
+                    f"{self.basic_info.logger_str}   - Could not process {data_processor.ID} due to missing dependencies {', '.join(missing_dependencies)}"
                 )
-                if missing_dependencies:
-                    logger.info(
-                        f"{self.basic_info.logger_str}   - Could not process {data_processor.ID} due to missing dependencies {', '.join(missing_dependencies)}"
-                    )
-                else:
-                    logger.info(
-                        f"{self.basic_info.logger_str}   - Processing {data_processor.ID}"
-                    )
-                    data_processor.extract_data_from_gamestate(
-                        {
-                            key: all_dependencies[key]
-                            for key in data_processor.DEPENDENCIES
-                        }
-                    )
-                    all_dependencies[data_processor.ID] = data_processor.data()
-                    logger.info(
-                        f"{self.basic_info.logger_str}         done ({time.clock() - t_start:.3f} s)"
-                    )
+            else:
+                logger.info(
+                    f"{self.basic_info.logger_str}   - Processing {data_processor.ID}"
+                )
+                data_processor.extract_data_from_gamestate(
+                    {key: all_dependencies[key] for key in data_processor.DEPENDENCIES}
+                )
+                all_dependencies[data_processor.ID] = data_processor
+                logger.info(
+                    f"{self.basic_info.logger_str}         done ({time.clock() - t_start:.3f} s)"
+                )
 
     def _get_or_add_game_to_db(self, game_id: str):
         game = self._session.query(models.Game).filter_by(game_name=game_id).first()
@@ -189,7 +190,7 @@ class TimelineExtractor:
         yield CountryDataProcessor()
         yield SpeciesProcessor()
         yield LeaderProcessor()
-        yield PlanetModelProcessor()
+        yield PlanetProcessor()
         yield SectorColonyEventProcessor()
         yield PlanetUpdateProcessor()
         yield RulerEventProcessor()
@@ -231,14 +232,11 @@ class AbstractGamestateDataProcessor(abc.ABC):
     def initialize_data(self):
         pass
 
-    def data(self) -> Any:
-        pass
-
     @abc.abstractmethod
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         pass
 
-    @functools.lru_cache()
+    @functools.lru_cache(maxsize=10000)
     def _get_or_add_shared_description(self, text: str) -> models.SharedDescription:
         matching_description = (
             self._session.query(models.SharedDescription)
@@ -258,9 +256,6 @@ class SystemProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
         self.systems_by_ingame_id = None
-
-    def data(self) -> Dict[int, models.System]:
-        return self.systems_by_ingame_id
 
     def extract_data_from_gamestate(self, dependencies):
         self.systems_by_ingame_id = {
@@ -332,7 +327,7 @@ class BypassProcessor(AbstractGamestateDataProcessor):
     DEPENDENCIES = [SystemProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        systems_dict = dependencies[SystemProcessor.ID]
+        systems_dict = dependencies[SystemProcessor.ID].systems_by_ingame_id
 
         bypasses = self._gamestate_dict.get("bypasses", {})
         if not isinstance(bypasses, dict):
@@ -391,9 +386,6 @@ class CountryProcessor(AbstractGamestateDataProcessor):
     def initialize_data(self):
         self.countries_by_ingame_id = {}
 
-    def data(self) -> Dict[int, models.Country]:
-        return self.countries_by_ingame_id
-
     def extract_data_from_gamestate(self, dependencies):
         for country_id, country_data_dict in self._gamestate_dict["country"].items():
             if not isinstance(country_data_dict, dict):
@@ -434,17 +426,16 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
         self.systems_by_owner_country_id: Dict[int, Set[models.System]] = None
+        self.possible_war_conquests = None
 
     def initialize_data(self):
         self.systems_by_owner_country_id = {}
-
-    def data(self) -> Dict[int, Set[models.System]]:
-        return self.systems_by_owner_country_id
+        self.possible_war_conquests: List[models.HistoricalEvent] = []
 
     def extract_data_from_gamestate(self, dependencies):
         starbases = self._gamestate_dict.get("starbases", {})
-        countries_dict = dependencies[CountryProcessor.ID]
-        systems_dict = dependencies[SystemProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        systems_dict = dependencies[SystemProcessor.ID].systems_by_ingame_id
 
         starbase_systems = set()
         for starbase_dict in starbases.values():
@@ -480,7 +471,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             self._update_ownership(None, system_model)
 
     def _update_ownership(
-        self, current_owner_country: models.Country, system_model: models.System
+        self,
+        current_owner_country: Optional[models.Country],
+        system_model: models.System,
     ):
         owner_changed = False
         event_type = None
@@ -507,7 +500,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
 
         elif system_model.country != current_owner_country:
             owner_changed = True
-            event_type = models.HistoricalEventType.gained_system
+            event_type = models.HistoricalEventType.conquered_system
 
         if owner_changed:
             system_model.country = current_owner_country
@@ -575,11 +568,8 @@ class DiplomacyDictProcessor(AbstractGamestateDataProcessor):
     def initialize_data(self):
         self.diplomacy_dict = {}
 
-    def data(self):
-        return self.diplomacy_dict
-
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
         self.diplomacy_dict = {}
 
         diplo_predicates_by_key = dict(
@@ -634,11 +624,10 @@ class DiplomaticRelationsProcessor(AbstractGamestateDataProcessor):
         super().__init__()
         self.diplo_relations: Dict[int, Dict[int, models.DiplomaticRelation]] = None
 
-    def data(self):
-        return self.diplo_relations
-
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict: Dict[int, models.Country] = dependencies[CountryProcessor.ID]
+        countries_dict: Dict[int, models.Country] = dependencies[
+            CountryProcessor.ID
+        ].countries_by_ingame_id
 
         self.diplo_relations: Dict[int, Dict[int, models.DiplomaticRelation]] = {}
         all_relations = self._session.query(models.DiplomaticRelation).all()
@@ -680,11 +669,8 @@ class SensorLinkProcessor(AbstractGamestateDataProcessor):
     def initialize_data(self):
         self.sensor_links = {}
 
-    def data(self):
-        return self.sensor_links
-
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
         self.sensor_links = {country_id: dict() for country_id in countries_dict}
         trades = self._gamestate_dict.get("trade_deal", {})
         if not trades:
@@ -727,15 +713,16 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
     def initialize_data(self):
         self.country_data_dict = {}
 
-    def data(self):
         return self.country_data_dict
 
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
-        sensor_links = dependencies[SensorLinkProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        sensor_links = dependencies[SensorLinkProcessor.ID].sensor_links
 
-        diplomacy_dict = dependencies[DiplomacyDictProcessor.ID]
-        systems_by_country_id = dependencies[SystemOwnershipProcessor.ID]
+        diplomacy_dict = dependencies[DiplomacyDictProcessor.ID].diplomacy_dict
+        systems_by_country_id = dependencies[
+            SystemOwnershipProcessor.ID
+        ].systems_by_owner_country_id
 
         for country_id, country_model in countries_dict.items():
             country_data_dict = self._gamestate_dict["country"][country_id]
@@ -912,24 +899,21 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
 
-        self._species_by_ingame_id: Dict[int, models.Species] = None
-        self._robot_species: Set[int] = None
+        self.species_by_ingame_id: Dict[int, models.Species] = None
+        self.robot_species: Set[int] = None
 
     def initialize_data(self):
-        self._species_by_ingame_id = {}
-        self._robot_species = set()
-
-    def data(self):
-        return self._species_by_ingame_id, self._robot_species
+        self.species_by_ingame_id = {}
+        self.robot_species = set()
 
     def extract_data_from_gamestate(self, dependencies):
         for species_index, species_dict in enumerate(
             self._gamestate_dict.get("species", [])
         ):
             species_model = self._get_or_add_species(species_index)
-            self._species_by_ingame_id[species_index] = species_model
+            self.species_by_ingame_id[species_index] = species_model
             if species_dict.get("class") == "ROBOT":
-                self._robot_species.add(species_index)
+                self.robot_species.add(species_index)
 
     def _get_or_add_species(self, species_id_in_game: int):
         species_data = self._gamestate_dict["species"][species_id_in_game]
@@ -978,12 +962,9 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         self.leader_model_by_ingame_id = {}
         self._random_instance.seed(self._basic_info.game_id)
 
-    def data(self):
-        return self.leader_model_by_ingame_id
-
     def extract_data_from_gamestate(self, dependencies):
-        countries = dependencies[CountryProcessor.ID]
-        self._species_dict, _ = dependencies[SpeciesProcessor.ID]
+        countries = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._species_dict = dependencies[SpeciesProcessor.ID].species_by_ingame_id
 
         db_active_leaders = {}
         db_inactive_leaders = {}
@@ -1135,7 +1116,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             self._session.add(leader)
 
 
-class PlanetModelProcessor(AbstractGamestateDataProcessor):
+class PlanetProcessor(AbstractGamestateDataProcessor):
     ID = "planet_models"
     DEPENDENCIES = [SystemProcessor.ID]
 
@@ -1146,14 +1127,11 @@ class PlanetModelProcessor(AbstractGamestateDataProcessor):
         self._countries_dict = None
         self._leaders_dict = None
 
-    def data(self) -> Any:
-        return self.planets_by_ingame_id
-
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         self.planets_by_ingame_id = {
             p.planet_id_in_game: p for p in self._session.query(models.Planet)
         }
-        systems_by_id = dependencies[SystemProcessor.ID]
+        systems_by_id = dependencies[SystemProcessor.ID].systems_by_ingame_id
 
         for system_id, system_dict in self._gamestate_dict["galactic_object"].items():
             planets = system_dict.get("planet", [])
@@ -1338,7 +1316,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
     DEPENDENCIES = [
         SystemProcessor.ID,
         SystemOwnershipProcessor.ID,
-        PlanetModelProcessor.ID,
+        PlanetProcessor.ID,
         CountryProcessor.ID,
         LeaderProcessor.ID,
     ]
@@ -1352,11 +1330,13 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         self._systems_by_owner = None
 
     def extract_data_from_gamestate(self, dependencies):
-        self._planets_dict = dependencies[PlanetModelProcessor.ID]
-        self._countries_dict = dependencies[CountryProcessor.ID]
-        self._systems_dict = dependencies[SystemProcessor.ID]
-        self._leaders_dict = dependencies[LeaderProcessor.ID]
-        self._systems_by_owner = dependencies[SystemOwnershipProcessor.ID]
+        self._planets_dict = dependencies[PlanetProcessor.ID].planets_by_ingame_id
+        self._countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._systems_dict = dependencies[SystemProcessor.ID].systems_by_ingame_id
+        self._leaders_dict = dependencies[LeaderProcessor.ID].leader_model_by_ingame_id
+        self._systems_by_owner = dependencies[
+            SystemOwnershipProcessor.ID
+        ].systems_by_owner_country_id
 
         for country_id, country_model in self._countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
@@ -1606,10 +1586,10 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
 
 class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
     ID = "planet_updates"
-    DEPENDENCIES = [PlanetModelProcessor.ID, SectorColonyEventProcessor.ID]
+    DEPENDENCIES = [PlanetProcessor.ID, SectorColonyEventProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        planet_models = dependencies[PlanetModelProcessor.ID]
+        planet_models = dependencies[PlanetProcessor.ID].planets_by_ingame_id
         for ingame_id, planet_model in planet_models.items():
             planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id, {})
             self._update_planet_model(planet_dict, planet_model)
@@ -1630,8 +1610,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
     DEPENDENCIES = [
         CountryProcessor.ID,
         LeaderProcessor.ID,
-        PlanetModelProcessor.ID,
-        PlanetModelProcessor.ID,
+        PlanetProcessor.ID,
     ]
 
     def __init__(self):
@@ -1642,13 +1621,12 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
     def initialize_data(self):
         self.ruler_by_country_id = {}
 
-    def data(self) -> Dict[int, Optional[models.Leader]]:
-        return self.ruler_by_country_id
-
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
-        leader_by_ingame_id = dependencies.get(LeaderProcessor.ID)
-        self._planet_by_ingame_id = dependencies.get(PlanetModelProcessor.ID)
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        leader_by_ingame_id = dependencies[LeaderProcessor.ID].leader_model_by_ingame_id
+        self._planet_by_ingame_id = dependencies[
+            PlanetProcessor.ID
+        ].planets_by_ingame_id
 
         for country_id, country_model in countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
@@ -1828,8 +1806,8 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
     DEPENDENCIES = [CountryProcessor.ID, RulerEventProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
-        rulers_dict = dependencies[RulerEventProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        rulers_dict = dependencies[RulerEventProcessor.ID].ruler_by_country_id
 
         for country_id, country_model in countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
@@ -1951,12 +1929,9 @@ class FactionProcessor(AbstractGamestateDataProcessor):
     def initialize_data(self):
         self.faction_by_ingame_id = {}
 
-    def data(self):
-        return self.faction_by_ingame_id
-
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
-        self._leaders_dict = dependencies[LeaderProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._leaders_dict = dependencies[LeaderProcessor.ID].leader_model_by_ingame_id
 
         for faction_id, faction_dict in self._gamestate_dict.get(
             "pop_factions", {}
@@ -2078,10 +2053,12 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
         self._outgoing_relations = None
 
     def extract_data_from_gamestate(self, dependencies):
-        self._diplo_dict = dependencies[DiplomacyDictProcessor.ID]
-        self._country_dict = dependencies[CountryProcessor.ID]
-        self._ruler_dict = dependencies[RulerEventProcessor.ID]
-        self._outgoing_relations = dependencies[DiplomaticRelationsProcessor.ID]
+        self._diplo_dict = dependencies[DiplomacyDictProcessor.ID].diplomacy_dict
+        self._country_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._outgoing_relations = dependencies[
+            DiplomaticRelationsProcessor.ID
+        ].diplo_relations
+        self._ruler_dict = dependencies[RulerEventProcessor.ID].ruler_by_country_id
 
         diplo_relations = [
             (
@@ -2213,8 +2190,8 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
         self._leader_dict = None
 
     def extract_data_from_gamestate(self, dependencies):
-        countries_dict = dependencies[CountryProcessor.ID]
-        self._leader_dict = dependencies[LeaderProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._leader_dict = dependencies[LeaderProcessor.ID].leader_model_by_ingame_id
         for country_id, country_model in countries_dict.items():
             self._history_add_tech_events(
                 country_model, self._gamestate_dict["country"][country_id]
@@ -2380,9 +2357,9 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
         self._fleet_compos = {}
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        countries = dependencies[CountryProcessor.ID]
-        self._leaders = dependencies[LeaderProcessor.ID]
-        self._country_datas = dependencies[CountryDataProcessor.ID]
+        countries = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._country_datas = dependencies[CountryDataProcessor.ID].country_data_dict
+        self._leaders = dependencies[LeaderProcessor.ID].leader_model_by_ingame_id
 
         for fleet_id, fleet_dict in self._gamestate_dict["fleet"].items():
             if not isinstance(fleet_dict, dict):
@@ -2520,7 +2497,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         RulerEventProcessor.ID,
         CountryProcessor.ID,
         SystemProcessor.ID,
-        PlanetModelProcessor.ID,
+        PlanetProcessor.ID,
     ]
 
     def __init__(self):
@@ -2530,11 +2507,16 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._system_models_dict = None
         self._planet_models_dict = None
 
+        self.wars_by_country_id = None
+
+    def initialize_data(self):
+        self.wars_by_country_id = collections.defaultdict(list)
+
     def extract_data_from_gamestate(self, dependencies):
-        self._ruler_dict = dependencies[RulerEventProcessor.ID]
-        self._countries_dict = dependencies[CountryProcessor.ID]
-        self._system_models_dict = dependencies[SystemProcessor.ID]
-        self._planet_models_dict = dependencies[PlanetModelProcessor.ID]
+        self._ruler_dict = dependencies[RulerEventProcessor.ID].ruler_by_country_id
+        self._countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        self._system_models_dict = dependencies[SystemProcessor.ID].systems_by_ingame_id
+        self._planet_models_dict = dependencies[PlanetProcessor.ID].planets_by_ingame_id
 
         wars_dict = self._gamestate_dict.get("war")
         if not wars_dict:
@@ -2599,6 +2581,8 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 )
                 continue
 
+            self.wars_by_country_id[country_id_ingame].append(war_model)
+
             is_attacker = country_id_ingame in attackers
 
             war_participant = (
@@ -2632,7 +2616,6 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._extract_combat_victories(war_dict, war_model)
 
     def _extract_combat_victories(self, war_dict, war: models.War):
-
         battles = war_dict.get("battles", [])
         if not isinstance(battles, list):
             battles = [battles]
@@ -2848,11 +2831,12 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         def init_dict():
             return dict(pop_count=0, crime=0, happiness=0, power=0)
 
-        countries_dict = dependencies[CountryProcessor.ID]
-        country_data_dict = dependencies[CountryDataProcessor.ID]
-        species_dict, robot_species = dependencies[SpeciesProcessor.ID]
+        countries_dict = dependencies[CountryProcessor.ID].countries_by_ingame_id
+        country_data_dict = dependencies[CountryDataProcessor.ID].country_data_dict
+        species_dict = dependencies[SpeciesProcessor.ID].species_by_ingame_id
+        robot_species = dependencies[SpeciesProcessor.ID].robot_species
+        faction_by_ingame_id = dependencies[FactionProcessor.ID].faction_by_ingame_id
 
-        # TODO: Maybe make it possible to read other countries' pop stats??
         for country_id_in_game, country_model in countries_dict.items():
             if (
                 not config.CONFIG.read_non_player_countries
@@ -2973,11 +2957,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
                 stats["support"] = faction_dict.get("support", 0.0)
 
-                faction = (
-                    self._session.query(models.PoliticalFaction)
-                    .filter_by(country=country_model, faction_id_in_game=faction_id)
-                    .one_or_none()
-                )
+                faction = faction_by_ingame_id.get(faction_id)
                 if faction is None:
                     continue
                 self._session.add(
