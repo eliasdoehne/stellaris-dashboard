@@ -136,7 +136,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     The {{ links[event["country"]] | safe }} conquered the {{ links[event["system"]] | safe }} system from the
-                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war]] | safe }}{% endif %}.
+                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war"]] | safe }} {% endif %}.
                  </span>
             </div>
         </li>
