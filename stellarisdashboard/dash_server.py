@@ -288,7 +288,8 @@ BACKGROUND_PLOT_DARK = "rgba(43,59,52,1)"
 DARK_THEME_TEXT_COLOR = "rgba(217,217,217,1)"
 DARK_THEME_TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
 DEFAULT_PLOT_LAYOUT = dict(
-    yaxis=dict(type="linear"),
+    xaxis=dict(showgrid=False),
+    yaxis=dict(showgrid=False, type="linear"),
     plot_bgcolor=BACKGROUND_PLOT_DARK,
     paper_bgcolor=DARK_THEME_BACKGROUND,
     font={"color": DARK_THEME_TEXT_COLOR},
@@ -392,7 +393,7 @@ timeline_app.layout = html.Div(
                             "value": "normalize_stacked_plots",
                         },
                     ],
-                    values=["normalize_stacked_plots"]
+                    value=["normalize_stacked_plots"]
                     if config.CONFIG.normalize_stacked_plots
                     else [],
                     labelStyle=dict(color=DARK_THEME_TEXT_COLOR),
@@ -460,7 +461,7 @@ timeline_app.layout = html.Div(
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
-    layout["xaxis"] = dict(title=plot_spec.x_axis_label)
+    layout["xaxis"]["title"] = plot_spec.x_axis_label
     layout["yaxis"]["title"] = plot_spec.y_axis_label
     layout["width"] = config.CONFIG.plot_width
     layout["height"] = config.CONFIG.plot_height
@@ -527,7 +528,7 @@ def update_country_select_options(search):
         Input("tabs-container", "value"),
         Input("url", "search"),
         Input("dateslider", "value"),
-        Input("dash-plot-checklist", "values"),
+        Input("dash-plot-checklist", "value"),
         Input("country-perspective-dropdown", "value"),
     ],
 )
