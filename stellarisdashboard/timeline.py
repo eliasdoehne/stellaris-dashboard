@@ -1958,6 +1958,7 @@ class FactionProcessor(AbstractGamestateDataProcessor):
                 country_model=country_model,
                 faction_type=faction_dict.get("type"),
             )
+            self.faction_by_ingame_id[faction_id] = faction_model
             self._history_add_or_update_faction_leader_event(
                 country_model, faction_model, faction_dict
             )
@@ -2862,7 +2863,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 planet_country_id_in_game = self.country_by_planet_id.get(planet_id)
                 if planet_country_id_in_game != country_id_in_game:
                     continue
-                country_model = countries_dict.get(planet_country_id_in_game)
 
                 species_id = pop_dict.get("species_index")
                 job = pop_dict.get("job", "unemployed")
@@ -2942,7 +2942,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                     )
                 )
 
-            gamestate_dict_factions = self._gamestate_dict.get("pop_factions", {})
+            gamestate_dict_factions = self._gamestate_dict.get("pop_factions")
             if not isinstance(gamestate_dict_factions, dict):
                 gamestate_dict_factions = {}
             for faction_id, stats in stats_by_faction.items():
