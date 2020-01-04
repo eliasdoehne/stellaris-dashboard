@@ -3,7 +3,7 @@ import logging
 
 from flask import render_template
 
-from stellarisdashboard import config, models
+from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app import (
     flask_app,
     utils,
@@ -23,7 +23,7 @@ def index_page(version=None):
     show_old_version_notice = False
     if config.CONFIG.check_version and version is not None:
         show_old_version_notice = utils.is_old_version(version)
-    games = models.get_available_games_dict().values()
+    games = datamodel.get_available_games_dict().values()
     return render_template(
         "game_index.html",
         games=games,

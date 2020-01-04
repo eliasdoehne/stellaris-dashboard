@@ -25,7 +25,7 @@ from typing import (
 )
 
 from stellarisdashboard import config
-from stellarisdashboard.token_value_stream_re import INT, FLOAT
+from stellarisdashboard.parsing.token_value_stream_re import INT, FLOAT
 
 logger = logging.getLogger(__name__)
 try:
@@ -35,7 +35,7 @@ except ImportError as import_error:
     logger.info(
         f'Cython extensions not available, using slow parser. Error message: "{import_error}"'
     )
-    from stellarisdashboard import token_value_stream_re as token_value_stream
+    from stellarisdashboard.parsing import token_value_stream_re as token_value_stream
 
 FilePosition = namedtuple("FilePosition", "line col")
 

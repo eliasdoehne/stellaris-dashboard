@@ -7,7 +7,7 @@ from typing import Dict
 import flask
 from flask import render_template, request
 
-from stellarisdashboard import config, models, game_info
+from stellarisdashboard import config, datamodel, game_info
 from stellarisdashboard.dashboard_app import flask_app, utils
 
 logger = logging.getLogger(__name__)
@@ -20,17 +20,17 @@ logger = logging.getLogger(__name__)
 def history_page(game_id="", version=None):
     show_old_version_notice = version is not None and utils.is_old_version(version)
 
-    matches = models.get_known_games(game_id)
+    matches = datamodel.get_known_games(game_id)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
     game_id = matches[0]
-    games_dict = models.get_available_games_dict()
+    games_dict = datamodel.get_available_games_dict()
     country = games_dict[game_id]["country_name"]
 
     event_filter = get_event_filter()
 
-    with models.get_db_session(game_id) as session:
+    with datamodel.get_db_session(game_id) as session:
         dict_builder = EventTemplateDictBuilder(session, game_id, event_filter)
         events, title, details, links = dict_builder.get_event_and_link_dicts()
         wars = dict_builder.get_war_list()
@@ -104,41 +104,41 @@ class EventFilter:
         """
         if self.leader_filter is not None:
             return (
-                models.Leader,
+                datamodel.Leader,
                 "leader",
                 dict(leader_id=self.leader_filter),
-                models.Leader.leader_id.asc(),
+                datamodel.Leader.leader_id.asc(),
             )
         elif self.system_filter is not None:
             return (
-                models.System,
+                datamodel.System,
                 "system",
                 dict(system_id=self.system_filter),
-                models.System.system_id.asc(),
+                datamodel.System.system_id.asc(),
             )
         elif self.planet_filter is not None:
             return (
-                models.Planet,
+                datamodel.Planet,
                 "planet",
                 dict(planet_id=self.planet_filter),
-                models.Planet.planet_id.asc(),
+                datamodel.Planet.planet_id.asc(),
             )
         elif self.war_filter is not None:
             return (
-                models.War,
+                datamodel.War,
                 "war",
                 dict(war_id=self.war_filter),
-                models.War.war_id.asc(),
+                datamodel.War.war_id.asc(),
             )
         else:
             filter_dict = {}
             if self.country_filter is not None:
                 filter_dict = dict(country_id=(self.country_filter))
             return (
-                models.Country,
+                datamodel.Country,
                 "country",
                 filter_dict,
-                models.Country.country_id.asc(),
+                datamodel.Country.country_id.asc(),
             )
 
     @property
@@ -152,7 +152,7 @@ class EventFilter:
             and self.faction_filter is None
         )
 
-    def include_event(self, event: models.HistoricalEvent) -> bool:
+    def include_event(self, event: datamodel.HistoricalEvent) -> bool:
         result = all(
             [
                 self.min_date <= event.start_date_days <= self.max_date,
@@ -177,33 +177,33 @@ class EventFilter:
     def _initialize_scope(self):
         if config.CONFIG.filter_events_by_type:
             country_scope = (
-                models.HistoricalEventScope.country
+                datamodel.HistoricalEventScope.country
                 if self.country_filter is not None
                 else float("inf")
             )
             leader_scope = (
-                models.HistoricalEventScope.leader
+                datamodel.HistoricalEventScope.leader
                 if self.leader_filter is not None
                 else float("inf")
             )
             system_scope = (
-                models.HistoricalEventScope.system
+                datamodel.HistoricalEventScope.system
                 if self.system_filter is not None
                 else float("inf")
             )
             planet_scope = (
-                models.HistoricalEventScope.all
+                datamodel.HistoricalEventScope.all
                 if self.planet_filter is not None
                 else float("inf")
             )
             war_scope = (
-                models.HistoricalEventScope.all
+                datamodel.HistoricalEventScope.all
                 if self.war_filter is not None
                 else float("inf")
             )
             self.scope_threshold = min(
                 [
-                    models.HistoricalEventScope.galaxy,
+                    datamodel.HistoricalEventScope.galaxy,
                     country_scope,
                     leader_scope,
                     system_scope,
@@ -212,7 +212,7 @@ class EventFilter:
                 ]
             )
         else:
-            self.scope_threshold = models.HistoricalEventScope.all
+            self.scope_threshold = datamodel.HistoricalEventScope.all
 
 
 class EventTemplateDictBuilder:
@@ -252,8 +252,8 @@ class EventTemplateDictBuilder:
 
         for key in key_objects:
             event_list = (
-                self._session.query(models.HistoricalEvent)
-                .order_by(models.HistoricalEvent.start_date_days.asc())
+                self._session.query(datamodel.HistoricalEvent)
+                .order_by(datamodel.HistoricalEvent.start_date_days.asc())
                 .filter_by(**{event_query_kwargs: key})
                 .all()
             )
@@ -287,11 +287,11 @@ class EventTemplateDictBuilder:
                 ]:
                     continue
 
-            start = models.days_to_date(event.start_date_days)
+            start = datamodel.days_to_date(event.start_date_days)
             end_date = None
             is_active = True
             if event.end_date_days is not None:
-                end_date = models.days_to_date(event.end_date_days)
+                end_date = datamodel.days_to_date(event.end_date_days)
                 is_active = event.end_date_days >= self._most_recent_date
             event_dict = dict(
                 country=event.country,
@@ -325,18 +325,18 @@ class EventTemplateDictBuilder:
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
             return []
-        return [key for key in self._formatted_urls if isinstance(key, models.War)]
+        return [key for key in self._formatted_urls if isinstance(key, datamodel.War)]
 
     def _get_details(self, key) -> Dict[str, str]:
-        if isinstance(key, models.Country):
+        if isinstance(key, datamodel.Country):
             return self.country_details(key)
-        elif isinstance(key, models.System):
+        elif isinstance(key, datamodel.System):
             return self.system_details(key)
-        elif isinstance(key, models.Leader):
+        elif isinstance(key, datamodel.Leader):
             return self.leader_details(key)
-        elif isinstance(key, models.War):
+        elif isinstance(key, datamodel.War):
             return self.war_details(key)
-        elif isinstance(key, models.Planet):
+        elif isinstance(key, datamodel.Planet):
             return self.planet_details(key)
         else:
             return {}
@@ -354,55 +354,55 @@ class EventTemplateDictBuilder:
             self._formatted_urls[event.war] = self._get_url_for(event.war)
 
     def _get_title(self, key) -> str:
-        if isinstance(key, models.Country):
+        if isinstance(key, datamodel.Country):
             return self._get_url_for(key, a_class="titlelink")
-        elif isinstance(key, models.System):
+        elif isinstance(key, datamodel.System):
             return f"{key.get_name()} System"
-        elif isinstance(key, models.Leader):
+        elif isinstance(key, datamodel.Leader):
             return key.get_name()
-        elif isinstance(key, models.War):
+        elif isinstance(key, datamodel.War):
             return key.name
-        elif isinstance(key, models.Planet):
+        elif isinstance(key, datamodel.Planet):
             return f"Planet {key.name}"
         else:
             return ""
 
     def _get_url_for(self, key, a_class="textlink"):
-        if isinstance(key, models.Country):
+        if isinstance(key, datamodel.Country):
             return self._preformat_history_url(
                 key.country_name, country=key.country_id, a_class=a_class
             )
-        elif isinstance(key, models.System):
+        elif isinstance(key, datamodel.System):
             return self._preformat_history_url(
                 game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
                 system=key.system_id,
                 a_class=a_class,
             )
-        elif isinstance(key, models.Leader):
+        elif isinstance(key, datamodel.Leader):
             return self._preformat_history_url(
                 key.leader_name, leader=key.leader_id, a_class=a_class
             )
-        elif isinstance(key, models.Planet):
+        elif isinstance(key, datamodel.Planet):
             return self._preformat_history_url(
                 game_info.convert_id_to_name(key.planet_name),
                 planet=key.planet_id,
                 a_class=a_class,
             )
-        elif isinstance(key, models.War):
+        elif isinstance(key, datamodel.War):
             return self._preformat_history_url(
                 key.name, war=key.war_id, a_class=a_class
             )
         else:
             return str(key)
 
-    def system_details(self, system_model: models.System) -> Dict[str, str]:
+    def system_details(self, system_model: datamodel.System) -> Dict[str, str]:
         star_class = game_info.convert_id_to_name(
             system_model.star_class, remove_prefix="sc"
         )
         details = {
             "Star Class": star_class,
         }
-        hyperlane_targets = sorted(system_model.neighbors, key=models.System.get_name)
+        hyperlane_targets = sorted(system_model.neighbors, key=datamodel.System.get_name)
         details["Hyperlanes"] = ", ".join(
             self._get_url_for(s) for s in hyperlane_targets
         )
@@ -413,7 +413,7 @@ class EventTemplateDictBuilder:
                 bypasses.append(bp.name)
             if bp.is_active:
                 targets = (
-                    self._session.query(models.Bypass)
+                    self._session.query(datamodel.Bypass)
                     .filter_by(network_id=bp.network_id)
                     .all()
                 )
@@ -449,16 +449,16 @@ class EventTemplateDictBuilder:
         )
         return details
 
-    def leader_details(self, leader_model: models.Leader) -> Dict[str, str]:
+    def leader_details(self, leader_model: datamodel.Leader) -> Dict[str, str]:
         country_url = self._get_url_for(leader_model.country)
         details = {
             "Leader Name": leader_model.leader_name,
             "Gender": game_info.convert_id_to_name(leader_model.gender),
             "Species": leader_model.species.species_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
-            "Born": models.days_to_date(leader_model.date_born),
-            "Hired": models.days_to_date(leader_model.date_hired),
-            "Last active": models.days_to_date(
+            "Born": datamodel.days_to_date(leader_model.date_born),
+            "Hired": datamodel.days_to_date(leader_model.date_hired),
+            "Last active": datamodel.days_to_date(
                 utils.get_most_recent_date(self._session)
                 if leader_model.is_active
                 else leader_model.last_date
@@ -467,7 +467,7 @@ class EventTemplateDictBuilder:
         }
         return details
 
-    def country_details(self, country_model: models.Country) -> Dict[str, str]:
+    def country_details(self, country_model: datamodel.Country) -> Dict[str, str]:
         details = {
             "Country Type": game_info.convert_id_to_name(country_model.country_type),
         }
@@ -509,13 +509,13 @@ class EventTemplateDictBuilder:
 
         return details
 
-    def planet_details(self, planet_model: models.Planet):
+    def planet_details(self, planet_model: datamodel.Planet):
         details = {}
 
         modifiers = []
         for modifier in planet_model.modifiers:
             if modifier.expiry_date is not None:
-                m = f"{modifier.name} (expires {models.days_to_date(modifier.expiry_date)})"
+                m = f"{modifier.name} (expires {datamodel.days_to_date(modifier.expiry_date)})"
             else:
                 m = modifier.name
             modifiers.append(m)
@@ -557,7 +557,7 @@ class EventTemplateDictBuilder:
         return details
 
     def war_details(self, war):
-        start = models.days_to_date(war.start_date_days)
+        start = datamodel.days_to_date(war.start_date_days)
 
         details = {
             "Start date": start,
@@ -578,11 +578,11 @@ class EventTemplateDictBuilder:
             details["Attacker exhaustion"] = war.attacker_war_exhaustion
             details["Defender exhaustion"] = war.defender_war_exhaustion
         if war.end_date_days:
-            details["End date"] = models.days_to_date(war.end_date_days)
+            details["End date"] = datamodel.days_to_date(war.end_date_days)
 
         return details
 
-    def _combat_dict(self, combat: models.Combat):
+    def _combat_dict(self, combat: datamodel.Combat):
         attackers = ", ".join(self._get_url_for(cp.country) for cp in combat.attackers)
         defenders = ", ".join(self._get_url_for(cp.country) for cp in combat.defenders)
         return dict(

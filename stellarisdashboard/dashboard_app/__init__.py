@@ -11,7 +11,12 @@ logger = logging.getLogger(__name__)
 flask_app = flask.Flask(__name__)
 flask_app.logger.setLevel(logging.DEBUG)
 
-from stellarisdashboard.dashboard_app import history_ledger, game_index, graph_ledger, settings
+from stellarisdashboard.dashboard_app import (
+    history_ledger,
+    game_index,
+    graph_ledger,
+    settings,
+)
 
 
 def start_server():

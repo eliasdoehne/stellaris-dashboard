@@ -12,7 +12,9 @@ import threading
 
 import click
 
-from stellarisdashboard import config, save_parser, timeline, visualization_data
+from stellarisdashboard import config, visualization_data
+from stellarisdashboard.parsing import save_parser, timeline
+
 
 logger = logging.getLogger(__name__)
 

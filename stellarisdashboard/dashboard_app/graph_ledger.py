@@ -10,7 +10,7 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template
 
-from stellarisdashboard import config, models, visualization_data
+from stellarisdashboard import config, datamodel, visualization_data
 from stellarisdashboard.dashboard_app import utils, flask_app
 
 logger = logging.getLogger(__name__)
@@ -232,7 +232,7 @@ def update_game_header(search):
         logger.warning(f"Could not find a game matching {game_id}")
         return "Unknown Game"
     game_id = matches[0]
-    games_dict = models.get_available_games_dict()
+    games_dict = datamodel.get_available_games_dict()
     country = games_dict[game_id]["country_name"]
     return f"{country} ({game_id})"
 
@@ -250,15 +250,15 @@ def update_ledger_link(search):
 )
 def update_country_select_options(search):
     game_id, _ = _get_game_ids_matching_url(search)
-    games_dict = models.get_available_games_dict()
+    games_dict = datamodel.get_available_games_dict()
 
     if game_id not in games_dict:
         logger.warning(f"Game ID {game_id} does not match any known game!")
         return []
 
     options = [{"label": "None", "value": None}]
-    with models.get_db_session(game_id) as session:
-        for c in session.query(models.Country):
+    with datamodel.get_db_session(game_id) as session:
+        for c in session.query(datamodel.Country):
             if (
                 c.is_real_country()
                 and (c.has_met_player() or config.CONFIG.show_everything)
@@ -290,13 +290,13 @@ def update_content(
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
     game_id = matches[0]
 
-    games_dict = models.get_available_games_dict()
+    games_dict = datamodel.get_available_games_dict()
     if game_id not in games_dict:
         logger.warning(f"Game ID {game_id} does not match any known game!")
         return []
 
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
-    with models.get_db_session(game_id) as session:
+    with datamodel.get_db_session(game_id) as session:
         current_date = utils.get_most_recent_date(session)
 
     children = []
@@ -334,7 +334,7 @@ def update_content(
         children.append(get_galaxy(game_id, slider_date))
         children.append(
             html.P(
-                f"Galaxy Map at {models.days_to_date(slider_date)}", style=TEXT_STYLE,
+                f"Galaxy Map at {datamodel.days_to_date(slider_date)}", style=TEXT_STYLE,
             )
         )
     return children
@@ -349,7 +349,7 @@ def _get_game_ids_matching_url(url):
     game_id = url_params.get("game_name", [None])[0]
     if game_id is None:
         game_id = ""
-    matches = models.get_known_games(game_id)
+    matches = datamodel.get_known_games(game_id)
     return game_id, matches
 
 
@@ -471,7 +471,7 @@ def dict_key_to_legend_label(key: str):
 
 def get_plot_value_labels(x_values, y_values, key):
     return [
-        f"{models.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}"
+        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}"
         if (y and y == y)
         else ""
         for (x, y) in zip(x_values, y_values)

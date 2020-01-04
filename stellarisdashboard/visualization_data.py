@@ -1,14 +1,14 @@
 import abc
-import dataclasses
 import enum
 import logging
 import random
 import time
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
 
+import dataclasses
 import networkx as nx
 
-from stellarisdashboard import models, config
+from stellarisdashboard import datamodel, config
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +58,8 @@ def get_current_execution_plot_data(
     """
     global _CURRENT_EXECUTION_PLOT_DATA
     if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
-        with models.get_db_session(game_name) as session:
-            game = session.query(models.Game).filter_by(game_name=game_name).first()
+        with datamodel.get_db_session(game_name) as session:
+            game = session.query(datamodel.Game).filter_by(game_name=game_name).first()
         if not game:
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(game_name)
@@ -168,7 +168,7 @@ class PlotDataManager:
             self.only_show_default_empires = config.CONFIG.only_show_default_empires
             self.plot_time_resolution = config.CONFIG.plot_time_resolution
 
-        num_new_gs = models.count_gamestates_since(self.game_name, self.last_date)
+        num_new_gs = datamodel.count_gamestates_since(self.game_name, self.last_date)
         if self.plot_time_resolution == 0 or num_new_gs < self.plot_time_resolution:
             use_every_nth_gamestate = 1
         else:
@@ -176,11 +176,11 @@ class PlotDataManager:
         t_start = time.time()
         num_loaded_gs = 0
         for i, gs in enumerate(
-            models.get_gamestates_since(self.game_name, self.last_date)
+            datamodel.get_gamestates_since(self.game_name, self.last_date)
         ):
             if gs.date <= self.last_date:
                 logger.warning(
-                    f"Received gamestate with date {models.days_to_date(gs.date)}, last known date is {models.days_to_date(self.last_date)}"
+                    f"Received gamestate with date {datamodel.days_to_date(gs.date)}, last known date is {datamodel.days_to_date(self.last_date)}"
                 )
                 continue
             if (
@@ -247,12 +247,12 @@ class AbstractPlotDataContainer(abc.ABC):
                 self.data_dict[key].append(default_val)
 
     @abc.abstractmethod
-    def extract_data_from_gamestate(self, gs: models.GameState):
+    def extract_data_from_gamestate(self, gs: datamodel.GameState):
         pass
 
 
 class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
-    def extract_data_from_gamestate(self, gs: models.GameState):
+    def extract_data_from_gamestate(self, gs: datamodel.GameState):
         added_new_val = False
         self.dates.append(gs.date / 360.0)
         for cd in gs.country_data:
@@ -275,12 +275,14 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         self._pad_data_dict(default_val=self.DEFAULT_VAL)
 
     @abc.abstractmethod
-    def _get_value_from_countrydata(self, cd: models.CountryData) -> Union[None, float]:
+    def _get_value_from_countrydata(
+        self, cd: datamodel.CountryData
+    ) -> Union[None, float]:
         pass
 
 
 class PlanetCountDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_geography_info():
@@ -288,7 +290,7 @@ class PlanetCountDataContainer(AbstractPerCountryDataContainer):
 
 
 class SystemCountDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_geography_info():
@@ -296,7 +298,7 @@ class SystemCountDataContainer(AbstractPerCountryDataContainer):
 
 
 class TotalEnergyIncomeDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_economic_info():
@@ -304,7 +306,7 @@ class TotalEnergyIncomeDataContainer(AbstractPerCountryDataContainer):
 
 
 class TotalMineralsIncomeDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_economic_info():
@@ -312,7 +314,7 @@ class TotalMineralsIncomeDataContainer(AbstractPerCountryDataContainer):
 
 
 class TotalAlloysIncomeDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_economic_info():
@@ -320,7 +322,7 @@ class TotalAlloysIncomeDataContainer(AbstractPerCountryDataContainer):
 
 
 class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_economic_info():
@@ -328,7 +330,7 @@ class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
 
 
 class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_economic_info():
@@ -336,7 +338,7 @@ class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
 
 
 class TechCountDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_tech_info():
@@ -344,7 +346,7 @@ class TechCountDataContainer(AbstractPerCountryDataContainer):
 
 
 class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_tech_info():
@@ -352,7 +354,7 @@ class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
 
 
 class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_tech_info():
@@ -364,7 +366,7 @@ class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
 
 
 class FleetSizeDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_military_info():
@@ -372,7 +374,7 @@ class FleetSizeDataContainer(AbstractPerCountryDataContainer):
 
 
 class MilitaryPowerDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_military_info():
@@ -380,7 +382,7 @@ class MilitaryPowerDataContainer(AbstractPerCountryDataContainer):
 
 
 class VictoryScoreDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_geography_info():
@@ -388,7 +390,7 @@ class VictoryScoreDataContainer(AbstractPerCountryDataContainer):
 
 
 class EconomyScoreDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_geography_info():
@@ -396,7 +398,7 @@ class EconomyScoreDataContainer(AbstractPerCountryDataContainer):
 
 
 class VictoryRankDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: models.CountryData):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if (
             not cd.country.is_other_player and config.CONFIG.show_everything
         ) or cd.show_geography_info():
@@ -404,7 +406,7 @@ class VictoryRankDataContainer(AbstractPerCountryDataContainer):
 
 
 class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
-    def extract_data_from_gamestate(self, gs: models.GameState):
+    def extract_data_from_gamestate(self, gs: datamodel.GameState):
         player_cd = self._get_player_countrydata(gs)
 
         if player_cd is None or not self._include(player_cd):
@@ -421,7 +423,7 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
             logger.exception(player_cd.country.country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
 
-    def _get_player_countrydata(self, gs: models.GameState) -> models.CountryData:
+    def _get_player_countrydata(self, gs: datamodel.GameState) -> datamodel.CountryData:
         player_cd = None
         for cd in gs.country_data:
             if cd.country.is_other_player:
@@ -435,11 +437,11 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
 
     @abc.abstractmethod
     def _iterate_budgetitems(
-        self, cd: models.CountryData
+        self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         pass
 
-    def _include(self, player_cd: models.CountryData) -> bool:
+    def _include(self, player_cd: datamodel.CountryData) -> bool:
         return True
 
 
@@ -447,7 +449,7 @@ class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = 0.0
 
     def _iterate_budgetitems(
-        self, cd: models.CountryData
+        self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         yield "Physics", cd.net_physics_research
         yield "Society", cd.net_society_research
@@ -458,7 +460,7 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = 0.0
 
     def _iterate_budgetitems(
-        self, cd: models.CountryData
+        self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         yield "corvettes", cd.ship_count_corvette
         yield "destroyers", cd.ship_count_destroyer * 2
@@ -472,7 +474,7 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
     DEFAULT_VAL = 0.0
 
     def _iterate_budgetitems(
-        self, cd: models.CountryData
+        self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         for budget_item in cd.budget:
             val = self._get_value_from_budgetitem(budget_item)
@@ -481,7 +483,7 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
             yield (budget_item.name, val)
 
     @abc.abstractmethod
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem) -> float:
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem) -> float:
         pass
 
     def _include(self, player_cd):
@@ -489,87 +491,87 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
 
 
 class EnergyBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_energy
 
 
 class MineralsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_minerals
 
 
 class AlloysBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_alloys
 
 
 class ConsumerGoodsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_consumer_goods
 
 
 class FoodBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_food
 
 
 class VolatileMotesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_volatile_motes
 
 
 class ExoticGasesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_exotic_gases
 
 
 class RareCrystalsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_rare_crystals
 
 
 class LivingMetalBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_living_metal
 
 
 class ZroBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_zro
 
 
 class DarkMatterBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_dark_matter
 
 
 class NanitesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_nanites
 
 
 class UnityBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_unity
 
 
 class InfluenceBudgetDataContainer(AbstractEconomyBudgetDataContainer):
-    def _get_value_from_budgetitem(self, bi: models.BudgetItem):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_influence
 
 
 PopStatsType = Union[
-    models.PopStatsByFaction,
-    models.PopStatsByEthos,
-    models.PopStatsByStratum,
-    models.PopStatsBySpecies,
-    models.PlanetStats,
+    datamodel.PopStatsByFaction,
+    datamodel.PopStatsByEthos,
+    datamodel.PopStatsByStratum,
+    datamodel.PopStatsBySpecies,
+    datamodel.PlanetStats,
 ]
 
 
 class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     def _iterate_budgetitems(
-        self, cd: models.CountryData
+        self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         for pop_stats in self._iterate_popstats(cd):
             key = self._get_key_from_popstats(pop_stats)
@@ -577,7 +579,7 @@ class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
             yield (key, val)
 
     @abc.abstractmethod
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[PopStatsType]:
+    def _iterate_popstats(self, cd: datamodel.CountryData) -> Iterable[PopStatsType]:
         pass
 
     @abc.abstractmethod
@@ -598,229 +600,231 @@ class AbstractPopStatsDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
 
 class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.ABC):
     def _iterate_popstats(
-        self, cd: models.CountryData
-    ) -> Iterable[models.PopStatsBySpecies]:
+        self, cd: datamodel.CountryData
+    ) -> Iterable[datamodel.PopStatsBySpecies]:
         return iter(cd.pop_stats_species)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
-        assert isinstance(ps, models.PopStatsBySpecies)
+        assert isinstance(ps, datamodel.PopStatsBySpecies)
         return f"{ps.species.species_name} ({ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PopStatsBySpecies):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsBySpecies):
         return ps.pop_count
 
 
 class SpeciesHappinessDataContainer(AbstractPopStatsBySpeciesDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsBySpecies):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsBySpecies):
         return ps.happiness
 
 
 class SpeciesPowerDataContainer(AbstractPopStatsBySpeciesDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsBySpecies):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsBySpecies):
         return ps.power
 
 
 class SpeciesCrimeDataContainer(AbstractPopStatsBySpeciesDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsBySpecies):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsBySpecies):
         return ps.crime
 
 
 class AbstractPopStatsByFactionDataContainer(AbstractPopStatsDataContainer, abc.ABC):
     def _iterate_popstats(
-        self, cd: models.CountryData
-    ) -> Iterable[models.PopStatsByFaction]:
+        self, cd: datamodel.CountryData
+    ) -> Iterable[datamodel.PopStatsByFaction]:
         return iter(cd.pop_stats_faction)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
-        assert isinstance(ps, models.PopStatsByFaction)
+        assert isinstance(ps, datamodel.PopStatsByFaction)
         return ps.faction.faction_name
 
 
 class FactionDistributionDataContainer(AbstractPopStatsByFactionDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PopStatsByFaction):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByFaction):
         return ps.pop_count
 
 
 class FactionSupportDataContainer(AbstractPopStatsByFactionDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PopStatsByFaction):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByFaction):
         return ps.support
 
 
 class FactionApprovalDataContainer(AbstractPopStatsByFactionDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByFaction):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByFaction):
         return ps.faction_approval
 
 
 class FactionHappinessDataContainer(AbstractPopStatsByFactionDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByFaction):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByFaction):
         return ps.happiness
 
 
 class FactionPowerDataContainer(AbstractPopStatsByFactionDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByFaction):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByFaction):
         return ps.power
 
 
 class FactionCrimeDataContainer(AbstractPopStatsByFactionDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByFaction):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByFaction):
         return ps.crime
 
 
 class AbstractPopStatsByJobDataContainer(AbstractPopStatsDataContainer, abc.ABC):
     def _iterate_popstats(
-        self, cd: models.CountryData
-    ) -> Iterable[models.PopStatsByJob]:
+        self, cd: datamodel.CountryData
+    ) -> Iterable[datamodel.PopStatsByJob]:
         return iter(cd.pop_stats_job)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
-        assert isinstance(ps, models.PopStatsByJob)
+        assert isinstance(ps, datamodel.PopStatsByJob)
         return ps.job_description
 
 
 class JobDistributionDataContainer(AbstractPopStatsByJobDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PopStatsByJob):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByJob):
         return ps.pop_count
 
 
 class JobHappinessDataContainer(AbstractPopStatsByJobDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByJob):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByJob):
         return ps.happiness
 
 
 class JobPowerDataContainer(AbstractPopStatsByJobDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByJob):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByJob):
         return ps.power
 
 
 class JobCrimeDataContainer(AbstractPopStatsByJobDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByJob):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByJob):
         return ps.crime
 
 
 class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.ABC):
-    def _iterate_popstats(self, cd: models.CountryData) -> Iterable[models.PlanetStats]:
+    def _iterate_popstats(
+        self, cd: datamodel.CountryData
+    ) -> Iterable[datamodel.PlanetStats]:
         return iter(cd.pop_stats_planets)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
-        assert isinstance(ps, models.PlanetStats)
+        assert isinstance(ps, datamodel.PlanetStats)
         return f"{ps.planet.name} (ID {ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.pop_count
 
 
 class PlanetHappinessDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.happiness
 
 
 class PlanetPowerDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.power
 
 
 class PlanetCrimeDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.crime
 
 
 class PlanetMigrationDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.migration
 
 
 class PlanetAmenitiesDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.free_amenities
 
 
 class PlanetHousingDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.free_housing
 
 
 class PlanetStabilityDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: models.PlanetStats):
+    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.stability
 
 
 class AbstractPopStatsByEthosDataContainer(AbstractPopStatsDataContainer, abc.ABC):
     def _iterate_popstats(
-        self, cd: models.CountryData
-    ) -> Iterable[models.PopStatsByEthos]:
+        self, cd: datamodel.CountryData
+    ) -> Iterable[datamodel.PopStatsByEthos]:
         return iter(cd.pop_stats_ethos)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
-        assert isinstance(ps, models.PopStatsByEthos)
+        assert isinstance(ps, datamodel.PopStatsByEthos)
         return ps.ethos
 
 
 class EthosDistributionDataContainer(AbstractPopStatsByEthosDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PopStatsByEthos):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByEthos):
         return ps.pop_count
 
 
 class EthosHappinessDataContainer(AbstractPopStatsByEthosDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByEthos):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByEthos):
         return ps.happiness
 
 
 class EthosPowerDataContainer(AbstractPopStatsByEthosDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByEthos):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByEthos):
         return ps.power
 
 
 class EthosCrimeDataContainer(AbstractPopStatsByEthosDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByEthos):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByEthos):
         return ps.crime
 
 
 class AbstractPopStatsByStratumDataContainer(AbstractPopStatsDataContainer, abc.ABC):
     def _iterate_popstats(
-        self, cd: models.CountryData
-    ) -> Iterable[models.PopStatsByStratum]:
+        self, cd: datamodel.CountryData
+    ) -> Iterable[datamodel.PopStatsByStratum]:
         return iter(cd.pop_stats_stratum)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
-        assert isinstance(ps, models.PopStatsByStratum)
+        assert isinstance(ps, datamodel.PopStatsByStratum)
         return ps.stratum
 
 
 class StratumDistributionDataContainer(AbstractPopStatsByStratumDataContainer):
     DEFAULT_VAL = 0.0
 
-    def _get_value_from_popstats(self, ps: models.PopStatsByStratum):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByStratum):
         return ps.pop_count
 
 
 class StratumHappinessDataContainer(AbstractPopStatsByStratumDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByStratum):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByStratum):
         return ps.happiness
 
 
 class StratumPowerDataContainer(AbstractPopStatsByStratumDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByStratum):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByStratum):
         return ps.power
 
 
 class StratumCrimeDataContainer(AbstractPopStatsByStratumDataContainer):
-    def _get_value_from_popstats(self, ps: models.PopStatsByStratum):
+    def _get_value_from_popstats(self, ps: datamodel.PopStatsByStratum):
         return ps.crime
 
 
@@ -1362,16 +1366,18 @@ class GalaxyMapData:
     def initialize_galaxy_graph(self):
         start_time = time.clock()
         self.galaxy_graph = nx.Graph()
-        with models.get_db_session(self.game_id) as session:
-            for system in session.query(models.System):
-                assert isinstance(system, models.System)  # to remove pycharm warnings
+        with datamodel.get_db_session(self.game_id) as session:
+            for system in session.query(datamodel.System):
+                assert isinstance(
+                    system, datamodel.System
+                )  # to remove pycharm warnings
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
                     name=system.name,
                     country=GalaxyMapData.UNCLAIMED,
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
-            for hl in session.query(models.HyperLane).all():
+            for hl in session.query(datamodel.HyperLane).all():
                 sys_one, sys_two = (
                     hl.system_one.system_id_in_game,
                     hl.system_two.system_id_in_game,
@@ -1407,8 +1413,8 @@ class GalaxyMapData:
         owned_systems = set()
         systems_by_owner = {GalaxyMapData.UNCLAIMED: set()}
 
-        with models.get_db_session(self.game_id) as session:
-            for system in session.query(models.System):
+        with datamodel.get_db_session(self.game_id) as session:
+            for system in session.query(datamodel.System):
                 country = system.get_owner_country_at(time_days)
                 country = self._country_display_name(country)
                 owned_systems.add(system.system_id_in_game)
@@ -1421,7 +1427,7 @@ class GalaxyMapData:
         )
         return systems_by_owner
 
-    def _country_display_name(self, country: models.Country) -> str:
+    def _country_display_name(self, country: datamodel.Country) -> str:
         if country is None:
             return GalaxyMapData.UNCLAIMED
         if config.CONFIG.show_everything:
