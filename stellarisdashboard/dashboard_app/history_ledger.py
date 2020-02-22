@@ -402,7 +402,9 @@ class EventTemplateDictBuilder:
         details = {
             "Star Class": star_class,
         }
-        hyperlane_targets = sorted(system_model.neighbors, key=datamodel.System.get_name)
+        hyperlane_targets = sorted(
+            system_model.neighbors, key=datamodel.System.get_name
+        )
         details["Hyperlanes"] = ", ".join(
             self._get_url_for(s) for s in hyperlane_targets
         )

@@ -334,7 +334,8 @@ def update_content(
         children.append(get_galaxy(game_id, slider_date))
         children.append(
             html.P(
-                f"Galaxy Map at {datamodel.days_to_date(slider_date)}", style=TEXT_STYLE,
+                f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
+                style=TEXT_STYLE,
             )
         )
     return children
