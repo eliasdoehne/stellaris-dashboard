@@ -25,17 +25,18 @@ from typing import (
 )
 
 from stellarisdashboard import config
-from stellarisdashboard.parsing.token_value_stream_re import INT, FLOAT
+from stellarisdashboard.parsing.tokenizer_re import INT, FLOAT
 
 logger = logging.getLogger(__name__)
 try:
     # try to load the cython-compiled C-extension
-    from stellarisdashboard.cython_ext import token_value_stream
+    from stellarisdashboard.parsing.cython_ext import tokenizer
+
 except ImportError as import_error:
     logger.info(
         f'Cython extensions not available, using slow parser. Error message: "{import_error}"'
     )
-    from stellarisdashboard.parsing import token_value_stream_re as token_value_stream
+    from stellarisdashboard.parsing import tokenizer_re as tokenizer
 
 FilePosition = namedtuple("FilePosition", "line col")
 
@@ -294,7 +295,7 @@ class TokenType(enum.Enum):
 Token = namedtuple("Token", ["token_type", "value", "pos"])
 
 
-def token_stream(gamestate, tokenizer=token_value_stream.token_value_stream):
+def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
     """
     Take each value obtained from the tokenizer and wrap it in an appropriate
     Token object.

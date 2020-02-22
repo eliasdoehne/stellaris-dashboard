@@ -20,7 +20,7 @@ REG_EXES = [
 ]
 
 
-def token_value_stream(gamestate: str, debug=False):
+def tokenizer(gamestate: str, debug=False):
     N = len(gamestate)
     start_index = 0
     line_number = 1
