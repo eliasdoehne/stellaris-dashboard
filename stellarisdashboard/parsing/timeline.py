@@ -1167,7 +1167,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     current_entities=planet_dict.get("district", []),
                     db_entity_factory=datamodel.PlanetDistrict,
                 )
-                buildings = planet_dict.get("building", [])
+                buildings = planet_dict.get("buildings", [])
                 if not isinstance(buildings, list):
                     buildings = [buildings]
                 was_updated |= self._update_countable_planet_attributes(
@@ -1301,8 +1301,9 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
 
     def _get_deposits(self, planet_dict):
         result = []
+        game_deposits = self._gamestate_dict.get("deposit", {})
         for deposit in planet_dict.get("deposits", []):
-            d_dict = self._gamestate_dict.get("deposit", {}).get(deposit)
+            d_dict = game_deposits.get(deposit)
             if isinstance(d_dict, dict) and "type" in d_dict:
                 result.append(d_dict.get("type", "deposit_unknown"))
         return result
@@ -1597,7 +1598,7 @@ class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         planet_models = dependencies[PlanetProcessor.ID]
-        for ingame_id, planet_model in planet_datamodel.items():
+        for ingame_id, planet_model in planet_models.items():
             planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id, {})
             self._update_planet_model(planet_dict, planet_model)
 
@@ -3062,8 +3063,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 self.country_by_planet_id[planet_id] = country_id
 
 
-def _all_planetary_modifiers(planet_dict):
-    modifiers = planet_dict.get("timed_modifiers", [])
+def _all_planetary_modifiers(planet_dict) -> Iterable[Tuple[str, int]]:
+    modifiers = planet_dict.get("timed_modifier", [])
     if not isinstance(modifiers, list):
         modifiers = [modifiers]
     for m in modifiers:
