@@ -6,7 +6,7 @@ import itertools
 import logging
 import random
 import time
-from typing import Dict, Any, Set, Iterable, Optional, Union, List
+from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple
 
 from stellarisdashboard import datamodel, game_info, config
 
@@ -1282,6 +1282,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             modifier_text = db_modifier.db_description.text
             if modifier_text not in current_modifiers:
                 self._session.delete(db_modifier)
+                self._session.refresh(planet_model)
             else:
                 if expiration != current_modifiers[modifier_text]:
                     db_modifier.expiry_date = expiration
