@@ -132,6 +132,17 @@ guiTypes = {
 			clicksound = back_click
 			shortcut = "ESCAPE"
 		}
-	}
+		containerWindowType = {
+			name = "setting_bg_box"
+			size = { width = 1206 height = 616 }
+			position = { x = 7 y = 82 }
+			clipping = no
 
+			background = {
+				name = "setting_bg_frame"
+				spriteType = "GFX_clean_frame_area"
+				alwaystransparent = yes
+			}
+		}
+	}
 }

@@ -15,7 +15,7 @@ spriteTypes = {
 			animationtype = "scrolling"      #scrolling, rotating, pulsing
 			animationrotationoffset = { x = 0.0 y = 0.0 }
 			animationtexturescale = { x = 1.0 y = 1.0 }
-			animationframes = { 1 2 3 }
+			animationframes = { 1  2 3 }
 		}
 	}
 
