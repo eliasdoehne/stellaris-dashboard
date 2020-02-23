@@ -1,6 +1,6 @@
 from cpython cimport bool
 
-def token_value_stream(str gamestate, bool debug=False):
+def tokenizer(str gamestate, bool debug=False):
     cdef int token_start, end_index, current_position, line_number, len_gs
     cdef str c
     cdef bint in_word, in_quoted_string

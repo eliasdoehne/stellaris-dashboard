@@ -84,7 +84,7 @@ guiTypes = {
 
 		buttonType =
 		{
-			name = "Index"
+			name = "dashboard_index"
 			quadTextureSprite = "GFX_button_timeline_index"
 			position = { x = -280 y = 26 }
 			Orientation = UPPER_RIGHT
@@ -93,7 +93,7 @@ guiTypes = {
 		}
 		buttonType =
 		{
-			name = "Timeline"
+			name = "dashboard_graphs"
 			quadTextureSprite = "GFX_button_timeline_graphs"
 			position = { x = -220 y = 17 }
 			Orientation = UPPER_RIGHT
@@ -102,27 +102,27 @@ guiTypes = {
 		}
 		buttonType =
 		{
-			name = "Event History"
+			name = "dashboard_event_log"
 			quadTextureSprite = "GFX_button_event_history"
 			position = { x = -150 y = 21 }
 			Orientation = UPPER_RIGHT
 			web_link="http://127.0.0.1:28053/checkversion/v0.6.0/history"
 			shortcut = "L"
 		}
-		
+
 		containerWindowType = {
 			name = "setting_bg_box"
 			size = { width = 1206 height = 616 }
 			position = { x = 7 y = 82 }
 			clipping = no
-			
+
 			background = {
 				name = "setting_bg_frame"
 				spriteType = "GFX_clean_frame_area"
 				alwaystransparent = yes
 			}
 		}
-		
+
 		buttonType =
 		{
 			name = "close"
@@ -131,7 +131,7 @@ guiTypes = {
 			Orientation = UPPER_RIGHT
 			clicksound = back_click
 			shortcut = "ESCAPE"
-		}		
+		}
 	}
 
 }

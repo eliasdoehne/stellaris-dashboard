@@ -2,7 +2,9 @@ import logging
 import multiprocessing as mp
 import threading
 
-from stellarisdashboard import cli, dash_server
+from stellarisdashboard import cli
+from stellarisdashboard.dashboard_app import start_server
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ def main():
     2. Begin monitoring for new save files
     """
     stop_event = threading.Event()
-    t_server = threading.Thread(target=dash_server.start_server, daemon=True)
+    t_server = threading.Thread(target=start_server, daemon=True)
     try:
         t_server.start()
         cli.f_monitor_saves(stop_event=stop_event)
