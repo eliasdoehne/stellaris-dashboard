@@ -4,14 +4,15 @@ block_cipher = None
 
 added_files = [
     ('env/Lib/site-packages/sqlalchemy', 'sqlalchemy'),
+    ('env/Lib/site-packages/plotly/package_data', 'plotly/package_data'),
     ('env/Lib/site-packages/dash/favicon.ico', 'dash/favicon.ico'),
     ('env/Lib/site-packages/dash_core_components', 'dash_core_components'),
     ('env/Lib/site-packages/dash_html_components', 'dash_html_components'),
     ('env/Lib/site-packages/dash_renderer', 'dash_renderer'),
     ('./README.md', '.'),
-    ('./stellarisdashboard/static', 'stellarisdashboard/static'),
-    ('./stellarisdashboard/templates', 'stellarisdashboard/templates'),
-    ('./stellarisdashboard/cython_ext', 'stellarisdashboard/cython_ext'),
+    ('./stellarisdashboard/dashboard_app/static', 'stellarisdashboard/dashboard_app/static'),
+    ('./stellarisdashboard/dashboard_app/templates', 'stellarisdashboard/dashboard_app/templates'),
+    ('./stellarisdashboard/parsing/cython_ext', 'stellarisdashboard/parsing/cython_ext'),
 ]
 
 a = Analysis(['stellarisdashboard/__main__.py'],
