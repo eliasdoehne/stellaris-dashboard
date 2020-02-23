@@ -1,0 +1,63 @@
+The stellaris dashboard is a program that reads your Stellaris save files while you play the game and shows you more detailed information and stats about your playthrough. This workshop mod extends the internet browser included in Stellaris, allowing you to access the dashboard from within the game. 
+
+[b] !!!IMPORTANT!!! To use the dashboard, you must install and run the program following the instructions given below. The program has to run in the background while you play Stellaris! [/b]
+
+Please consider rating this mod if you like it. :)
+
+[h1] Features [/h1]
+
+[b]Timeline Graphs[/b]
+
+You can access up to 60 timeline graphs, including:
+  - Detailed, categorized economy budgets (energy, minerals, alloys, consumer goods and food)
+  - Pop statistics (demographics, happiness, crime by species, job, strata, faction and planet)
+  - Science output, and exploration progress
+
+There is also a historical galaxy map showing which empire owned which systems at any time.
+
+[b]Event Ledger [/b]
+
+Additionally, a browsable historical event ledger is created while you play the game.
+
+[h1] Installation and Use [/h1]
+
+[b] Important: Already existing save files are ignored in the current version of the program, you have to generate a new save file before anything happens...[/b]
+
+1. Subscribe to this workshop mod
+2. Download the latest release of the Dashboard from https://github.com/eliasdoehne/stellaris-dashboard/releases.
+3. Follow the instructions at https://github.com/eliasdoehne/stellaris-dashboard for your operating system.
+4. Run the dashboard program and play the game. As soon as a new save file is generated, the program should read it in the background and add it to the database.
+5. To open the dashboard, access the in-game internet browser by clicking on the help icon in the lower right.  You can also open the browser with the keyboard shortcut ALT-B. 
+
+In some versions of Stellaris, the help icon is hidden in a submenu. The submenu also needs to be expanded to use the ALT-B hotkey:
+
+[img]https://steamuserimages-a.akamaihd.net/ugc/940589883945878302/66874C499AB7088E309D95FFB5A720F80E229BE0/[/img]
+
+Once you open the browser, you should see three buttons in the upper right area of the window:
+
+[img]https://steamuserimages-a.akamaihd.net/ugc/940589883947546239/330A856DDDEFB565C299CC45D6B2C3CE2B33A9A5/[/img]
+
+The left button opens the index page, showing a list of games for which data is available. The center and right buttons are shortcuts to the graph dashboard and event ledger of the most recently modified game, respectively. Remember that the buttons only work if the dashboard program is running in the background.
+
+
+[h1]Other information[/h1]
+
+[b]Update notifications[/b]
+Since the dashboard is still a work in progress, I occasionally release updates. If a new version of the dashboard program is released I can update the Steam workshop, and you will see a notification in the dashboard UI. This notification is shown only because the workshop mod contains a version ID, allowing the dashboard to compare its own version to this ID. [b]The dashboard program itself does not send any data. It only runs locally on your computer.[/b]
+
+[b]Why a separate program?[/b]
+The dashboard is quite complex and to my (limited) knowledge, making a mod with these features by editing the game files would be impossible (at least for me). This is why you have to run the external program to use the dashboard.
+
+The dashboard program's entire source code is released on github, at https://github.com/eliasdoehne/stellaris-dashboard.
+
+[h1]Acknowledgments[/h1]
+
+First of all, thanks to everyone who directly or indirectly contributed to this project!
+
+Thanks to reddit and Steam user 8igualdos0s for initially maintaining a copy of the browser mod in the Steam Workshop.
+
+The approach of modding the in-game browser was inspired by this project by reddit user Ariestinak:
+https://github.com/omiddavoodi/StellarisInGameLedger
+
+Development of this project is supported by JetBrains with an open source license:
+http://jetbrains.com/?from=stellarisdashboard
