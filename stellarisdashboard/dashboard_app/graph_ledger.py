@@ -10,8 +10,8 @@ import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template
 
-from stellarisdashboard import config, datamodel, visualization_data
-from stellarisdashboard.dashboard_app import utils, flask_app
+from stellarisdashboard import config, datamodel
+from stellarisdashboard.dashboard_app import utils, flask_app, visualization_data
 
 logger = logging.getLogger(__name__)
 
@@ -417,8 +417,8 @@ def _get_raw_data_for_stacked_and_budget_plots(
     net_gain = None
     lines = []
     normalized = (
-        config.CONFIG.normalize_stacked_plots
-        and plot_spec.style == visualization_data.PlotStyle.stacked
+            config.CONFIG.normalize_stacked_plots
+            and plot_spec.style == visualization_data.PlotStyle.stacked
     )
     for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if not any(y_values):
