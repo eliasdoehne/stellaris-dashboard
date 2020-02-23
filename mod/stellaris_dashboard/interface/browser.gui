@@ -88,7 +88,7 @@ guiTypes = {
 			quadTextureSprite = "GFX_button_timeline_index"
 			position = { x = -280 y = 26 }
 			Orientation = UPPER_RIGHT
-			web_link="http://127.0.0.1:28053/checkversion/v0.6.1"
+			web_link="http://127.0.0.1:28053/checkversion/v0.6.2"
 			shortcut = "J"
 		}
 		buttonType =
@@ -106,7 +106,7 @@ guiTypes = {
 			quadTextureSprite = "GFX_button_event_history"
 			position = { x = -150 y = 21 }
 			Orientation = UPPER_RIGHT
-			web_link="http://127.0.0.1:28053/checkversion/v0.6.1/history"
+			web_link="http://127.0.0.1:28053/checkversion/v0.6.2/history"
 			shortcut = "L"
 		}
 
