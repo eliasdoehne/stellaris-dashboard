@@ -2941,6 +2941,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
             for species_id, stats in stats_by_species.items():
                 if stats["pop_count"] == 0:
                     continue
+                if species_id is None or species_id not in species_dict:
+                    continue
                 stats["crime"] /= stats["pop_count"]
                 stats["happiness"] /= stats["pop_count"]
                 stats["power"] /= stats["pop_count"]
