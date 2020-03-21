@@ -257,15 +257,22 @@ class SystemProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
         self.systems_by_ingame_id = None
+        self.starbase_systems = None
 
-    def data(self) -> Dict[int, datamodel.System]:
-        return self.systems_by_ingame_id
+    def data(self) -> Dict[str, Any]:
+        return {
+            "systems_by_ingame_id": self.systems_by_ingame_id,
+            "starbase_system_map": self.starbase_systems,
+        }
 
     def extract_data_from_gamestate(self, dependencies):
         self.systems_by_ingame_id = {
             s.system_id_in_game: s for s in self._session.query(datamodel.System)
         }
+        self.starbase_systems = {}
         for ingame_id, system_data in self._gamestate_dict["galactic_object"].items():
+            if "starbase" in system_data:
+                self.starbase_systems[system_data["starbase"]] = ingame_id
             if ingame_id in self.systems_by_ingame_id:
                 self._update_system(
                     system_model=self.systems_by_ingame_id[ingame_id],
@@ -333,7 +340,7 @@ class BypassProcessor(AbstractGamestateDataProcessor):
     DEPENDENCIES = [SystemProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        systems_dict = dependencies[SystemProcessor.ID]
+        systems_dict = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
 
         bypasses = self._gamestate_dict.get("bypasses", {})
         if not isinstance(bypasses, dict):
@@ -443,15 +450,18 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
         return self.systems_by_owner_country_id
 
     def extract_data_from_gamestate(self, dependencies):
-        starbases = self._gamestate_dict.get("starbases", {})
+        starbases = self._gamestate_dict.get("starbase_mgr", {}).get("starbases", {})
+        if not isinstance(starbases, dict):
+            return
         countries_dict = dependencies[CountryProcessor.ID]
-        systems_dict = dependencies[SystemProcessor.ID]
-
+        systems_dict = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        starbase_system_map = dependencies[SystemProcessor.ID]["starbase_system_map"]
         starbase_systems = set()
-        for starbase_dict in starbases.values():
+
+        for starbase_id, starbase_dict in starbases.items():
             if not isinstance(starbase_dict, dict):
                 continue
-            system_id_in_game = starbase_dict.get("system")
+            system_id_in_game = starbase_system_map.get(starbase_id)
             country_id_in_game = starbase_dict.get("owner")
             system_model = systems_dict.get(system_id_in_game)
             country_model = countries_dict.get(country_id_in_game)
@@ -469,8 +479,8 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             self.systems_by_owner_country_id[country_id_in_game].add(system_model)
 
             if country_model != system_model.country:
-                self._update_ownership(
-                    current_owner_country=country_model, system_model=system_model
+                self._update_owner(
+                    current_owner=country_model, system_model=system_model
                 )
 
         for system_id, system_model in systems_dict.items():
@@ -478,26 +488,26 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 continue
             if system_model.country is None:
                 continue
-            self._update_ownership(None, system_model)
+            self._update_owner(None, system_model)
 
-    def _update_ownership(
-        self, current_owner_country: datamodel.Country, system_model: datamodel.System
+    def _update_owner(
+        self, current_owner: Optional[datamodel.Country], system_model: datamodel.System
     ):
         owner_changed = False
         event_type = None
         target_country = None
 
-        if current_owner_country is None:
+        if current_owner is None:
             owner_changed = True
         elif system_model.country is None:
             owner_changed = True
             event_type = datamodel.HistoricalEventType.expanded_to_system
-        elif system_model.country != current_owner_country:
+        elif system_model.country != current_owner:
             owner_changed = True
             event_type = datamodel.HistoricalEventType.conquered_system
 
         if owner_changed:
-            system_model.country = current_owner_country
+            system_model.country = current_owner
             self._session.add(system_model)
 
             ownership = (
@@ -513,35 +523,34 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 target_country = ownership.country
                 if target_country is not None:
                     is_visible = target_country.has_met_player() or (
-                        current_owner_country is not None
-                        and current_owner_country.has_met_player()
+                        current_owner is not None and current_owner.has_met_player()
                     )
                     self._session.add(
                         datamodel.HistoricalEvent(
                             event_type=datamodel.HistoricalEventType.lost_system,
                             country=target_country,
-                            target_country=current_owner_country,
+                            target_country=current_owner,
                             system=system_model,
                             start_date_days=self._basic_info.date_in_days,
                             event_is_known_to_player=is_visible,
                         )
                     )
-            if current_owner_country is not None:
+            if current_owner is not None:
                 self._session.add(
                     datamodel.SystemOwnership(
                         start_date_days=self._basic_info.date_in_days,
                         end_date_days=self._basic_info.date_in_days + 1,
-                        country=current_owner_country,
+                        country=current_owner,
                         system=system_model,
                     )
                 )
-                is_visible = current_owner_country.has_met_player() or (
+                is_visible = current_owner.has_met_player() or (
                     target_country is not None and target_country.has_met_player()
                 )
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=event_type,
-                        country=current_owner_country,
+                        country=current_owner,
                         target_country=target_country,
                         system=system_model,
                         start_date_days=self._basic_info.date_in_days,
@@ -1139,7 +1148,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         self.planets_by_ingame_id = {
             p.planet_id_in_game: p for p in self._session.query(datamodel.Planet)
         }
-        systems_by_id = dependencies[SystemProcessor.ID]
+        systems_by_id = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
 
         for system_id, system_dict in self._gamestate_dict["galactic_object"].items():
             planets = system_dict.get("planet", [])
@@ -1342,7 +1351,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         self._planets_dict = dependencies[PlanetProcessor.ID]
         self._countries_dict = dependencies[CountryProcessor.ID]
-        self._systems_dict = dependencies[SystemProcessor.ID]
+        self._systems_dict = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
         self._leaders_dict = dependencies[LeaderProcessor.ID]
         self._systems_by_owner = dependencies[SystemOwnershipProcessor.ID]
 
@@ -1601,6 +1610,8 @@ class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
         planet_models = dependencies[PlanetProcessor.ID]
         for ingame_id, planet_model in planet_models.items():
             planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id, {})
+            if not isinstance(planet_dict, dict):
+                continue
             self._update_planet_model(planet_dict, planet_model)
 
     def _update_planet_model(self, planet_dict: Dict, planet_model: datamodel.Planet):
@@ -2528,7 +2539,9 @@ class WarProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         self._ruler_dict = dependencies[RulerEventProcessor.ID]
         self._countries_dict = dependencies[CountryProcessor.ID]
-        self._system_models_dict = dependencies[SystemProcessor.ID]
+        self._system_models_dict = dependencies[SystemProcessor.ID][
+            "systems_by_ingame_id"
+        ]
         self._planet_models_dict = dependencies[PlanetProcessor.ID]
 
         wars_dict = self._gamestate_dict.get("war")
