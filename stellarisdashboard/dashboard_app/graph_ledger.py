@@ -128,9 +128,7 @@ DASH_LAYOUT = html.Div(
                             "value": "normalize_stacked_plots",
                         },
                     ],
-                    value=["normalize_stacked_plots"]
-                    if config.CONFIG.normalize_stacked_plots
-                    else [],
+                    value=[],
                     labelStyle=dict(color=DARK_THEME_TEXT_COLOR),
                     style={"text-align": "center"},
                 ),
@@ -215,13 +213,6 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
         layout["hovermode"] = "closest"
     else:
         layout["hovermode"] = "x"
-    if (
-        plot_spec.style == visualization_data.PlotStyle.budget
-        and config.CONFIG.use_two_y_axes_for_budgets
-    ):
-        layout["yaxis2"] = dict(
-            title=f"{plot_spec.y_axis_label} (net gain)", overlaying="y", side="right"
-        )
     return go.Layout(**layout)
 
 
@@ -417,8 +408,8 @@ def _get_raw_data_for_stacked_and_budget_plots(
     net_gain = None
     lines = []
     normalized = (
-            config.CONFIG.normalize_stacked_plots
-            and plot_spec.style == visualization_data.PlotStyle.stacked
+        config.CONFIG.normalize_stacked_plots
+        and plot_spec.style == visualization_data.PlotStyle.stacked
     )
     for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if not any(y_values):
@@ -457,8 +448,6 @@ def _get_raw_data_for_stacked_and_budget_plots(
             text=get_plot_value_labels(lines[0]["x"], net_gain, "Net result"),
             hoverinfo="text",
         )
-        if config.CONFIG.use_two_y_axes_for_budgets:
-            line["yaxis"] = "y2"
         lines.append(line)
     return lines
 

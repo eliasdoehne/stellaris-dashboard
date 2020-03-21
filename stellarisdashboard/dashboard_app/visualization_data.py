@@ -121,8 +121,7 @@ class PlotDataManager:
         self.last_date: float = None
         self._loaded_gamestates: int = None
         self.show_everything: bool = None
-        self.only_show_default_empires: bool = None
-        self.plot_time_resolution: bool = None
+        self.show_all_country_types: bool = None
 
         self._country_perspective: int = country_perspective
 
@@ -132,7 +131,7 @@ class PlotDataManager:
         self.last_date = -float("inf")
         self._loaded_gamestates = 0
         self.show_everything = config.CONFIG.show_everything
-        self.only_show_default_empires = config.CONFIG.only_show_default_empires
+        self.show_all_country_types = config.CONFIG.show_all_country_types
         self.plot_time_resolution = config.CONFIG.plot_time_resolution
 
         self.data_containers_by_plot_id = {}
@@ -158,15 +157,14 @@ class PlotDataManager:
     def update_with_new_gamestate(self):
         if (
             self.show_everything != config.CONFIG.show_everything
-            or self.only_show_default_empires != config.CONFIG.only_show_default_empires
+            or self.show_all_country_types != config.CONFIG.show_all_country_types
             or self.plot_time_resolution != config.CONFIG.plot_time_resolution
         ):
             # reset everything due to changed setting: This forces the program to redraw all plots with the appropriate data:
             logger.info("Detected changed visibility settings: Reassembling plot data")
             self.initialize()
             self.show_everything = config.CONFIG.show_everything
-            self.only_show_default_empires = config.CONFIG.only_show_default_empires
-            self.plot_time_resolution = config.CONFIG.plot_time_resolution
+            self.show_all_country_types = config.CONFIG.show_all_country_types
 
         num_new_gs = datamodel.count_gamestates_since(self.game_name, self.last_date)
         if self.plot_time_resolution == 0 or num_new_gs < self.plot_time_resolution:
@@ -258,7 +256,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         for cd in gs.country_data:
             try:
                 if (
-                    config.CONFIG.only_show_default_empires
+                    config.CONFIG.show_all_country_types
                     and cd.country.country_type != "default"
                 ):
                     continue

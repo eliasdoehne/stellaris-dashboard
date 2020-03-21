@@ -103,26 +103,22 @@ class SavePathMonitor(abc.ABC):
                 )
         return new_files
 
-    def _apply_skip_savefiles_filter(self, new_files):
-        if not new_files:
+    def _apply_skip_savefiles_filter(
+        self, new_files: List[pathlib.Path]
+    ) -> List[pathlib.Path]:
+        if not new_files or config.CONFIG.skip_saves == 0:
             return new_files
         new_files_str = ", ".join(f.stem for f in new_files[:10])
         logger.info(f"Found {len(new_files)} new files: {new_files_str}...")
-        if (config.CONFIG.read_only_every_nth_save or 0) > 1:
-            num_new_files = len(new_files)
-            new_files = [
-                f
-                for (i, f) in enumerate(new_files)
-                if (self.num_encountered_saves + i)
-                % config.CONFIG.read_only_every_nth_save
-                == 0
-            ]
-            self.num_encountered_saves += num_new_files
-            self.num_encountered_saves %= config.CONFIG.read_only_every_nth_save
-            logger.info(
-                f"Reduced to {len(new_files)} files due to read_only_every_nth_save={config.CONFIG.read_only_every_nth_save}..."
-            )
-        return new_files
+        filtered_files = []
+        for f in new_files:
+            self.num_encountered_saves += 1
+            if self.num_encountered_saves % (1 + config.CONFIG.skip_saves) == 0:
+                filtered_files.append(f)
+        logger.info(
+            f"Reduced to {len(filtered_files)} files due to skip_saves={config.CONFIG.skip_saves}..."
+        )
+        return filtered_files
 
     def mark_all_existing_saves_processed(self) -> None:
         """ Ensure that existing files are not re-parsed. """
@@ -257,21 +253,22 @@ def parse_save(filename) -> Dict[str, Any]:
     """
     gamestate = None
     parser = SaveFileParser()
-    for attempt in range(config.CONFIG.max_file_read_attempts):
+    max_attempts = 3
+    for attempt in range(max_attempts):
         try:
             gamestate = parser.parse_save(filename)
             break
         except KeyboardInterrupt:
             raise
         except zipfile.BadZipFile as e:
-            remaining = config.CONFIG.max_file_read_attempts - attempt - 1
+            remaining = max_attempts - attempt - 1
             if not remaining:
                 raise
-            delay = config.CONFIG.save_file_delay
+            delay_seconds = 0.5
             logger.info(
-                f"Encountered BadZipFile error {e}. Next attempt in {delay} seconds, {remaining} attempts remaining."
+                f"Encountered BadZipFile error {e}. Next attempt in {delay_seconds} seconds, {remaining} attempts remaining."
             )
-            time.sleep(delay)
+            time.sleep(delay_seconds)
     return gamestate
 
 

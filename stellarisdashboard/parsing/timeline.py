@@ -20,21 +20,10 @@ class BasicGameInfo:
     player_country_id: int
     other_players: Set[int]
     number_of_parsed_saves: int
-    _logged_pop_stats_skip: bool = False
 
     @property
     def logger_str(self) -> str:
         return f"{self.game_id} {datamodel.days_to_date(self.date_in_days)}"
-
-    def skip_budget_pop_stats(self):
-        pop_stats_frequency = config.CONFIG.budget_pop_stats_frequency
-        result = self.number_of_parsed_saves % pop_stats_frequency != 0
-        if result and not self._logged_pop_stats_skip:
-            self._logged_pop_stats_skip = True
-            logger.info(
-                f"{self.logger_str}         Skipping Pop stats and Budgets due to budget_pop_stats_frequency = {pop_stats_frequency}"
-            )
-        return result
 
 
 class TimelineExtractor:
@@ -436,7 +425,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
 
 
 class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
-    ID = "system_ownership"
+    ID = "system_owners"
     DEPENDENCIES = [SystemProcessor.ID, CountryProcessor.ID]
 
     def __init__(self):
@@ -867,11 +856,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_society_research += society
             country_data.net_engineering_research += engineering
 
-            if not country.is_player and self._basic_info.skip_budget_pop_stats():
-                continue
             if country.country_id_in_game in self._basic_info.other_players:
                 continue
-            if country.is_player or config.CONFIG.read_non_player_countries:
+            if country.is_player or config.CONFIG.read_all_countries:
                 self._session.add(
                     datamodel.BudgetItem(
                         country_data=country_data,
@@ -2862,14 +2849,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         faction_by_ingame_id = dependencies[FactionProcessor.ID]
 
         for country_id_in_game, country_model in countries_dict.items():
-            if (
-                not config.CONFIG.read_non_player_countries
-                and not country_model.is_player
-            ):
+            if not config.CONFIG.read_all_countries and not country_model.is_player:
                 continue
             if country_id_in_game in self._basic_info.other_players:
-                continue
-            if not country_model.is_player and self._basic_info.skip_budget_pop_stats():
                 continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}

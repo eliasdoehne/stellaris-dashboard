@@ -76,21 +76,14 @@ DEFAULT_SETTINGS = dict(
     threads=_get_default_thread_count(),
     port=28053,
     polling_interval=0.5,
-    save_file_delay=0.5,
-    max_file_read_attempts=3,
     check_version=True,
-    colormap="viridis",
     log_level="INFO",
     show_everything=False,
-    filter_events_by_type=False,
-    only_show_default_empires=False,
+    show_all_country_types=False,
     save_name_filter="",
-    read_non_player_countries=False,
-    budget_pop_stats_frequency=1,
-    read_only_every_nth_save=1,
     plot_time_resolution=200,
-    normalize_stacked_plots=False,
-    use_two_y_axes_for_budgets=False,
+    read_all_countries=False,
+    skip_saves=0,
     log_to_file=False,
     plot_width=1150,
     plot_height=640,
@@ -107,31 +100,23 @@ class Config:
     threads: int = None
 
     port: int = None
-    colormap: str = None
     log_level: str = None
     plot_height: int = None
     plot_width: int = None
 
     polling_interval: float = None
-    save_file_delay: float = None
-    max_file_read_attempts: int = None
 
     check_version: bool = None
     show_everything: bool = None
-    read_non_player_countries: bool = None
-    budget_pop_stats_frequency: int = None
-    only_show_default_empires: bool = None
-    filter_events_by_type: bool = None
-
-    normalize_stacked_plots: bool = None
-    use_two_y_axes_for_budgets: bool = None
+    read_all_countries: bool = None
+    show_all_country_types: bool = None
 
     save_name_filter: str = None
-    read_only_every_nth_save: int = None
+    skip_saves: int = None
     plot_time_resolution: int = None
 
-    debug_mode: bool = False
     log_to_file: bool = False
+    debug_mode: bool = False
 
     PATH_KEYS = {
         "base_output_path",
@@ -141,44 +126,31 @@ class Config:
         "check_version",
         "filter_events_by_type",
         "show_everything",
-        "read_non_player_countries",
-        "only_show_default_empires",
-        "normalize_stacked_plots",
-        "use_two_y_axes_for_budgets",
+        "read_all_countries",
+        "show_all_country_types",
         "log_to_file",
     }
     INT_KEYS = {
         "port",
-        "read_only_every_nth_save",
         "plot_time_resolution",
-        "budget_pop_stats_frequency",
+        "skip_saves",
         "threads",
         "plot_width",
         "plot_height",
-        "max_file_read_attempts",
     }
     FLOAT_KEYS = {
         "polling_interval",
-        "save_file_delay",
     }
     STR_KEYS = {
         "mp_username",
-        "colormap",
         "save_name_filter",
         "log_level",
-    }
-    DEPRECATED_KEYS = {
-        "extract_system_ownership",
-        "only_read_player_history",
     }
     ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS
 
     def apply_dict(self, settings_dict):
         logger.info("Updating settings")
         for key, val in settings_dict.items():
-            if key in Config.DEPRECATED_KEYS:
-                logger.info(f"Ignoring deprecated setting {key} with value {val}.")
-                continue
             if key not in Config.ALL_KEYS:
                 logger.info(f"Ignoring unknown setting {key} with value {val}.")
                 continue
@@ -243,7 +215,7 @@ class Config:
             f"  base_output_path: {repr(self.base_output_path)}",
             f"  threads: {repr(self.threads)}",
             f"  show_everything: {repr(self.show_everything)}",
-            f"  only_show_default_empires: {repr(self.only_show_default_empires)}",
+            f"  show_all_country_types: {repr(self.show_all_country_types)}",
         ]
         return "\n".join(lines)
 

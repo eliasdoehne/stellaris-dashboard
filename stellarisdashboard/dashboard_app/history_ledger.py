@@ -279,13 +279,12 @@ class EventTemplateDictBuilder:
             country_type = (
                 event.country.country_type if event.country is not None else None
             )
-            if config.CONFIG.only_show_default_empires:
-                if country_type not in [
-                    "default",
-                    "fallen_empire",
-                    "awakened_fallen_empire",
-                ]:
-                    continue
+            if not config.CONFIG.show_all_country_types and country_type not in [
+                "default",
+                "fallen_empire",
+                "awakened_fallen_empire",
+            ]:
+                continue
 
             start = datamodel.days_to_date(event.start_date_days)
             end_date = None
