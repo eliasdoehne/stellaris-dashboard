@@ -79,9 +79,10 @@ DEFAULT_SETTINGS = dict(
     check_version=True,
     log_level="INFO",
     show_everything=False,
+    filter_events_by_type=True,
     show_all_country_types=False,
     save_name_filter="",
-    plot_time_resolution=200,
+    plot_time_resolution=500,
     read_all_countries=False,
     skip_saves=0,
     log_to_file=False,
@@ -107,6 +108,7 @@ class Config:
     polling_interval: float = None
 
     check_version: bool = None
+    filter_events_by_type: bool = None
     show_everything: bool = None
     read_all_countries: bool = None
     show_all_country_types: bool = None

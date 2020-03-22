@@ -17,7 +17,6 @@ def settings_page():
     t_int = "int"
     t_bool = "bool"
     t_str = "str"
-    t_float = "float"
 
     current_values = config.CONFIG.get_adjustable_settings_dict()
     settings = {
@@ -75,7 +74,7 @@ def settings_page():
             "type": t_bool,
             "value": _bool_to_lowercase(current_values["read_all_countries"]),
             "name": "Store data of all countries",
-            "description": "Store budgets and internal stats of all countries. This produces a larger database and could slow things down.",
+            "description": "Store budgets and internal stats of all countries. This makes a larger database and could slow things down.",
         },
         "skip_saves": {
             "type": t_int,
