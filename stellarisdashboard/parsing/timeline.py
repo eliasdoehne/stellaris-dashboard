@@ -38,7 +38,7 @@ class TimelineExtractor:
         self._gamestate_dict = gamestate_dict
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
-        t_start_gs = time.clock()
+        t_start_gs = time.process_time()
         with datamodel.get_db_session(game_id=game_id) as self._session:
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
@@ -51,7 +51,7 @@ class TimelineExtractor:
                 else:
                     self._process_gamestate(db_game)
                 logger.info(
-                    f"{self.basic_info.logger_str} Processed Gamestate in {time.clock() - t_start_gs:.3f} s, writing changes to database"
+                    f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, writing changes to database"
                 )
                 self._session.commit()
                 self.number_of_parsed_saves += 1
@@ -74,7 +74,7 @@ class TimelineExtractor:
         self._session.add(db_game_state)
         all_dependencies = {}
         for data_processor in self._data_processors():
-            t_start = time.clock()
+            t_start = time.process_time()
             data_processor.initialize(
                 db_game,
                 self._gamestate_dict,
@@ -101,7 +101,7 @@ class TimelineExtractor:
                 )
                 all_dependencies[data_processor.ID] = data_processor.data()
                 logger.info(
-                    f"{self.basic_info.logger_str}         done ({time.clock() - t_start:.3f} s)"
+                    f"{self.basic_info.logger_str}         done ({time.process_time() - t_start:.3f} s)"
                 )
 
     def _get_or_add_game_to_db(self, game_id: str):
