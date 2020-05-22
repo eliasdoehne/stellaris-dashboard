@@ -1362,7 +1362,7 @@ class GalaxyMapData:
         self.galaxy_graph: nx.Graph = None
 
     def initialize_galaxy_graph(self):
-        start_time = time.clock()
+        start_time = time.process_time()
         self.galaxy_graph = nx.Graph()
         with datamodel.get_db_session(self.game_id) as session:
             for system in session.query(datamodel.System):
@@ -1382,11 +1382,11 @@ class GalaxyMapData:
                 )
                 self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
         logger.debug(
-            f"Initialized galaxy graph in {time.clock() - start_time} seconds."
+            f"Initialized galaxy graph in {time.process_time() - start_time} seconds."
         )
 
     def get_graph_for_date(self, time_days: int) -> nx.Graph:
-        start_time = time.clock()
+        start_time = time.process_time()
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
         for country, nodes in systems_by_owner.items():
@@ -1403,7 +1403,7 @@ class GalaxyMapData:
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
         logger.info(
-            f"Updated networkx graph in {time.clock() - start_time:5.3f} seconds."
+            f"Updated networkx graph in {time.process_time() - start_time:5.3f} seconds."
         )
         return self.galaxy_graph
 
