@@ -1,6 +1,6 @@
 import pytest
 
-from stellarisdashboard import save_parser
+from stellarisdashboard.parsing import save_parser
 import parser_test_data
 
 
