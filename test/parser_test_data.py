@@ -31,4 +31,17 @@ PARSER_TEST_CASES = dict(
             amount={ 7 8 8 }""",
         expected=dict(amount=[[1, 2, 3], [4, 5, 6], [7, 8, 8],]),
     ),
+    ancient_relic_missing_event_ids=dict(
+        input="""expired=yes
+        event_id=					scope={
+        type=none
+        id=0
+        random={ 0 3991148998 }
+        }""",
+        expected=dict(
+            expired="yes",
+            event_id="scope",
+            unknown_key={"type": "none", "id": 0, "random": [0, 3991148998]},
+        ),
+    ),
 )

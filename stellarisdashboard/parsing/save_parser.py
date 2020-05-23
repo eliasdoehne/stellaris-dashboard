@@ -374,14 +374,20 @@ class SaveFileParser:
 
     def _parse_key_value_pair(self):
         key_token = self._lookahead()
-        if (
-            key_token.token_type != TokenType.STRING
-            and key_token.token_type != TokenType.INTEGER
-        ):
+        if key_token.token_type not in [
+            TokenType.STRING,
+            TokenType.INTEGER,
+            TokenType.EQUAL,
+        ]:
             raise StellarisFileFormatError(
                 f"Line {key_token.pos}: Expected a string or Integer as key, found {key_token}"
             )
-        key = self._parse_literal()
+        if key_token.token_type == TokenType.EQUAL:
+            # Workaround to handle this edge case/bug: "event_id=scope={" which happens for some ancient relics
+            # Change it effectively to this: "event_id="scope" unknown_key={"
+            key = "unknown_key"
+        else:
+            key = self._parse_literal()
         eq_token = self._next_token()
         if eq_token.token_type == TokenType.EQUAL:
             value = self._parse_value()
