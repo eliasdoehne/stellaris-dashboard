@@ -353,8 +353,7 @@ class BypassProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(bypass_dict, dict):
                     continue
                 bypass_type = bypass_dict.get("type", "unknown")
-                connections = bypass_dict.get("connections")
-
+                connections = bypass_dict.get("connections", [])
                 if bypass_type == "lgate":
                     network_id = hash("lgate")
                 elif bypass_type == "gateway":
