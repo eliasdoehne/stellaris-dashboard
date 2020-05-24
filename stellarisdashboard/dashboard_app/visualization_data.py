@@ -1,11 +1,11 @@
 import abc
+import dataclasses
 import enum
 import logging
 import random
 import time
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
 
-import dataclasses
 import networkx as nx
 
 from stellarisdashboard import datamodel, config
@@ -118,10 +118,11 @@ class PlotDataManager:
         self.game_name: str = game_name
         self.plot_specifications = plot_specifications
 
-        self.last_date: float = None
-        self._loaded_gamestates: int = None
-        self.show_everything: bool = None
-        self.show_all_country_types: bool = None
+        self.last_date = None
+        self._loaded_gamestates = None
+        self.show_everything = None
+        self.show_all_country_types = None
+        self.plot_time_resolution = None
 
         self._country_perspective: int = country_perspective
 
@@ -604,7 +605,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsBySpecies)
-        return f"{ps.species.species_name} ({ps.species.species_id_in_game})"
+        return f"{ps.species.species_name} (ID {ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):

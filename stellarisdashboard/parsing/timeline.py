@@ -1162,9 +1162,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     current_entities=planet_dict.get("district", []),
                     db_entity_factory=datamodel.PlanetDistrict,
                 )
-                buildings = planet_dict.get("buildings", [])
-                if not isinstance(buildings, list):
-                    buildings = [buildings]
+                buildings = list(planet_dict.get("buildings", {}).values())
                 was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
                     entity_attribute_name="buildings",
@@ -1224,11 +1222,9 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         :param db_entity_factory:
         :return: True, if the planet model was updated, False otherwise
         """
-        if isinstance(current_entities, list):
-            pass
-        elif isinstance(current_entities, str):
+        if isinstance(current_entities, str):
             current_entities = [current_entities]
-        else:
+        if not isinstance(current_entities, list):
             logger.warning(
                 f"{self._basic_info.logger_str}: Expected str or list, got {current_entities} while updating {entity_attribute_name}"
             )
