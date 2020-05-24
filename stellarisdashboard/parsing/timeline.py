@@ -1162,12 +1162,11 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     current_entities=planet_dict.get("district", []),
                     db_entity_factory=datamodel.PlanetDistrict,
                 )
-                buildings = list(planet_dict.get("buildings", {}).values())
                 was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
                     entity_attribute_name="buildings",
                     entity_hash_attribute="buildings_hash",
-                    current_entities=buildings,
+                    current_entities=self._get_buildings(planet_dict),
                     db_entity_factory=datamodel.PlanetBuilding,
                 )
                 was_updated |= self._update_countable_planet_attributes(
@@ -1182,6 +1181,18 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                 )
                 if was_updated:
                     self._session.add(planet_model)
+
+    def _get_buildings(self, planet_dict):
+        building_ids = planet_dict.get("buildings", {})
+        buildings_dict = self._gamestate_dict.get("buildings", {})
+
+        buildings = []
+        for b_id in building_ids:
+            building = buildings_dict.get(b_id, "Unknown building")
+            if not isinstance(building, dict):
+                continue
+            buildings.append(building.get("type", "Unknown type"))
+        return buildings
 
     def _add_planet_model(
         self, system_model: datamodel.System, planet_id: int, planet_dict: Dict
