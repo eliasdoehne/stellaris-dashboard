@@ -33,7 +33,8 @@ Alternatively, you can access the dashboard by opening [http://localhost:28053](
 
   1. Download the latest build of the dashboard from the [releases page](https://github.com/eliasdoehne/stellaris-dashboard/releases).
   2. Extract the zip archive to a location of your choice.
-  3. Run `stellarisdashboard.exe`.
+  3. (Optional) To read any existing save files, run `parse_saves.exe`. This will attempt to load them into the dashboard's database.
+  4. Run `stellarisdashboard.exe`.
 
 ### Linux
  
@@ -42,7 +43,8 @@ Alternatively, you can access the dashboard by opening [http://localhost:28053](
   3. Open a terminal in the extracted folder and run `python -m venv env` to create a virtual environment. Depending on what Python versions are installed in your system, you may need to replace `python` in this step with the more explicit `python3.7` or similar. Once you activate the virtualenvironment in the next step, this should not matter anymore. 
   4. Run `source env/bin/activate` to activate the virtual environment.
   5. Run `python -m pip install -r requirements.txt` to install all dependencies.
-  6. To start the program, run `python -m stellarisdashboard` from the main directory (remember to first activate your virtual environment!).
+  6. (Optional) To read any existing save files, run `stellarisdashboardcli parse-saves`. This will attempt to load them into the dashboard's database.
+  7. To start the program, run `python -m stellarisdashboard` from the main directory (remember to first activate your virtual environment!).
 
 These instructions should also work on Mac OS X, although I cannot test this. Mac users should also follow the Cython instructions in the next section to improve the performance of the program.
 
