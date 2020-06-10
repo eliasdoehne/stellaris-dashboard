@@ -1,1 +1,0 @@
-env\Scripts\activate & python -m stellarisdashboard
