@@ -36,6 +36,8 @@ def _add_file_handler():
 
 initialize_logger()
 logger = logging.getLogger(__name__)
+if mp.current_process().name != "MainProcess":
+    logger.setLevel(logging.CRITICAL)
 
 
 def _get_default_thread_count():
@@ -247,12 +249,6 @@ def _get_settings_file_path() -> pathlib.Path:
     return pathlib.Path.cwd() / "config.yml"
 
 
-def update_log_level():
-    level = LOG_LEVELS.get(CONFIG.log_level, logging.INFO)
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-
-
 # Initialize the Config object with the default settings
 CONFIG = Config()
 _apply_existing_settings(CONFIG)
@@ -261,5 +257,6 @@ _apply_existing_settings(CONFIG)
 if not CONFIG.base_output_path.exists():
     (CONFIG.base_output_path / "db").mkdir(parents=True)
     (CONFIG.base_output_path / "output").mkdir(parents=True)
-update_log_level()
+
+logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
 _add_file_handler()
