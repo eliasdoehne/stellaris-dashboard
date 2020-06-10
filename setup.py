@@ -39,22 +39,13 @@ except RuntimeError as e:
     print("Using pre-built C-extension if available, or (slow) fallback solution.")
     extension_modules = []
 
+with open("requirements.txt", "r") as f:
+    install_requires = f.read().strip().split()
+
 setup(
     name="stellarisdashboard",
     ext_modules=extension_modules,
-    install_requires=[
-        "click",
-        "dash",
-        "dash-core-components",
-        "dash-html-components",
-        "dash-renderer",
-        "flask",
-        "dataclasses",
-        "networkx",
-        "plotly",
-        "sqlalchemy",
-        "pyyaml",
-    ],
+    install_requires=install_requires,
     entry_points={
         "console_scripts": [
             "stellarisdashboard = stellarisdashboard.__main__:main",

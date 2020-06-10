@@ -1,3 +1,4 @@
 pytest
 Cython
 pyinstaller
+black
