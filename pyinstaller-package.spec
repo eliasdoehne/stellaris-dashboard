@@ -1,22 +1,30 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-block_cipher = None
+from pathlib import Path
+import importlib
 
+
+def module_path(module_name):
+    module = importlib.import_module(module_name)
+    return Path(module.__file__).resolve().parent
+
+
+block_cipher = None
 added_files = [
-    ('env/Lib/site-packages/sqlalchemy', 'sqlalchemy'),
-    ('env/Lib/site-packages/plotly/package_data', 'plotly/package_data'),
-    ('env/Lib/site-packages/dash/favicon.ico', 'dash/favicon.ico'),
-    ('env/Lib/site-packages/dash_core_components', 'dash_core_components'),
-    ('env/Lib/site-packages/dash_html_components', 'dash_html_components'),
-    ('env/Lib/site-packages/dash_renderer', 'dash_renderer'),
-    ('./README.md', '.'),
-    ('./stellarisdashboard/dashboard_app/static', 'stellarisdashboard/dashboard_app/static'),
-    ('./stellarisdashboard/dashboard_app/templates', 'stellarisdashboard/dashboard_app/templates'),
-    ('./stellarisdashboard/parsing/cython_ext', 'stellarisdashboard/parsing/cython_ext'),
+    (str(module_path("sqlalchemy")), "sqlalchemy/"),
+    (str(module_path("plotly") / "package_data"), "plotly/package_data/"),
+    (str(module_path("dash") / "favicon.ico"), "dash/favicon.ico/"),
+    (str(module_path("dash_core_components")), "dash_core_components/"),
+    (str(module_path("dash_html_components")), "dash_html_components/"),
+    (str(module_path("dash_renderer")), "dash_renderer/"),
+    (str(Path("README.md")), "./"),
+    (str(Path("stellarisdashboard/dashboard_app/static")), "stellarisdashboard/dashboard_app/static/"),
+    (str(Path("stellarisdashboard/dashboard_app/templates")), "stellarisdashboard/dashboard_app/templates/"),
+    (str(Path("stellarisdashboard/parsing/cython_ext")), "stellarisdashboard/parsing/cython_ext/"),
 ]
 
 a_main = Analysis(
-    ['stellarisdashboard/__main__.py'],
+    [str(Path('stellarisdashboard/__main__.py'))],
     pathex=['.'],
     binaries=[],
     datas=added_files,
@@ -30,9 +38,8 @@ a_main = Analysis(
     noarchive=False
 )
 
-
 a_parse_saves = Analysis(
-    ['stellarisdashboard\\parse_existing_saves.py'],
+    [str(Path('stellarisdashboard/parse_existing_saves.py'))],
     pathex=['.'],
     binaries=[],
     datas=added_files,
@@ -47,23 +54,22 @@ a_parse_saves = Analysis(
 )
 
 MERGE(
-    (a_main, 'stellarisdashboard', 'stellarisdashboard'),
+    (a_main, 'dashboard', 'dashboard'),
     (a_parse_saves, 'parse-saves', 'parse-saves')
 )
 
 pyz_main = PYZ(a_main.pure, a_main.zipped_data,
-             cipher=block_cipher)
+               cipher=block_cipher)
 exe_main = EXE(pyz_main,
-          a_main.scripts,
-          [],
-          exclude_binaries=True,
-          name='stellarisdashboard',
-          debug=False,
-          bootloader_ignore_signals=False,
-          strip=False,
-          upx=True,
-          console=True )
-
+               a_main.scripts,
+               [],
+               exclude_binaries=True,
+               name='dashboard',
+               debug=False,
+               bootloader_ignore_signals=False,
+               strip=False,
+               upx=True,
+               console=True)
 
 pyz_parse_saves = PYZ(
     a_parse_saves.pure,
@@ -94,6 +100,4 @@ coll = COLLECT(exe_main,
                strip=False,
                upx=True,
                upx_exclude=[],
-               name='stellarisdashboard-win')
-
-
+               name='stellarisdashboard-build')
