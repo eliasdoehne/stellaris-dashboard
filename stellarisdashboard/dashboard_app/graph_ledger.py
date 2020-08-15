@@ -9,12 +9,12 @@ import dash_html_components as html
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template
+from scipy.spatial import Voronoi
 
 from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app import utils, flask_app, visualization_data
 
 logger = logging.getLogger(__name__)
-
 
 DARK_THEME_BACKGROUND = "rgba(33,43,39,1)"
 DARK_THEME_GALAXY_BACKGROUND = "rgba(0,0,0,1)"
@@ -191,7 +191,6 @@ DASH_LAYOUT = html.Div(
     },
 )
 
-
 timeline_app = dash.Dash(
     name="Stellaris Timeline",
     server=flask_app,
@@ -251,9 +250,9 @@ def update_country_select_options(search):
     with datamodel.get_db_session(game_id) as session:
         for c in session.query(datamodel.Country):
             if (
-                c.is_real_country()
-                and (c.has_met_player() or config.CONFIG.show_everything)
-                and not c.is_other_player
+                    c.is_real_country()
+                    and (c.has_met_player() or config.CONFIG.show_everything)
+                    and not c.is_other_player
             ):
                 options.append({"label": c.country_name, "value": c.country_id_in_game})
     return options
@@ -270,10 +269,10 @@ def update_country_select_options(search):
     ],
 )
 def update_content(
-    tab_value, search, date_fraction, dash_plot_checklist, country_perspective
+        tab_value, search, date_fraction, dash_plot_checklist, country_perspective
 ):
     config.CONFIG.normalize_stacked_plots = (
-        "normalize_stacked_plots" in dash_plot_checklist
+            "normalize_stacked_plots" in dash_plot_checklist
     )
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
@@ -346,8 +345,8 @@ def _get_game_ids_matching_url(url):
 
 
 def get_figure_data(
-    plot_data: visualization_data.PlotDataManager,
-    plot_spec: visualization_data.PlotSpecification,
+        plot_data: visualization_data.PlotDataManager,
+        plot_spec: visualization_data.PlotSpecification,
 ):
     start = time.time()
     plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
@@ -357,8 +356,8 @@ def get_figure_data(
 
 
 def get_raw_plot_data_dicts(
-    plot_data: visualization_data.PlotDataManager,
-    plot_spec: visualization_data.PlotSpecification,
+        plot_data: visualization_data.PlotDataManager,
+        plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
     """
     Depending on the plot_spec.style attribute, retrieve the data to be plotted
@@ -380,8 +379,8 @@ def get_raw_plot_data_dicts(
 
 
 def _get_raw_data_for_line_plot(
-    plot_data: visualization_data.PlotDataManager,
-    plot_spec: visualization_data.PlotSpecification,
+        plot_data: visualization_data.PlotDataManager,
+        plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
     plot_list = []
     for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
@@ -402,14 +401,14 @@ def _get_raw_data_for_line_plot(
 
 
 def _get_raw_data_for_stacked_and_budget_plots(
-    plot_data: visualization_data.PlotDataManager,
-    plot_spec: visualization_data.PlotSpecification,
+        plot_data: visualization_data.PlotDataManager,
+        plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
     net_gain = None
     lines = []
     normalized = (
-        config.CONFIG.normalize_stacked_plots
-        and plot_spec.style == visualization_data.PlotStyle.stacked
+            config.CONFIG.normalize_stacked_plots
+            and plot_spec.style == visualization_data.PlotStyle.stacked
     )
     for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if not any(y_values):
@@ -482,7 +481,7 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
         if country not in edge_traces_data:
-            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 8
+            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 2
             edge_traces_data[country] = dict(
                 x=[],
                 y=[],
@@ -502,52 +501,46 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
         country: go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
     }
 
-    node_traces_data = {}
-    for node in graph.nodes:
+    points = [graph.nodes[node]["pos"] for node in graph.nodes]
+    points += [[1000, 1000], [-1000, 1000], [1000, -1000], [-1000, -1000]]
+    print(points)
+    import numpy as np
+    voronoi = Voronoi(np.array(points))
+
+    node_traces = []
+    for i, node in enumerate(graph.nodes):
         country = graph.nodes[node]["country"]
-        if country not in node_traces_data:
-            node_size = (
-                10 if country != visualization_data.GalaxyMapData.UNCLAIMED else 4
-            )
-            node_traces_data[country] = dict(
-                x=[],
-                y=[],
-                text=[],
-                mode="markers",
-                hoverinfo="text",
-                marker=dict(color=[], size=node_size, line=dict(width=0.5)),
-                name=country,
-            )
+        region = voronoi.regions[voronoi.point_region[i]]
+
         color = get_country_color(country)
-        node_traces_data[country]["marker"]["color"].append(color)
-        x, y = graph.nodes[node]["pos"]
-        node_traces_data[country]["x"].append(x)
-        node_traces_data[country]["y"].append(y)
+
+        x, y = zip(*[voronoi.vertices[v] for v in region if v != -1])
+
         country_str = (
             f" ({country})"
             if country != visualization_data.GalaxyMapData.UNCLAIMED
             else ""
         )
-        node_traces_data[country]["text"].append(
-            f'{graph.nodes[node]["name"]}{country_str}'
-        )
-
-    for country in node_traces_data:
-        # convert markers first:
-        node_traces_data[country]["marker"] = go.scatter.Marker(
-            **node_traces_data[country]["marker"]
-        )
-
-    node_traces = {
-        country: go.Scatter(**node_traces_data[country]) for country in node_traces_data
-    }
+        text = f'{graph.nodes[node]["name"]}{country_str}'
+        node_traces.append(go.Scatter(
+            x=x,
+            y=y,
+            fill="toself",
+            fillcolor=color,
+            opacity=0.25,
+            name=country,
+            line=dict(width=0),
+            marker=dict(size=0),
+        ))
 
     layout = go.Layout(
         xaxis=go.layout.XAxis(
             showgrid=False, zeroline=False, showticklabels=False, fixedrange=True,
+            range=[-500, 500]
         ),
         yaxis=go.layout.YAxis(
             showgrid=False, zeroline=False, showticklabels=False, fixedrange=True,
+            range=[-500, 500]
         ),
         margin=dict(t=0, b=0, l=0, r=0),
         legend=dict(orientation="v", x=1.0, y=1.0),
@@ -561,7 +554,7 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=(list(edge_traces.values()) + list(node_traces.values())),
+            data=(list(edge_traces.values()) + list(node_traces)),
             layout=layout,
         ),
     )
