@@ -5,7 +5,7 @@ import logging
 import random
 import time
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
-
+import colorsys
 import networkx as nx
 import numpy as np
 from scipy.spatial import Voronoi
@@ -79,14 +79,6 @@ def get_color_vals(
 
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
     the random number generator. This makes colors consistent across figures and executions.
-
-    Optionally, min- and max-values can be passed in to avoid colors that are hard to see against
-    the background. This may be configurable in a future version.
-
-    :param key_str: A (unique) identifier with which the color should be associated (e.g. legend entry)
-    :param range_min: Minimum value of each color component
-    :param range_max: Maximum value of each color component
-    :return: RGB values
     """
     if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
@@ -98,7 +90,12 @@ def get_color_vals(
         r, g, b = 255, 255, 255
     else:
         random.seed(key_str)
-        r, g, b = [random.uniform(range_min, range_max) for _ in range(3)]
+        h = random.uniform(0, 1)
+        l = random.uniform(0.4, 0.6)
+        s = random.uniform(0.5, 1)
+        r, g, b = map(
+            lambda x: 255 * (x if x > 0.01 else 0), colorsys.hls_to_rgb(h, l, s)
+        )
     return r, g, b
 
 
@@ -893,7 +890,7 @@ RESEARCH_OUTPUT_GRAPH = PlotSpecification(
 )
 SURVEY_PROGRESS_GRAPH = PlotSpecification(
     plot_id="survey-count",
-    title="Exploration",
+    title="Surveyed Planets",
     data_container_factory=ExploredSystemsCountDataContainer,
     style=PlotStyle.line,
 )
@@ -1269,77 +1266,77 @@ ALL_PLOT_SPECIFICATIONS = [
 # This dictionary specifies how the plots should be laid out in tabs by the plotly frontend
 # and how they should be split to different image files by matplotlib
 THEMATICALLY_GROUPED_PLOTS = {
-    # "Economy": [
-    #     PLANET_COUNT_GRAPH,
-    #     SYSTEM_COUNT_GRAPH,
-    #     NET_ENERGY_INCOME_GRAPH,
-    #     NET_MINERAL_INCOME_GRAPH,
-    #     NET_ALLOYS_INCOME_GRAPH,
-    #     NET_CONSUMER_GOODS_INCOME_GRAPH,
-    #     NET_FOOD_INCOME_GRAPH,
-    # ],
-    # "Budget": [
-    #     ENERGY_BUDGET,
-    #     MINERAL_BUDGET,
-    #     CONSUMER_GOODS_BUDGET,
-    #     ALLOYS_BUDGET,
-    #     FOOD_BUDGET,
-    #     INFLUENCE_BUDGET,
-    #     UNITY_BUDGET,
-    #     VOLATILE_MOTES_BUDGET,
-    #     EXOTIC_GASES_BUDGET,
-    #     RARE_CRYSTALS_BUDGET,
-    #     LIVING_METAL_BUDGET,
-    #     ZRO_BUDGET,
-    #     DARK_MATTER_BUDGET,
-    #     NANITES_BUDGET,
-    # ],
-    # "Pops": [
-    #     SPECIES_DISTRIBUTION_GRAPH,
-    #     SPECIES_HAPPINESS_GRAPH,
-    #     SPECIES_CRIME_GRAPH,
-    #     SPECIES_POWER_GRAPH,
-    #     ETHOS_DISTRIBUTION_GRAPH,
-    #     ETHOS_HAPPINESS_GRAPH,
-    #     ETHOS_CRIME_GRAPH,
-    #     ETHOS_POWER_GRAPH,
-    #     STRATA_DISTRIBUTION_GRAPH,
-    #     STRATA_HAPPINESS_GRAPH,
-    #     STRATA_CRIME_GRAPH,
-    #     STRATA_POWER_GRAPH,
-    # ],
-    # "Jobs": [
-    #     JOB_DISTRIBUTION_GRAPH,
-    #     JOB_HAPPINESS_GRAPH,
-    #     JOB_CRIME_GRAPH,
-    #     JOB_POWER_GRAPH,
-    # ],
-    # "Factions": [
-    #     FACTION_DISTRIBUTION_GRAPH,
-    #     FACTION_APPROVAL_GRAPH,
-    #     FACTION_HAPPINESS_GRAPH,
-    #     FACTION_SUPPORT_GRAPH,
-    #     FACTION_CRIME_GRAPH,
-    #     FACTION_POWER_GRAPH,
-    # ],
-    # "Planets": [
-    #     PLANET_POP_DISTRIBUTION_GRAPH,
-    #     PLANET_MIGRATION_GRAPH,
-    #     PLANET_STABILITY_GRAPH,
-    #     PLANET_HAPPINESS_GRAPH,
-    #     PLANET_AMENITIES_GRAPH,
-    #     PLANET_HOUSING_GRAPH,
-    #     PLANET_CRIME_GRAPH,
-    #     PLANET_POWER_GRAPH,
-    # ],
-    # "Science": [
-    #     TECHNOLOGY_PROGRESS_GRAPH,
-    #     SURVEY_PROGRESS_GRAPH,
-    #     RESEARCH_OUTPUT_GRAPH,
-    #     RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
-    # ],
-    # "Military": [FLEET_SIZE_GRAPH, MILITARY_POWER_GRAPH, FLEET_COMPOSITION_GRAPH,],
-    # "Victory": [VICTORY_RANK_GRAPH, VICTORY_SCORE_GRAPH, VICTORY_ECONOMY_SCORE_GRAPH,],
+    "Economy": [
+        PLANET_COUNT_GRAPH,
+        SYSTEM_COUNT_GRAPH,
+        NET_ENERGY_INCOME_GRAPH,
+        NET_MINERAL_INCOME_GRAPH,
+        NET_ALLOYS_INCOME_GRAPH,
+        NET_CONSUMER_GOODS_INCOME_GRAPH,
+        NET_FOOD_INCOME_GRAPH,
+    ],
+    "Budget": [
+        ENERGY_BUDGET,
+        MINERAL_BUDGET,
+        CONSUMER_GOODS_BUDGET,
+        ALLOYS_BUDGET,
+        FOOD_BUDGET,
+        INFLUENCE_BUDGET,
+        UNITY_BUDGET,
+        VOLATILE_MOTES_BUDGET,
+        EXOTIC_GASES_BUDGET,
+        RARE_CRYSTALS_BUDGET,
+        LIVING_METAL_BUDGET,
+        ZRO_BUDGET,
+        DARK_MATTER_BUDGET,
+        NANITES_BUDGET,
+    ],
+    "Pops": [
+        SPECIES_DISTRIBUTION_GRAPH,
+        SPECIES_HAPPINESS_GRAPH,
+        SPECIES_CRIME_GRAPH,
+        SPECIES_POWER_GRAPH,
+        ETHOS_DISTRIBUTION_GRAPH,
+        ETHOS_HAPPINESS_GRAPH,
+        ETHOS_CRIME_GRAPH,
+        ETHOS_POWER_GRAPH,
+        STRATA_DISTRIBUTION_GRAPH,
+        STRATA_HAPPINESS_GRAPH,
+        STRATA_CRIME_GRAPH,
+        STRATA_POWER_GRAPH,
+    ],
+    "Jobs": [
+        JOB_DISTRIBUTION_GRAPH,
+        JOB_HAPPINESS_GRAPH,
+        JOB_CRIME_GRAPH,
+        JOB_POWER_GRAPH,
+    ],
+    "Factions": [
+        FACTION_DISTRIBUTION_GRAPH,
+        FACTION_APPROVAL_GRAPH,
+        FACTION_HAPPINESS_GRAPH,
+        FACTION_SUPPORT_GRAPH,
+        FACTION_CRIME_GRAPH,
+        FACTION_POWER_GRAPH,
+    ],
+    "Planets": [
+        PLANET_POP_DISTRIBUTION_GRAPH,
+        PLANET_MIGRATION_GRAPH,
+        PLANET_STABILITY_GRAPH,
+        PLANET_HAPPINESS_GRAPH,
+        PLANET_AMENITIES_GRAPH,
+        PLANET_HOUSING_GRAPH,
+        PLANET_CRIME_GRAPH,
+        PLANET_POWER_GRAPH,
+    ],
+    "Science": [
+        TECHNOLOGY_PROGRESS_GRAPH,
+        SURVEY_PROGRESS_GRAPH,
+        RESEARCH_OUTPUT_GRAPH,
+        RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
+    ],
+    "Military": [FLEET_SIZE_GRAPH, MILITARY_POWER_GRAPH, FLEET_COMPOSITION_GRAPH,],
+    "Victory": [VICTORY_RANK_GRAPH, VICTORY_SCORE_GRAPH, VICTORY_ECONOMY_SCORE_GRAPH,],
 }
 
 _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
@@ -1358,7 +1355,7 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
 class GalaxyMapData:
     """ Maintains the data for the historical galaxy map. """
 
-    UNCLAIMED = "Unclaimed Systems"
+    UNCLAIMED = "Unclaimed"
 
     def __init__(self, game_id: str):
         self.game_id = game_id
@@ -1442,7 +1439,7 @@ class GalaxyMapData:
             min_radius = min(min_radius, radius)
             max_radius = max(max_radius, radius)
 
-        # add points around the galaxy and the center to limit the shapes
+        # add artificial points around the galaxy and the center to make a clean boundary
         angles = np.linspace(0, 2 * np.pi, 32)
         _sin = np.sin(angles)
         _cos = np.cos(angles)
