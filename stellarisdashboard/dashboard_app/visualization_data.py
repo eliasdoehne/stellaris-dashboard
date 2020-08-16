@@ -7,6 +7,8 @@ import time
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
 
 import networkx as nx
+import numpy as np
+from scipy.spatial import Voronoi
 
 from stellarisdashboard import datamodel, config
 
@@ -1380,7 +1382,10 @@ class GalaxyMapData:
                     hl.system_two.system_id_in_game,
                 )
                 self.galaxy_graph.add_edge(sys_one, sys_two, country=self.UNCLAIMED)
-        logger.debug(
+
+        self._prepare_system_shapes()
+
+        logger.info(
             f"Initialized galaxy graph in {time.process_time() - start_time} seconds."
         )
 
@@ -1401,6 +1406,7 @@ class GalaxyMapData:
                 self.galaxy_graph.edges[edge]["country"] = i_country
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
+
         logger.info(
             f"Updated networkx graph in {time.process_time() - start_time:5.3f} seconds."
         )
@@ -1423,6 +1429,40 @@ class GalaxyMapData:
             set(self.galaxy_graph.nodes) - owned_systems
         )
         return systems_by_owner
+
+    def _prepare_system_shapes(self):
+        points = [
+            self.galaxy_graph.nodes[node]["pos"] for node in self.galaxy_graph.nodes
+        ]
+
+        min_radius = float("inf")
+        max_radius = float("-inf")
+        for x, y in points:
+            radius = np.sqrt(x ** 2 + y ** 2)
+            min_radius = min(min_radius, radius)
+            max_radius = max(max_radius, radius)
+
+        points += [
+            [2 * max_radius, 2 * max_radius],
+            [-2 * max_radius, 2 * max_radius],
+            [2 * max_radius, -2 * max_radius],
+            [-2 * max_radius, -2 * max_radius],
+        ]
+        voronoi = Voronoi(np.array(points))
+        for i, node in enumerate(self.galaxy_graph.nodes):
+            region = voronoi.regions[voronoi.point_region[i]]
+
+            vertices = [voronoi.vertices[v] for v in region if v != -1]
+            shape_x, shape_y = zip(
+                *[
+                    v
+                    for v in vertices
+                    if 0.5 * min_radius
+                    <= np.sqrt(v[0] ** 2 + v[1] ** 2)
+                    <= 1.5 * max_radius
+                ]
+            )
+            self.galaxy_graph.nodes[node]["shape"] = shape_x, shape_y
 
     def _country_display_name(self, country: datamodel.Country) -> str:
         if country is None:

@@ -9,7 +9,6 @@ import dash_html_components as html
 import plotly.graph_objs as go
 from dash.dependencies import Input, Output
 from flask import render_template
-from scipy.spatial import Voronoi
 
 from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app import utils, flask_app, visualization_data
@@ -497,58 +496,77 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
         edge_traces_data[country]["x"] += [x0, x1, None]
         edge_traces_data[country]["y"] += [y0, y1, None]
         edge_traces_data[country]["text"] += [country]
-    edge_traces = {
-        country: go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
-    }
+    edge_traces = [
+        go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
+    ]
 
-    points = [graph.nodes[node]["pos"] for node in graph.nodes]
-    points += [[1000, 1000], [-1000, 1000], [1000, -1000], [-1000, -1000]]
-    print(points)
-    import numpy as np
-
-    voronoi = Voronoi(np.array(points))
-
-    node_traces = []
+    system_shapes = []
+    country_system_markers = {}
     for i, node in enumerate(graph.nodes):
         country = graph.nodes[node]["country"]
-        region = voronoi.regions[voronoi.point_region[i]]
+        if country not in country_system_markers:
+            country_system_markers[country] = dict(
+                x=[],
+                y=[],
+                text=[],
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(color=[], size=4, line=dict(width=0.5)),
+                name=country,
+            )
 
         color = get_country_color(country)
-
-        x, y = zip(*[voronoi.vertices[v] for v in region if v != -1])
-
+        country_system_markers[country]["marker"]["color"].append(color)
+        x, y = graph.nodes[node]["pos"]
+        country_system_markers[country]["x"].append(x)
+        country_system_markers[country]["y"].append(y)
         country_str = (
             f" ({country})"
             if country != visualization_data.GalaxyMapData.UNCLAIMED
             else ""
         )
-        text = f'{graph.nodes[node]["name"]}{country_str}'
-        node_traces.append(
-            go.Scatter(
-                x=x,
-                y=y,
-                fill="toself",
-                fillcolor=color,
-                opacity=0.25,
-                name=country,
-                line=dict(width=0),
-                marker=dict(size=0),
-            )
+        country_system_markers[country]["text"].append(
+            f'{graph.nodes[node]["name"]}{country_str}'
         )
+        if country != visualization_data.GalaxyMapData.UNCLAIMED:
+            shape_x, shape_y = graph.nodes[node].get("shape", ([], []))
+            system_shapes.append(
+                go.Scatter(
+                    x=shape_x,
+                    y=shape_y,
+                    fill="toself",
+                    fillcolor=color,
+                    hoverinfo="none",
+                    line=dict(width=0),
+                    marker=dict(size=[0 for _ in shape_y]),
+                    opacity=0.25,
+                    showlegend=False,
+                )
+            )
+
+    for country in country_system_markers:
+        country_system_markers[country]["marker"] = go.scatter.Marker(
+            **country_system_markers[country]["marker"]
+        )
+    system_markers = [
+        go.Scatter(**scatter_data)
+        for country, scatter_data in country_system_markers.items()
+    ]
 
     layout = go.Layout(
         xaxis=go.layout.XAxis(
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            fixedrange=True,
+            fixedrange=False,
             range=[-500, 500],
         ),
         yaxis=go.layout.YAxis(
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            fixedrange=True,
+            scaleanchor="x",
+            scaleratio=0.8,
             range=[-500, 500],
         ),
         margin=dict(t=0, b=0, l=0, r=0),
@@ -563,7 +581,7 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=(list(edge_traces.values()) + list(node_traces)), layout=layout,
+            data=system_shapes + system_markers + edge_traces, layout=layout,
         ),
     )
 
