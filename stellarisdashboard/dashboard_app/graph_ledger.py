@@ -582,7 +582,6 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
     r, g, b = visualization_data.get_color_vals(country_name)
-    r, g, b = r, g, b
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 

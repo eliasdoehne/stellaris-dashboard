@@ -1,11 +1,12 @@
 import abc
+import colorsys
 import dataclasses
 import enum
 import logging
 import random
 import time
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
-import colorsys
+
 import networkx as nx
 import numpy as np
 from scipy.spatial import Voronoi
