@@ -117,8 +117,7 @@ DASH_LAYOUT = html.Div(
                     ]
                 ),
                 html.H1(
-                    children="Unknown Game",
-                    id="game-name-header",  style=HEADER_STYLE
+                    children="Unknown Game", id="game-name-header", style=HEADER_STYLE
                 ),
                 dcc.Checklist(
                     id="dash-plot-checklist",
