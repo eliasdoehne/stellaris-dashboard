@@ -39,6 +39,9 @@ jobs:
     - name: pyInstaller build
       run: |
         pyinstaller pyinstaller-package.spec
+    - name: check files
+      run: |
+        ls -laR dist/stellarisdashboard-build
     - name: Publish
       if: ${{ github.event_name == 'pull_request' }}
       uses: actions/upload-artifact@v2
