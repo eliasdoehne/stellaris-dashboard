@@ -484,7 +484,7 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
                 x=[],
                 y=[],
                 text=[],
-                line=go.scatter.Line(width=1, color=get_country_color(country)),
+                line=go.scatter.Line(width=0.5, color=get_country_color(country)),
                 hoverinfo="text",
                 mode="lines",
                 showlegend=False,
@@ -510,7 +510,7 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
                 text=[],
                 mode="markers",
                 hoverinfo="text",
-                marker=dict(color=[], size=4, line=dict(width=0.5)),
+                marker=dict(color=[], size=4),
                 name=country,
             )
 
@@ -582,6 +582,8 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
         figure=go.Figure(
             data=system_shapes + system_markers + edge_traces, layout=layout,
         ),
+        animate=True,
+        animation_options=dict(showAxisDragHandles=True,),
     )
 
 
