@@ -480,12 +480,11 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
         if country not in edge_traces_data:
-            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 2
             edge_traces_data[country] = dict(
                 x=[],
                 y=[],
                 text=[],
-                line=go.scatter.Line(width=width, color=get_country_color(country)),
+                line=go.scatter.Line(width=1, color=get_country_color(country)),
                 hoverinfo="text",
                 mode="lines",
                 showlegend=False,

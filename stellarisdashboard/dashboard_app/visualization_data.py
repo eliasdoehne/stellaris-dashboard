@@ -1442,12 +1442,15 @@ class GalaxyMapData:
             min_radius = min(min_radius, radius)
             max_radius = max(max_radius, radius)
 
-        points += [
-            [2 * max_radius, 2 * max_radius],
-            [-2 * max_radius, 2 * max_radius],
-            [2 * max_radius, -2 * max_radius],
-            [-2 * max_radius, -2 * max_radius],
-        ]
+        # add points around the galaxy and the center to limit the shapes
+        angles = np.linspace(0, 2 * np.pi, 32)
+        _sin = np.sin(angles)
+        _cos = np.cos(angles)
+        outer = 1.2 * max_radius
+        points += [[outer * _c, outer * _s] for _c, _s in zip(_sin, _cos)]
+        inner = 0.8 * min_radius
+        points += [[inner * _c, inner * _s] for _c, _s in zip(_sin, _cos)]
+
         voronoi = Voronoi(np.array(points))
         for i, node in enumerate(self.galaxy_graph.nodes):
             region = voronoi.regions[voronoi.point_region[i]]
