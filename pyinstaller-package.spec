@@ -18,7 +18,7 @@ added_files = [
     (str(module_path("dash_html_components")), "dash_html_components/"),
     (str(module_path("dash_renderer")), "dash_renderer/"),
     (str(Path("README.md")), "./"),
-    (str(Path("stellarisdashboard/dashboard_app/static")), "stellarisdashboard/dashboard_app/static/"),
+    (str(Path("stellarisdashboard/dashboard_app/assets")), "stellarisdashboard/dashboard_app/assets/"),
     (str(Path("stellarisdashboard/dashboard_app/templates")), "stellarisdashboard/dashboard_app/templates/"),
     (str(Path("stellarisdashboard/parsing/cython_ext")), "stellarisdashboard/parsing/cython_ext/"),
 ]

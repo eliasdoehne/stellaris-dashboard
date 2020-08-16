@@ -15,28 +15,27 @@ from stellarisdashboard.dashboard_app import utils, flask_app, visualization_dat
 
 logger = logging.getLogger(__name__)
 
-DARK_THEME_BACKGROUND = "rgba(33,43,39,1)"
-DARK_THEME_GALAXY_BACKGROUND = "rgba(0,0,0,1)"
-DARK_THEME_BACKGROUND_DARK = "rgba(20,25,25,1)"
-BACKGROUND_PLOT_DARK = "rgba(43,59,52,1)"
-DARK_THEME_TEXT_COLOR = "rgba(217,217,217,1)"
-DARK_THEME_TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
+BACKGROUND = "rgba(33,43,39,1)"
+GALAXY_BACKGROUND = "rgba(0,0,0,1)"
+BACKGROUND_DARK = "rgba(20,25,25,1)"
+TEXT_COLOR = "rgba(217,217,217,1)"
+TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
 DEFAULT_PLOT_LAYOUT = dict(
     xaxis=dict(showgrid=False),
     yaxis=dict(showgrid=False, type="linear"),
-    plot_bgcolor=BACKGROUND_PLOT_DARK,
-    paper_bgcolor=DARK_THEME_BACKGROUND,
-    font={"color": DARK_THEME_TEXT_COLOR},
+    plot_bgcolor=BACKGROUND_DARK,
+    paper_bgcolor=BACKGROUND,
+    font={"color": TEXT_COLOR},
     showlegend=True,
 )
 BUTTON_STYLE = {
-    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "color": TEXT_HIGHLIGHT_COLOR,
     "font-family": "verdana",
     "font-size": "20px",
     "-webkit-appearance": "button",
     "-moz-appearance": "button",
     "appearance": "button",
-    "background-color": BACKGROUND_PLOT_DARK,
+    "background-color": BACKGROUND,
     "display": "inline",
     "text-decoration": "none",
     "padding": "0.1cm",
@@ -44,7 +43,7 @@ BUTTON_STYLE = {
 }
 HEADER_STYLE = {
     "font-family": "verdana",
-    "color": DARK_THEME_TEXT_COLOR,
+    "color": TEXT_COLOR,
     "margin-top": "20px",
     "margin-bottom": "10px",
     "text-align": "center",
@@ -52,11 +51,12 @@ HEADER_STYLE = {
 DROPDOWN_STYLE = {
     "width": "100%",
     "font-family": "verdana",
-    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "color": TEXT_HIGHLIGHT_COLOR,
     "margin-top": "10px",
     "margin-bottom": "10px",
     "text-align": "center",
-    "background": DARK_THEME_BACKGROUND,
+    "text-color": TEXT_HIGHLIGHT_COLOR,
+    "background": BACKGROUND_DARK,
 }
 TEXT_STYLE = {
     "font-family": "verdana",
@@ -68,26 +68,26 @@ SELECTED_TAB_STYLE = {
     "borderLeft": "thin lightgrey solid",
     "borderRight": "thin lightgrey solid",
     "borderTop": "2px #0074D9 solid",
-    "background": DARK_THEME_BACKGROUND,
-    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "background": BACKGROUND,
+    "color": TEXT_HIGHLIGHT_COLOR,
 }
 TAB_CONTAINER_STYLE = {
     "width": "inherit",
     "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": DARK_THEME_BACKGROUND,
+    "background": BACKGROUND,
 }
 TAB_STYLE = {
     "width": "inherit",
     "border": "none",
     "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": DARK_THEME_BACKGROUND_DARK,
-    "color": DARK_THEME_TEXT_COLOR,
+    "background": BACKGROUND_DARK,
+    "color": TEXT_COLOR,
 }
 
 # Define the layout of the dash app:
 CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append("Galaxy")
-DEFAULT_SELECTED_CATEGORY = "Economy"
+DEFAULT_SELECTED_CATEGORY = CATEGORY_TABS[0]
 
 DASH_LAYOUT = html.Div(
     [
@@ -117,7 +117,8 @@ DASH_LAYOUT = html.Div(
                     ]
                 ),
                 html.H1(
-                    children="Unknown Game", id="game-name-header", style=HEADER_STYLE
+                    children="Unknown Game",
+                    id="game-name-header",  style=HEADER_STYLE
                 ),
                 dcc.Checklist(
                     id="dash-plot-checklist",
@@ -128,7 +129,7 @@ DASH_LAYOUT = html.Div(
                         },
                     ],
                     value=[],
-                    labelStyle=dict(color=DARK_THEME_TEXT_COLOR),
+                    labelStyle=dict(color=TEXT_COLOR),
                     style={"text-align": "center"},
                 ),
                 dcc.Dropdown(
@@ -186,12 +187,13 @@ DASH_LAYOUT = html.Div(
         "height": "100%",
         "padding": 0,
         "margin": 0,
-        "background-color": DARK_THEME_BACKGROUND,
+        "background-color": BACKGROUND,
     },
 )
 
 timeline_app = dash.Dash(
-    name="Stellaris Timeline",
+    __name__,
+    title="Stellaris Dashboard",
     server=flask_app,
     compress=False,
     url_base_pathname="/timeline/",
@@ -321,12 +323,6 @@ def update_content(
     else:
         slider_date = 0.01 * date_fraction * current_date
         children.append(get_galaxy(game_id, slider_date))
-        children.append(
-            html.P(
-                f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
-                style=TEXT_STYLE,
-            )
-        )
     return children
 
 
@@ -466,16 +462,16 @@ def get_plot_value_labels(x_values, y_values, key):
     ]
 
 
-def get_galaxy(game_id: str, date: float) -> dcc.Graph:
+def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     """ Generate the galaxy map, ready to be used in the Dash layout.
 
     :param game_id:
-    :param date:
+    :param slider_date:
     :return:
     """
     # adapted from https://plot.ly/python/network-graphs/
     galaxy = visualization_data.get_galaxy_data(game_id)
-    graph = galaxy.get_graph_for_date(int(date))
+    graph = galaxy.get_graph_for_date(int(slider_date))
     edge_traces_data = {}
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
@@ -513,19 +509,13 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
                 marker=dict(color=[], size=4),
                 name=country,
             )
-
         color = get_country_color(country)
         country_system_markers[country]["marker"]["color"].append(color)
         x, y = graph.nodes[node]["pos"]
         country_system_markers[country]["x"].append(x)
         country_system_markers[country]["y"].append(y)
-        country_str = (
-            f" ({country})"
-            if country != visualization_data.GalaxyMapData.UNCLAIMED
-            else ""
-        )
         country_system_markers[country]["text"].append(
-            f'{graph.nodes[node]["name"]}{country_str}'
+            f'{graph.nodes[node]["name"]} ({country})'
         )
         if country != visualization_data.GalaxyMapData.UNCLAIMED:
             shape_x, shape_y = graph.nodes[node].get("shape", ([], []))
@@ -537,8 +527,8 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
                     fillcolor=color,
                     hoverinfo="none",
                     line=dict(width=0),
-                    marker=dict(size=[0 for _ in shape_y]),
-                    opacity=0.25,
+                    mode="none",
+                    opacity=0.2,
                     showlegend=False,
                 )
             )
@@ -568,15 +558,17 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
             scaleratio=0.8,
             range=[-500, 500],
         ),
-        margin=dict(t=0, b=0, l=0, r=0),
+        margin=dict(t=50, b=0, l=0, r=0),
         legend=dict(orientation="v", x=1.0, y=1.0),
         width=config.CONFIG.plot_width,
         height=config.CONFIG.plot_height,
         hovermode="closest",
-        plot_bgcolor=DARK_THEME_GALAXY_BACKGROUND,
-        paper_bgcolor=BACKGROUND_PLOT_DARK,
-        font={"color": DARK_THEME_TEXT_COLOR},
+        plot_bgcolor=GALAXY_BACKGROUND,
+        paper_bgcolor=BACKGROUND_DARK,
+        font={"color": TEXT_COLOR},
+        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
     )
+
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
@@ -591,7 +583,7 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
     r, g, b = visualization_data.get_color_vals(country_name)
-    r, g, b = r * 255, g * 255, b * 255
+    r, g, b = r, g, b
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 
