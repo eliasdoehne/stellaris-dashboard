@@ -5,6 +5,7 @@ import datetime
 import itertools
 import logging
 import random
+import re
 import time
 from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple
 
@@ -2549,6 +2550,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
 
     def _update_war(self, war_id: int, war_dict):
         war_name = war_dict.get("name", "Unnamed war")
+        war_name = re.sub(r"\x11.", "", war_name)
         war_model = (
             self._session.query(datamodel.War)
             .order_by(datamodel.War.start_date_days.desc())
