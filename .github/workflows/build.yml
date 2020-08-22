@@ -40,16 +40,20 @@ jobs:
         pyinstaller pyinstaller-package.spec
     # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
     # (probably too many individual files?)
-    - name: package files
+    - name: package files (win)
       if: ${{ matrix.os == 'windows-latest' && github.event_name == 'pull_request' }}
       run: |
-        mv dist/stellarisdashboard-build stellarisdashboard-${{ matrix.os }}
-        powershell Compress-Archive stellarisdashboard-${{ matrix.os }} stellarisdashboard-${{ matrix.os }}.zip
+        base_dir = `pwd`
+        pushd dist/stellarisdashboard-build
+        powershell Compress-Archive stellarisdashboard-${{ matrix.os }} $base_dir/stellarisdashboard-${{ matrix.os }}.zip
+        popd
     - name: package files
       if: ${{ matrix.os != 'windows-latest' && github.event_name == 'pull_request' }}
       run: |
-        mv dist/stellarisdashboard-build stellarisdashboard-${{ matrix.os }}
-        zip -r stellarisdashboard-${{ matrix.os }}.zip stellarisdashboard-${{ matrix.os }}
+        base_dir = `pwd`
+        pushd dist/stellarisdashboard-build
+        zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip stellarisdashboard-${{ matrix.os }}
+        popd
     - name: Publish
       if: ${{ github.event_name == 'pull_request' }}
       uses: actions/upload-artifact@v2
