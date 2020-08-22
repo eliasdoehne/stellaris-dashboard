@@ -1789,7 +1789,11 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
         for edict in edict_list:
             if not isinstance(edict, dict):
                 continue
-            expiry_date = datamodel.date_to_days(edict.get("date"))
+            expiry_date = edict.get("date")
+            if not expiry_date or expiry_date == "1.01.01" or "perpetual" == "yes":
+                expiry_date = None
+            else:
+                expiry_date = datamodel.date_to_days(expiry_date)
             description = self._get_or_add_shared_description(text=edict.get("edict"))
             matching_event = (
                 self._session.query(datamodel.HistoricalEvent)
