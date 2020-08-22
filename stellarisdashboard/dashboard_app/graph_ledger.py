@@ -85,7 +85,7 @@ TAB_STYLE = {
 }
 
 # Define the layout of the dash app:
-CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
+CATEGORY_TABS = [category for category in visualization_data.TAB_LAYOUT]
 CATEGORY_TABS.append("Galaxy")
 DEFAULT_SELECTED_CATEGORY = CATEGORY_TABS[0]
 
@@ -290,8 +290,8 @@ def update_content(
         current_date = utils.get_most_recent_date(session)
 
     children = []
-    if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
-        plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+    if tab_value in visualization_data.TAB_LAYOUT:
+        plots = visualization_data.TAB_LAYOUT[tab_value]
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )

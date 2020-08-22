@@ -114,7 +114,7 @@ class PlotDataManager:
         country_perspective: Optional[int] = None,
     ):
         if plot_specifications is None:
-            plot_specifications = THEMATICALLY_GROUPED_PLOTS
+            plot_specifications = TAB_LAYOUT
         self.game_name: str = game_name
         self.plot_specifications = plot_specifications
 
@@ -280,83 +280,67 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         pass
 
 
+def _override_visibility(cd: datamodel.CountryData):
+    return not cd.country.is_other_player and config.CONFIG.show_everything
+
+
 class PlanetCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_geography_info():
+        if _override_visibility(cd) or cd.show_geography_info():
             return cd.owned_planets
 
 
 class SystemCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_geography_info():
+        if _override_visibility(cd) or cd.show_geography_info():
             return cd.controlled_systems
 
 
 class TotalEnergyIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_economic_info():
+        if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_energy
 
 
 class TotalMineralsIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_economic_info():
+        if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_minerals
 
 
 class TotalAlloysIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_economic_info():
+        if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_alloys
 
 
 class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_economic_info():
+        if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_consumer_goods
 
 
 class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_economic_info():
+        if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_food
 
 
 class TechCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_tech_info():
+        if _override_visibility(cd) or cd.show_tech_info():
             return cd.tech_count
 
 
 class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_tech_info():
+        if _override_visibility(cd) or cd.show_tech_info():
             return cd.exploration_progress
 
 
 class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_tech_info():
+        if _override_visibility(cd) or cd.show_tech_info():
             return (
                 cd.net_physics_research
                 + cd.net_society_research
@@ -366,41 +350,31 @@ class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
 
 class FleetSizeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_military_info():
+        if _override_visibility(cd) or cd.show_military_info():
             return cd.fleet_size
 
 
 class MilitaryPowerDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_military_info():
+        if _override_visibility(cd) or cd.show_military_info():
             return cd.military_power
 
 
 class VictoryScoreDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_geography_info():
+        if _override_visibility(cd) or cd.show_geography_info():
             return cd.victory_score
 
 
 class EconomyScoreDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_geography_info():
+        if _override_visibility(cd) or cd.show_geography_info():
             return cd.economy_power
 
 
 class VictoryRankDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if (
-            not cd.country.is_other_player and config.CONFIG.show_everything
-        ) or cd.show_geography_info():
+        if _override_visibility(cd) or cd.show_geography_info():
             return cd.victory_rank
 
 
@@ -1200,73 +1174,10 @@ VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
     style=PlotStyle.line,
 )
 
-ALL_PLOT_SPECIFICATIONS = [
-    PLANET_COUNT_GRAPH,
-    SYSTEM_COUNT_GRAPH,
-    NET_MINERAL_INCOME_GRAPH,
-    NET_ENERGY_INCOME_GRAPH,
-    NET_ALLOYS_INCOME_GRAPH,
-    NET_CONSUMER_GOODS_INCOME_GRAPH,
-    NET_FOOD_INCOME_GRAPH,
-    TECHNOLOGY_PROGRESS_GRAPH,
-    RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
-    RESEARCH_OUTPUT_GRAPH,
-    SURVEY_PROGRESS_GRAPH,
-    MILITARY_POWER_GRAPH,
-    FLEET_SIZE_GRAPH,
-    FLEET_COMPOSITION_GRAPH,
-    SPECIES_DISTRIBUTION_GRAPH,
-    SPECIES_HAPPINESS_GRAPH,
-    SPECIES_POWER_GRAPH,
-    SPECIES_CRIME_GRAPH,
-    FACTION_DISTRIBUTION_GRAPH,
-    FACTION_SUPPORT_GRAPH,
-    FACTION_APPROVAL_GRAPH,
-    FACTION_CRIME_GRAPH,
-    FACTION_POWER_GRAPH,
-    FACTION_HAPPINESS_GRAPH,
-    PLANET_POP_DISTRIBUTION_GRAPH,
-    PLANET_MIGRATION_GRAPH,
-    PLANET_AMENITIES_GRAPH,
-    PLANET_STABILITY_GRAPH,
-    PLANET_HOUSING_GRAPH,
-    PLANET_CRIME_GRAPH,
-    PLANET_POWER_GRAPH,
-    PLANET_HAPPINESS_GRAPH,
-    ETHOS_DISTRIBUTION_GRAPH,
-    ETHOS_CRIME_GRAPH,
-    ETHOS_POWER_GRAPH,
-    ETHOS_HAPPINESS_GRAPH,
-    STRATA_DISTRIBUTION_GRAPH,
-    STRATA_CRIME_GRAPH,
-    STRATA_POWER_GRAPH,
-    STRATA_HAPPINESS_GRAPH,
-    JOB_DISTRIBUTION_GRAPH,
-    JOB_CRIME_GRAPH,
-    JOB_POWER_GRAPH,
-    JOB_HAPPINESS_GRAPH,
-    ENERGY_BUDGET,
-    MINERAL_BUDGET,
-    CONSUMER_GOODS_BUDGET,
-    ALLOYS_BUDGET,
-    FOOD_BUDGET,
-    VOLATILE_MOTES_BUDGET,
-    EXOTIC_GASES_BUDGET,
-    RARE_CRYSTALS_BUDGET,
-    LIVING_METAL_BUDGET,
-    ZRO_BUDGET,
-    DARK_MATTER_BUDGET,
-    NANITES_BUDGET,
-    INFLUENCE_BUDGET,
-    UNITY_BUDGET,
-    VICTORY_RANK_GRAPH,
-    VICTORY_SCORE_GRAPH,
-    VICTORY_ECONOMY_SCORE_GRAPH,
-]
 
-# This dictionary specifies how the plots should be laid out in tabs by the plotly frontend
+# This dictionary defines how the plots are laid out in tabs by the plotly frontend
 # and how they should be split to different image files by matplotlib
-THEMATICALLY_GROUPED_PLOTS = {
+TAB_LAYOUT = {
     "Economy": [
         PLANET_COUNT_GRAPH,
         SYSTEM_COUNT_GRAPH,
