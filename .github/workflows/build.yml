@@ -30,7 +30,6 @@ jobs:
         python setup.py build_ext --inplace
     - name: Linters
       run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         black --check .
     - name: Tests
@@ -39,14 +38,18 @@ jobs:
     - name: pyInstaller build
       run: |
         pyinstaller pyinstaller-package.spec
-    - name: check files
-      if: ${{ matrix.os == 'ubuntu-latest' }}
+    - name: package files
+      if: ${{ matrix.os == 'windows-latest' }}
       run: |
-        ls -laR dist/stellarisdashboard-build
+        powershell Compress-Archive dist/stellarisdashboard-build stellarisdashboard-${{ matrix.os }}.zip
+    - name: package files
+      if: ${{ matrix.os != 'windows-latest' }}
+      run: |
+        zip -r stellarisdashboard-${{ matrix.os }}.zip dist/stellarisdashboard-build
     - name: Publish
       if: ${{ github.event_name == 'pull_request' }}
       uses: actions/upload-artifact@v2
       with:
         name: stellarisdashboard-${{ matrix.os }}
-        path: dist/stellarisdashboard-build
+        path: stellarisdashboard-${{ matrix.os }}.zip
 
