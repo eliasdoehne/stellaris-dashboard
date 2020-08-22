@@ -43,9 +43,8 @@ jobs:
     - name: package files (win)
       if: ${{ matrix.os == 'windows-latest' && github.event_name == 'pull_request' }}
       run: |
-        set base_dir=%cd%
         pushd dist/stellarisdashboard-build
-        powershell Compress-Archive . $base_dir/stellarisdashboard-${{ matrix.os }}.zip
+        powershell Compress-Archive . ../../stellarisdashboard-${{ matrix.os }}.zip
         popd
     - name: package files
       if: ${{ matrix.os != 'windows-latest' && github.event_name == 'pull_request' }}
