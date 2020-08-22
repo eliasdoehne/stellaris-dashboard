@@ -58,6 +58,6 @@ jobs:
       if: ${{ github.event_name == 'pull_request' }}
       uses: actions/upload-artifact@v2
       with:
-        name: stellarisdashboard-${{ matrix.os }}
+        name: stellarisdashboard-${{ matrix.os }}.zip
         path: stellarisdashboard-${{ matrix.os }}.zip
 
