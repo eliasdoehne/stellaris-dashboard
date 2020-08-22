@@ -8,7 +8,7 @@ from stellarisdashboard import config
 logger = logging.getLogger(__name__)
 
 # Initialize Flask, requests to /timeline/... are handled by the dash framework, all others via the flask routes defined below.
-flask_app = flask.Flask(__name__)
+flask_app = flask.Flask(__name__, static_folder="assets")
 flask_app.logger.setLevel(logging.DEBUG)
 
 from stellarisdashboard.dashboard_app import (

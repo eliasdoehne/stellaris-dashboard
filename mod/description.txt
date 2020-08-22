@@ -1,10 +1,10 @@
-The stellaris dashboard is a program that reads your Stellaris save files while you play the game and shows you more detailed information and stats about your playthrough. This workshop mod extends the internet browser included in Stellaris, allowing you to access the dashboard from within the game. 
+The stellaris dashboard is a program that reads your Stellaris save files while you play the game and shows you detailed information and stats about your playthrough. This workshop mod extends the internet browser included in Stellaris, allowing you to view the dashboard from the game.
 
-[b] !!!IMPORTANT!!! To use the dashboard, you must install and run the program following the instructions given below. The program has to run in the background while you play Stellaris! [/b]
+[b] !!!IMPORTANT!!! To use the dashboard, you must download and run the program following the instructions below. The program has to run in the background while you play Stellaris! [/b]
 
-Please consider rating this mod if you like it. :)
+Please consider rating this mod if you like it.
 
-[h1] Features [/h1]
+[h1]Features[/h1]
 
 [b]Timeline Graphs[/b]
 
@@ -26,10 +26,8 @@ Additionally, a browsable historical event ledger is created while you play the 
 1. Subscribe to this workshop mod
 2. Download the latest release of the Dashboard from https://github.com/eliasdoehne/stellaris-dashboard/releases.
 3. Follow the instructions at https://github.com/eliasdoehne/stellaris-dashboard for your operating system.
-4. Run the dashboard program and play the game. As soon as a new save file is generated, the program should read it in the background and add it to the database.
-5. To open the dashboard, access the in-game internet browser by clicking on the help icon in the lower right.  You can also open the browser with the keyboard shortcut ALT-B. 
-
-In some versions of Stellaris, the help icon is hidden in a submenu. The submenu also needs to be expanded to use the ALT-B hotkey:
+4. Run the dashboard program and play the game. When a new save file is generated, the program should read it in the background and add it to the database.
+5. To open the dashboard, access the in-game internet browser by clicking on the help icon in the lower right. In some versions of Stellaris, the help icon is hidden in a submenu. The submenu also needs to be expanded to use the ALT-B hotkey:
 
 [img]https://steamuserimages-a.akamaihd.net/ugc/940589883945878302/66874C499AB7088E309D95FFB5A720F80E229BE0/[/img]
 
@@ -37,18 +35,19 @@ Once you open the browser, you should see three buttons in the upper right area 
 
 [img]https://steamuserimages-a.akamaihd.net/ugc/940589883947546239/330A856DDDEFB565C299CC45D6B2C3CE2B33A9A5/[/img]
 
-The left button opens the index page, showing a list of games for which data is available. The center and right buttons are shortcuts to the graph dashboard and event ledger of the most recently modified game, respectively. Remember that the buttons only work if the dashboard program is running in the background.
+The left button opens the index page, showing a list of games for which data is available. The center and right buttons are shortcuts to the graph dashboard and event ledger of the most recently modified game, respectively. Remember that the buttons [b]only work if the dashboard program is running in the background[/b].
 
 
 [h1]Other information[/h1]
 
 [b]Update notifications[/b]
-Since the dashboard is still a work in progress, I occasionally release updates. If a new version of the dashboard program is released I can update the Steam workshop, and you will see a notification in the dashboard UI. This notification is shown only because the workshop mod contains a version ID, allowing the dashboard to compare its own version to this ID. [b]The dashboard program itself does not send any data. It only runs locally on your computer.[/b]
+If a new version of the dashboard program is released I update the Steam workshop, and you will see a notification in the dashboard UI. This is done by comparing against a locally stored version identifier. You can turn this off in the settings page.
 
-[b]Why a separate program?[/b]
-The dashboard is quite complex and to my (limited) knowledge, making a mod with these features by editing the game files would be impossible (at least for me). This is why you have to run the external program to use the dashboard.
+[b]Why do I have to download a separate program?[/b]
+The dashboard software is very complex and making a mod like that would be impossible by modifying the game files (for me anyway).
 
-The dashboard program's entire source code is released on github, at https://github.com/eliasdoehne/stellaris-dashboard.
+[b]Can I trust your program?[/b]
+You should always be careful about running software you download from the internet. The dashboard program's entire source code is released on github, at https://github.com/eliasdoehne/stellaris-dashboard under the MIT license. The dashboard program does not send any data anywhere and only runs locally on your computer.
 
 [h1]Acknowledgments[/h1]
 

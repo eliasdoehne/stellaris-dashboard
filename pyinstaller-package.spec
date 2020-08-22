@@ -12,13 +12,13 @@ def module_path(module_name):
 block_cipher = None
 added_files = [
     (str(module_path("sqlalchemy")), "sqlalchemy/"),
-    (str(module_path("plotly") / "package_data"), "plotly/package_data/"),
+    (str(module_path("plotly")), "plotly"),
     (str(module_path("dash") / "favicon.ico"), "dash/favicon.ico/"),
     (str(module_path("dash_core_components")), "dash_core_components/"),
     (str(module_path("dash_html_components")), "dash_html_components/"),
     (str(module_path("dash_renderer")), "dash_renderer/"),
     (str(Path("README.md")), "./"),
-    (str(Path("stellarisdashboard/dashboard_app/static")), "stellarisdashboard/dashboard_app/static/"),
+    (str(Path("stellarisdashboard/dashboard_app/assets")), "stellarisdashboard/dashboard_app/assets/"),
     (str(Path("stellarisdashboard/dashboard_app/templates")), "stellarisdashboard/dashboard_app/templates/"),
     (str(Path("stellarisdashboard/parsing/cython_ext")), "stellarisdashboard/parsing/cython_ext/"),
 ]

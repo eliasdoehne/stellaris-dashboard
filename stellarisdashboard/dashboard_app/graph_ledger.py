@@ -15,29 +15,27 @@ from stellarisdashboard.dashboard_app import utils, flask_app, visualization_dat
 
 logger = logging.getLogger(__name__)
 
-
-DARK_THEME_BACKGROUND = "rgba(33,43,39,1)"
-DARK_THEME_GALAXY_BACKGROUND = "rgba(0,0,0,1)"
-DARK_THEME_BACKGROUND_DARK = "rgba(20,25,25,1)"
-BACKGROUND_PLOT_DARK = "rgba(43,59,52,1)"
-DARK_THEME_TEXT_COLOR = "rgba(217,217,217,1)"
-DARK_THEME_TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
+BACKGROUND = "rgba(33,43,39,1)"
+GALAXY_BACKGROUND = "rgba(0,0,0,1)"
+BACKGROUND_DARK = "rgba(20,25,25,1)"
+TEXT_COLOR = "rgba(217,217,217,1)"
+TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
 DEFAULT_PLOT_LAYOUT = dict(
     xaxis=dict(showgrid=False),
     yaxis=dict(showgrid=False, type="linear"),
-    plot_bgcolor=BACKGROUND_PLOT_DARK,
-    paper_bgcolor=DARK_THEME_BACKGROUND,
-    font={"color": DARK_THEME_TEXT_COLOR},
+    plot_bgcolor=BACKGROUND_DARK,
+    paper_bgcolor=BACKGROUND,
+    font={"color": TEXT_COLOR},
     showlegend=True,
 )
 BUTTON_STYLE = {
-    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "color": TEXT_HIGHLIGHT_COLOR,
     "font-family": "verdana",
     "font-size": "20px",
     "-webkit-appearance": "button",
     "-moz-appearance": "button",
     "appearance": "button",
-    "background-color": BACKGROUND_PLOT_DARK,
+    "background-color": BACKGROUND,
     "display": "inline",
     "text-decoration": "none",
     "padding": "0.1cm",
@@ -45,7 +43,7 @@ BUTTON_STYLE = {
 }
 HEADER_STYLE = {
     "font-family": "verdana",
-    "color": DARK_THEME_TEXT_COLOR,
+    "color": TEXT_COLOR,
     "margin-top": "20px",
     "margin-bottom": "10px",
     "text-align": "center",
@@ -53,11 +51,12 @@ HEADER_STYLE = {
 DROPDOWN_STYLE = {
     "width": "100%",
     "font-family": "verdana",
-    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "color": TEXT_HIGHLIGHT_COLOR,
     "margin-top": "10px",
     "margin-bottom": "10px",
     "text-align": "center",
-    "background": DARK_THEME_BACKGROUND,
+    "text-color": TEXT_HIGHLIGHT_COLOR,
+    "background": BACKGROUND_DARK,
 }
 TEXT_STYLE = {
     "font-family": "verdana",
@@ -69,26 +68,26 @@ SELECTED_TAB_STYLE = {
     "borderLeft": "thin lightgrey solid",
     "borderRight": "thin lightgrey solid",
     "borderTop": "2px #0074D9 solid",
-    "background": DARK_THEME_BACKGROUND,
-    "color": DARK_THEME_TEXT_HIGHLIGHT_COLOR,
+    "background": BACKGROUND,
+    "color": TEXT_HIGHLIGHT_COLOR,
 }
 TAB_CONTAINER_STYLE = {
     "width": "inherit",
     "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": DARK_THEME_BACKGROUND,
+    "background": BACKGROUND,
 }
 TAB_STYLE = {
     "width": "inherit",
     "border": "none",
     "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": DARK_THEME_BACKGROUND_DARK,
-    "color": DARK_THEME_TEXT_COLOR,
+    "background": BACKGROUND_DARK,
+    "color": TEXT_COLOR,
 }
 
 # Define the layout of the dash app:
 CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
 CATEGORY_TABS.append("Galaxy")
-DEFAULT_SELECTED_CATEGORY = "Economy"
+DEFAULT_SELECTED_CATEGORY = CATEGORY_TABS[0]
 
 DASH_LAYOUT = html.Div(
     [
@@ -129,7 +128,7 @@ DASH_LAYOUT = html.Div(
                         },
                     ],
                     value=[],
-                    labelStyle=dict(color=DARK_THEME_TEXT_COLOR),
+                    labelStyle=dict(color=TEXT_COLOR),
                     style={"text-align": "center"},
                 ),
                 dcc.Dropdown(
@@ -187,13 +186,13 @@ DASH_LAYOUT = html.Div(
         "height": "100%",
         "padding": 0,
         "margin": 0,
-        "background-color": DARK_THEME_BACKGROUND,
+        "background-color": BACKGROUND,
     },
 )
 
-
 timeline_app = dash.Dash(
-    name="Stellaris Timeline",
+    __name__,
+    title="Stellaris Dashboard",
     server=flask_app,
     compress=False,
     url_base_pathname="/timeline/",
@@ -323,12 +322,6 @@ def update_content(
     else:
         slider_date = 0.01 * date_fraction * current_date
         children.append(get_galaxy(game_id, slider_date))
-        children.append(
-            html.P(
-                f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
-                style=TEXT_STYLE,
-            )
-        )
     return children
 
 
@@ -468,26 +461,25 @@ def get_plot_value_labels(x_values, y_values, key):
     ]
 
 
-def get_galaxy(game_id: str, date: float) -> dcc.Graph:
+def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     """ Generate the galaxy map, ready to be used in the Dash layout.
 
     :param game_id:
-    :param date:
+    :param slider_date:
     :return:
     """
     # adapted from https://plot.ly/python/network-graphs/
     galaxy = visualization_data.get_galaxy_data(game_id)
-    graph = galaxy.get_graph_for_date(int(date))
+    graph = galaxy.get_graph_for_date(int(slider_date))
     edge_traces_data = {}
     for edge in graph.edges:
         country = graph.edges[edge]["country"]
         if country not in edge_traces_data:
-            width = 1 if country == visualization_data.GalaxyMapData.UNCLAIMED else 8
             edge_traces_data[country] = dict(
                 x=[],
                 y=[],
                 text=[],
-                line=go.scatter.Line(width=width, color=get_country_color(country)),
+                line=go.scatter.Line(width=0.5, color=get_country_color(country)),
                 hoverinfo="text",
                 mode="lines",
                 showlegend=False,
@@ -498,72 +490,91 @@ def get_galaxy(game_id: str, date: float) -> dcc.Graph:
         edge_traces_data[country]["x"] += [x0, x1, None]
         edge_traces_data[country]["y"] += [y0, y1, None]
         edge_traces_data[country]["text"] += [country]
-    edge_traces = {
-        country: go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
-    }
+    edge_traces = [
+        go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
+    ]
 
-    node_traces_data = {}
-    for node in graph.nodes:
+    system_shapes = []
+    country_system_markers = {}
+    for i, node in enumerate(graph.nodes):
         country = graph.nodes[node]["country"]
-        if country not in node_traces_data:
-            node_size = (
-                10 if country != visualization_data.GalaxyMapData.UNCLAIMED else 4
-            )
-            node_traces_data[country] = dict(
+        if country not in country_system_markers:
+            country_system_markers[country] = dict(
                 x=[],
                 y=[],
                 text=[],
                 mode="markers",
                 hoverinfo="text",
-                marker=dict(color=[], size=node_size, line=dict(width=0.5)),
+                marker=dict(color=[], size=4),
                 name=country,
             )
         color = get_country_color(country)
-        node_traces_data[country]["marker"]["color"].append(color)
+        country_system_markers[country]["marker"]["color"].append(color)
         x, y = graph.nodes[node]["pos"]
-        node_traces_data[country]["x"].append(x)
-        node_traces_data[country]["y"].append(y)
-        country_str = (
-            f" ({country})"
-            if country != visualization_data.GalaxyMapData.UNCLAIMED
-            else ""
+        country_system_markers[country]["x"].append(x)
+        country_system_markers[country]["y"].append(y)
+        country_system_markers[country]["text"].append(
+            f'{graph.nodes[node]["name"]} ({country})'
         )
-        node_traces_data[country]["text"].append(
-            f'{graph.nodes[node]["name"]}{country_str}'
-        )
+        if country != visualization_data.GalaxyMapData.UNCLAIMED:
+            shape_x, shape_y = graph.nodes[node].get("shape", ([], []))
+            system_shapes.append(
+                go.Scatter(
+                    x=shape_x,
+                    y=shape_y,
+                    fill="toself",
+                    fillcolor=color,
+                    hoverinfo="none",
+                    line=dict(width=0),
+                    mode="none",
+                    opacity=0.2,
+                    showlegend=False,
+                )
+            )
 
-    for country in node_traces_data:
-        # convert markers first:
-        node_traces_data[country]["marker"] = go.scatter.Marker(
-            **node_traces_data[country]["marker"]
+    for country in country_system_markers:
+        country_system_markers[country]["marker"] = go.scatter.Marker(
+            **country_system_markers[country]["marker"]
         )
-
-    node_traces = {
-        country: go.Scatter(**node_traces_data[country]) for country in node_traces_data
-    }
+    system_markers = [
+        go.Scatter(**scatter_data)
+        for country, scatter_data in country_system_markers.items()
+    ]
 
     layout = go.Layout(
         xaxis=go.layout.XAxis(
-            showgrid=False, zeroline=False, showticklabels=False, fixedrange=True,
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            fixedrange=False,
+            range=[-500, 500],
         ),
         yaxis=go.layout.YAxis(
-            showgrid=False, zeroline=False, showticklabels=False, fixedrange=True,
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            scaleanchor="x",
+            scaleratio=0.8,
+            range=[-500, 500],
         ),
-        margin=dict(t=0, b=0, l=0, r=0),
+        margin=dict(t=50, b=0, l=0, r=0),
         legend=dict(orientation="v", x=1.0, y=1.0),
         width=config.CONFIG.plot_width,
         height=config.CONFIG.plot_height,
         hovermode="closest",
-        plot_bgcolor=DARK_THEME_GALAXY_BACKGROUND,
-        paper_bgcolor=BACKGROUND_PLOT_DARK,
-        font={"color": DARK_THEME_TEXT_COLOR},
+        plot_bgcolor=GALAXY_BACKGROUND,
+        paper_bgcolor=BACKGROUND_DARK,
+        font={"color": TEXT_COLOR},
+        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
     )
+
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=(list(edge_traces.values()) + list(node_traces.values())),
-            layout=layout,
+            data=system_shapes + system_markers + edge_traces, layout=layout,
         ),
+        animate=True,
+        animation_options=dict(showAxisDragHandles=True,),
     )
 
 
@@ -571,7 +582,6 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
     r, g, b = visualization_data.get_color_vals(country_name)
-    r, g, b = r * 255, g * 255, b * 255
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 
