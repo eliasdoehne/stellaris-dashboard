@@ -159,30 +159,33 @@ class HistoricalEventType(enum.Enum):
     tradition = enum.auto()
     ascension_perk = enum.auto()
     edict = enum.auto()
+    expanded_to_system = enum.auto()
 
-    # expansion:
+    # Planets and sectors:
     colonization = enum.auto()
     discovered_new_system = enum.auto()
     habitat_ringworld_construction = enum.auto()
     megastructure_construction = enum.auto()
     sector_creation = enum.auto()
-    expanded_to_system = enum.auto()
+    capital_relocation = enum.auto()
+    planetary_unrest = enum.auto()  # TODO
+    terraforming = enum.auto()
+    planet_destroyed = enum.auto()  # TODO
 
     # related to internal politics:
     new_faction = enum.auto()
     government_reform = enum.auto()
-    species_rights_reform = enum.auto()  # TODO this would be cool!
-    capital_relocation = enum.auto()
-    planetary_unrest = enum.auto()  # TODO this would be cool!
+    species_rights_reform = enum.auto()  # TODO
 
-    # diplomacy and war:
+    # Galactic community and council
     joined_galactic_community = enum.auto()
     joined_galactic_council = enum.auto()
     left_galactic_community = enum.auto()
     left_galactic_council = enum.auto()
-    voted_for_resolution = enum.auto()
-    voted_against_resolution = enum.auto()
+    voted_for_resolution = enum.auto()  # TODO
+    voted_against_resolution = enum.auto()  # TODO
 
+    # diplomacy:
     first_contact = enum.auto()
     non_aggression_pact = enum.auto()
     defensive_pact = enum.auto()
@@ -191,26 +194,24 @@ class HistoricalEventType(enum.Enum):
     research_agreement = enum.auto()
     migration_treaty = enum.auto()
 
+    closed_borders = enum.auto()
+    received_closed_borders = enum.auto()
+    sent_rivalry = enum.auto()
+    received_rivalry = enum.auto()
+
     # envoys
     envoy_community = enum.auto()
     envoy_federation = enum.auto()
     envoy_improving_relations = enum.auto()
     envoy_harming_relations = enum.auto()
 
-    closed_borders = enum.auto()
-    received_closed_borders = enum.auto()
-    sent_rivalry = enum.auto()
-    received_rivalry = enum.auto()
-
+    # war
     war = enum.auto()
     peace = enum.auto()
     fleet_combat = enum.auto()
     army_combat = enum.auto()
     conquered_system = enum.auto()
     lost_system = enum.auto()
-
-    terraforming = enum.auto()
-    planet_destroyed = enum.auto()  # TODO this would be cool!
 
     def __str__(self):
         return self.name
