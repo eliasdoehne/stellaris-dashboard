@@ -85,8 +85,8 @@ TAB_STYLE = {
 }
 
 # Define the layout of the dash app:
-CATEGORY_TABS = [category for category in visualization_data.TAB_LAYOUT]
-CATEGORY_TABS.append("Galaxy")
+CATEGORY_TABS = list(config.CONFIG.tab_layout)
+CATEGORY_TABS.append(config.GALAXY_MAP_TAB)
 DEFAULT_SELECTED_CATEGORY = CATEGORY_TABS[0]
 
 DASH_LAYOUT = html.Div(
@@ -282,7 +282,9 @@ def update_content(
 
     games_dict = datamodel.get_available_games_dict()
     if game_id not in games_dict:
-        logger.warning(f"Game ID {game_id} does not match any known game!")
+        logger.warning(
+            f"Game ID {game_id} does not match any known game! (URL parameter {search})"
+        )
         return []
 
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
@@ -290,13 +292,22 @@ def update_content(
         current_date = utils.get_most_recent_date(session)
 
     children = []
-    if tab_value in visualization_data.TAB_LAYOUT:
-        plots = visualization_data.TAB_LAYOUT[tab_value]
+    if tab_value in config.CONFIG.tab_layout:
+        plots = visualization_data.get_plot_specifications_for_tab_layout().get(
+            tab_value
+        )
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )
         for plot_spec in plots:
-            figure_data = get_figure_data(plot_data, plot_spec)
+            if not plot_spec:
+                continue  # just in case it's possible to sneak in an invalid ID
+            start = time.time()
+            figure_data = get_raw_plot_data_dicts(plot_data, plot_spec)
+            end = time.time()
+            logger.debug(
+                f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds."
+            )
             if not figure_data:
                 continue
             figure_layout = get_figure_layout(plot_spec)
@@ -338,17 +349,6 @@ def _get_game_ids_matching_url(url):
     return game_id, matches
 
 
-def get_figure_data(
-    plot_data: visualization_data.PlotDataManager,
-    plot_spec: visualization_data.PlotSpecification,
-):
-    start = time.time()
-    plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
-    end = time.time()
-    logger.debug(f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds.")
-    return plot_list
-
-
 def get_raw_plot_data_dicts(
     plot_data: visualization_data.PlotDataManager,
     plot_spec: visualization_data.PlotSpecification,
@@ -363,9 +363,10 @@ def get_raw_plot_data_dicts(
     """
     if plot_spec.style == visualization_data.PlotStyle.line:
         return _get_raw_data_for_line_plot(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.stacked:
-        return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.budget:
+    elif plot_spec.style in [
+        visualization_data.PlotStyle.stacked,
+        visualization_data.PlotStyle.budget,
+    ]:
         return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
     else:
         logger.warning(f"Unknown Plot type {plot_spec}")
