@@ -2173,6 +2173,9 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                 leader=c_ruler,
                                 start_date_days=self._basic_info.date_in_days,
                                 event_is_known_to_player=is_known_to_player,
+                                db_description=self._get_event_description(
+                                    et, c_model, tc_model
+                                ),
                             )
                             self._session.add(matching_event)
                     elif was_active:  # Set end date of existing historical event entry
@@ -2192,6 +2195,28 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                 logger.warning(
                                     f"Could not find event matching {relation}, {diplo_dict_key}"
                                 )
+
+    def _get_event_description(self, event_type, country_model, target_country_model):
+        if country_model is None or target_country_model is None:
+            return None
+        if event_type == datamodel.HistoricalEventType.formed_federation:
+            federations = self._gamestate_dict.get("federation", {})
+            if not isinstance(federations, dict):
+                return None
+            for f_id, fed_dict in federations.items():
+                if not isinstance(fed_dict, dict):
+                    continue
+                members = fed_dict.get("members", [])
+                if not isinstance(members, list):
+                    continue
+                if (
+                    country_model.country_id_in_game in members
+                    and target_country_model.country_id_in_game in members
+                ):
+                    return self._get_or_add_shared_description(
+                        fed_dict.get("name", "Unnamed Federation")
+                    )
+        return None
 
     def _query_event(
         self,

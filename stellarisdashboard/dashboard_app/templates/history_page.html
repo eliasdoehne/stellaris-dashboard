@@ -382,7 +382,7 @@
                     {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
                     {% else %} The
                     {% endif %}
-                    {{ links[event["country"]] | safe }} formed a federation with the {{ links[event["target_country"]] | safe }}.
+                    {{ links[event["country"]] | safe }} joined the "{{ event["description"] }}" and are now allied with the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
