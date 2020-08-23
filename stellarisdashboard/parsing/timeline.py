@@ -2658,8 +2658,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._settle_finished_wars()
 
     def _update_war(self, war_id: int, war_dict):
-        war_name = war_dict.get("name", "Unnamed war")
-        war_name = re.sub(r"\x11.", "", war_name)
+        war_name = self._get_war_name(war_dict.get("name", "Unnamed war"))
         war_model = (
             self._session.query(datamodel.War)
             .order_by(datamodel.War.start_date_days.desc())
@@ -2866,7 +2865,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         for truce_id, truce_info in truces_dict.items():
             if not isinstance(truce_info, dict):
                 continue
-            war_name = truce_info.get("name")
+            war_name = self._get_war_name(truce_info.get("name"))
             truce_type = truce_info.get("truce_type", "other")
             if not war_name or truce_type != "war":
                 continue  # truce is due to diplomatic agreements or similar
@@ -2938,6 +2937,10 @@ class WarProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=wp.country.has_met_player(),
                     )
                 )
+
+    def _get_war_name(self, war_name: str):
+        """Sometimes part of a war name are highlighted which doesn't show correctly"""
+        return re.sub(r"\x11.", "", war_name)
 
 
 class PopStatsProcessor(AbstractGamestateDataProcessor):
