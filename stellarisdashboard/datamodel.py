@@ -178,6 +178,8 @@ class HistoricalEventType(enum.Enum):
     # diplomacy and war:
     joined_galactic_community = enum.auto()
     joined_galactic_council = enum.auto()
+    left_galactic_community = enum.auto()
+    left_galactic_council = enum.auto()
     voted_for_resolution = enum.auto()
     voted_against_resolution = enum.auto()
 
@@ -233,6 +235,10 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.received_closed_borders,
             HistoricalEventType.sent_rivalry,
             HistoricalEventType.received_rivalry,
+            HistoricalEventType.joined_galactic_community,
+            HistoricalEventType.joined_galactic_council,
+            HistoricalEventType.left_galactic_community,
+            HistoricalEventType.left_galactic_council,
             HistoricalEventType.war,
             HistoricalEventType.peace,
             HistoricalEventType.terraforming,

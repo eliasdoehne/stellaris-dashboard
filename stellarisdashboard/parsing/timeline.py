@@ -186,6 +186,7 @@ class TimelineExtractor:
         yield GovernmentProcessor()
         yield FactionProcessor()
         yield DiplomacyUpdatesProcessor()
+        yield GalacticCommunityProcessor()
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
@@ -2232,6 +2233,97 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())
             .first()
         )
+
+
+class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
+    ID = "galactic_community"
+    DEPENDENCIES = [CountryProcessor.ID, RulerEventProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self._ruler_dict = None
+        self._countries_dict = None
+
+    def extract_data_from_gamestate(self, dependencies):
+        self._ruler_dict = dependencies[RulerEventProcessor.ID]
+        self._countries_dict = dependencies[CountryProcessor.ID]
+
+        community_dict = self._gamestate_dict.get("galactic_community")
+        if not isinstance(community_dict, dict):
+            return
+        self._update_community_members(community_dict)
+        self._update_council_members(community_dict)
+
+    def _update_community_members(self, community_dict):
+        members = community_dict.get("members", [])
+        if not isinstance(members, list):
+            return
+        non_members = set(self._countries_dict.keys()) - set(members)
+        matching_event_types = (
+            datamodel.HistoricalEventType.joined_galactic_community,
+            datamodel.HistoricalEventType.left_galactic_community,
+        )
+        new_event_type = datamodel.HistoricalEventType.joined_galactic_community
+        for c_id in members:
+            self._update_membership_events(c_id, matching_event_types, new_event_type)
+
+        new_event_type = datamodel.HistoricalEventType.left_galactic_community
+        for c_id in non_members:
+            self._update_membership_events(c_id, matching_event_types, new_event_type)
+
+    def _update_council_members(self, community_dict):
+        members = community_dict.get("council", [])
+        if not isinstance(members, list):
+            return
+        non_members = set(self._countries_dict.keys()) - set(members)
+        matching_event_types = (
+            datamodel.HistoricalEventType.joined_galactic_council,
+            datamodel.HistoricalEventType.left_galactic_council,
+        )
+        new_event_type = datamodel.HistoricalEventType.joined_galactic_council
+        for c_id in members:
+            self._update_membership_events(c_id, matching_event_types, new_event_type)
+
+        new_event_type = datamodel.HistoricalEventType.left_galactic_council
+        for c_id in non_members:
+            self._update_membership_events(c_id, matching_event_types, new_event_type)
+
+    def _update_membership_events(self, c_id, matching_event_types, new_event_type):
+        country = self._countries_dict.get(c_id)
+        if not country:
+            logger.warning(
+                f"{self._basic_info.logger_str} Could not find country with ID {c_id}"
+            )
+            return
+        previous_event = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter(
+                datamodel.HistoricalEvent.event_type.in_(matching_event_types),
+                datamodel.HistoricalEvent.country == country,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+            )
+            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .first()
+        )
+        if previous_event is None and new_event_type in (
+            datamodel.HistoricalEventType.left_galactic_community,
+            datamodel.HistoricalEventType.left_galactic_council,
+        ):
+            return  # can't leave if it never joined
+        elif previous_event is not None and previous_event.event_type == new_event_type:
+            return  # don't add event if last event is the same
+        else:
+            if previous_event is not None:
+                previous_event.end_date_days = self._basic_info.date_in_days
+                self._session.add(previous_event)
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=new_event_type,
+                    leader=self._ruler_dict.get(c_id),
+                    country=country,
+                    start_date_days=self._basic_info.date_in_days,
+                )
+            )
 
 
 class ScientistEventProcessor(AbstractGamestateDataProcessor):

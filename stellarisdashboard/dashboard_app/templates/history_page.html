@@ -422,6 +422,54 @@
                  </span>
             </div>
         </li>
+        {% elif event["event_type"] == "joined_galactic_community" %}
+        <li class="eventitem joined_galactic_community">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} joined the Galactic Community.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "joined_galactic_council" %}
+        <li class="eventitem joined_galactic_council">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} joined the Galactic Council.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "left_galactic_community" %}
+        <li class="eventitem left_galactic_community">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} left the Galactic Community.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "left_galactic_council" %}
+        <li class="eventitem left_galactic_council">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} left the Galactic Council.
+                 </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "habitat_ringworld_construction" %}
         <li class="eventitem habitat_ringworld_construction">
             <div class="eventdescription">
