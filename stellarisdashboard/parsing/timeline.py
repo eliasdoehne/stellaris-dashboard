@@ -2421,11 +2421,12 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 event_type = datamodel.HistoricalEventType.envoy_community
             elif assignment == "federation":
                 event_type = datamodel.HistoricalEventType.envoy_federation
-                fed_dict = self._gamestate_dict.get("federation", {})
-                if isinstance(fed_dict, dict):
-                    description = self._get_or_add_shared_description(
-                        fed_dict.get(location.get("id"), "Unknown Federation")
+                federations = self._gamestate_dict.get("federation", {})
+                if isinstance(federations, dict):
+                    federation_name = federations.get(location.get("id"), {}).get(
+                        "name", "Unknown Federation"
                     )
+                    description = self._get_or_add_shared_description(federation_name)
             else:
                 event_type = None
 
@@ -2433,17 +2434,20 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
 
             previous_assignment = self._previous_assignment(envoy)
 
-            add_new_event = event_type is not None
+            assignment_is_the_same = False
             if previous_assignment is not None:
-                if previous_assignment.event_type == event_type:
-                    add_new_event = False
+                if (
+                    previous_assignment.event_type == event_type
+                    and previous_assignment.target_country == target_country
+                ):
+                    assignment_is_the_same = True
                 else:
                     previous_assignment.end_date_days = (
                         self._basic_info.date_in_days - 1
                     )
                     self._session.add(previous_assignment)
 
-            if add_new_event:
+            if not assignment_is_the_same and event_type is not None:
                 new_assignment_event = datamodel.HistoricalEvent(
                     start_date_days=self._basic_info.date_in_days,
                     country=country,
@@ -2454,12 +2458,6 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                     db_description=description,
                 )
                 self._session.add(new_assignment_event)
-            if (
-                previous_assignment is not None
-                and previous_assignment.event_type == event_type
-            ):
-                previous_assignment.end_date_days = self._basic_info.date_in_days
-                self._session.add(previous_assignment)
 
     def _previous_assignment(self, envoy: datamodel.Leader):
         return (
