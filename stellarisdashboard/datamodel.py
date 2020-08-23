@@ -176,6 +176,11 @@ class HistoricalEventType(enum.Enum):
     planetary_unrest = enum.auto()  # TODO this would be cool!
 
     # diplomacy and war:
+    joined_galactic_community = enum.auto()
+    joined_galactic_council = enum.auto()
+    voted_for_resolution = enum.auto()
+    voted_against_resolution = enum.auto()
+
     first_contact = enum.auto()
     non_aggression_pact = enum.auto()
     defensive_pact = enum.auto()
