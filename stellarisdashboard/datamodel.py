@@ -184,6 +184,12 @@ class HistoricalEventType(enum.Enum):
     research_agreement = enum.auto()
     migration_treaty = enum.auto()
 
+    # envoys
+    envoy_community = enum.auto()
+    envoy_federation = enum.auto()
+    envoy_improving_relations = enum.auto()
+    envoy_harming_relations = enum.auto()
+
     closed_borders = enum.auto()
     received_closed_borders = enum.auto()
     sent_rivalry = enum.auto()
@@ -226,6 +232,10 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.peace,
             HistoricalEventType.terraforming,
             HistoricalEventType.planet_destroyed,
+            HistoricalEventType.envoy_community,
+            HistoricalEventType.envoy_federation,
+            HistoricalEventType.envoy_improving_relations,
+            HistoricalEventType.envoy_harming_relations,
         }:
             return HistoricalEventScope.galaxy
         elif self in {

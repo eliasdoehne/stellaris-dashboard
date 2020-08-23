@@ -187,6 +187,7 @@ class TimelineExtractor:
         yield FactionProcessor()
         yield DiplomacyUpdatesProcessor()
         yield ScientistEventProcessor()
+        yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
         yield WarProcessor()
         yield PopStatsProcessor()
@@ -2362,6 +2363,87 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
                     event_is_known_to_player=country_model.has_met_player(),
                 )
             )
+
+
+class EnvoyEventProcessor(AbstractGamestateDataProcessor):
+    ID = "envoy_events"
+    DEPENDENCIES = [CountryProcessor.ID, LeaderProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies):
+        countries_dict = dependencies[CountryProcessor.ID]
+        leaders = dependencies[LeaderProcessor.ID]
+
+        for envoy_id_ingame, raw_leader_dict in self._gamestate_dict["leaders"].items():
+            if not isinstance(raw_leader_dict, dict):
+                continue
+            if raw_leader_dict.get("class") != "envoy":
+                continue
+            if envoy_id_ingame not in leaders:
+                continue
+            envoy = leaders[envoy_id_ingame]
+            country = envoy.country
+            target_country = None
+            location = raw_leader_dict.get("location")
+            assignment = location.get("assignment")
+            description = None
+            if assignment == "improve_relations":
+                event_type = datamodel.HistoricalEventType.envoy_improving_relations
+                target_country = countries_dict.get(location.get("id"))
+            elif assignment == "harm_relations":
+                event_type = datamodel.HistoricalEventType.envoy_harming_relations
+                target_country = countries_dict.get(location.get("id"))
+            elif assignment == "galactic_community":
+                event_type = datamodel.HistoricalEventType.envoy_community
+            elif assignment == "federation":
+                event_type = datamodel.HistoricalEventType.envoy_federation
+                fed_dict = self._gamestate_dict.get("federation", {})
+                if isinstance(fed_dict, dict):
+                    description = self._get_or_add_shared_description(
+                        fed_dict.get(location.get("id"), "Unknown Federation")
+                    )
+            else:
+                event_type = None
+
+            event_is_known = country.is_player or country.has_met_player()
+
+            previous_assignment = self._previous_assignment(envoy)
+
+            add_new_event = event_type is not None
+            if previous_assignment is not None:
+                if previous_assignment.event_type == event_type:
+                    add_new_event = False
+                else:
+                    previous_assignment.end_date_days = (
+                        self._basic_info.date_in_days - 1
+                    )
+                    self._session.add(previous_assignment)
+
+            if add_new_event:
+                new_assignment_event = datamodel.HistoricalEvent(
+                    start_date_days=self._basic_info.date_in_days,
+                    country=country,
+                    leader=envoy,
+                    event_type=event_type,
+                    event_is_known_to_player=event_is_known,
+                    target_country=target_country,
+                    db_description=description,
+                )
+                self._session.add(new_assignment_event)
+            if (
+                previous_assignment is not None
+                and previous_assignment.event_type == event_type
+            ):
+                previous_assignment.end_date_days = self._basic_info.date_in_days
+                self._session.add(previous_assignment)
+
+    def _previous_assignment(self, envoy: datamodel.Leader):
+        return (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter(datamodel.HistoricalEvent.end_date_days.is_(None))
+            .filter_by(leader=envoy)
+            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .first()
+        )
 
 
 class FleetInfoProcessor(AbstractGamestateDataProcessor):
