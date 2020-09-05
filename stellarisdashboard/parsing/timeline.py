@@ -2303,6 +2303,7 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
                 f"{self._basic_info.logger_str} Could not find country with ID {c_id}"
             )
             return
+        event_is_known = country.has_met_player()
         previous_event = (
             self._session.query(datamodel.HistoricalEvent)
             .filter(
@@ -2323,6 +2324,7 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
         else:
             if previous_event is not None:
                 previous_event.end_date_days = self._basic_info.date_in_days
+                previous_event.event_is_known_to_player = event_is_known
                 self._session.add(previous_event)
             self._session.add(
                 datamodel.HistoricalEvent(
@@ -2330,6 +2332,7 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
                     leader=self._ruler_dict.get(c_id),
                     country=country,
                     start_date_days=self._basic_info.date_in_days,
+                    event_is_known_to_player=event_is_known,
                 )
             )
 
@@ -2531,6 +2534,8 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 event_type = None
 
             event_is_known = country.is_player or country.has_met_player()
+            if target_country is not None:
+                event_is_known &= target_country.has_met_player()
 
             previous_assignment = self._previous_assignment(envoy)
 
