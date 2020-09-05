@@ -159,23 +159,33 @@ class HistoricalEventType(enum.Enum):
     tradition = enum.auto()
     ascension_perk = enum.auto()
     edict = enum.auto()
+    expanded_to_system = enum.auto()
 
-    # expansion:
+    # Planets and sectors:
     colonization = enum.auto()
     discovered_new_system = enum.auto()
     habitat_ringworld_construction = enum.auto()
     megastructure_construction = enum.auto()
     sector_creation = enum.auto()
-    expanded_to_system = enum.auto()
+    capital_relocation = enum.auto()
+    planetary_unrest = enum.auto()  # TODO
+    terraforming = enum.auto()
+    planet_destroyed = enum.auto()  # TODO
 
     # related to internal politics:
     new_faction = enum.auto()
     government_reform = enum.auto()
-    species_rights_reform = enum.auto()  # TODO this would be cool!
-    capital_relocation = enum.auto()
-    planetary_unrest = enum.auto()  # TODO this would be cool!
+    species_rights_reform = enum.auto()  # TODO
 
-    # diplomacy and war:
+    # Galactic community and council
+    joined_galactic_community = enum.auto()
+    joined_galactic_council = enum.auto()
+    left_galactic_community = enum.auto()
+    left_galactic_council = enum.auto()
+    voted_for_resolution = enum.auto()  # TODO
+    voted_against_resolution = enum.auto()  # TODO
+
+    # diplomacy:
     first_contact = enum.auto()
     non_aggression_pact = enum.auto()
     defensive_pact = enum.auto()
@@ -189,15 +199,19 @@ class HistoricalEventType(enum.Enum):
     sent_rivalry = enum.auto()
     received_rivalry = enum.auto()
 
+    # envoys
+    envoy_community = enum.auto()
+    envoy_federation = enum.auto()
+    envoy_improving_relations = enum.auto()
+    envoy_harming_relations = enum.auto()
+
+    # war
     war = enum.auto()
     peace = enum.auto()
     fleet_combat = enum.auto()
     army_combat = enum.auto()
     conquered_system = enum.auto()
     lost_system = enum.auto()
-
-    terraforming = enum.auto()
-    planet_destroyed = enum.auto()  # TODO this would be cool!
 
     def __str__(self):
         return self.name
@@ -222,10 +236,18 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.received_closed_borders,
             HistoricalEventType.sent_rivalry,
             HistoricalEventType.received_rivalry,
+            HistoricalEventType.joined_galactic_community,
+            HistoricalEventType.joined_galactic_council,
+            HistoricalEventType.left_galactic_community,
+            HistoricalEventType.left_galactic_council,
             HistoricalEventType.war,
             HistoricalEventType.peace,
             HistoricalEventType.terraforming,
             HistoricalEventType.planet_destroyed,
+            HistoricalEventType.envoy_community,
+            HistoricalEventType.envoy_federation,
+            HistoricalEventType.envoy_improving_relations,
+            HistoricalEventType.envoy_harming_relations,
         }:
             return HistoricalEventScope.galaxy
         elif self in {
@@ -263,7 +285,7 @@ class HistoricalEventType(enum.Enum):
 
 ### Some convenience functions
 def date_to_days(date_str: str) -> int:
-    """ Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
+    """Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
     2200.01.01.
 
     :param date_str: Date in YYYY.MM.DD format
@@ -274,7 +296,7 @@ def date_to_days(date_str: str) -> int:
 
 
 def days_to_date(days: float) -> str:
-    """ Converts an integer counting the days passed in-game since 2200.01.01 to a readable date in YYYY.MM.DD format
+    """Converts an integer counting the days passed in-game since 2200.01.01 to a readable date in YYYY.MM.DD format
     (In Stellaris, there are 12 months with 30 days each)
 
     :param date_str: Date in YYYY.MM.DD format
@@ -511,7 +533,7 @@ class HyperLane(Base):
     """
     Represent hyperlane connections between systems. While the HyperLane is
     represented as a directed edge, it should be interpreted as undirected.
-     """
+    """
 
     __tablename__ = "hyperlanetable"
     hyperlane_id = Column(Integer, primary_key=True)
@@ -520,17 +542,21 @@ class HyperLane(Base):
     system_two_id = Column(ForeignKey(System.system_id))
 
     system_one = relationship(
-        "System", back_populates="hyperlanes_one", foreign_keys=[system_one_id],
+        "System",
+        back_populates="hyperlanes_one",
+        foreign_keys=[system_one_id],
     )
     system_two = relationship(
-        "System", back_populates="hyperlanes_two", foreign_keys=[system_two_id],
+        "System",
+        back_populates="hyperlanes_two",
+        foreign_keys=[system_two_id],
     )
 
 
 class Bypass(Base):
     """
     Represent bypasses.
-     """
+    """
 
     __tablename__ = "bypasstable"
     bypass_id = Column(Integer, primary_key=True)
@@ -858,10 +884,14 @@ class DiplomaticRelation(Base):
     research_agreement = Column(Boolean, default=False)
 
     owner = relationship(
-        Country, back_populates="outgoing_relations", foreign_keys=[country_id],
+        Country,
+        back_populates="outgoing_relations",
+        foreign_keys=[country_id],
     )
     target = relationship(
-        Country, back_populates="incoming_relations", foreign_keys=[target_country_id],
+        Country,
+        back_populates="incoming_relations",
+        foreign_keys=[target_country_id],
     )
 
     _dict_key_attr_mapping = dict(

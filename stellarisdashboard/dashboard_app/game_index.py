@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @flask_app.route("/")
 @flask_app.route("/checkversion/<version>/")
 def index_page(version=None):
-    """ Show a list of known games with database files.
+    """Show a list of known games with database files.
 
     :param version: Used to check for updates.
     :return:

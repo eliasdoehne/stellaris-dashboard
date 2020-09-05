@@ -253,7 +253,10 @@ class EventTemplateDictBuilder:
         for key in key_objects:
             event_list = (
                 self._session.query(datamodel.HistoricalEvent)
-                .order_by(datamodel.HistoricalEvent.start_date_days.asc())
+                .order_by(
+                    datamodel.HistoricalEvent.start_date_days.asc(),
+                    datamodel.HistoricalEvent.event_type.asc(),
+                )
                 .filter_by(**{event_query_kwargs: key})
                 .all()
             )

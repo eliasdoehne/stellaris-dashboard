@@ -11,7 +11,7 @@ VERSION_ID = "v1.1"
 
 
 def is_old_version(requested_version: str) -> bool:
-    """ Compares the requested version against the VERSION_ID defined above.
+    """Compares the requested version against the VERSION_ID defined above.
 
     :param requested_version: The version of the dashboard requested by the URL.
     :return:

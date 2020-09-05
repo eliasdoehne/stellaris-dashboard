@@ -462,7 +462,7 @@ def get_plot_value_labels(x_values, y_values, key):
 
 
 def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
-    """ Generate the galaxy map, ready to be used in the Dash layout.
+    """Generate the galaxy map, ready to be used in the Dash layout.
 
     :param game_id:
     :param slider_date:
@@ -571,10 +571,13 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=system_shapes + system_markers + edge_traces, layout=layout,
+            data=system_shapes + system_markers + edge_traces,
+            layout=layout,
         ),
         animate=True,
-        animation_options=dict(showAxisDragHandles=True,),
+        animation_options=dict(
+            showAxisDragHandles=True,
+        ),
     )
 
 

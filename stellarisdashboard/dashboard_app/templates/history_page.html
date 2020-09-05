@@ -382,7 +382,91 @@
                     {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
                     {% else %} The
                     {% endif %}
-                    {{ links[event["country"]] | safe }} formed a federation with the {{ links[event["target_country"]] | safe }}.
+                    {{ links[event["country"]] | safe }} joined the "{{ event["description"] }}" and are now allied with the {{ links[event["target_country"]] | safe }}.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "envoy_community" %}
+        <li class="eventitem envoy_community">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    The {{ links[event["country"]] | safe }} sent envoy {{ links[event["leader"]] | safe }} to increase their diplomatic weight in the galactic community.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "envoy_federation" %}
+        <li class="eventitem envoy_federation">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    The {{ links[event["country"]] | safe }} sent envoy {{ links[event["leader"]] | safe }} to improve the cohesion of the {{ event["description"] }}.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "envoy_improving_relations" %}
+        <li class="eventitem envoy_improving_relations">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    The {{ links[event["country"]] | safe }} sent envoy {{ links[event["leader"]] | safe }} to improve relations with the {{ links[event["target_country"]] | safe }}.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "envoy_harming_relations" %}
+        <li class="eventitem envoy_harming_relations">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    The {{ links[event["country"]] | safe }} sent envoy {{ links[event["leader"]] | safe }} to harm relations with the {{ links[event["target_country"]] | safe }}.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "joined_galactic_community" %}
+        <li class="eventitem joined_galactic_community">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} joined the Galactic Community.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "joined_galactic_council" %}
+        <li class="eventitem joined_galactic_council">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} joined the Galactic Council.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "left_galactic_community" %}
+        <li class="eventitem left_galactic_community">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} left the Galactic Community.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "left_galactic_council" %}
+        <li class="eventitem left_galactic_council">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
+                    {% else %} The
+                    {% endif %}
+                    {{ links[event["country"]] | safe }} left the Galactic Council.
                  </span>
             </div>
         </li>
@@ -425,7 +509,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The "{{ event["faction"].faction_name }}", a new {{ event["faction"].type }} faction, emerged in the {{ links[event["country"]] | safe}}.
+                    The {{ event["faction"].type }} "{{ event["faction"].faction_name }}" faction emerged in the {{ links[event["country"]] | safe}}.
                 </span>
             </div>
         </li>
