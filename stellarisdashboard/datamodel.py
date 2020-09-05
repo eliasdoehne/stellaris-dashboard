@@ -285,7 +285,7 @@ class HistoricalEventType(enum.Enum):
 
 ### Some convenience functions
 def date_to_days(date_str: str) -> int:
-    """ Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
+    """Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
     2200.01.01.
 
     :param date_str: Date in YYYY.MM.DD format
@@ -296,7 +296,7 @@ def date_to_days(date_str: str) -> int:
 
 
 def days_to_date(days: float) -> str:
-    """ Converts an integer counting the days passed in-game since 2200.01.01 to a readable date in YYYY.MM.DD format
+    """Converts an integer counting the days passed in-game since 2200.01.01 to a readable date in YYYY.MM.DD format
     (In Stellaris, there are 12 months with 30 days each)
 
     :param date_str: Date in YYYY.MM.DD format
@@ -533,7 +533,7 @@ class HyperLane(Base):
     """
     Represent hyperlane connections between systems. While the HyperLane is
     represented as a directed edge, it should be interpreted as undirected.
-     """
+    """
 
     __tablename__ = "hyperlanetable"
     hyperlane_id = Column(Integer, primary_key=True)
@@ -542,17 +542,21 @@ class HyperLane(Base):
     system_two_id = Column(ForeignKey(System.system_id))
 
     system_one = relationship(
-        "System", back_populates="hyperlanes_one", foreign_keys=[system_one_id],
+        "System",
+        back_populates="hyperlanes_one",
+        foreign_keys=[system_one_id],
     )
     system_two = relationship(
-        "System", back_populates="hyperlanes_two", foreign_keys=[system_two_id],
+        "System",
+        back_populates="hyperlanes_two",
+        foreign_keys=[system_two_id],
     )
 
 
 class Bypass(Base):
     """
     Represent bypasses.
-     """
+    """
 
     __tablename__ = "bypasstable"
     bypass_id = Column(Integer, primary_key=True)
@@ -880,10 +884,14 @@ class DiplomaticRelation(Base):
     research_agreement = Column(Boolean, default=False)
 
     owner = relationship(
-        Country, back_populates="outgoing_relations", foreign_keys=[country_id],
+        Country,
+        back_populates="outgoing_relations",
+        foreign_keys=[country_id],
     )
     target = relationship(
-        Country, back_populates="incoming_relations", foreign_keys=[target_country_id],
+        Country,
+        back_populates="incoming_relations",
+        foreign_keys=[target_country_id],
     )
 
     _dict_key_attr_mapping = dict(

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    """ Entry point for the default execution:
+    """Entry point for the default execution:
 
     1. Start the flask server which hosts the visualizations
     2. Begin monitoring for new save files

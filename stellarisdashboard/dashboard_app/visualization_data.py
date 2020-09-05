@@ -54,7 +54,7 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
 def get_current_execution_plot_data(
     game_name: str, country_perspective: Optional[int] = None
 ) -> "PlotDataManager":
-    """ Update and retrieve the PlotDataManager object stored for the requested game.
+    """Update and retrieve the PlotDataManager object stored for the requested game.
 
     :param game_name: The exact name of a game for which a database is available
     :return:
@@ -75,7 +75,7 @@ def get_current_execution_plot_data(
 def get_color_vals(
     key_str: str, range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
-    """ Generate RGB values for the given identifier. Some special values (tech categories)
+    """Generate RGB values for the given identifier. Some special values (tech categories)
     have hardcoded colors to roughly match the game's look and feel.
 
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
@@ -101,7 +101,7 @@ def get_color_vals(
 
 
 class PlotDataManager:
-    """ Responsible for maintaining a single game's data for every available PlotSpecification.
+    """Responsible for maintaining a single game's data for every available PlotSpecification.
 
     The data is organized as a dictionary mapping the plot_id of the PlotSpecification class
     to a DataContainer instance (defined below).
@@ -1336,15 +1336,23 @@ THEMATICALLY_GROUPED_PLOTS = {
         RESEARCH_OUTPUT_GRAPH,
         RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
     ],
-    "Military": [FLEET_SIZE_GRAPH, MILITARY_POWER_GRAPH, FLEET_COMPOSITION_GRAPH,],
-    "Victory": [VICTORY_RANK_GRAPH, VICTORY_SCORE_GRAPH, VICTORY_ECONOMY_SCORE_GRAPH,],
+    "Military": [
+        FLEET_SIZE_GRAPH,
+        MILITARY_POWER_GRAPH,
+        FLEET_COMPOSITION_GRAPH,
+    ],
+    "Victory": [
+        VICTORY_RANK_GRAPH,
+        VICTORY_SCORE_GRAPH,
+        VICTORY_ECONOMY_SCORE_GRAPH,
+    ],
 }
 
 _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
 
 
 def get_galaxy_data(game_name: str) -> "GalaxyMapData":
-    """ Similar to get_current_execution_plot_data, the GalaxyMapData for
+    """Similar to get_current_execution_plot_data, the GalaxyMapData for
     each game is cached in the _GALAXY_DATA dictionary.
     """
     if game_name not in _GALAXY_DATA:

@@ -70,7 +70,8 @@ class TimelineExtractor:
 
     def _process_gamestate(self, db_game):
         db_game_state = datamodel.GameState(
-            game=db_game, date=self.basic_info.date_in_days,
+            game=db_game,
+            date=self.basic_info.date_in_days,
         )
         self._session.add(db_game_state)
         all_dependencies = {}
@@ -1180,7 +1181,8 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     db_entity_factory=datamodel.PlanetDeposit,
                 )
                 was_updated |= self._update_planet_modifiers(
-                    planet_model=planet_model, planet_dict=planet_dict,
+                    planet_model=planet_model,
+                    planet_dict=planet_dict,
                 )
                 if was_updated:
                     self._session.add(planet_model)
@@ -1264,7 +1266,9 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             db_description = self._get_or_add_shared_description(entity)
             self._session.add(
                 db_entity_factory(
-                    db_description=db_description, planet=planet_model, count=count,
+                    db_description=db_description,
+                    planet=planet_model,
+                    count=count,
                 )
             )
         return True
@@ -1741,7 +1745,8 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
                 )
                 self._session.add(
                     datamodel.Tradition(
-                        country=country_model, db_description=matching_description,
+                        country=country_model,
+                        db_description=matching_description,
                     )
                 )
                 country_data = country_model.get_most_recent_data()
@@ -1768,7 +1773,8 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
                 )
                 self._session.add(
                     datamodel.AscensionPerk(
-                        country=country_model, db_description=matching_description,
+                        country=country_model,
+                        db_description=matching_description,
                     )
                 )
                 self._session.add(
@@ -2228,7 +2234,9 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
         return (
             self._session.query(datamodel.HistoricalEvent)
             .filter_by(
-                event_type=event_type, country=country, target_country=target_country,
+                event_type=event_type,
+                country=country,
+                target_country=target_country,
             )
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())
             .first()
@@ -3157,7 +3165,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 species = species_dict[species_id]
                 self._session.add(
                     datamodel.PopStatsBySpecies(
-                        country_data=country_data, species=species, **stats,
+                        country_data=country_data,
+                        species=species,
+                        **stats,
                     )
                 )
 
@@ -3184,7 +3194,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
                 self._session.add(
                     datamodel.PopStatsByFaction(
-                        country_data=country_data, faction=faction, **stats,
+                        country_data=country_data,
+                        faction=faction,
+                        **stats,
                     )
                 )
 
@@ -3216,7 +3228,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                     continue
                 self._session.add(
                     datamodel.PlanetStats(
-                        country_data=country_data, planet=planet, **stats,
+                        country_data=country_data,
+                        planet=planet,
+                        **stats,
                     )
                 )
 
@@ -3230,7 +3244,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 job = self._get_or_add_shared_description(job)
                 self._session.add(
                     datamodel.PopStatsByJob(
-                        country_data=country_data, db_job_description=job, **stats,
+                        country_data=country_data,
+                        db_job_description=job,
+                        **stats,
                     )
                 )
 
@@ -3260,7 +3276,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 ethos = self._get_or_add_shared_description(ethos)
                 self._session.add(
                     datamodel.PopStatsByEthos(
-                        country_data=country_data, db_ethos_description=ethos, **stats,
+                        country_data=country_data,
+                        db_ethos_description=ethos,
+                        **stats,
                     )
                 )
 
