@@ -1,12 +1,10 @@
 # Configuring the graph layout
 
-The dashboard graphs can be freely arranged into tabs with some manual editing of the configuration file. 
-
-Disabling some graphs means that the dashboard has to do less work, making it faster to browse. At the same time, this allows leaving only the graphs that matter to you and arranging them in whatever way you prefer.
+Disabling some graphs means that the dashboard has to do less work, making it faster to browse. Also, you can remove any graphs that you don't care about and arrange them into tabs in whatever way you prefer.
 
 The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Galaxy Map", which is reserved.
 
-For example:
+For example this would be a valid configuration you can add to the config.yml:
 ```yaml
 tab_layout:
   my-first-tab:
@@ -19,9 +17,9 @@ This will make the graph dashboard appear like this:
 
 ![Custom Tab Layout](img/custom_tab_layout.png)
 
-I strongly recommended to make a backup copy of the config.yml after customizing it, since the dashboard may overwrite changes. 
+I recommend to make a backup copy of the config.yml after customizing it, since the dashboard may overwrite changes. Also, you can copy over the adjusted config.yml when you download an updated release of the Stellaris Dashboard
 
-To reset the default layout, simply delete or move the config.yml file, or remove the `tab_layout` section from it.
+To reset the default layout, simply delete the `tab_layout` section from your config.yml or move the entire file to reset all default settings.
 
 Changes to the tab layout will only apply after restarting the dashboard.
 
