@@ -21,8 +21,15 @@ from stellarisdashboard.parsing import save_parser, timeline
 logger = logging.getLogger(__name__)
 
 # These messages are shown by the CLI
-save_path_help_string = "The path where the Stellaris save files are stored. This should be the path to the folder containing the save folders for each game."
-game_name_help_string = 'An identifier of the game that you want to visualize. It matches prefixes, such that "--game-name uni" matches the game id "unitednationsofearth_-15512622", but not "lokkenmechanists_1256936305"'
+save_path_help_string = (
+    "The path where the Stellaris save files are stored. "
+    "This should be the path to the folder containing the save folders for each game."
+)
+game_name_help_string = (
+    "An identifier of the game that you want to visualize. It matches prefixes, such that "
+    '"--game-name uni" matches the game id "unitednationsofearth_-15512622", '
+    'but not "lokkenmechanists_1256936305"'
+)
 showeverything_help_string = (
     "Use this flag if you want to include all empires regardless of visibility."
 )
@@ -34,7 +41,7 @@ threads_help_string = (
 
 @click.group()
 def cli():
-    pass
+    config.initialize()
 
 
 @cli.command()
@@ -119,5 +126,4 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
 
 if __name__ == "__main__":
     mp.freeze_support()
-    config.initialize()
     cli()

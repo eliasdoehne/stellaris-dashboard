@@ -310,7 +310,7 @@ def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
     :param tokenizer: tokenizer function. Passed as an argument to allow either the cython one or the regex tokenizer
     :return:
     """
-    for token_info in tokenizer(gamestate, config.CONFIG.debug_mode):
+    for token_info in tokenizer(gamestate):
         value, line_number = token_info
         if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)

@@ -1,7 +1,7 @@
 import logging
 import multiprocessing as mp
 
-from stellarisdashboard import cli
+from stellarisdashboard import cli, config
 
 logger = logging.getLogger(__name__)
 
@@ -20,4 +20,5 @@ def main():
 
 if __name__ == "__main__":
     mp.freeze_support()
+    config.initialize()
     main()
