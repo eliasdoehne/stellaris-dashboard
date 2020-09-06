@@ -84,111 +84,6 @@ TAB_STYLE = {
     "color": TEXT_COLOR,
 }
 
-# Define the layout of the dash app:
-CATEGORY_TABS = list(config.CONFIG.tab_layout)
-CATEGORY_TABS.append(config.GALAXY_MAP_TAB)
-DEFAULT_SELECTED_CATEGORY = CATEGORY_TABS[0]
-
-DASH_LAYOUT = html.Div(
-    [
-        dcc.Location(id="url", refresh=False),
-        html.Div(
-            [
-                html.Div(
-                    [
-                        html.A(
-                            "Go to Game Selection",
-                            id="index-link",
-                            href="/",
-                            style=BUTTON_STYLE,
-                        ),
-                        html.A(
-                            f"Settings",
-                            id="settings-link",
-                            href="/settings/",
-                            style=BUTTON_STYLE,
-                        ),
-                        html.A(
-                            f"Go to Event Ledger",
-                            id="ledger-link",
-                            href="/history",
-                            style=BUTTON_STYLE,
-                        ),
-                    ]
-                ),
-                html.H1(
-                    children="Unknown Game", id="game-name-header", style=HEADER_STYLE
-                ),
-                dcc.Checklist(
-                    id="dash-plot-checklist",
-                    options=[
-                        {
-                            "label": "Normalize stacked plots",
-                            "value": "normalize_stacked_plots",
-                        },
-                    ],
-                    value=[],
-                    labelStyle=dict(color=TEXT_COLOR),
-                    style={"text-align": "center"},
-                ),
-                dcc.Dropdown(
-                    id="country-perspective-dropdown",
-                    options=[],
-                    placeholder="Select a country",
-                    value=None,
-                    style=DROPDOWN_STYLE,
-                ),
-                dcc.Tabs(
-                    id="tabs-container",
-                    style=TAB_CONTAINER_STYLE,
-                    parent_style=TAB_CONTAINER_STYLE,
-                    children=[
-                        dcc.Tab(
-                            id=tab_label,
-                            label=tab_label,
-                            value=tab_label,
-                            style=TAB_STYLE,
-                            selected_style=SELECTED_TAB_STYLE,
-                        )
-                        for tab_label in CATEGORY_TABS
-                    ],
-                    value=DEFAULT_SELECTED_CATEGORY,
-                ),
-                html.Div(
-                    id="tab-content",
-                    style={
-                        "width": "100%",
-                        "height": "100%",
-                        "margin-left": "auto",
-                        "margin-right": "auto",
-                    },
-                ),
-                dcc.Slider(
-                    id="dateslider",
-                    min=0,
-                    max=100,
-                    step=0.01,
-                    value=100,
-                    marks={i: "{}%".format(i) for i in range(0, 110, 10)},
-                ),
-            ],
-            style={
-                "width": "100%",
-                "height": "100%",
-                "fontFamily": "Sans-Serif",
-                "margin-left": "auto",
-                "margin-right": "auto",
-            },
-        ),
-    ],
-    style={
-        "width": "100%",
-        "height": "100%",
-        "padding": 0,
-        "margin": 0,
-        "background-color": BACKGROUND,
-    },
-)
 
 timeline_app = dash.Dash(
     __name__,
@@ -197,9 +92,6 @@ timeline_app = dash.Dash(
     compress=False,
     url_base_pathname="/timeline/",
 )
-timeline_app.css.config.serve_locally = True
-timeline_app.scripts.config.serve_locally = True
-timeline_app.layout = DASH_LAYOUT
 
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
@@ -591,4 +483,114 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
 
 
 def start_dash_app(port):
-    timeline_app.run_server(port=config.CONFIG.port)
+    timeline_app.css.config.serve_locally = True
+    timeline_app.scripts.config.serve_locally = True
+    timeline_app.layout = get_layout()
+    timeline_app.run_server(port=port)
+
+
+def get_layout():
+    tab_names = list(config.CONFIG.tab_layout)
+    tab_names.append(config.GALAXY_MAP_TAB)
+    return html.Div(
+        [
+            dcc.Location(id="url", refresh=False),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.A(
+                                "Go to Game Selection",
+                                id="index-link",
+                                href="/",
+                                style=BUTTON_STYLE,
+                            ),
+                            html.A(
+                                f"Settings",
+                                id="settings-link",
+                                href="/settings/",
+                                style=BUTTON_STYLE,
+                            ),
+                            html.A(
+                                f"Go to Event Ledger",
+                                id="ledger-link",
+                                href="/history",
+                                style=BUTTON_STYLE,
+                            ),
+                        ]
+                    ),
+                    html.H1(
+                        children="Unknown Game",
+                        id="game-name-header",
+                        style=HEADER_STYLE,
+                    ),
+                    dcc.Checklist(
+                        id="dash-plot-checklist",
+                        options=[
+                            {
+                                "label": "Normalize stacked plots",
+                                "value": "normalize_stacked_plots",
+                            },
+                        ],
+                        value=[],
+                        labelStyle=dict(color=TEXT_COLOR),
+                        style={"text-align": "center"},
+                    ),
+                    dcc.Dropdown(
+                        id="country-perspective-dropdown",
+                        options=[],
+                        placeholder="Select a country",
+                        value=None,
+                        style=DROPDOWN_STYLE,
+                    ),
+                    dcc.Tabs(
+                        id="tabs-container",
+                        style=TAB_CONTAINER_STYLE,
+                        parent_style=TAB_CONTAINER_STYLE,
+                        children=[
+                            dcc.Tab(
+                                id=tab_label,
+                                label=tab_label,
+                                value=tab_label,
+                                style=TAB_STYLE,
+                                selected_style=SELECTED_TAB_STYLE,
+                            )
+                            for tab_label in tab_names
+                        ],
+                        value=tab_names[0],
+                    ),
+                    html.Div(
+                        id="tab-content",
+                        style={
+                            "width": "100%",
+                            "height": "100%",
+                            "margin-left": "auto",
+                            "margin-right": "auto",
+                        },
+                    ),
+                    dcc.Slider(
+                        id="dateslider",
+                        min=0,
+                        max=100,
+                        step=0.01,
+                        value=100,
+                        marks={i: "{}%".format(i) for i in range(0, 110, 10)},
+                    ),
+                ],
+                style={
+                    "width": "100%",
+                    "height": "100%",
+                    "fontFamily": "Sans-Serif",
+                    "margin-left": "auto",
+                    "margin-right": "auto",
+                },
+            ),
+        ],
+        style={
+            "width": "100%",
+            "height": "100%",
+            "padding": 0,
+            "margin": 0,
+            "background-color": BACKGROUND,
+        },
+    )

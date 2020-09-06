@@ -14,7 +14,6 @@ import click
 
 from stellarisdashboard import config
 
-config.initialize()
 from stellarisdashboard.dashboard_app import visualization_data
 from stellarisdashboard.parsing import save_parser, timeline
 
@@ -120,4 +119,5 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
 
 if __name__ == "__main__":
     mp.freeze_support()
+    config.initialize()
     cli()
