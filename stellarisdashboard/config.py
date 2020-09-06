@@ -39,7 +39,9 @@ def _add_file_handler():
 initialize_logger()
 logger = logging.getLogger(__name__)
 if mp.current_process().name != "MainProcess":
-    logger.setLevel(logging.CRITICAL)
+    logger.setLevel(logging.ERROR)
+    for h in logger.handlers:
+        h.setLevel(logging.ERROR)
 
 
 def _get_default_thread_count():
@@ -85,10 +87,10 @@ DEFAULT_TAB_LAYOUT = {
         "volatile_motes_budget",
         "exotic_gases_budget",
         "rare_crystals_budget",
-        # "living_metal_budget",
-        # "zro_budget",
-        # "dark_matter_budget",
-        # "nanites_budget",
+        "living_metal_budget",
+        "zro_budget",
+        "dark_matter_budget",
+        "nanites_budget",
     ],
     "Economy": [
         "net_energy_income_graph",

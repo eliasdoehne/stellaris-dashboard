@@ -35,7 +35,7 @@ try:
     from stellarisdashboard.parsing.cython_ext import tokenizer
 
 except ImportError as import_error:
-    logger.info(
+    logger.warning(
         f'Cython extensions not available, using slow parser. Error message: "{import_error}"'
     )
     from stellarisdashboard.parsing import tokenizer_re as tokenizer
