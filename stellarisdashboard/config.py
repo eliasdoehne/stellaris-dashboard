@@ -25,23 +25,13 @@ def initialize_logger():
     stdout_ch.setLevel(logging.INFO)
     stdout_ch.setFormatter(LOG_FORMAT)
     root_logger.addHandler(stdout_ch)
+    if mp.current_process().name != "MainProcess":
+        root_logger.setLevel(logging.ERROR)
+        stdout_ch.setLevel(logging.ERROR)
 
 
-def _add_file_handler():
-    if CONFIG.log_to_file:
-        root_logger = logging.getLogger()
-        file_ch = logging.FileHandler(CONFIG.base_output_path / "logs.txt")
-        file_ch.setLevel(logging.WARN)
-        file_ch.setFormatter(LOG_FORMAT)
-        root_logger.addHandler(file_ch)
-
-
-initialize_logger()
-logger = logging.getLogger(__name__)
-if mp.current_process().name != "MainProcess":
-    logger.setLevel(logging.ERROR)
-    for h in logger.handlers:
-        h.setLevel(logging.ERROR)
+CONFIG = None
+logger = None
 
 
 def _get_default_thread_count():
@@ -344,6 +334,13 @@ class Config:
             f"Expected either true or false for bool value, received {val}."
         )
 
+    @property
+    def db_path(self) -> pathlib.Path:
+        path = self.base_output_path / "db/"
+        if not path.exists():
+            path.mkdir(parents=True)
+        return path
+
 
 def _apply_existing_settings(config: Config):
     settings = dict(DEFAULT_SETTINGS)
@@ -359,14 +356,28 @@ def _get_settings_file_path() -> pathlib.Path:
     return pathlib.Path.cwd() / "config.yml"
 
 
-# Initialize the Config object with the default settings
-CONFIG = Config()
-_apply_existing_settings(CONFIG)
+def initialize():
+    global CONFIG
+    global logger
+    initialize_logger()
+    logger = logging.getLogger(__name__)
+    CONFIG = Config()
+    _apply_existing_settings(CONFIG)
 
-# Initialize output paths
-if not CONFIG.base_output_path.exists():
-    (CONFIG.base_output_path / "db").mkdir(parents=True)
-    (CONFIG.base_output_path / "output").mkdir(parents=True)
+    # Initialize output paths
+    if not CONFIG.base_output_path.exists():
+        (CONFIG.base_output_path / "db").mkdir(parents=True)
+        (CONFIG.base_output_path / "output").mkdir(parents=True)
 
-logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
-_add_file_handler()
+    configure_logger()
+
+
+def configure_logger():
+    global logger
+    logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
+    if CONFIG.log_to_file:
+        logger = logging.getLogger()
+        file_ch = logging.FileHandler(CONFIG.base_output_path / "log.txt")
+        file_ch.setLevel(logging.WARN)
+        file_ch.setFormatter(LOG_FORMAT)
+        logger.addHandler(file_ch)

@@ -13,6 +13,8 @@ import threading
 import click
 
 from stellarisdashboard import config
+
+config.initialize()
 from stellarisdashboard.dashboard_app import visualization_data
 from stellarisdashboard.parsing import save_parser, timeline
 

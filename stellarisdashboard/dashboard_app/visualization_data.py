@@ -46,6 +46,13 @@ class PlotSpecification:
     y_axis_label: str = ""
 
 
+def get_plot_specifications_for_tab_layout():
+    return {
+        tab: [PLOT_SPECIFICATIONS[plot] for plot in plots]
+        for tab, plots in config.CONFIG.tab_layout.items()
+    }
+
+
 # The PlotDataManager is cached in memory for each "active" game
 # (one that was requested or had a save file parsed in the current execution).
 _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
@@ -65,7 +72,14 @@ def get_current_execution_plot_data(
             game = session.query(datamodel.Game).filter_by(game_name=game_name).first()
         if not game:
             logger.warning(f"Warning: Game {game_name} could not be found in database!")
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(game_name)
+        plot_specifications = [
+            ps
+            for pslist in get_plot_specifications_for_tab_layout().values()
+            for ps in pslist
+        ]
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(
+            game_name, plot_specifications
+        )
         _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
     _CURRENT_EXECUTION_PLOT_DATA[game_name].country_perspective = country_perspective
     _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
@@ -110,11 +124,9 @@ class PlotDataManager:
     def __init__(
         self,
         game_name: str,
-        plot_specifications: Dict[str, List[PlotSpecification]] = None,
+        plot_specifications: List[PlotSpecification],
         country_perspective: Optional[int] = None,
     ):
-        if plot_specifications is None:
-            plot_specifications = TAB_LAYOUT
         self.game_name: str = game_name
         self.plot_specifications = plot_specifications
 
@@ -136,11 +148,10 @@ class PlotDataManager:
         self.plot_time_resolution = config.CONFIG.plot_time_resolution
 
         self.data_containers_by_plot_id = {}
-        for ps_list in self.plot_specifications.values():
-            for plot_spec in ps_list:
-                self.data_containers_by_plot_id[
-                    plot_spec.plot_id
-                ] = plot_spec.data_container_factory(self.country_perspective)
+        for plot_spec in self.plot_specifications:
+            self.data_containers_by_plot_id[
+                plot_spec.plot_id
+            ] = plot_spec.data_container_factory(self.country_perspective)
 
     @property
     def country_perspective(self) -> Optional[int]:
@@ -1177,86 +1188,68 @@ VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
 
 # This dictionary defines how the plots are laid out in tabs by the plotly frontend
 # and how they should be split to different image files by matplotlib
-TAB_LAYOUT = {
-    "Economy": [
-        PLANET_COUNT_GRAPH,
-        SYSTEM_COUNT_GRAPH,
-        NET_ENERGY_INCOME_GRAPH,
-        NET_MINERAL_INCOME_GRAPH,
-        NET_ALLOYS_INCOME_GRAPH,
-        NET_CONSUMER_GOODS_INCOME_GRAPH,
-        NET_FOOD_INCOME_GRAPH,
-    ],
-    "Budget": [
-        ENERGY_BUDGET,
-        MINERAL_BUDGET,
-        CONSUMER_GOODS_BUDGET,
-        ALLOYS_BUDGET,
-        FOOD_BUDGET,
-        INFLUENCE_BUDGET,
-        UNITY_BUDGET,
-        VOLATILE_MOTES_BUDGET,
-        EXOTIC_GASES_BUDGET,
-        RARE_CRYSTALS_BUDGET,
-        LIVING_METAL_BUDGET,
-        ZRO_BUDGET,
-        DARK_MATTER_BUDGET,
-        NANITES_BUDGET,
-    ],
-    "Pops": [
-        SPECIES_DISTRIBUTION_GRAPH,
-        SPECIES_HAPPINESS_GRAPH,
-        SPECIES_CRIME_GRAPH,
-        SPECIES_POWER_GRAPH,
-        ETHOS_DISTRIBUTION_GRAPH,
-        ETHOS_HAPPINESS_GRAPH,
-        ETHOS_CRIME_GRAPH,
-        ETHOS_POWER_GRAPH,
-        STRATA_DISTRIBUTION_GRAPH,
-        STRATA_HAPPINESS_GRAPH,
-        STRATA_CRIME_GRAPH,
-        STRATA_POWER_GRAPH,
-    ],
-    "Jobs": [
-        JOB_DISTRIBUTION_GRAPH,
-        JOB_HAPPINESS_GRAPH,
-        JOB_CRIME_GRAPH,
-        JOB_POWER_GRAPH,
-    ],
-    "Factions": [
-        FACTION_DISTRIBUTION_GRAPH,
-        FACTION_APPROVAL_GRAPH,
-        FACTION_HAPPINESS_GRAPH,
-        FACTION_SUPPORT_GRAPH,
-        FACTION_CRIME_GRAPH,
-        FACTION_POWER_GRAPH,
-    ],
-    "Planets": [
-        PLANET_POP_DISTRIBUTION_GRAPH,
-        PLANET_MIGRATION_GRAPH,
-        PLANET_STABILITY_GRAPH,
-        PLANET_HAPPINESS_GRAPH,
-        PLANET_AMENITIES_GRAPH,
-        PLANET_HOUSING_GRAPH,
-        PLANET_CRIME_GRAPH,
-        PLANET_POWER_GRAPH,
-    ],
-    "Science": [
-        TECHNOLOGY_PROGRESS_GRAPH,
-        SURVEY_PROGRESS_GRAPH,
-        RESEARCH_OUTPUT_GRAPH,
-        RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
-    ],
-    "Military": [
-        FLEET_SIZE_GRAPH,
-        MILITARY_POWER_GRAPH,
-        FLEET_COMPOSITION_GRAPH,
-    ],
-    "Victory": [
-        VICTORY_RANK_GRAPH,
-        VICTORY_SCORE_GRAPH,
-        VICTORY_ECONOMY_SCORE_GRAPH,
-    ],
+PLOT_SPECIFICATIONS = {
+    "planet_count_graph": PLANET_COUNT_GRAPH,
+    "system_count_graph": SYSTEM_COUNT_GRAPH,
+    "net_energy_income_graph": NET_ENERGY_INCOME_GRAPH,
+    "net_mineral_income_graph": NET_MINERAL_INCOME_GRAPH,
+    "net_alloys_income_graph": NET_ALLOYS_INCOME_GRAPH,
+    "net_consumer_goods_income_graph": NET_CONSUMER_GOODS_INCOME_GRAPH,
+    "net_food_income_graph": NET_FOOD_INCOME_GRAPH,
+    "energy_budget": ENERGY_BUDGET,
+    "mineral_budget": MINERAL_BUDGET,
+    "consumer_goods_budget": CONSUMER_GOODS_BUDGET,
+    "alloys_budget": ALLOYS_BUDGET,
+    "food_budget": FOOD_BUDGET,
+    "influence_budget": INFLUENCE_BUDGET,
+    "unity_budget": UNITY_BUDGET,
+    "volatile_motes_budget": VOLATILE_MOTES_BUDGET,
+    "exotic_gases_budget": EXOTIC_GASES_BUDGET,
+    "rare_crystals_budget": RARE_CRYSTALS_BUDGET,
+    "living_metal_budget": LIVING_METAL_BUDGET,
+    "zro_budget": ZRO_BUDGET,
+    "dark_matter_budget": DARK_MATTER_BUDGET,
+    "nanites_budget": NANITES_BUDGET,
+    "species_distribution_graph": SPECIES_DISTRIBUTION_GRAPH,
+    "species_happiness_graph": SPECIES_HAPPINESS_GRAPH,
+    "species_crime_graph": SPECIES_CRIME_GRAPH,
+    "species_power_graph": SPECIES_POWER_GRAPH,
+    "ethos_distribution_graph": ETHOS_DISTRIBUTION_GRAPH,
+    "ethos_happiness_graph": ETHOS_HAPPINESS_GRAPH,
+    "ethos_crime_graph": ETHOS_CRIME_GRAPH,
+    "ethos_power_graph": ETHOS_POWER_GRAPH,
+    "strata_distribution_graph": STRATA_DISTRIBUTION_GRAPH,
+    "strata_happiness_graph": STRATA_HAPPINESS_GRAPH,
+    "strata_crime_graph": STRATA_CRIME_GRAPH,
+    "strata_power_graph": STRATA_POWER_GRAPH,
+    "job_distribution_graph": JOB_DISTRIBUTION_GRAPH,
+    "job_happiness_graph": JOB_HAPPINESS_GRAPH,
+    "job_crime_graph": JOB_CRIME_GRAPH,
+    "job_power_graph": JOB_POWER_GRAPH,
+    "faction_distribution_graph": FACTION_DISTRIBUTION_GRAPH,
+    "faction_approval_graph": FACTION_APPROVAL_GRAPH,
+    "faction_happiness_graph": FACTION_HAPPINESS_GRAPH,
+    "faction_support_graph": FACTION_SUPPORT_GRAPH,
+    "faction_crime_graph": FACTION_CRIME_GRAPH,
+    "faction_power_graph": FACTION_POWER_GRAPH,
+    "planet_pop_distribution_graph": PLANET_POP_DISTRIBUTION_GRAPH,
+    "planet_migration_graph": PLANET_MIGRATION_GRAPH,
+    "planet_stability_graph": PLANET_STABILITY_GRAPH,
+    "planet_happiness_graph": PLANET_HAPPINESS_GRAPH,
+    "planet_amenities_graph": PLANET_AMENITIES_GRAPH,
+    "planet_housing_graph": PLANET_HOUSING_GRAPH,
+    "planet_crime_graph": PLANET_CRIME_GRAPH,
+    "planet_power_graph": PLANET_POWER_GRAPH,
+    "technology_progress_graph": TECHNOLOGY_PROGRESS_GRAPH,
+    "survey_progress_graph": SURVEY_PROGRESS_GRAPH,
+    "research_output_graph": RESEARCH_OUTPUT_GRAPH,
+    "research_output_by_category_graph": RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
+    "fleet_size_graph": FLEET_SIZE_GRAPH,
+    "military_power_graph": MILITARY_POWER_GRAPH,
+    "fleet_composition_graph": FLEET_COMPOSITION_GRAPH,
+    "victory_rank_graph": VICTORY_RANK_GRAPH,
+    "victory_score_graph": VICTORY_SCORE_GRAPH,
+    "victory_economy_score_graph": VICTORY_ECONOMY_SCORE_GRAPH,
 }
 
 _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}

@@ -5,7 +5,6 @@ import threading
 from stellarisdashboard import cli
 from stellarisdashboard.dashboard_app import start_server
 
-
 logger = logging.getLogger(__name__)
 
 
