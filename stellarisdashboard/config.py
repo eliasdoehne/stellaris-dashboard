@@ -4,6 +4,8 @@ import pathlib
 import platform
 import sys
 import traceback
+from collections import defaultdict
+from typing import List, Dict
 
 import yaml
 
@@ -23,21 +25,13 @@ def initialize_logger():
     stdout_ch.setLevel(logging.INFO)
     stdout_ch.setFormatter(LOG_FORMAT)
     root_logger.addHandler(stdout_ch)
+    if mp.current_process().name != "MainProcess":
+        root_logger.setLevel(logging.ERROR)
+        stdout_ch.setLevel(logging.ERROR)
 
 
-def _add_file_handler():
-    if CONFIG.log_to_file:
-        root_logger = logging.getLogger()
-        file_ch = logging.FileHandler(CONFIG.base_output_path / "logs.txt")
-        file_ch.setLevel(logging.WARN)
-        file_ch.setFormatter(LOG_FORMAT)
-        root_logger.addHandler(file_ch)
-
-
-initialize_logger()
-logger = logging.getLogger(__name__)
-if mp.current_process().name != "MainProcess":
-    logger.setLevel(logging.CRITICAL)
+CONFIG = None
+logger = None
 
 
 def _get_default_thread_count():
@@ -71,6 +65,82 @@ def _get_default_base_output_path():
     return pathlib.Path.cwd() / "output"
 
 
+DEFAULT_TAB_LAYOUT = {
+    "Budget": [
+        "energy_budget",
+        "mineral_budget",
+        "consumer_goods_budget",
+        "alloys_budget",
+        "food_budget",
+        "influence_budget",
+        "unity_budget",
+        "volatile_motes_budget",
+        "exotic_gases_budget",
+        "rare_crystals_budget",
+        "living_metal_budget",
+        "zro_budget",
+        "dark_matter_budget",
+        "nanites_budget",
+    ],
+    "Economy": [
+        "net_energy_income_graph",
+        "net_mineral_income_graph",
+        "net_alloys_income_graph",
+        "net_consumer_goods_income_graph",
+        "net_food_income_graph",
+    ],
+    "Demographics": [
+        "species_distribution_graph",
+        "job_distribution_graph",
+        "ethos_distribution_graph",
+        "strata_distribution_graph",
+        "faction_distribution_graph",
+        "planet_pop_distribution_graph",
+    ],
+    "Pops": [
+        "species_happiness_graph",
+        "species_crime_graph",
+        "species_power_graph",
+        "job_happiness_graph",
+        "job_crime_graph",
+        "job_power_graph",
+        "ethos_happiness_graph",
+        "ethos_crime_graph",
+        "ethos_power_graph",
+        "faction_approval_graph",
+        "faction_happiness_graph",
+        "faction_support_graph",
+        "faction_crime_graph",
+        "faction_power_graph",
+        "strata_happiness_graph",
+        "strata_crime_graph",
+        "strata_power_graph",
+    ],
+    "Planets": [
+        "planet_count_graph",
+        "planet_migration_graph",
+        "planet_stability_graph",
+        "planet_happiness_graph",
+        "planet_amenities_graph",
+        "planet_housing_graph",
+        "planet_crime_graph",
+        "planet_power_graph",
+    ],
+    "Science": [
+        "technology_progress_graph",
+        "survey_progress_graph",
+        "research_output_graph",
+        "research_output_by_category_graph",
+    ],
+    "Military": ["fleet_size_graph", "military_power_graph", "fleet_composition_graph"],
+    "Victory": [
+        "victory_rank_graph",
+        "victory_score_graph",
+        "victory_economy_score_graph",
+    ],
+}
+GALAXY_MAP_TAB = "Galaxy Map"
+
 DEFAULT_SETTINGS = dict(
     save_file_path=_get_default_save_path(),
     mp_username="",
@@ -90,6 +160,7 @@ DEFAULT_SETTINGS = dict(
     log_to_file=False,
     plot_width=1150,
     plot_height=640,
+    tab_layout=DEFAULT_TAB_LAYOUT,
 )
 
 
@@ -122,6 +193,8 @@ class Config:
     log_to_file: bool = False
     debug_mode: bool = False
 
+    tab_layout: Dict[str, List[str]] = None
+
     PATH_KEYS = {
         "base_output_path",
         "save_file_path",
@@ -150,7 +223,8 @@ class Config:
         "save_name_filter",
         "log_level",
     }
-    ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS
+    DICT_KEYS = {"tab_layout"}
+    ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS
 
     def apply_dict(self, settings_dict):
         logger.info("Updating settings")
@@ -161,35 +235,61 @@ class Config:
             old_val = self.__dict__.get(key)
             if key in Config.BOOL_KEYS:
                 val = self._preprocess_bool(val)
-
             if key in Config.PATH_KEYS:
-                if val == "":
-                    val = DEFAULT_SETTINGS[key]
-                else:
-                    val = pathlib.Path(val)
-                if key == "base_output_path":
-                    try:
-                        if not val.exists():
-                            logger.info(f"Creating new {key} directory at {val}")
-                            val.mkdir(parents=True)
-                        elif not val.is_dir():
-                            logger.warning(
-                                f"Ignoring path setting {key} with value {val}, as the provided value exists and is not a directory!"
-                            )
-                            continue
-                    except Exception:
-                        logger.warning(
-                            f"Error during path creation while updating {key} option with value {val}:"
-                        )
-                        logger.error(traceback.format_exc())
-                        logger.info(f"Ignoring setting {key} with value {val}.")
-                        continue
-
+                val = self._process_path_keys(key, val)
+                if val is None:
+                    continue
+            if key == "tab_layout":
+                val = self._process_tab_layout(val)
             self.__setattr__(key, val)
             if val != old_val:
                 logger.info(
                     f"Updated setting {key.ljust(28)} {str(old_val).rjust(8)} -> {str(val).ljust(8)}"
                 )
+
+    def _process_path_keys(self, key, val):
+        if val == "":
+            val = DEFAULT_SETTINGS[key]
+        else:
+            val = pathlib.Path(val)
+        if key == "base_output_path":
+            try:
+                if not val.exists():
+                    logger.info(f"Creating new {key} directory at {val}")
+                    val.mkdir(parents=True)
+                elif not val.is_dir():
+                    logger.warning(
+                        f"Ignoring setting {key} with value {val}: Path exists and is not a directory"
+                    )
+                    return
+            except Exception:
+                logger.warning(
+                    f"Error during path creation while updating {key} with value {val}:"
+                )
+                logger.error(traceback.format_exc())
+                logger.info(f"Ignoring setting {key} with value {val}.")
+                return
+        return val
+
+    def _process_tab_layout(self, layout_dict):
+        if not isinstance(layout_dict, dict):
+            logger.error(f"Invalid tab layout configuration: {layout_dict}")
+            logger.info(f"Falling back to default tab layout.")
+            return DEFAULT_SETTINGS["tab_layout"]
+        processed = defaultdict(list)
+        for tab, plot_list in layout_dict.items():
+            if tab == GALAXY_MAP_TAB:
+                logger.warning(f"Ignoring tab {tab}, it is reserved for the galaxy map")
+                pass
+            if not isinstance(plot_list, list):
+                logger.warning(f"Ignoring invalid graph list for tab {tab}")
+                pass
+            for g in plot_list:
+                if not isinstance(g, str):
+                    logger.warning(f"Ignoring invalid graph ID {g}")
+                    pass
+                processed[tab].append(g)
+        return dict(processed)
 
     def write_to_file(self):
         fname = _get_settings_file_path()
@@ -234,6 +334,13 @@ class Config:
             f"Expected either true or false for bool value, received {val}."
         )
 
+    @property
+    def db_path(self) -> pathlib.Path:
+        path = self.base_output_path / "db/"
+        if not path.exists():
+            path.mkdir(parents=True)
+        return path
+
 
 def _apply_existing_settings(config: Config):
     settings = dict(DEFAULT_SETTINGS)
@@ -249,14 +356,28 @@ def _get_settings_file_path() -> pathlib.Path:
     return pathlib.Path.cwd() / "config.yml"
 
 
-# Initialize the Config object with the default settings
-CONFIG = Config()
-_apply_existing_settings(CONFIG)
+def initialize():
+    global CONFIG
+    global logger
+    initialize_logger()
+    logger = logging.getLogger(__name__)
+    CONFIG = Config()
+    _apply_existing_settings(CONFIG)
 
-# Initialize output paths
-if not CONFIG.base_output_path.exists():
-    (CONFIG.base_output_path / "db").mkdir(parents=True)
-    (CONFIG.base_output_path / "output").mkdir(parents=True)
+    # Initialize output paths
+    if not CONFIG.base_output_path.exists():
+        (CONFIG.base_output_path / "db").mkdir(parents=True)
+        (CONFIG.base_output_path / "output").mkdir(parents=True)
 
-logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
-_add_file_handler()
+    configure_logger()
+
+
+def configure_logger():
+    global logger
+    logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
+    if CONFIG.log_to_file:
+        logger = logging.getLogger()
+        file_ch = logging.FileHandler(CONFIG.base_output_path / "log.txt")
+        file_ch.setLevel(logging.WARN)
+        file_ch.setFormatter(LOG_FORMAT)
+        logger.addHandler(file_ch)

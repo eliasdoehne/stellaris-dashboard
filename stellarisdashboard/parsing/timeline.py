@@ -52,7 +52,8 @@ class TimelineExtractor:
                 else:
                     self._process_gamestate(db_game)
                 logger.info(
-                    f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, writing changes to database"
+                    f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, "
+                    f"writing changes to database"
                 )
                 self._session.commit()
                 self.number_of_parsed_saves += 1
@@ -92,7 +93,8 @@ class TimelineExtractor:
             )
             if missing_dependencies:
                 logger.info(
-                    f"{self.basic_info.logger_str}   - Could not process {data_processor.ID} due to missing dependencies {', '.join(missing_dependencies)}"
+                    f"{self.basic_info.logger_str}   - Could not process {data_processor.ID} due to missing "
+                    f"dependencies {', '.join(missing_dependencies)}"
                 )
             else:
                 logger.info(
@@ -460,7 +462,8 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
 
             if country_model is None or system_model is None:
                 logger.warning(
-                    f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game} and country {country_id_in_game}"
+                    f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game} and "
+                    f"country {country_id_in_game}"
                 )
                 continue
 
@@ -1242,7 +1245,8 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             current_entities = [current_entities]
         if not isinstance(current_entities, list):
             logger.warning(
-                f"{self._basic_info.logger_str}: Expected str or list, got {current_entities} while updating {entity_attribute_name}"
+                f"{self._basic_info.logger_str}: Expected str or list, got {current_entities} while updating "
+                f"{entity_attribute_name}"
             )
             return False
 
@@ -1525,7 +1529,8 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         target_pc = terraform_dict.get("planet_class")
         if not isinstance(target_pc, str):
             logger.info(
-                f"{self._basic_info.logger_str} Unexpected target planet class for terraforming of {planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}"
+                f"{self._basic_info.logger_str} Unexpected target planet class for terraforming of "
+                f"{planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}"
             )
             return
         text = f"{current_pc},{target_pc}"
@@ -2038,7 +2043,8 @@ class FactionProcessor(AbstractGamestateDataProcessor):
         leader = self._leaders_dict.get(faction_leader_id)
         if leader is None:
             logger.debug(
-                f"{self._basic_info.logger_str}     Could not find faction leader matching leader id {faction_leader_id} for {country_model.country_name}"
+                f"{self._basic_info.logger_str}     Could not find faction leader matching leader id "
+                f"{faction_leader_id} for {country_model.country_name}"
             )
             logger.debug(f"{self._basic_info.logger_str}     {faction_dict}")
             return
@@ -2923,7 +2929,8 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 db_country = self._countries_dict.get(country_id)
                 if db_country is None:
                     logger.warning(
-                        f"{self._basic_info.logger_str}     Could not find country with ID {country_id} when processing battle {battle_dict}"
+                        f"{self._basic_info.logger_str}     Could not find country with ID {country_id} "
+                        f"when processing battle {battle_dict}"
                     )
                     continue
                 is_known_to_player |= db_country.has_met_player()
@@ -2934,7 +2941,8 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 )
                 if war_participant is None:
                     logger.info(
-                        f"{self._basic_info.logger_str}     Could not find War participant matching country {db_country.country_name} and war {war.name}."
+                        f"{self._basic_info.logger_str}     Could not find War participant matching country "
+                        f"{db_country.country_name} and war {war.name}."
                     )
                     continue
                 self._session.add(
@@ -3017,7 +3025,8 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 self._session.add(war)
                 self._history_add_peace_events(war)
                 logger.warning(
-                    f"{self._basic_info.logger_str} Ending war {war.name}, as it has been inactive since {datamodel.days_to_date(war.end_date_days)}"
+                    f"{self._basic_info.logger_str} Ending war {war.name}, as it has been inactive since "
+                    f"{datamodel.days_to_date(war.end_date_days)}"
                 )
 
     def _history_add_peace_events(self, war: datamodel.War):

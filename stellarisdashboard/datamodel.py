@@ -15,10 +15,6 @@ from stellarisdashboard import config, game_info
 
 logger = logging.getLogger(__name__)
 
-DB_PATH: pathlib.Path = config.CONFIG.base_output_path / "db"
-if not DB_PATH.exists():
-    logger.info(f"Creating database path {DB_PATH}")
-    DB_PATH.mkdir()
 
 Base = declarative_base()
 _ENGINES = {}
@@ -29,7 +25,7 @@ _DB_LOCKS = {}
 @contextlib.contextmanager
 def get_db_session(game_id) -> sqlalchemy.orm.Session:
     if game_id not in _SESSIONMAKERS:
-        db_file = DB_PATH / f"{game_id}.db"
+        db_file = config.CONFIG.db_path / f"{game_id}.db"
         if not db_file.exists():
             logger.info(f"Creating database for game {game_id} in file {db_file}.")
         engine = sqlalchemy.create_engine(f"sqlite:///{db_file}", echo=False)
@@ -319,7 +315,7 @@ def get_last_modified_time(path: pathlib.Path) -> int:
 
 def get_known_games(game_name_prefix: str = "") -> List[str]:
     files = sorted(
-        DB_PATH.glob(f"{game_name_prefix}*.db"),
+        config.CONFIG.db_path.glob(f"{game_name_prefix}*.db"),
         key=get_last_modified_time,
         reverse=True,
     )

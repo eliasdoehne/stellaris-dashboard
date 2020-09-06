@@ -84,111 +84,6 @@ TAB_STYLE = {
     "color": TEXT_COLOR,
 }
 
-# Define the layout of the dash app:
-CATEGORY_TABS = [category for category in visualization_data.THEMATICALLY_GROUPED_PLOTS]
-CATEGORY_TABS.append("Galaxy")
-DEFAULT_SELECTED_CATEGORY = CATEGORY_TABS[0]
-
-DASH_LAYOUT = html.Div(
-    [
-        dcc.Location(id="url", refresh=False),
-        html.Div(
-            [
-                html.Div(
-                    [
-                        html.A(
-                            "Go to Game Selection",
-                            id="index-link",
-                            href="/",
-                            style=BUTTON_STYLE,
-                        ),
-                        html.A(
-                            f"Settings",
-                            id="settings-link",
-                            href="/settings/",
-                            style=BUTTON_STYLE,
-                        ),
-                        html.A(
-                            f"Go to Event Ledger",
-                            id="ledger-link",
-                            href="/history",
-                            style=BUTTON_STYLE,
-                        ),
-                    ]
-                ),
-                html.H1(
-                    children="Unknown Game", id="game-name-header", style=HEADER_STYLE
-                ),
-                dcc.Checklist(
-                    id="dash-plot-checklist",
-                    options=[
-                        {
-                            "label": "Normalize stacked plots",
-                            "value": "normalize_stacked_plots",
-                        },
-                    ],
-                    value=[],
-                    labelStyle=dict(color=TEXT_COLOR),
-                    style={"text-align": "center"},
-                ),
-                dcc.Dropdown(
-                    id="country-perspective-dropdown",
-                    options=[],
-                    placeholder="Select a country",
-                    value=None,
-                    style=DROPDOWN_STYLE,
-                ),
-                dcc.Tabs(
-                    id="tabs-container",
-                    style=TAB_CONTAINER_STYLE,
-                    parent_style=TAB_CONTAINER_STYLE,
-                    children=[
-                        dcc.Tab(
-                            id=tab_label,
-                            label=tab_label,
-                            value=tab_label,
-                            style=TAB_STYLE,
-                            selected_style=SELECTED_TAB_STYLE,
-                        )
-                        for tab_label in CATEGORY_TABS
-                    ],
-                    value=DEFAULT_SELECTED_CATEGORY,
-                ),
-                html.Div(
-                    id="tab-content",
-                    style={
-                        "width": "100%",
-                        "height": "100%",
-                        "margin-left": "auto",
-                        "margin-right": "auto",
-                    },
-                ),
-                dcc.Slider(
-                    id="dateslider",
-                    min=0,
-                    max=100,
-                    step=0.01,
-                    value=100,
-                    marks={i: "{}%".format(i) for i in range(0, 110, 10)},
-                ),
-            ],
-            style={
-                "width": "100%",
-                "height": "100%",
-                "fontFamily": "Sans-Serif",
-                "margin-left": "auto",
-                "margin-right": "auto",
-            },
-        ),
-    ],
-    style={
-        "width": "100%",
-        "height": "100%",
-        "padding": 0,
-        "margin": 0,
-        "background-color": BACKGROUND,
-    },
-)
 
 timeline_app = dash.Dash(
     __name__,
@@ -197,9 +92,6 @@ timeline_app = dash.Dash(
     compress=False,
     url_base_pathname="/timeline/",
 )
-timeline_app.css.config.serve_locally = True
-timeline_app.scripts.config.serve_locally = True
-timeline_app.layout = DASH_LAYOUT
 
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
@@ -282,7 +174,9 @@ def update_content(
 
     games_dict = datamodel.get_available_games_dict()
     if game_id not in games_dict:
-        logger.warning(f"Game ID {game_id} does not match any known game!")
+        logger.warning(
+            f"Game ID {game_id} does not match any known game! (URL parameter {search})"
+        )
         return []
 
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
@@ -290,13 +184,22 @@ def update_content(
         current_date = utils.get_most_recent_date(session)
 
     children = []
-    if tab_value in visualization_data.THEMATICALLY_GROUPED_PLOTS:
-        plots = visualization_data.THEMATICALLY_GROUPED_PLOTS[tab_value]
+    if tab_value in config.CONFIG.tab_layout:
+        plots = visualization_data.get_plot_specifications_for_tab_layout().get(
+            tab_value
+        )
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )
         for plot_spec in plots:
-            figure_data = get_figure_data(plot_data, plot_spec)
+            if not plot_spec:
+                continue  # just in case it's possible to sneak in an invalid ID
+            start = time.time()
+            figure_data = get_raw_plot_data_dicts(plot_data, plot_spec)
+            end = time.time()
+            logger.debug(
+                f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds."
+            )
             if not figure_data:
                 continue
             figure_layout = get_figure_layout(plot_spec)
@@ -338,17 +241,6 @@ def _get_game_ids_matching_url(url):
     return game_id, matches
 
 
-def get_figure_data(
-    plot_data: visualization_data.PlotDataManager,
-    plot_spec: visualization_data.PlotSpecification,
-):
-    start = time.time()
-    plot_list = get_raw_plot_data_dicts(plot_data, plot_spec)
-    end = time.time()
-    logger.debug(f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds.")
-    return plot_list
-
-
 def get_raw_plot_data_dicts(
     plot_data: visualization_data.PlotDataManager,
     plot_spec: visualization_data.PlotSpecification,
@@ -363,9 +255,10 @@ def get_raw_plot_data_dicts(
     """
     if plot_spec.style == visualization_data.PlotStyle.line:
         return _get_raw_data_for_line_plot(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.stacked:
-        return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
-    elif plot_spec.style == visualization_data.PlotStyle.budget:
+    elif plot_spec.style in [
+        visualization_data.PlotStyle.stacked,
+        visualization_data.PlotStyle.budget,
+    ]:
         return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
     else:
         logger.warning(f"Unknown Plot type {plot_spec}")
@@ -590,4 +483,114 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
 
 
 def start_dash_app(port):
-    timeline_app.run_server(port=config.CONFIG.port)
+    timeline_app.css.config.serve_locally = True
+    timeline_app.scripts.config.serve_locally = True
+    timeline_app.layout = get_layout()
+    timeline_app.run_server(port=port)
+
+
+def get_layout():
+    tab_names = list(config.CONFIG.tab_layout)
+    tab_names.append(config.GALAXY_MAP_TAB)
+    return html.Div(
+        [
+            dcc.Location(id="url", refresh=False),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.A(
+                                "Go to Game Selection",
+                                id="index-link",
+                                href="/",
+                                style=BUTTON_STYLE,
+                            ),
+                            html.A(
+                                f"Settings",
+                                id="settings-link",
+                                href="/settings/",
+                                style=BUTTON_STYLE,
+                            ),
+                            html.A(
+                                f"Go to Event Ledger",
+                                id="ledger-link",
+                                href="/history",
+                                style=BUTTON_STYLE,
+                            ),
+                        ]
+                    ),
+                    html.H1(
+                        children="Unknown Game",
+                        id="game-name-header",
+                        style=HEADER_STYLE,
+                    ),
+                    dcc.Checklist(
+                        id="dash-plot-checklist",
+                        options=[
+                            {
+                                "label": "Normalize stacked plots",
+                                "value": "normalize_stacked_plots",
+                            },
+                        ],
+                        value=[],
+                        labelStyle=dict(color=TEXT_COLOR),
+                        style={"text-align": "center"},
+                    ),
+                    dcc.Dropdown(
+                        id="country-perspective-dropdown",
+                        options=[],
+                        placeholder="Select a country",
+                        value=None,
+                        style=DROPDOWN_STYLE,
+                    ),
+                    dcc.Tabs(
+                        id="tabs-container",
+                        style=TAB_CONTAINER_STYLE,
+                        parent_style=TAB_CONTAINER_STYLE,
+                        children=[
+                            dcc.Tab(
+                                id=tab_label,
+                                label=tab_label,
+                                value=tab_label,
+                                style=TAB_STYLE,
+                                selected_style=SELECTED_TAB_STYLE,
+                            )
+                            for tab_label in tab_names
+                        ],
+                        value=tab_names[0],
+                    ),
+                    html.Div(
+                        id="tab-content",
+                        style={
+                            "width": "100%",
+                            "height": "100%",
+                            "margin-left": "auto",
+                            "margin-right": "auto",
+                        },
+                    ),
+                    dcc.Slider(
+                        id="dateslider",
+                        min=0,
+                        max=100,
+                        step=0.01,
+                        value=100,
+                        marks={i: "{}%".format(i) for i in range(0, 110, 10)},
+                    ),
+                ],
+                style={
+                    "width": "100%",
+                    "height": "100%",
+                    "fontFamily": "Sans-Serif",
+                    "margin-left": "auto",
+                    "margin-right": "auto",
+                },
+            ),
+        ],
+        style={
+            "width": "100%",
+            "height": "100%",
+            "padding": 0,
+            "margin": 0,
+            "background-color": BACKGROUND,
+        },
+    )
