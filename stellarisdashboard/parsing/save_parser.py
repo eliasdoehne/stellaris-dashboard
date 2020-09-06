@@ -5,8 +5,10 @@ import enum
 import itertools
 import logging
 import multiprocessing as mp
+import os
 import pathlib
 import signal
+import sys
 import time
 import traceback
 import zipfile
@@ -143,6 +145,7 @@ class SavePathMonitor(abc.ABC):
 
 def _pool_worker_init():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    sys.stdout = open(os.devnull, "w")
 
 
 class ContinuousSavePathMonitor(SavePathMonitor):
@@ -158,7 +161,9 @@ class ContinuousSavePathMonitor(SavePathMonitor):
         self._pool = mp.Pool(
             processes=config.CONFIG.threads, initializer=_pool_worker_init
         )
-        self._pending_results: Deque[Tuple[pathlib.PurePath, Any]] = collections.deque()
+        self._pending_results: Deque[
+            Tuple[pathlib.PurePath, mp.pool.AsyncResult, float]
+        ] = collections.deque()
 
     def get_gamestates_and_check_for_new_files(
         self,
@@ -166,7 +171,10 @@ class ContinuousSavePathMonitor(SavePathMonitor):
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
-                fname, result = self._pending_results.popleft()
+                fname, result, submit_time = self._pending_results.popleft()
+                logger.info(
+                    f"Parsed save file {fname} in {time.time() - submit_time} seconds."
+                )
                 logger.info(f"Retrieving gamestate for {fname}")
                 try:
                     yield fname.parent.stem, result.get()
@@ -184,7 +192,8 @@ class ContinuousSavePathMonitor(SavePathMonitor):
             if len(self._pending_results) >= config.CONFIG.threads:
                 break  # Ignore if there are any additional files
             result = self._pool.apply_async(parse_save, args=(fname,))
-            self._pending_results.append((fname, result))
+            submit_time = time.time()
+            self._pending_results.append((fname, result, submit_time))
 
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
 
@@ -357,14 +366,9 @@ class SaveFileParser:
         """
         self.save_filename = filename
         logger.info(f"Parsing Save File {self.save_filename}...")
-        start_time = time.time()
         with zipfile.ZipFile(self.save_filename) as save_zip:
             gamestate = save_zip.read("gamestate").decode()
         self.parse_from_string(gamestate)
-        end_time = time.time()
-        logger.info(
-            f"Parsed save file {self.save_filename} in {end_time - start_time} seconds."
-        )
         return self.gamestate_dict
 
     def parse_from_string(self, s: str):
