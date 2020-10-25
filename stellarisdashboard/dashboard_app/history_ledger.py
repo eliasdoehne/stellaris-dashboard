@@ -282,11 +282,12 @@ class EventTemplateDictBuilder:
             country_type = (
                 event.country.country_type if event.country is not None else None
             )
-            if not config.CONFIG.show_all_country_types and country_type not in [
-                "default",
-                "fallen_empire",
-                "awakened_fallen_empire",
-            ]:
+            if (
+                not config.CONFIG.show_all_country_types
+                and country_type
+                not in ["default", "fallen_empire", "awakened_fallen_empire",]
+                and event.country is not None
+            ):
                 continue
 
             start = datamodel.days_to_date(event.start_date_days)
@@ -587,8 +588,12 @@ class EventTemplateDictBuilder:
         return details
 
     def _combat_dict(self, combat: datamodel.Combat):
-        attackers = ", ".join(self._get_url_for(cp.country) for cp in combat.attackers)
-        defenders = ", ".join(self._get_url_for(cp.country) for cp in combat.defenders)
+        attackers = ", ".join(
+            sorted(self._get_url_for(cp.country) for cp in combat.attackers)
+        )
+        defenders = ", ".join(
+            sorted(self._get_url_for(cp.country) for cp in combat.defenders)
+        )
         return dict(
             combat_type=combat.combat_type,
             attackers=attackers,

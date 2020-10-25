@@ -16,6 +16,9 @@ CPU_COUNT = mp.cpu_count()
 
 LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
+CONFIG = None
+logger = None
+
 
 def initialize_logger():
     # Add a stream handler for stdout output
@@ -28,10 +31,6 @@ def initialize_logger():
     if mp.current_process().name != "MainProcess":
         root_logger.setLevel(logging.ERROR)
         stdout_ch.setLevel(logging.ERROR)
-
-
-CONFIG = None
-logger = None
 
 
 def _get_default_thread_count():
