@@ -464,13 +464,10 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     return dcc.Graph(
         id="galaxy-map",
         figure=go.Figure(
-            data=system_shapes + system_markers + edge_traces,
-            layout=layout,
+            data=system_shapes + system_markers + edge_traces, layout=layout,
         ),
         animate=True,
-        animation_options=dict(
-            showAxisDragHandles=True,
-        ),
+        animation_options=dict(showAxisDragHandles=True,),
     )
 
 
