@@ -46,19 +46,13 @@ def _get_default_thread_count():
 
 def _get_default_save_path():
     # according to https://stellaris.paradoxwikis.com/Save-game_editing
+    home = pathlib.Path.home()
     if platform.system() == "Windows":
-        return (
-            pathlib.Path.home() / "Documents/Paradox Interactive/Stellaris/save games/"
-        )
+        return home / "Documents/Paradox Interactive/Stellaris/save games/"
     elif platform.system() == "Linux":
-        return (
-            pathlib.Path.home()
-            / ".local/share/Paradox Interactive/Stellaris/save games/"
-        )
+        return home / ".local/share/Paradox Interactive/Stellaris/save games/"
     else:
-        return (
-            pathlib.Path.home() / "Documents/Paradox Interactive/Stellaris/save games/"
-        )
+        return home / "Documents/Paradox Interactive/Stellaris/save games/"
 
 
 def _get_default_base_output_path():
@@ -358,6 +352,8 @@ def _get_settings_file_path() -> pathlib.Path:
 
 def initialize():
     global CONFIG
+    if CONFIG is not None:
+        return
     global logger
     initialize_logger()
     logger = logging.getLogger(__name__)
@@ -381,3 +377,6 @@ def configure_logger():
         file_ch.setLevel(logging.WARN)
         file_ch.setFormatter(LOG_FORMAT)
         logger.addHandler(file_ch)
+
+
+initialize()
