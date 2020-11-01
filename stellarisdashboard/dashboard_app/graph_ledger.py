@@ -2,7 +2,6 @@ import logging
 import time
 from typing import Dict, Any, List
 from urllib import parse
-
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -150,15 +149,71 @@ def update_country_select_options(search):
 
 
 @timeline_app.callback(
+    Output("click-data", "children"), [Input("galaxy-map", "clickData")]
+)
+def galaxy_map_system_info(clickData):
+    if not clickData:
+        return ""
+    points = clickData.get("points")
+    if not points:
+        return ""
+    p = points[0]
+    custom_data = p.get("customdata", {})
+    system_id = custom_data.get("system_id")
+    game_id = custom_data.get("game_id")
+    text = p.get("text")
+    if not system_id or not game_id or not text:
+        return ""
+    return html.P(
+        children=[
+            f"Selected system: ",
+            html.A(
+                children=text,
+                href=utils.flask.url_for(
+                    "history_page", game_id=game_id, system=system_id
+                ),
+                # className="textlink",
+            ),
+        ]
+    )
+
+
 @timeline_app.callback(
     Output(component_id="dateslider-container", component_property="style"),
     [Input("tabs-container", "value")],
 )
 def show_hide_date_slider(tab_value):
+    style_dict = {
+        "display": "none",
+        "width": f"{int(0.90 * config.CONFIG.plot_width)}px",
+        "margin": "auto",
+        # "text-align": "center",
+        "padding-left": "1%",
+        "padding-right": "1%",
+        "background-color": BACKGROUND_DARK,
+    }
     if tab_value == config.GALAXY_MAP_TAB:
-        return {"display": "block"}
+        style_dict["display"] = "block"
+    return style_dict
+
+
+@timeline_app.callback(
+    Output(component_id="dateslider", component_property="marks"),
+    [Input("tabs-container", "value"), Input("url", "search")],
+)
+def adjust_slider_values(tab_value, search):
+    _, matches = _get_game_ids_matching_url(search)
+    with datamodel.get_db_session(matches[0]) as session:
+        max_date = utils.get_most_recent_date(session)
+
+    if tab_value == config.GALAXY_MAP_TAB:
+        marks = {0: "2200.01.01", 100: datamodel.days_to_date(max_date)}
+        for x in range(20, 100, 20):
+            marks[x] = datamodel.days_to_date(x / 100 * max_date)
+        logger.info(f"Setting marks to {marks}")
+        return marks
     else:
-        return {"display": "none"}
+        return {}
 
 
 @timeline_app.callback(
@@ -226,16 +281,28 @@ def update_content(
                             style=dict(textAlign="center"),
                         )
                     ],
-                    style=dict(
-                        margin="auto",
-                        width=f"{config.CONFIG.plot_width}px",
-                        height=f"{config.CONFIG.plot_height}px",
-                    ),
+                    style=dict(margin="auto", width=f"{config.CONFIG.plot_width}px",),
                 )
             )
     else:
         slider_date = 0.01 * date_fraction * current_date
-        children.append(get_galaxy(game_id, slider_date))
+        children.append(
+            html.Div(
+                [
+                    get_galaxy(game_id, slider_date),
+                    html.P(
+                        id="click-data",
+                        style=dict(width=f"{config.CONFIG.plot_width}px",),
+                    ),
+                ],
+                style=dict(
+                    margin="auto",
+                    width=f"{config.CONFIG.plot_width}px",
+                    # height=f"{config.CONFIG.plot_height}px",
+                    backgroundColor=BACKGROUND_DARK,
+                ),
+            )
+        )
     return children
 
 
@@ -407,6 +474,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                 x=[],
                 y=[],
                 text=[],
+                customdata=[],
                 mode="markers",
                 hoverinfo="text",
                 marker=dict(color=[], size=4),
@@ -417,15 +485,18 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         x, y = graph.nodes[node]["pos"]
         country_system_markers[country]["x"].append(x)
         country_system_markers[country]["y"].append(y)
-        country_system_markers[country]["text"].append(
-            f'{graph.nodes[node]["name"]} ({country})'
-        )
+        text = f'{graph.nodes[node]["name"]} ({country})'
+        country_system_markers[country]["text"].append(text)
+        customdata = {"system_id": graph.nodes[node]["system_id"], "game_id": game_id}
+        country_system_markers[country]["customdata"].append(customdata)
         if country != visualization_data.GalaxyMapData.UNCLAIMED:
             shape_x, shape_y = graph.nodes[node].get("shape", ([], []))
             system_shapes.append(
                 go.Scatter(
                     x=shape_x,
                     y=shape_y,
+                    text=[text],
+                    customdata=[customdata],
                     fill="toself",
                     fillcolor=color,
                     hoverinfo="none",
@@ -466,19 +537,20 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         width=config.CONFIG.plot_width,
         height=config.CONFIG.plot_height,
         hovermode="closest",
+        clickmode="event",
         plot_bgcolor=GALAXY_BACKGROUND,
         paper_bgcolor=BACKGROUND_DARK,
         font={"color": TEXT_COLOR},
         title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
     )
 
+    fig = go.Figure(data=system_shapes + system_markers + edge_traces, layout=layout)
     return dcc.Graph(
         id="galaxy-map",
-        figure=go.Figure(
-            data=system_shapes + system_markers + edge_traces, layout=layout,
-        ),
+        figure=fig,
         animate=True,
-        animation_options=dict(showAxisDragHandles=True,),
+        animation_options=dict(showAxisDragHandles=True),
+        style=dict(textAlign="center"),
     )
 
 
@@ -588,7 +660,6 @@ def get_layout():
                             )
                         ],
                         id="dateslider-container",
-                        style=dict(display="none"),
                     ),
                 ],
                 style={

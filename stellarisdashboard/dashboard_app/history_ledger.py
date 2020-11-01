@@ -1,10 +1,8 @@
 """This file contains the code for the flask server hosting the visualizations and the event ledger."""
 import collections
-import functools
 import logging
 from typing import Dict
 
-import flask
 from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
@@ -372,18 +370,25 @@ class EventTemplateDictBuilder:
 
     def _get_url_for(self, key, a_class="textlink"):
         if isinstance(key, datamodel.Country):
-            return self._preformat_history_url(
-                key.country_name, country=key.country_id, a_class=a_class
+            return utils.preformat_history_url(
+                key.country_name,
+                country=key.country_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         elif isinstance(key, datamodel.System):
-            return self._preformat_history_url(
+            return utils.preformat_history_url(
                 game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
                 system=key.system_id,
                 a_class=a_class,
+                game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Leader):
-            return self._preformat_history_url(
-                key.leader_name, leader=key.leader_id, a_class=a_class
+            return utils.preformat_history_url(
+                key.leader_name,
+                leader=key.leader_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Planet):
             name = key.planet_name
@@ -391,12 +396,12 @@ class EventTemplateDictBuilder:
                 name = game_info.convert_id_to_name(
                     key.planet_name, remove_prefix="NAME"
                 )
-            return self._preformat_history_url(
-                name, planet=key.planet_id, a_class=a_class,
+            return utils.preformat_history_url(
+                name, planet=key.planet_id, a_class=a_class, game_id=self.game_id
             )
         elif isinstance(key, datamodel.War):
-            return self._preformat_history_url(
-                key.name, war=key.war_id, a_class=a_class
+            return utils.preformat_history_url(
+                key.name, war=key.war_id, a_class=a_class, game_id=self.game_id
             )
         else:
             return str(key)
@@ -608,7 +613,3 @@ class EventTemplateDictBuilder:
             attacker_exhaustion=f"{100 * combat.attacker_war_exhaustion:.1f}%",
             defender_exhaustion=f"{100 * combat.defender_war_exhaustion:.1f}%",
         )
-
-    @functools.lru_cache()
-    def _preformat_history_url(self, text, a_class="textlink", **kwargs):
-        return f'<a class="{a_class}" href={flask.url_for("history_page", game_id=self.game_id, **kwargs)}>{text}</a>'
