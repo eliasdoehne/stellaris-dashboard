@@ -386,10 +386,13 @@ class EventTemplateDictBuilder:
                 key.leader_name, leader=key.leader_id, a_class=a_class
             )
         elif isinstance(key, datamodel.Planet):
+            name = key.planet_name
+            if name.startswith("NAME"):
+                name = game_info.convert_id_to_name(
+                    key.planet_name, remove_prefix="NAME"
+                )
             return self._preformat_history_url(
-                game_info.convert_id_to_name(key.planet_name),
-                planet=key.planet_id,
-                a_class=a_class,
+                name, planet=key.planet_id, a_class=a_class,
             )
         elif isinstance(key, datamodel.War):
             return self._preformat_history_url(
@@ -517,6 +520,9 @@ class EventTemplateDictBuilder:
     def planet_details(self, planet_model: datamodel.Planet):
         details = {}
 
+        details["Planet Class"] = game_info.convert_id_to_name(
+            planet_model.planet_class, remove_prefix="pc"
+        )
         modifiers = []
         for modifier in planet_model.modifiers:
             if modifier.expiry_date is not None:
