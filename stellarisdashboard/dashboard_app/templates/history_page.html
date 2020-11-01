@@ -3,7 +3,7 @@
 
 <a class="button" href={{url_for("/timeline/", game_name=game_name)}}>Graph Dashboard</a>
 {% if is_filtered_page %}
-<a class="button" href={{url_for("history_page", game_id=game_name)}}>Return to global event ledger</a>
+<a class="button" href={{url_for("history_page", game_id=game_name)}}>Global event ledger</a>
 {% endif %}
 {% if not is_filtered_page %}
 <div class="ledgerbox">

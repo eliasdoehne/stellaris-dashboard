@@ -1,5 +1,7 @@
 """This file contains the code for the flask server hosting the visualizations and the event ledger."""
+import functools
 import logging
+import flask
 
 from pkg_resources import parse_version
 
@@ -33,3 +35,9 @@ def get_most_recent_date(session):
     else:
         most_recent_date = most_recent_gs.date
     return most_recent_date
+
+
+@functools.lru_cache()
+def preformat_history_url(text, game_id, a_class="textlink", **kwargs):
+    href = flask.url_for("history_page", game_id=game_id, **kwargs)
+    return f'<a class="{a_class}" href={href}>{text}</a>'

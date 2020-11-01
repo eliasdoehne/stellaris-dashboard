@@ -1284,6 +1284,7 @@ class GalaxyMapData:
                     system.system_id_in_game,
                     name=system.name,
                     country=GalaxyMapData.UNCLAIMED,
+                    system_id=system.system_id,
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
             for hl in session.query(datamodel.HyperLane).all():
