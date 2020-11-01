@@ -84,7 +84,6 @@ TAB_STYLE = {
     "color": TEXT_COLOR,
 }
 
-
 timeline_app = dash.Dash(
     __name__,
     title="Stellaris Dashboard",
@@ -148,6 +147,18 @@ def update_country_select_options(search):
             ):
                 options.append({"label": c.country_name, "value": c.country_id_in_game})
     return options
+
+
+@timeline_app.callback(
+@timeline_app.callback(
+    Output(component_id="dateslider-container", component_property="style"),
+    [Input("tabs-container", "value")],
+)
+def show_hide_date_slider(tab_value):
+    if tab_value == config.GALAXY_MAP_TAB:
+        return {"display": "block"}
+    else:
+        return {"display": "none"}
 
 
 @timeline_app.callback(
@@ -565,13 +576,19 @@ def get_layout():
                             "margin-right": "auto",
                         },
                     ),
-                    dcc.Slider(
-                        id="dateslider",
-                        min=0,
-                        max=100,
-                        step=0.01,
-                        value=100,
-                        marks={i: "{}%".format(i) for i in range(0, 110, 10)},
+                    html.Div(
+                        [
+                            dcc.Slider(
+                                id="dateslider",
+                                min=0,
+                                max=100,
+                                step=0.01,
+                                value=100,
+                                marks={},
+                            )
+                        ],
+                        id="dateslider-container",
+                        style=dict(display="none"),
                     ),
                 ],
                 style={
