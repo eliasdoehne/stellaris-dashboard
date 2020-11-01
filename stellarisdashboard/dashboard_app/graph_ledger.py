@@ -497,7 +497,7 @@ def get_layout():
                     html.Div(
                         [
                             html.A(
-                                "Go to Game Selection",
+                                "Game Selection",
                                 id="index-link",
                                 href="/",
                                 style=BUTTON_STYLE,
@@ -509,7 +509,7 @@ def get_layout():
                                 style=BUTTON_STYLE,
                             ),
                             html.A(
-                                f"Go to Event Ledger",
+                                f"Event Ledger",
                                 id="ledger-link",
                                 href="/history",
                                 style=BUTTON_STYLE,
