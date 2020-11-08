@@ -82,6 +82,11 @@ TAB_STYLE = {
     "background": BACKGROUND_DARK,
     "color": TEXT_COLOR,
 }
+SELECT_SYSTEM_DEFAULT = html.P(
+    children=[f"Click the map to select a system"],
+    id="click-data",
+    style=dict(width=f"{config.CONFIG.plot_width}px"),
+)
 
 timeline_app = dash.Dash(
     __name__,
@@ -163,7 +168,7 @@ def galaxy_map_system_info(clickData):
     game_id = custom_data.get("game_id")
     text = p.get("text")
     if not system_id or not game_id or not text:
-        return ""
+        return SELECT_SYSTEM_DEFAULT
     return html.P(
         children=[
             f"Selected system: ",
@@ -286,15 +291,10 @@ def update_content(
             )
     else:
         slider_date = 0.01 * date_fraction * current_date
+
         children.append(
             html.Div(
-                [
-                    get_galaxy(game_id, slider_date),
-                    html.P(
-                        id="click-data",
-                        style=dict(width=f"{config.CONFIG.plot_width}px",),
-                    ),
-                ],
+                [get_galaxy(game_id, slider_date), SELECT_SYSTEM_DEFAULT],
                 style=dict(
                     margin="auto",
                     width=f"{config.CONFIG.plot_width}px",
@@ -541,7 +541,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         plot_bgcolor=GALAXY_BACKGROUND,
         paper_bgcolor=BACKGROUND_DARK,
         font={"color": TEXT_COLOR},
-        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
+        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)} (click to select systems)",
     )
 
     fig = go.Figure(data=system_shapes + system_markers + edge_traces, layout=layout)
