@@ -44,7 +44,8 @@ jobs:
       if: ${{ matrix.os == 'windows-latest' && github.event_name == 'pull_request' }}
       run: |
         cd dist
-        powershell Compress-Archive stellarisdashboard-build/* ./stellarisdashboard-${{ matrix.os }}.zip
+        powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
+        cd ..
         ls
     - name: package files
       if: ${{ matrix.os != 'windows-latest' && github.event_name == 'pull_request' }}
