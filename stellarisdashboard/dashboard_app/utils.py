@@ -9,7 +9,7 @@ from stellarisdashboard import datamodel
 
 logger = logging.getLogger(__name__)
 
-VERSION_ID = "v1.2"
+VERSION_ID = "v1.3"
 
 
 def is_old_version(requested_version: str) -> bool:
