@@ -1,6 +1,11 @@
 name: Test and build
 
-on: [push, pull_request]
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
 
 jobs:
   build:
@@ -8,56 +13,54 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - 3.7
+          - 3.8
         os:
           - ubuntu-latest
           - windows-latest
           - macOS-latest
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v1
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install -r requirements.txt
-        python -m pip install -r dev-requirements.txt
-        python -m pip install flake8
-    - name: Build
-      run: |
-        python setup.py build_ext --inplace
-    - name: Linters
-      run: |
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        black --check .
-    - name: Tests
-      run: |
-        python -m pytest
-    - name: pyInstaller build
-      run: |
-        pyinstaller pyinstaller-package.spec
-    # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
-    # (probably too many individual files?)
-    - name: package files (win)
-      if: ${{ matrix.os == 'windows-latest' && github.event_name == 'pull_request' }}
-      run: |
-        cd dist/stellarisdashboard-build
-        powershell Compress-Archive * ../../stellarisdashboard-${{ matrix.os }}.zip
-        cd ../..
-        ls
-    - name: package files
-      if: ${{ matrix.os != 'windows-latest' && github.event_name == 'pull_request' }}
-      run: |
-        base_dir=`pwd`
-        pushd dist/stellarisdashboard-build
-        zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip .
-        popd
-    - name: Publish
-      if: ${{ github.event_name == 'pull_request' }}
-      uses: actions/upload-artifact@v2
-      with:
-        name: stellarisdashboard-${{ matrix.os }}.zip
-        path: stellarisdashboard-${{ matrix.os }}.zip
+      - uses: actions/checkout@v1
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r dev-requirements.txt
+      - name: Build
+        run: |
+          python setup.py build_ext --inplace
+      - name: Linters
+        run: |
+          black --check .
+      - name: Tests
+        run: |
+          python -m pytest
+      - name: pyInstaller build
+        run: |
+          pyinstaller pyinstaller-package.spec
+      # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
+      # (probably too many individual files?)
+      - name: package files (win)
+        if: matrix.os == 'windows-latest' && github.event_name != 'pull_request'
+        run: |
+          cd dist
+          powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
+          cd ..
+          ls
+      - name: package files
+        if: matrix.os != 'windows-latest' && github.event_name != 'pull_request'
+        run: |
+          base_dir=`pwd`
+          pushd dist/stellarisdashboard-build/
+          zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
+          popd
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v2
+        with:
+          name: stellarisdashboard-${{ matrix.os }}.zip
+          path: stellarisdashboard-${{ matrix.os }}.zip
 
