@@ -1,4 +1,4 @@
-VALID_TOKEN_SEQUENCE_TEST_DATA = [
+VALID_TOKEN_SEQUENCES = [
     ("", []),
     # Single tokens
     ("{", [("{", 1)]),

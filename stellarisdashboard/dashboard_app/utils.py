@@ -2,24 +2,42 @@
 import functools
 import logging
 import flask
-
-from pkg_resources import parse_version
-
+import itertools as it
 from stellarisdashboard import datamodel
 
 logger = logging.getLogger(__name__)
 
-VERSION_ID = "v1.3"
+VERSION = "v1.3"
 
 
-def is_old_version(requested_version: str) -> bool:
-    """Compares the requested version against the VERSION_ID defined above.
+def parse_version(version: str):
+    main_version, _, prerelease = version.lstrip("v").partition("-")
+    result = []
+    for v in main_version.split("."):
+        try:
+            result.append(int(v))
+        except ValueError:
+            pass
+    if prerelease:
+        result.append(prerelease)
+    return result
+
+
+def is_old_version(requested_version: str, actual_version=VERSION) -> bool:
+    """Compares the requested version against the VERSION defined above.
 
     :param requested_version: The version of the dashboard requested by the URL.
     :return:
     """
     try:
-        return parse_version(VERSION_ID) < parse_version(requested_version)
+        actual_parsed = parse_version(actual_version)
+        requested_parsed = parse_version(requested_version)
+        for a, r in it.zip_longest(actual_parsed, requested_parsed):
+            if a is None or a < r:
+                return True
+            elif r is None or a > r:
+                return False
+        return False
     except Exception:
         return False
 

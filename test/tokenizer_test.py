@@ -6,12 +6,10 @@ pyximport.install()
 from stellarisdashboard.parsing import tokenizer_re
 from stellarisdashboard.parsing.cython_ext import tokenizer
 
-import token_value_stream_test_data
+import tokenizer_test_cases
 
 
-@pytest.mark.parametrize(
-    "test_data", token_value_stream_test_data.VALID_TOKEN_SEQUENCE_TEST_DATA
-)
+@pytest.mark.parametrize("test_data", tokenizer_test_cases.VALID_TOKEN_SEQUENCES)
 def test_token_value_stream(test_data):
     _input, expected = test_data
     tok_re = list(tokenizer_re.tokenizer(_input))

@@ -43,7 +43,7 @@ def history_page(game_id="", version=None):
         title=title,
         is_filtered_page=not event_filter.is_empty_filter,
         show_old_version_notice=show_old_version_notice,
-        version=utils.VERSION_ID,
+        version=utils.VERSION,
         update_version_id=version,
     )
 
