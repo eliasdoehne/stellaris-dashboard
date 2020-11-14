@@ -18,8 +18,6 @@ import stellarisdashboard.dashboard_app.utils as u
         ("v1.9-beta", "v1.10", False),
         ("v1.0.0.0.1", "v1.0", True),
         ("v1.0", "v1.0.0.0.1", False),
-        ("v1.0", "v1.0-alpha", True),
-        ("v1.0-alpha", "v1.0", False),
     ],
 )
 def test_version_comparison(requested_version, actual_version, expected_result):
