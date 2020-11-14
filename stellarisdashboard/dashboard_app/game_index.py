@@ -28,6 +28,6 @@ def index_page(version=None):
         "game_index.html",
         games=games,
         show_old_version_notice=show_old_version_notice,
-        version=utils.VERSION_ID,
+        version=utils.VERSION,
         update_version_id=version,
     )
