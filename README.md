@@ -41,7 +41,8 @@ I unfortunately don't have access to a mac and can't check every release on all 
 - Get Python 3.7 (should also work with 3.8)
 - (Recommended) create & activate a virtual environment 
 - `pip install .`
-- `stellarisdashboard`
+- `python -m stellarisdashboard.cli parse-saves`
+- `python -m stellarisdashboard`
 
 # Other information
 
