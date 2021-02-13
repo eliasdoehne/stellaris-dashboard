@@ -27,6 +27,7 @@ from typing import (
 )
 
 from stellarisdashboard import config
+from stellarisdashboard.parsing.errors import StellarisFileFormatError
 from stellarisdashboard.parsing.tokenizer_re import INT, FLOAT
 
 logger = logging.getLogger(__name__)
@@ -41,11 +42,6 @@ except ImportError as import_error:
     from stellarisdashboard.parsing import tokenizer_re as tokenizer
 
 FilePosition = namedtuple("FilePosition", "line col")
-
-
-class StellarisFileFormatError(Exception):
-    pass
-
 
 T = TypeVar("T")
 
@@ -236,12 +232,32 @@ class BatchSavePathMonitor(SavePathMonitor):
                         for save_file in chunk_files
                     ]
                     for i, (game_id, future) in enumerate(zip(chunk_game_ids, futures)):
-                        result = future.result()
+                        try:
+                            result = future.result()
+                        except StellarisFileFormatError as e:
+                            logger.error(f"Skipping unparseable save file for {game_id}:")
+                            logger.error(traceback.format_exc())
+                            if config.CONFIG.continue_on_parse_error:
+                                continue
+                            else:
+                                raise
+                        except KeyboardInterrupt:
+                            raise
                         yield game_id, result
                         futures[i] = None
         else:
             for save_file in new_files:
-                yield save_file.parent.stem, parse_save(save_file)
+                try:
+                    yield save_file.parent.stem, parse_save(save_file)
+                except StellarisFileFormatError as e:
+                    logger.error(f"Skipping unparseable save file {save_file}:")
+                    logger.error(traceback.format_exc())         
+                    if config.CONFIG.continue_on_parse_error:
+                        continue
+                    else:
+                        raise
+                except KeyboardInterrupt:
+                    raise
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
 
     @staticmethod
@@ -319,15 +335,13 @@ def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
         elif value == "{":
             yield Token(TokenType.BRACE_OPEN, "{", line_number)
         else:
-            token_type = None
             if INT.fullmatch(value):
                 value = int(value)
                 token_type = TokenType.INTEGER
             elif FLOAT.fullmatch(value):
                 value = float(value)
                 token_type = TokenType.FLOAT
-
-            if token_type is None:
+            else:
                 value = value.strip('"')
                 token_type = TokenType.STRING
             yield Token(token_type, value, line_number)
@@ -340,6 +354,8 @@ class SaveFileParser:
         self.save_filename = None
         self._token_stream = None
         self._lookahead_token = None
+        self._dot_count = 0
+        self.should_print_dots = config.CONFIG.show_progress_dots
 
     def parse_save(self, filename):
         """
@@ -374,6 +390,8 @@ class SaveFileParser:
     def parse_from_string(self, s: str):
         self._token_stream = token_stream(s)
         self.gamestate_dict = self._parse_key_value_pair_list(self._next_token())
+        if self.should_print_dots:
+            print("")  # cleanup line for all the dots we've been printing
         return self.gamestate_dict
 
     def _parse_key_value_pair(self):
@@ -440,8 +458,18 @@ class SaveFileParser:
             else:
                 raise StellarisFileFormatError(f"Unexpected token: {next_token}")
         return result
+    
+    def print_dot(self):
+        """Prints a progress indicator every 100 tokens"""
+        if self.should_print_dots:
+            self._dot_count += 1
+            if self._dot_count > 100:
+                print(".", end="")
+                sys.stdout.flush()
+                self._dot_count = 0
 
     def _parse_key_value_pair_list(self, first_key_token):
+        self.print_dot()
         eq_token = self._next_token()
         if eq_token.token_type != TokenType.EQUAL:
             raise StellarisFileFormatError(

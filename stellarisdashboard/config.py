@@ -185,6 +185,8 @@ class Config:
 
     log_to_file: bool = False
     debug_mode: bool = False
+    continue_on_parse_error: bool = True
+    show_progress_dots: bool = True
 
     tab_layout: Dict[str, List[str]] = None
 

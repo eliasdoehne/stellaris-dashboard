@@ -1,0 +1,2 @@
+class StellarisFileFormatError(Exception):
+    pass
