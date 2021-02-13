@@ -17,6 +17,7 @@ REG_EXES = [
     INT,
 ]
 
+
 def tokenizer(gamestate: str, debug=False):
     global line_number
     N = len(gamestate)
@@ -38,4 +39,6 @@ def tokenizer(gamestate: str, debug=False):
                 break
         if last_start_index == start_index:
             end = start_index + 50 if start_index + 50 < N else N
-            raise StellarisFileFormatError(f'Stuck looking for next token at offset {start_index} [{gamestate[start_index:end]}]')
+            raise StellarisFileFormatError(
+                f"Stuck looking for next token at offset {start_index} [{gamestate[start_index:end]}]"
+            )

@@ -235,7 +235,9 @@ class BatchSavePathMonitor(SavePathMonitor):
                         try:
                             result = future.result()
                         except StellarisFileFormatError as e:
-                            logger.error(f"Skipping unparseable save file for {game_id}:")
+                            logger.error(
+                                f"Skipping unparseable save file for {game_id}:"
+                            )
                             logger.error(traceback.format_exc())
                             if config.CONFIG.continue_on_parse_error:
                                 continue
@@ -251,7 +253,7 @@ class BatchSavePathMonitor(SavePathMonitor):
                     yield save_file.parent.stem, parse_save(save_file)
                 except StellarisFileFormatError as e:
                     logger.error(f"Skipping unparseable save file {save_file}:")
-                    logger.error(traceback.format_exc())         
+                    logger.error(traceback.format_exc())
                     if config.CONFIG.continue_on_parse_error:
                         continue
                     else:
@@ -458,7 +460,7 @@ class SaveFileParser:
             else:
                 raise StellarisFileFormatError(f"Unexpected token: {next_token}")
         return result
-    
+
     def print_dot(self):
         """Prints a progress indicator every 100 tokens"""
         if self.should_print_dots:
