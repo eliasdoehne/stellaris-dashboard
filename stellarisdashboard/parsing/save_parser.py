@@ -435,6 +435,7 @@ class SaveFileParser:
             elif (
                 next_token.token_type.is_literal()
                 or next_token.token_type == TokenType.BRACE_CLOSE
+                or next_token.token_type == TokenType.BRACE_OPEN
             ):
                 result = self._parse_list(token.value)
             else:

@@ -48,4 +48,31 @@ PARSER_TEST_CASES = dict(
             unknown_key={"type": "none", "id": 0, "random": [0, 3991148998]},
         ),
     ),
+    update_espionage_manager=dict(
+        input="""
+            intel_manager={
+            intel={
+                {
+                    48 {
+                        intel=70
+                        stale_intel={}
+                    }
+                }
+                {
+                    49 {
+                        intel=70.5
+                        stale_intel={}
+                    }
+                }
+            }
+        }""",
+        expected=dict(
+            intel_manager=dict(
+                intel=[
+                    [48, dict(intel=70, stale_intel=[])],
+                    [49, dict(intel=70.5, stale_intel=[])],
+                ]
+            )
+        ),
+    ),
 )
