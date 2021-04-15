@@ -910,16 +910,15 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
         return self._species_by_ingame_id, self._robot_species
 
     def extract_data_from_gamestate(self, dependencies):
-        for species_index, species_dict in enumerate(
-            self._gamestate_dict.get("species", [])
-        ):
-            species_model = self._get_or_add_species(species_index)
-            self._species_by_ingame_id[species_index] = species_model
+        for species_ingame_id, species_dict in self._gamestate_dict.get(
+            "species_db", {}
+        ).items():
+            species_model = self._get_or_add_species(species_ingame_id, species_dict)
+            self._species_by_ingame_id[species_ingame_id] = species_model
             if species_dict.get("class") == "ROBOT":
-                self._robot_species.add(species_index)
+                self._robot_species.add(species_ingame_id)
 
-    def _get_or_add_species(self, species_id_in_game: int):
-        species_data = self._gamestate_dict["species"][species_id_in_game]
+    def _get_or_add_species(self, species_id_in_game: int, species_data: Dict):
         species_name = species_data.get("name", "Unnamed Species")
         species = (
             self._session.query(datamodel.Species)
@@ -1082,25 +1081,25 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
 
     def _update_leader_attributes(self, leader: datamodel.Leader, leader_dict):
         if "pre_ruler_class" in leader_dict:
-            leader_class = leader_dict.get("pre_ruler_class", "Unknown class")
+            leader_class = leader_dict.get("pre_ruler_class", "unknown class")
         else:
-            leader_class = leader_dict.get("class", "Unknown class")
-        leader_gender = leader_dict.get("gender", "Other")
-        leader_agenda = leader_dict.get("agenda", "Unknown")
+            leader_class = leader_dict.get("class", "unknown class")
+        leader_gender = leader_dict.get("gender", "other")
+        leader_agenda = leader_dict.get("agenda", "unknown agenda")
         leader_name = self.get_leader_name(leader_dict)
         level = leader_dict.get("level", -1)
-        species_id = leader_dict.get("species_index", -1)
+        species_id = leader_dict.get("species", -1)
         leader_species = self._species_dict.get(species_id)
         if leader_species is None:
             logger.warning(
-                f"{self._basic_info.logger_str} Invalid species index for leader {leader_dict}"
+                f"{self._basic_info.logger_str} Invalid species ID {species_id} for leader {leader_dict}"
             )
         if (
             leader.leader_name != leader_name
             or leader.leader_class != leader_class
             or leader.gender != leader_gender
             or leader.leader_agenda != leader_agenda
-            or leader.species.species_id_in_game != leader_species.species_id_in_game
+            or leader.species != leader_species
         ):
             if leader.last_level != level:
                 self._session.add(
@@ -3095,7 +3094,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 if planet_country_id_in_game != country_id_in_game:
                     continue
 
-                species_id = pop_dict.get("species_index")
+                species_id = pop_dict.get("species")
                 job = pop_dict.get("job", "unemployed")
                 stratum = pop_dict.get("category", "unknown stratum")
                 faction_id = pop_dict.get("pop_faction")
