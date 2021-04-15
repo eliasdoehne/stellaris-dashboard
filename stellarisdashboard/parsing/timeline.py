@@ -910,16 +910,15 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
         return self._species_by_ingame_id, self._robot_species
 
     def extract_data_from_gamestate(self, dependencies):
-        for species_index, species_dict in enumerate(
-            self._gamestate_dict.get("species", [])
-        ):
-            species_model = self._get_or_add_species(species_index)
-            self._species_by_ingame_id[species_index] = species_model
+        for species_ingame_id, species_dict in self._gamestate_dict.get(
+            "species_db", {}
+        ).items():
+            species_model = self._get_or_add_species(species_ingame_id, species_dict)
+            self._species_by_ingame_id[species_ingame_id] = species_model
             if species_dict.get("class") == "ROBOT":
-                self._robot_species.add(species_index)
+                self._robot_species.add(species_ingame_id)
 
-    def _get_or_add_species(self, species_id_in_game: int):
-        species_data = self._gamestate_dict["species"][species_id_in_game]
+    def _get_or_add_species(self, species_id_in_game: int, species_data: Dict):
         species_name = species_data.get("name", "Unnamed Species")
         species = (
             self._session.query(datamodel.Species)
