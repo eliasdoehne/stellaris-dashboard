@@ -7,7 +7,7 @@ from stellarisdashboard import datamodel
 
 logger = logging.getLogger(__name__)
 
-VERSION = "v1.3"
+VERSION = "v2.0-alpha"
 
 
 def parse_version(version: str):
