@@ -91,6 +91,7 @@ DEFAULT_TAB_LAYOUT = {
         "planet_pop_distribution_graph",
     ],
     "Pops": [
+        "total_pops_graph",
         "species_happiness_graph",
         "species_crime_graph",
         "species_power_graph",

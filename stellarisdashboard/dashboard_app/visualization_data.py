@@ -358,6 +358,14 @@ class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
                 + cd.net_engineering_research
             )
 
+# Total Pops requires "Store data of all countries". TODO: make it so it doesn't, like e.g. amount of planets.
+class TotalPopsDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_geography_info():
+            sum = None
+            for pop_stratum in cd.pop_stats_species:
+                sum = (sum or 0) + pop_stratum.pop_count
+            return sum
 
 class FleetSizeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
@@ -874,6 +882,12 @@ RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     data_container_factory=TotalScienceOutputDataContainer,
     style=PlotStyle.line,
 )
+TOTAL_POPS_GRAPH = PlotSpecification(
+    plot_id="empire-pops-comparison",
+    title="Total Pops",
+    data_container_factory=TotalPopsDataContainer,
+    style=PlotStyle.line,
+)
 SURVEY_PROGRESS_GRAPH = PlotSpecification(
     plot_id="survey-count",
     title="Surveyed Planets",
@@ -1243,6 +1257,7 @@ PLOT_SPECIFICATIONS = {
     "technology_progress_graph": TECHNOLOGY_PROGRESS_GRAPH,
     "survey_progress_graph": SURVEY_PROGRESS_GRAPH,
     "research_output_graph": RESEARCH_OUTPUT_GRAPH,
+    "total_pops_graph": TOTAL_POPS_GRAPH,
     "research_output_by_category_graph": RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
     "fleet_size_graph": FLEET_SIZE_GRAPH,
     "military_power_graph": MILITARY_POWER_GRAPH,
