@@ -310,7 +310,7 @@ def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
     :param tokenizer: tokenizer function. Passed as an argument to allow either the cython one or the regex tokenizer
     :return:
     """
-    for token_info in tokenizer(gamestate):
+    for token_info in tokenizer(gamestate, debug=config.CONFIG.debug_mode):
         value, line_number = token_info
         if value == "=":
             yield Token(TokenType.EQUAL, "=", line_number)
@@ -367,7 +367,8 @@ class SaveFileParser:
         self.save_filename = filename
         logger.info(f"Parsing Save File {self.save_filename}...")
         with zipfile.ZipFile(self.save_filename) as save_zip:
-            gamestate = save_zip.read("gamestate").decode()
+            # encoding guess based on EU4 wiki https://eu4.paradoxwikis.com/Save-game_editing#File_locations
+            gamestate = save_zip.read("gamestate").decode("cp1252")
         self.parse_from_string(gamestate)
         return self.gamestate_dict
 
