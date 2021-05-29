@@ -688,9 +688,13 @@ class SensorLinkProcessor(AbstractGamestateDataProcessor):
     def _process_sensor_links(self, first, second, trade_deal):
         start_date = datamodel.date_to_days(trade_deal.get("date", "2200.01.01"))
         end_date = start_date + 360 * trade_deal.get("length", 0)
-        first_country_id = first["country"]
-        second_country_id = second["country"]
-        if second.get("sensor_link") == "yes":
+        first_country_id = first.get("country")
+        second_country_id = second.get("country")
+        if (
+            first_country_id is not None
+            and second_country_id is not None
+            and second.get("sensor_link") == "yes"
+        ):
             prev_start, prev_end = self.sensor_links[first_country_id].get(
                 second_country_id, (float("inf"), -float("inf"))
             )
@@ -817,7 +821,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(attitude, dict):
                     continue
                 if attitude.get("country") == self._basic_info.player_country_id:
-                    attitude_towards_player = attitude["attitude"]
+                    attitude_towards_player = attitude.get("attitude")
                     break
             attitude_towards_player = datamodel.Attitude.__members__.get(
                 attitude_towards_player, datamodel.Attitude.unknown
@@ -1017,7 +1021,10 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         gs_leaders = self._gamestate_dict.get("leaders")
 
         for country_id, country_model in countries.items():
-            country_data_dict = self._gamestate_dict["country"][country_id]
+            country_data_dict = self._gamestate_dict["country"].get(country_id, {})
+            if not isinstance(country_data_dict, dict):
+                logger.error(f"Could not find country with ID {country_id}")
+                continue
             owned_leaders = country_data_dict.get("owned_leaders", [])
             if not isinstance(owned_leaders, list):  # if there is only one
                 owned_leaders = [owned_leaders]
@@ -1074,7 +1081,9 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         return leader
 
     def get_leader_name(self, leader_dict):
-        first_name = leader_dict["name"]["first_name"]
+        if "name" not in leader_dict:
+            return "Unknown Leader"
+        first_name = leader_dict["name"].get("first_name", "Unknown Leader")
         last_name = leader_dict["name"].get("second_name", "")
         leader_name = f"{first_name} {last_name}".strip()
         return leader_name
@@ -1354,6 +1363,10 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         self._leaders_dict = dependencies[LeaderProcessor.ID]
         self._systems_by_owner = dependencies[SystemOwnershipProcessor.ID]
 
+        sectors_dict = self._gamestate_dict.get("sectors")
+        if not isinstance(sectors_dict, dict):
+            return
+
         for country_id, country_model in self._countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
             country_sectors = country_dict.get("sectors", {}).get("owned", [])
@@ -1363,7 +1376,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
 
             # processing all colonies by sector allows reading the responsible sector governor
             for sector_id in country_sectors:
-                sector_info = self._gamestate_dict["sectors"].get(sector_id)
+                sector_info = sectors_dict.get(sector_id)
                 if not isinstance(sector_info, dict):
                     continue
                 sector_description = self._get_or_add_shared_description(
@@ -2768,7 +2781,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
             .first()
         )
         if war_model is None:
-            start_date_days = datamodel.date_to_days(war_dict["start_date"])
+            start_date_days = datamodel.date_to_days(war_dict.get("start_date"))
             war_model = datamodel.War(
                 war_id_in_game=war_id,
                 game=self._db_game,
@@ -2806,7 +2819,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
 
             country_dict = self._gamestate_dict["country"][country_id_ingame]
             if db_country is None:
-                country_name = country_dict["name"]
+                country_name = country_dict.get("name")
                 logger.warning(
                     f"{self._basic_info.logger_str}     Could not find country matching war participant {country_name}"
                 )
