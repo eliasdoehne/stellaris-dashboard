@@ -11,6 +11,7 @@ import signal
 import sys
 import time
 import traceback
+import typing
 import zipfile
 from collections import namedtuple
 from typing import (
@@ -334,12 +335,27 @@ def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
     yield Token(TokenType.EOF, None, -1)
 
 
+def _track_nesting_depth(f) -> typing.Callable:
+    """ Decorator for tracking the nesting/recursion depth in the parser. """
+
+    def inner(*args, **kwargs):
+        self = args[0]
+        self._current_nesting_depth += 1
+        result = f(*args, **kwargs)
+        self._current_nesting_depth -= 1
+        return result
+
+    return inner
+
+
 class SaveFileParser:
-    def __init__(self):
+    def __init__(self, max_nesting_depth=100):
         self.gamestate_dict = None
         self.save_filename = None
         self._token_stream = None
         self._lookahead_token = None
+        self._current_nesting_depth = 0
+        self.max_nesting_depth = max_nesting_depth
 
     def parse_save(self, filename):
         """
@@ -373,6 +389,9 @@ class SaveFileParser:
         return self.gamestate_dict
 
     def parse_from_string(self, s: str):
+        if self._current_nesting_depth != 0:
+            logger.warning("Found current_nesting_depth != 0, resetting it.")
+        self._current_nesting_depth = 0
         self._token_stream = token_stream(s)
         self.gamestate_dict = self._parse_key_value_pair_list(self._next_token())
         return self.gamestate_dict
@@ -414,12 +433,16 @@ class SaveFileParser:
             )
         return value
 
+    @_track_nesting_depth
     def _parse_composite_game_object_or_list(self):
         brace = self._next_token()
         if brace.token_type != TokenType.BRACE_OPEN:
             raise StellarisFileFormatError(
                 f"Line {brace.pos}: Expected {{ token, found {brace}"
             )
+        if self._current_nesting_depth > self.max_nesting_depth:
+            return self._skip_nested_object()
+
         tt = self._lookahead().token_type
         if (
             tt == TokenType.BRACE_OPEN
@@ -517,3 +540,17 @@ class SaveFileParser:
             token = self._lookahead_token
             self._lookahead_token = None
         return token
+
+    def _skip_nested_object(self):
+        logger.info(
+            "Skipping deeply nested object, probably caused by another mod. Everything should still work."
+        )
+        brace_count = 1  # "{" token is parsed outside the function
+        while brace_count > 0:
+            t = self._next_token()
+            if t.token_type == TokenType.BRACE_OPEN:
+                brace_count += 1
+            if t.token_type == TokenType.BRACE_CLOSE:
+                brace_count -= 1
+
+        return []
