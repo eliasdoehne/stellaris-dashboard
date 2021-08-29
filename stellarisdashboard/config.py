@@ -159,7 +159,7 @@ DEFAULT_SETTINGS = dict(
 
 @dataclasses.dataclass
 class Config:
-    """ Stores the settings for the dashboard. """
+    """Stores the settings for the dashboard."""
 
     save_file_path: pathlib.Path = None
     mp_username: str = None

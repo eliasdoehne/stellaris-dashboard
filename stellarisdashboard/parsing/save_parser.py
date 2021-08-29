@@ -83,7 +83,7 @@ class SavePathMonitor(abc.ABC):
         pass
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
-        """ Get a list of all new, unfiltered save files. """
+        """Get a list of all new, unfiltered save files."""
         new_files = self._valid_save_files()
         new_files = self._apply_filename_filter(new_files)
         new_files = self._apply_skip_savefiles_filter(new_files)
@@ -124,7 +124,7 @@ class SavePathMonitor(abc.ABC):
         return filtered_files
 
     def mark_all_existing_saves_processed(self) -> None:
-        """ Ensure that existing files are not re-parsed. """
+        """Ensure that existing files are not re-parsed."""
         self.processed_saves |= {
             f for f in self._valid_save_files() if f.stem != "ironman"
         }
@@ -336,7 +336,7 @@ def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
 
 
 def _track_nesting_depth(f) -> typing.Callable:
-    """ Decorator for tracking the nesting/recursion depth in the parser. """
+    """Decorator for tracking the nesting/recursion depth in the parser."""
 
     def inner(*args, **kwargs):
         self = args[0]
