@@ -538,10 +538,14 @@ class HyperLane(Base):
     system_two_id = Column(ForeignKey(System.system_id))
 
     system_one = relationship(
-        "System", back_populates="hyperlanes_one", foreign_keys=[system_one_id],
+        "System",
+        back_populates="hyperlanes_one",
+        foreign_keys=[system_one_id],
     )
     system_two = relationship(
-        "System", back_populates="hyperlanes_two", foreign_keys=[system_two_id],
+        "System",
+        back_populates="hyperlanes_two",
+        foreign_keys=[system_two_id],
     )
 
 
@@ -876,10 +880,14 @@ class DiplomaticRelation(Base):
     research_agreement = Column(Boolean, default=False)
 
     owner = relationship(
-        Country, back_populates="outgoing_relations", foreign_keys=[country_id],
+        Country,
+        back_populates="outgoing_relations",
+        foreign_keys=[country_id],
     )
     target = relationship(
-        Country, back_populates="incoming_relations", foreign_keys=[target_country_id],
+        Country,
+        back_populates="incoming_relations",
+        foreign_keys=[target_country_id],
     )
 
     _dict_key_attr_mapping = dict(
@@ -1319,6 +1327,8 @@ class Planet(Base):
 
     @property
     def name(self):
+        if self.planet_name is None:
+            return "Unnamed Planet"
         if self.planet_name.startswith("NAME_"):
             return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
         return self.planet_name
