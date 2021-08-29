@@ -1282,7 +1282,7 @@ class GalaxyMapData:
                 assert isinstance(system, datamodel.System)
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
-                    name=system.name,
+                    name=system.get_name(),
                     country=GalaxyMapData.UNCLAIMED,
                     system_id=system.system_id,
                     pos=[-system.coordinate_x, -system.coordinate_y],

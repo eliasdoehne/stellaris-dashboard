@@ -1319,6 +1319,8 @@ class Planet(Base):
 
     @property
     def name(self):
+        if self.planet_name is None:
+            return "Unnamed Planet"
         if self.planet_name.startswith("NAME_"):
             return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
         return self.planet_name
