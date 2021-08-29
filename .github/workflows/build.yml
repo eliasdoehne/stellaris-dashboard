@@ -47,23 +47,21 @@ jobs:
       # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
       # (probably too many individual files?)
       - name: package files (win)
-        if: matrix.os == 'windows-latest'
-        # && github.event_name != 'pull_request'
+        if: matrix.os == 'windows-latest' && github.event_name != 'pull_request'
         run: |
           cd dist
           powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
           cd ..
           ls
       - name: package files
-        if: matrix.os != 'windows-latest'
-        # && github.event_name != 'pull_request'
+        if: matrix.os != 'windows-latest' && github.event_name != 'pull_request'
         run: |
           base_dir=`pwd`
           pushd dist/stellarisdashboard-build/
           zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
           popd
       - name: Publish
-        # if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v2
         with:
           name: stellarisdashboard-${{ matrix.os }}.zip
