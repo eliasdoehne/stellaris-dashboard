@@ -7,7 +7,7 @@ from stellarisdashboard import datamodel
 
 logger = logging.getLogger(__name__)
 
-VERSION = "v2.0"
+VERSION = "v2.1"
 
 
 def parse_version(version: str):
@@ -24,11 +24,7 @@ def parse_version(version: str):
 
 
 def is_old_version(requested_version: str, actual_version=VERSION) -> bool:
-    """Compares the requested version against the VERSION defined above.
-
-    :param requested_version: The version of the dashboard requested by the URL.
-    :return:
-    """
+    """Compares the requested version against the VERSION defined above."""
     try:
         actual_parsed = parse_version(actual_version)
         requested_parsed = parse_version(requested_version)
