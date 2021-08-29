@@ -283,7 +283,11 @@ class EventTemplateDictBuilder:
             if (
                 not config.CONFIG.show_all_country_types
                 and country_type
-                not in ["default", "fallen_empire", "awakened_fallen_empire",]
+                not in [
+                    "default",
+                    "fallen_empire",
+                    "awakened_fallen_empire",
+                ]
                 and event.country is not None
             ):
                 continue

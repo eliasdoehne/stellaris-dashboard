@@ -286,7 +286,10 @@ def update_content(
                             style=dict(textAlign="center"),
                         )
                     ],
-                    style=dict(margin="auto", width=f"{config.CONFIG.plot_width}px",),
+                    style=dict(
+                        margin="auto",
+                        width=f"{config.CONFIG.plot_width}px",
+                    ),
                 )
             )
     else:
