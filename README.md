@@ -45,6 +45,16 @@ I unfortunately don't have access to a mac and can't check every release on all 
 
 # Other information
 
+## Configuration Options
+
+There are a number of configuration options available either via the `Settings` menu in the dashboard or by editing the `.\config.yml` file directly.
+
+| Property | Notes |
+|----------|-------|
+| mp_username | Specify your multiplayer name so it filters correctly |
+| save_name_filter | When you run `parse-saves.exe` this applies a text filter. Must use the numeric name. Example: To filter to your latest save in `\Stellaris\save games\blorgempire_-136963542\2170.07.09.sav` you would use `2170.07.09` |
+
+
 ## Visibility Settings
 
 For balance and immersion, only some information about other empires is shown by default. You can enable some settings to show everything:
