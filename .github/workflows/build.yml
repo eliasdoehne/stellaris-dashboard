@@ -41,6 +41,9 @@ jobs:
       - name: pyInstaller build
         run: |
           pyinstaller pyinstaller-package.spec
+      - name: pyInstaller run
+        run: |
+          dist/stellarisdashboard-build/parse_saves
       # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
       # (probably too many individual files?)
       - name: package files (win)

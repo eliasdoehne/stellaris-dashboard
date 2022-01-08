@@ -323,7 +323,7 @@ def get_known_games(game_name_prefix: str = "") -> List[str]:
 
 
 def get_available_games_dict() -> Dict[str, Dict[str, str]]:
-    """ Returns a dictionary mapping game id to some basic info about the game. """
+    """Returns a dictionary mapping game id to some basic info about the game."""
     games = {}
     for game_id in get_known_games():
         with get_db_session(game_id) as session:
@@ -417,7 +417,7 @@ class Game(Base):
 
 
 class SharedDescription(Base):
-    """ Represents short descriptions like technology names that are likely to occur many times for various empires. """
+    """Represents short descriptions like technology names that are likely to occur many times for various empires."""
 
     __tablename__ = "shareddescriptiontable"
     description_id = Column(Integer, primary_key=True)
@@ -426,7 +426,7 @@ class SharedDescription(Base):
 
 
 class System(Base):
-    """ Represents a single star system/galactic_object. """
+    """Represents a single star system/galactic_object."""
 
     __tablename__ = "systemtable"
     system_id = Column(Integer, primary_key=True)
@@ -499,7 +499,7 @@ class System(Base):
 
 
 class SystemOwnership(Base):
-    """ Represent the timespan during which some empire owned a given system. """
+    """Represent the timespan during which some empire owned a given system."""
 
     __tablename__ = "systemownershiptable"
     system_ownership_id = Column(Integer, primary_key=True)
@@ -538,10 +538,14 @@ class HyperLane(Base):
     system_two_id = Column(ForeignKey(System.system_id))
 
     system_one = relationship(
-        "System", back_populates="hyperlanes_one", foreign_keys=[system_one_id],
+        "System",
+        back_populates="hyperlanes_one",
+        foreign_keys=[system_one_id],
     )
     system_two = relationship(
-        "System", back_populates="hyperlanes_two", foreign_keys=[system_two_id],
+        "System",
+        back_populates="hyperlanes_two",
+        foreign_keys=[system_two_id],
     )
 
 
@@ -876,10 +880,14 @@ class DiplomaticRelation(Base):
     research_agreement = Column(Boolean, default=False)
 
     owner = relationship(
-        Country, back_populates="outgoing_relations", foreign_keys=[country_id],
+        Country,
+        back_populates="outgoing_relations",
+        foreign_keys=[country_id],
     )
     target = relationship(
-        Country, back_populates="incoming_relations", foreign_keys=[target_country_id],
+        Country,
+        back_populates="incoming_relations",
+        foreign_keys=[target_country_id],
     )
 
     _dict_key_attr_mapping = dict(
@@ -916,7 +924,7 @@ class DiplomaticRelation(Base):
 
 
 class CountryData(Base):
-    """ Representation of the state of a single country at a specific time. """
+    """Representation of the state of a single country at a specific time."""
 
     __tablename__ = "countrydatatable"
     country_data_id = Column(Integer, primary_key=True)
@@ -1141,7 +1149,7 @@ class PoliticalFaction(Base):
 
 
 class War(Base):
-    """ Wars are represented by a list of participants and a list of combat events. """
+    """Wars are represented by a list of participants and a list of combat events."""
 
     __tablename__ = "wartable"
     war_id = Column(Integer, primary_key=True)
@@ -1319,6 +1327,8 @@ class Planet(Base):
 
     @property
     def name(self):
+        if self.planet_name is None:
+            return "Unnamed Planet"
         if self.planet_name.startswith("NAME_"):
             return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
         return self.planet_name
@@ -1584,7 +1594,7 @@ class HistoricalEvent(Base):
 
     @property
     def description(self) -> str:
-        """ A brief description associated with the event, e.g. technology name or changes in government reform. """
+        """A brief description associated with the event, e.g. technology name or changes in government reform."""
         if self.event_type == HistoricalEventType.tradition:
             return game_info.convert_id_to_name(
                 self.db_description.text, remove_prefix="tr"

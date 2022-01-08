@@ -283,7 +283,11 @@ class EventTemplateDictBuilder:
             if (
                 not config.CONFIG.show_all_country_types
                 and country_type
-                not in ["default", "fallen_empire", "awakened_fallen_empire",]
+                not in [
+                    "default",
+                    "fallen_empire",
+                    "awakened_fallen_empire",
+                ]
                 and event.country is not None
             ):
                 continue
@@ -391,13 +395,8 @@ class EventTemplateDictBuilder:
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Planet):
-            name = key.planet_name
-            if name.startswith("NAME"):
-                name = game_info.convert_id_to_name(
-                    key.planet_name, remove_prefix="NAME"
-                )
             return utils.preformat_history_url(
-                name, planet=key.planet_id, a_class=a_class, game_id=self.game_id
+                key.name, planet=key.planet_id, a_class=a_class, game_id=self.game_id
             )
         elif isinstance(key, datamodel.War):
             return utils.preformat_history_url(
@@ -525,9 +524,12 @@ class EventTemplateDictBuilder:
     def planet_details(self, planet_model: datamodel.Planet):
         details = {}
 
-        details["Planet Class"] = game_info.convert_id_to_name(
-            planet_model.planet_class, remove_prefix="pc"
-        )
+        if planet_model.planet_class is None:
+            details["Planet Class"] = "Unknown Planet Class"
+        else:
+            details["Planet Class"] = game_info.convert_id_to_name(
+                planet_model.planet_class, remove_prefix="pc"
+            )
         modifiers = []
         for modifier in planet_model.modifiers:
             if modifier.expiry_date is not None:

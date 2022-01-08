@@ -1,27 +1,21 @@
 import pytest
-import pyximport
-
-pyximport.install()
-
-from stellarisdashboard.parsing import tokenizer_re
 from stellarisdashboard.parsing.cython_ext import tokenizer
 
 import tokenizer_test_cases
+from stellarisdashboard.parsing import tokenizer_re
 
 
+@pytest.mark.parametrize(
+    "tokenizer_impl", [tokenizer_re.tokenizer, tokenizer.tokenizer]
+)
 @pytest.mark.parametrize("test_data", tokenizer_test_cases.VALID_TOKEN_SEQUENCES)
-def test_token_value_stream(test_data):
+def test_token_value_stream(tokenizer_impl, test_data):
     _input, expected = test_data
-    tok_re = list(tokenizer_re.tokenizer(_input))
-    tok_cython = list(tokenizer.tokenizer(_input))
+    tokens = list(tokenizer_impl(_input))
 
-    tok_re_values_only = [val for val, pos in tok_re]
-    tok_cython_values_only = [val for val, pos in tok_cython]
+    values_only = [val for val, pos in tokens]
     expected_values_only = [val for val, pos in expected]
-    assert tok_re_values_only == expected_values_only
-    assert tok_cython_values_only == expected_values_only
+    assert values_only == expected_values_only
 
-    tok_re_lines = list(tokenizer_re.tokenizer(_input, debug=True))
-    tok_cython_lines = list(tokenizer.tokenizer(_input, debug=True))
-    assert tok_re_lines == expected
-    assert tok_cython_lines == expected
+    tokens_with_lines = list(tokenizer_impl(_input, debug=True))
+    assert tokens_with_lines == expected

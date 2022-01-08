@@ -22,7 +22,7 @@ COLOR_ENGINEERING = (0.75, 0.59, 0.12)
 
 @enum.unique
 class PlotStyle(enum.Enum):
-    """ Defines the kind of visualization associated with a given PlotSpecification (defined below)"""
+    """Defines the kind of visualization associated with a given PlotSpecification (defined below)"""
 
     line = 0
     stacked = 1
@@ -31,7 +31,7 @@ class PlotStyle(enum.Enum):
 
 @dataclasses.dataclass
 class PlotSpecification:
-    """ This class is used to define all available visualizations. """
+    """This class is used to define all available visualizations."""
 
     plot_id: str
     title: str
@@ -1266,7 +1266,7 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
 
 
 class GalaxyMapData:
-    """ Maintains the data for the historical galaxy map. """
+    """Maintains the data for the historical galaxy map."""
 
     UNCLAIMED = "Unclaimed"
 
@@ -1282,7 +1282,7 @@ class GalaxyMapData:
                 assert isinstance(system, datamodel.System)
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
-                    name=system.name,
+                    name=system.get_name(),
                     country=GalaxyMapData.UNCLAIMED,
                     system_id=system.system_id,
                     pos=[-system.coordinate_x, -system.coordinate_y],

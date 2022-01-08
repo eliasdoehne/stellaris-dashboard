@@ -1,4 +1,4 @@
 pytest
 Cython
 pyinstaller
-black==19.10b0
+black
