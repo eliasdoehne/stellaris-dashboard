@@ -45,6 +45,12 @@ I unfortunately don't have access to a mac and can't check every release on all 
 
 # Other information
 
+## Save File Location
+
+If the dashboard is not showing any data, first make sure that you play the game until at least one autosave is triggered while the dashboard is running in the background. If the dashboard does not react to the new save file, the most likely explanation is that it cannot find it. 
+
+Check that the save file location is correctly configured in the dashboard settings page, when you go to that path you should see one folder for each of your Stellaris games. By default, the dashboard assumes the values described [in the Stellaris wiki](https://stellaris.paradoxwikis.com/Save-game_editing#Location_.28Steam_Version.29). If you have enabled Steam cloud sync for your save files, you may need to change this location.
+
 ## Visibility Settings
 
 For balance and immersion, only some information about other empires is shown by default. You can enable some settings to show everything:
