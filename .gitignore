@@ -7,7 +7,6 @@ data
 **/config.ini
 **/*.json
 **/.pytest*
-random_execution.py  # file I use to debug issues
 
 *.yml
 

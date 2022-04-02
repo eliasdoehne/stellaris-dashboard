@@ -3,7 +3,7 @@
 The Stellaris Dashboard is a program that reads your Stellaris save files while you play the game and shows detailed information and statistics about your playthrough. 
 
 The dashboard has two main components: 
-1. A graph-based **timeline dashboard** which shows up to 60 graphs of game statistics and a historical map of the galaxy.
+1. A graph-based **graph dashboard** and a historical map of the galaxy.
 2. A text-based **event ledger** listing the events that define your game's history.
 
 You can find some screenshots on the Steam workshop page: https://steamcommunity.com/sharedfiles/filedetails/?id=1466534202 
@@ -87,19 +87,6 @@ The dashboard is quite complex and to my knowledge, making a mod with these feat
 ## Mod compatibility
 
 The dashboard may or may not work with other mods, it is developed with the vanilla game in mind. If you experience a problem with a modded game, you can still let me know: If the mod is quite popular and the problem is easily fixed, I will take a look.
-
-# Acknowledgements
-
-First of all, thanks to everyone who directly or indirectly contributed to this project!
-
-Thanks to reddit and Steam user 8igualdos0s for initially maintaining a copy of the browser mod [in the Steam Workshop](http://steamcommunity.com/sharedfiles/filedetails/?id=1341242772).
-
-The approach of modding the in-game browser was inspired by [this project](https://github.com/omiddavoodi/StellarisInGameLedger) by reddit user Ariestinak.
-
-
-Development of this project is supported by [JetBrains](http://jetbrains.com/?from=stellarisdashboard) with an open source license:
-
-[<img src="img/jetbrains.png" height="80">](http://jetbrains.com/?from=stellarisdashboard)
 
 ---
 

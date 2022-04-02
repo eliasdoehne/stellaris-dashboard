@@ -12,7 +12,7 @@ def module_path(module_name):
 block_cipher = None
 added_files = [
     (str(module_path("sqlalchemy")), "sqlalchemy/"),
-    (str(module_path("plotly")), "plotly"),
+    (str(module_path("plotly")), "plotly/"),
     (str(module_path("dash")), "dash/"),
     (str(Path("README.md")), "./"),
     (str(Path("stellarisdashboard/dashboard_app/assets")), "stellarisdashboard/dashboard_app/assets/"),
@@ -22,7 +22,7 @@ added_files = [
 
 a_main = Analysis(
     [str(Path('stellarisdashboard/__main__.py'))],
-    pathex=['.'],
+    pathex=[],
     binaries=[],
     datas=added_files,
     hiddenimports=[],
@@ -37,7 +37,7 @@ a_main = Analysis(
 
 a_parse_saves = Analysis(
     [str(Path('stellarisdashboard/parse_existing_saves.py'))],
-    pathex=['.'],
+    pathex=[],
     binaries=[],
     datas=added_files,
     hiddenimports=[],
