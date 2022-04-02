@@ -1349,7 +1349,7 @@ class GalaxyMapData:
         min_radius = float("inf")
         max_radius = float("-inf")
         for x, y in points:
-            radius = np.sqrt(x ** 2 + y ** 2)
+            radius = np.sqrt(x**2 + y**2)
             min_radius = min(min_radius, radius)
             max_radius = max(max_radius, radius)
 
