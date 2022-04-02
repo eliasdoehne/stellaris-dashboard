@@ -17,7 +17,6 @@ from stellarisdashboard import config
 from stellarisdashboard.dashboard_app import visualization_data
 from stellarisdashboard.parsing import save_parser, timeline
 
-
 logger = logging.getLogger(__name__)
 
 # These messages are shown by the CLI

@@ -1,8 +1,11 @@
+from stellarisdashboard import _force_imports
+
+_force_imports.force_imports()
 import logging
 import multiprocessing as mp
 import threading
 
-from stellarisdashboard import cli, config
+from stellarisdashboard import cli
 from stellarisdashboard.dashboard_app import start_server
 
 logger = logging.getLogger(__name__)

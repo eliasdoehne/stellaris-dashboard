@@ -483,7 +483,9 @@ class System(Base):
         for ownership in sorted(
             self.ownership_history, key=lambda oh: oh.start_date_days
         ):
-            if ownership.start_date_days <= time_in_days <= ownership.end_date_days:
+            start = ownership.start_date_days or float("-inf")
+            end = ownership.end_date_days or float("inf")
+            if start <= time_in_days <= end:
                 return ownership.country
             elif ownership.start_date_days > time_in_days:
                 return None
