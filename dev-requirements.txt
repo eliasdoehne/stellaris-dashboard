@@ -1,4 +1,4 @@
 pytest
 Cython
 pyinstaller
-black
+black==22.3.0
