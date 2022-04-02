@@ -14,7 +14,7 @@ added_files = [
     (str(module_path("sqlalchemy")), "sqlalchemy/"),
     (str(module_path("plotly")), "plotly"),
 
-    (str(module_path("dash") / "favicon.ico"), "dash/favicon.ico/"),
+    # (str(module_path("dash") / "favicon.ico"), "dash/favicon.ico/"),
     (str(module_path("dash") / "deps"), "dash/deps/"),
     (str(module_path("dash") / "dash-renderer"), "dash/dash-renderer/"),
     (str(module_path("dash_core_components")), "dash_core_components/"),
