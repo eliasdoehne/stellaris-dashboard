@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import multiprocessing as mp  # only to get the cpu count
 import pathlib
@@ -8,8 +9,6 @@ from collections import defaultdict
 from typing import List, Dict
 
 import yaml
-
-import dataclasses
 
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 CPU_COUNT = mp.cpu_count()
