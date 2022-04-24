@@ -107,6 +107,10 @@ def get_color_vals(
         r, g, b = COLOR_ENGINEERING
     elif key_str == GalaxyMapData.UNCLAIMED:  # for unclaimed system in the galaxy map
         r, g, b = 255, 255, 255
+    elif key_str.endswith("galactic_market"):
+        r, g, b = 255, 0, 0
+    elif key_str.endswith("internal_market"):
+        r, g, b = 0, 0, 255
     else:
         random.seed(key_str)
         h = random.uniform(0, 1)
@@ -462,8 +466,8 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
 
 class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = float("nan")
-    galactic_market_indicator_key = "traded on galactic market"
-    internal_market_indicator_key = "traded on internal market"
+    galactic_market_indicator_key = "traded_on_galactic_market"
+    internal_market_indicator_key = "traded_on_internal_market"
 
     def __init__(self, country_perspective, resource_name, base_price, resource_index):
         super().__init__(country_perspective=country_perspective)
@@ -511,13 +515,15 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         if res_data["base_price"] is None:
             return
 
-        fluctuation = None
+        always_tradeable = ["minerals", "food", "consumer_goods", "alloys"]
+        fluctuation = 0.0 if self.resource_name in always_tradeable else None
         for resource in cd.internal_market_resources:
             if resource.resource_name.text == self.resource_name:
                 fluctuation = resource.fluctuation
                 break
         if fluctuation is None:
             return
+
         yield from self._get_resource_prices(
             market_fee, res_data["base_price"], fluctuation
         )
