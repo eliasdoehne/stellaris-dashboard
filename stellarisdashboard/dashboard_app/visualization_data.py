@@ -11,8 +11,7 @@ import networkx as nx
 import numpy as np
 from scipy.spatial import Voronoi
 
-import game_info
-from stellarisdashboard import datamodel, config
+from stellarisdashboard import datamodel, config, game_info
 
 logger = logging.getLogger(__name__)
 
@@ -469,9 +468,6 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
     def __init__(self, country_perspective, resource_name, base_price, resource_index):
         super().__init__(country_perspective=country_perspective)
         self.resource_name = resource_name
-        self.resource_print_name = game_info.convert_id_to_name(
-            self.resource_name, remove_prefix="sr"
-        )
         self.base_price = base_price
         self.resource_index = resource_index
 
@@ -535,10 +531,10 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         buy_price = base_price * (1 + fluctuation / 100) * (1 + market_fee)
         sell_price = base_price * (1 + fluctuation / 100) * (1 - market_fee)
 
-        yield f"{self.resource_print_name} base price", no_fee_price
+        yield f"{self.resource_name}_base_price", no_fee_price
         if buy_price != sell_price:
-            yield f"{self.resource_print_name} buy price", buy_price
-            yield f"{self.resource_print_name} sell price", sell_price
+            yield f"{self.resource_name}_buy_price", buy_price
+            yield f"{self.resource_name}_sell_price", sell_price
 
     def get_market_fee(self, gs):
         market_fees = config.CONFIG.market_fee

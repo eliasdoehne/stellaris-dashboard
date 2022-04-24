@@ -59,6 +59,32 @@ For balance and immersion, only some information about other empires is shown by
 - `Store data of all countries`: This will read detailed budgets and pop statistics for non-player countries. It will increase the processing time and database file size, but will allow you to inspect other countries by selecting them from the dropdown menu at the top. (Basic economy information is always read, this setting only controls the very detailed budgets)
 - `Filter history ledger by event type`: By default, the event ledger does not show everything on the main page. For example, more detailed events like leader level-ups are only shown on that specific leader's ledger entry. This setting allows you to change this behavior and see all events on the main page.
 
+## Market Price Graphs
+
+The dashboard includes graphs of market prices for each resource in the game. To get the correct values, you will need to manually configure some things in the file `config.yaml`. 
+
+These configurations are applied only when preparing the graph, so you can adjust them at any time in the configuration without reprocessing your save data.
+  
+### Market fees
+
+Currently, there is no easy way to get the market fee information from the save files. To still get the correct numbers in the graph, you can add the fee manually in the configuration by extending the `market_fee` section.
+
+For example, to configure a game where the market_fee changed to 20% in 2240 and 5% in 2300, you would change the market_fee section like this:
+```
+market_fee:
+- {date: 2200.01.01, fee: 0.3}
+- {date: 2240.01.01, fee: 0.2}
+- {date: 2300.01.01, fee: 0.05}
+```
+
+### Resources
+
+When using mods that change resources in the game, you can manually adjust the resource configuration in configuration.yaml to have the data collected for the additional resources.
+
+The default configuration should be correct for the current vanilla Stellaris game. 
+  
+These values must be configured in the correct order, for vanilla Stellaris, this is the same order in which they are defined in the game file ``
+
 ## How to improve performance
 
 If you find that the dashboard is too slow to browse, you can try some of these things:
