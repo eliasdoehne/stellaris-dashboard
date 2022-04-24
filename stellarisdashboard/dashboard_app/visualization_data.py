@@ -11,6 +11,7 @@ import networkx as nx
 import numpy as np
 from scipy.spatial import Voronoi
 
+import game_info
 from stellarisdashboard import datamodel, config
 
 logger = logging.getLogger(__name__)
@@ -39,11 +40,14 @@ class PlotSpecification:
     # This function specifies which data container class should be used for the plot.
     # The int argument is the country ID for which budgets and pop stats are shown.
     data_container_factory: Callable[[Optional[int]], "AbstractPlotDataContainer"]
+
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
     x_axis_label: str = "Time (years after 2200.01.01)"
     y_axis_label: str = ""
+
+    data_container_factory_kwargs: Dict = dataclasses.field(default_factory=dict)
 
 
 def get_plot_specifications_for_tab_layout():
@@ -77,6 +81,7 @@ def get_current_execution_plot_data(
             for pslist in get_plot_specifications_for_tab_layout().values()
             for ps in pslist
         ]
+        plot_specifications += get_market_graphs(config.CONFIG.market_resources)
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(
             game_name, plot_specifications
         )
@@ -151,7 +156,9 @@ class PlotDataManager:
         for plot_spec in self.plot_specifications:
             self.data_containers_by_plot_id[
                 plot_spec.plot_id
-            ] = plot_spec.data_container_factory(self.country_perspective)
+            ] = plot_spec.data_container_factory(
+                self.country_perspective, **plot_spec.data_container_factory_kwargs
+            )
 
     @property
     def country_perspective(self) -> Optional[int]:
@@ -229,7 +236,7 @@ class PlotDataManager:
 class AbstractPlotDataContainer(abc.ABC):
     DEFAULT_VAL = float("nan")
 
-    def __init__(self, country_perspective: Optional[int]):
+    def __init__(self, country_perspective: Optional[int], **kwargs):
         self.dates: List[float] = []
         self.data_dict: Dict[str, List[float]] = {}
         self._country_perspective = country_perspective
@@ -454,6 +461,96 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
         yield "colossi", cd.ship_count_colossus * 32
 
 
+class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
+    DEFAULT_VAL = float("nan")
+    galactic_market_indicator_key = "traded on galactic market"
+    internal_market_indicator_key = "traded on internal market"
+
+    def __init__(self, country_perspective, resource_name, base_price, resource_index):
+        super().__init__(country_perspective=country_perspective)
+        self.resource_name = resource_name
+        self.resource_print_name = game_info.convert_id_to_name(
+            self.resource_name, remove_prefix="sr"
+        )
+        self.base_price = base_price
+        self.resource_index = resource_index
+
+    def _iterate_budgetitems(
+        self, cd: datamodel.CountryData
+    ) -> Iterable[Tuple[str, float]]:
+        gs = cd.game_state
+        if cd.has_galactic_market_access:
+            yield from self._iter_galactic_market_price(gs, cd)
+        else:
+            yield from self._iter_internal_market_price(gs, cd)
+
+    def _iter_galactic_market_price(
+        self, gs: datamodel.GameState, cd: datamodel.CountryData
+    ) -> Iterable[Tuple[str, float]]:
+        market_fee = self.get_market_fee(gs)
+        market_resources: List[datamodel.GalacticMarketResource] = sorted(
+            gs.galactic_market_resources, key=lambda r: r.resource_index
+        )
+        for res, res_data in zip(market_resources, config.CONFIG.market_resources):
+            if res_data["name"] == self.resource_name and res.availability != 0:
+                yield from self._get_resource_prices(
+                    market_fee, res_data["base_price"], res.fluctuation
+                )
+                yield self.galactic_market_indicator_key, -0.001
+                yield self.internal_market_indicator_key, self.DEFAULT_VAL
+                break
+
+    def _iter_internal_market_price(
+        self, gs: datamodel.GameState, cd: datamodel.CountryData
+    ):
+        market_fee = self.get_market_fee(gs)
+        res_data = None
+        for r in config.CONFIG.market_resources:
+            if r["name"] == self.resource_name:
+                res_data = r
+                break
+        if res_data is None:
+            logger.info("Could not find configuration for resource {self.resour")
+            return
+        if res_data["base_price"] is None:
+            return
+
+        fluctuation = None
+        for resource in cd.internal_market_resources:
+            if resource.resource_name.text == self.resource_name:
+                fluctuation = resource.fluctuation
+                break
+        if fluctuation is None:
+            return
+        yield from self._get_resource_prices(
+            market_fee, res_data["base_price"], fluctuation
+        )
+        yield self.galactic_market_indicator_key, self.DEFAULT_VAL
+        yield self.internal_market_indicator_key, -0.001
+
+    def _get_resource_prices(
+        self, market_fee: float, base_price: float, fluctuation: float
+    ) -> Tuple[float, float, float]:
+        no_fee_price = base_price * (1 + fluctuation / 100)
+        buy_price = base_price * (1 + fluctuation / 100) * (1 + market_fee)
+        sell_price = base_price * (1 + fluctuation / 100) * (1 - market_fee)
+
+        yield f"{self.resource_print_name} base price", no_fee_price
+        if buy_price != sell_price:
+            yield f"{self.resource_print_name} buy price", buy_price
+            yield f"{self.resource_print_name} sell price", sell_price
+
+    def get_market_fee(self, gs):
+        market_fees = config.CONFIG.market_fee
+        current_fee = {"date": 0, "fee": 0.3}  # default
+        for fee in sorted(market_fees, key=lambda f: f["date"]):
+            if datamodel.date_to_days(fee["date"]) > gs.date:
+                break
+            current_fee = fee
+        market_fee = current_fee["fee"]
+        return market_fee
+
+
 class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     DEFAULT_VAL = 0.0
 
@@ -464,7 +561,7 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
             val = self._get_value_from_budgetitem(budget_item)
             if val == 0.0:
                 val = None
-            yield (budget_item.name, val)
+            yield budget_item.name, val
 
     @abc.abstractmethod
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem) -> float:
@@ -1253,6 +1350,37 @@ PLOT_SPECIFICATIONS = {
 }
 
 _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
+
+
+def market_graph_id(resource_config) -> str:
+    return f"trade-price-{resource_config['name']}"
+
+
+def market_graph_title(resource_config) -> str:
+    resource_name = game_info.convert_id_to_name(
+        resource_config["name"], remove_prefix="sr"
+    )
+    return f"{resource_name} market price"
+
+
+def get_market_graphs(resource_config) -> List[PlotSpecification]:
+    res = []
+    for idx, rc in enumerate(resource_config):
+        if rc["base_price"] is not None:
+            res.append(
+                PlotSpecification(
+                    plot_id=market_graph_id(rc),
+                    title=market_graph_title(rc),
+                    data_container_factory=MarketPriceDataContainer,
+                    data_container_factory_kwargs=dict(
+                        resource_name=rc["name"],
+                        base_price=rc["base_price"],
+                        resource_index=idx,
+                    ),
+                    style=PlotStyle.line,
+                )
+            )
+    return res
 
 
 def get_galaxy_data(game_name: str) -> "GalaxyMapData":

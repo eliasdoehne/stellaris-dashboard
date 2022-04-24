@@ -257,9 +257,12 @@ def update_content(
 
     children = []
     if tab_value in config.CONFIG.tab_layout:
-        plots = visualization_data.get_plot_specifications_for_tab_layout().get(
-            tab_value
-        )
+        if tab_value == config.MARKET_TAB:
+            plots = visualization_data.get_market_graphs(config.CONFIG.market_resources)
+        else:
+            plots = visualization_data.get_plot_specifications_for_tab_layout().get(
+                tab_value
+            )
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )
