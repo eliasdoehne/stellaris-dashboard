@@ -180,6 +180,8 @@ class TimelineExtractor:
         yield DiplomaticRelationsProcessor()
         yield SensorLinkProcessor()
         yield CountryDataProcessor()
+        yield GalacticMarketProcessor()
+        yield InternalMarketProcessor()
         yield SpeciesProcessor()
         yield LeaderProcessor()
         yield PlanetProcessor()
@@ -746,6 +748,10 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                     country_id
                 )
 
+            has_market_access = "has_market_access" in country_data_dict.get(
+                "flags", []
+            )
+
             diplomacy_data = self._get_diplomacy_towards_player(
                 diplomacy_dict, country_id
             )
@@ -771,6 +777,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 economy_power=country_data_dict.get("economy_power", 0),
                 has_sensor_link_with_player=has_sensor_link_with_player,
                 attitude_towards_player=attitude_towards_player,
+                has_galactic_market_access=has_market_access,
                 # Resource income is calculated below in _extract_country_economy
                 net_energy=0.0,
                 net_minerals=0.0,
@@ -2259,6 +2266,101 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())
             .first()
         )
+
+
+class GalacticMarketProcessor(AbstractGamestateDataProcessor):
+    ID = "galactic_market"
+    DEPENDENCIES = []
+
+    def extract_data_from_gamestate(self, dependencies):
+        market = self._gamestate_dict.get("market", {})
+        resource_list = market.get("galactic_market_resources", [])
+        fluctuations = market.get("fluctuations", [])
+        bought_by_country = market.get("resources_bought", {}).get("amount")
+        sold_by_country = market.get("resources_sold", {}).get("amount")
+
+        if not all(
+            [
+                market,
+                resource_list,
+                fluctuations,
+                bought_by_country,
+                sold_by_country,
+            ]
+        ):
+            logger.info(
+                f"{self._basic_info.logger_str}         Missing or invalid Galactic Market data, skipping..."
+            )
+            return
+
+        total_bought = [
+            sum(bought[i] for bought in bought_by_country)
+            for i in range(len(resource_list))
+        ]
+        total_sold = [
+            sum(sold[i] for sold in sold_by_country) for i in range(len(resource_list))
+        ]
+        for i, (availability, fluctuation, bought, sold) in enumerate(
+            zip(resource_list, fluctuations, total_bought, total_sold)
+        ):
+            self._session.add(
+                datamodel.GalacticMarketResource(
+                    game_state=self._db_gamestate,
+                    resource_index=i,
+                    availability=availability,
+                    fluctuation=fluctuation,
+                    resources_bought=bought,
+                    resources_sold=sold,
+                )
+            )
+
+
+class InternalMarketProcessor(AbstractGamestateDataProcessor):
+    ID = "internal_market"
+    DEPENDENCIES = [CountryDataProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies):
+        country_data_dict = dependencies[CountryDataProcessor.ID]
+
+        market = self._gamestate_dict.get("market", {})
+        fluctuation_dict = market.get("internal_market_fluctuations", {})
+        market_countries = fluctuation_dict.get("country", [])
+        fluctuation_resources = fluctuation_dict.get("resources", [])
+
+        if not all(
+            [
+                fluctuation_dict,
+                market_countries,
+                fluctuation_resources,
+                self._basic_info.player_country_id in market_countries,
+            ]
+        ):
+            logger.info(
+                f"{self._basic_info.logger_str}         Missing or invalid Internal Market data, skipping..."
+            )
+            return
+
+        for country_id, product_fluctuation in zip(
+            market_countries, fluctuation_resources
+        ):
+            if (
+                not isinstance(product_fluctuation, dict)
+                or country_id not in country_data_dict
+            ):
+                continue
+            if (
+                not config.CONFIG.read_all_countries
+                and country_id != self._basic_info.player_country_id
+            ):
+                continue
+            for name, value in product_fluctuation.items():
+                self._session.add(
+                    datamodel.InternalMarketResource(
+                        resource_name=self._get_or_add_shared_description(name),
+                        country_data=country_data_dict[country_id],
+                        fluctuation=value,
+                    )
+                )
 
 
 class GalacticCommunityProcessor(AbstractGamestateDataProcessor):

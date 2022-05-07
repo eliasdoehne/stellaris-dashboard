@@ -589,6 +589,11 @@ class GameState(Base):
     country_data = relationship(
         "CountryData", back_populates="game_state", cascade="all,delete,delete-orphan"
     )
+    galactic_market_resources = relationship(
+        "GalacticMarketResource",
+        back_populates="game_state",
+        cascade="all,delete,delete-orphan",
+    )
 
     def __str__(self):
         return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"
@@ -982,10 +987,19 @@ class CountryData(Base):
     has_commercial_pact_with_player = Column(Boolean)
     is_player_neighbor = Column(Boolean)
 
+    has_galactic_market_access = Column(Boolean, default=False)
+
     country = relationship("Country", back_populates="country_data")
     game_state = relationship("GameState", back_populates="country_data")
 
     budget = relationship("BudgetItem", cascade="all,delete,delete-orphan")
+
+    internal_market_resources = relationship(
+        "InternalMarketResource",
+        back_populates="country_data",
+        cascade="all,delete,delete-orphan",
+    )
+
     pop_stats_species = relationship(
         "PopStatsBySpecies",
         back_populates="country_data",
@@ -1048,6 +1062,49 @@ class CountryData(Base):
             or self.has_defensive_pact_with_player
             or self.has_federation_with_player
         )
+
+
+class GalacticMarketResource(Base):
+    """
+    Market data for a single resource at a specific time.
+    The name of the resource and its
+    """
+
+    __tablename__ = "galacticmarketresourcetable"
+    galactic_market_resource_id = Column(Integer, primary_key=True)
+    game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
+    country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
+
+    # position encodes the resource, matching the order in common/strategic_resources/00_strategic_resources.txt
+    resource_index = Column(Integer)
+    availability = Column(Integer)  # 0 or 1
+
+    fluctuation = Column(Float)
+
+    # Buy volume: Sum over all countries
+    resources_bought = Column(Float)
+    resources_sold = Column(Float)
+
+    game_state = relationship(
+        "GameState",
+        back_populates="galactic_market_resources",
+    )
+
+
+class InternalMarketResource(Base):
+    __tablename__ = "internalmarketresourcetable"
+    internal_market_resource_id = Column(Integer, primary_key=True)
+    country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
+
+    # internal market resources are stored by name
+    resource_name_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+
+    fluctuation = Column(Float)
+
+    country_data = relationship(
+        "CountryData", back_populates="internal_market_resources"
+    )
+    resource_name = relationship("SharedDescription")
 
 
 class BudgetItem(Base):

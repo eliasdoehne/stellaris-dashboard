@@ -59,6 +59,34 @@ For balance and immersion, only some information about other empires is shown by
 - `Store data of all countries`: This will read detailed budgets and pop statistics for non-player countries. It will increase the processing time and database file size, but will allow you to inspect other countries by selecting them from the dropdown menu at the top. (Basic economy information is always read, this setting only controls the very detailed budgets)
 - `Filter history ledger by event type`: By default, the event ledger does not show everything on the main page. For example, more detailed events like leader level-ups are only shown on that specific leader's ledger entry. This setting allows you to change this behavior and see all events on the main page.
 
+## Market Price Graphs
+
+The dashboard includes graphs of market prices for each resource in the game. To get the correct values, you will need to manually configure some things in the file `config.yml`, as these settings are not available in the built-in settings page. 
+
+If `config.yml` does not exist, go to the settings page linked at the top (or `localhost:28053/settings/`) and hit "Apply Settings". This will create the file with all of your current settings.
+
+These configurations are applied only when preparing the graph, so you can adjust them at any time in the configuration without reprocessing any data.
+
+### Market fees
+
+Currently, there is no easy way to get the market fee information from the save files. To still get the correct numbers in the graph, you can add the fee manually in the configuration by creating additional entries in the `market_fee` section. By default, a constant fee of 30% is assumed.
+
+For example, to configure a game where the market_fee changed to 20% in 2240 and 5% in 2300, you could change the market_fee section like this:
+```
+market_fee:
+- {date: 2200.01.01, fee: 0.3}
+- {date: 2240.01.01, fee: 0.2}
+- {date: 2300.01.01, fee: 0.05}
+```
+
+### Resources
+
+The default resource configuration should be correct for the current vanilla Stellaris game.
+
+When using mods that change resources in the game (or if Stellaris is updated in the future), you might need to manually adjust the resource configuration in `config.yml` to have the data collected for the additional resources.
+  
+These values must be configured in the correct order, for vanilla Stellaris, this is the same order in which they are defined in the game file `common/strategic_resources/00_strategic_resources.txt`.
+
 ## How to improve performance
 
 If you find that the dashboard is too slow to browse, you can try some of these things:

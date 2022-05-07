@@ -6,7 +6,7 @@ import platform
 import sys
 import traceback
 from collections import defaultdict
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 
 import yaml
 
@@ -16,7 +16,7 @@ CPU_COUNT = mp.cpu_count()
 LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 CONFIG = None
-logger = None
+logger: logging.Logger = None
 
 
 def initialize_logger():
@@ -57,6 +57,8 @@ def _get_default_base_output_path():
     return pathlib.Path.cwd() / "output"
 
 
+GALAXY_MAP_TAB = "Galaxy Map"
+MARKET_TAB = "Markets"
 DEFAULT_TAB_LAYOUT = {
     "Budget": [
         "energy_budget",
@@ -130,8 +132,35 @@ DEFAULT_TAB_LAYOUT = {
         "victory_score_graph",
         "victory_economy_score_graph",
     ],
+    MARKET_TAB: [],  # filled dynamically based on resource config
 }
-GALAXY_MAP_TAB = "Galaxy Map"
+DEFAULT_MARKET_RESOURCES = [
+    # all available resources, in the order in which they are defined in the game files
+    # common/strategic_resources/00_strategic_resources.txt
+    # Put None as price of non-tradeable resources (These must still be added because ordering matters)
+    {"name": "time", "base_price": None},
+    {"name": "energy", "base_price": None},
+    {"name": "minerals", "base_price": 1},
+    {"name": "food", "base_price": 1},
+    {"name": "physics_research", "base_price": None},
+    {"name": "society_research", "base_price": None},
+    {"name": "engineering_research", "base_price": None},
+    {"name": "influence", "base_price": None},
+    {"name": "unity", "base_price": None},
+    {"name": "consumer_goods", "base_price": 2},
+    {"name": "alloys", "base_price": 4},
+    {"name": "volatile_motes", "base_price": 10},
+    {"name": "exotic_gases", "base_price": 10},
+    {"name": "rare_crystals", "base_price": 10},
+    {"name": "sr_living_metal", "base_price": 20},
+    {"name": "sr_zro", "base_price": 20},
+    {"name": "sr_dark_matter", "base_price": 20},
+    {"name": "nanites", "base_price": None},
+    {"name": "minor_artifacts", "base_price": None},
+    {"name": "menace", "base_price": None},
+]
+DEFAULT_MARKET_FEE = [{"date": "2200.01.01", "fee": 0.3}]
+
 
 DEFAULT_SETTINGS = dict(
     save_file_path=_get_default_save_path(),
@@ -153,6 +182,8 @@ DEFAULT_SETTINGS = dict(
     plot_width=1150,
     plot_height=640,
     tab_layout=DEFAULT_TAB_LAYOUT,
+    market_resources=DEFAULT_MARKET_RESOURCES,
+    market_fee=DEFAULT_MARKET_FEE,
 )
 
 
@@ -186,6 +217,8 @@ class Config:
     debug_mode: bool = False
 
     tab_layout: Dict[str, List[str]] = None
+    market_resources: List[Dict[str, Any]] = None
+    market_fee: List[Dict[str, float]] = None
 
     PATH_KEYS = {
         "base_output_path",
@@ -215,11 +248,21 @@ class Config:
         "save_name_filter",
         "log_level",
     }
-    DICT_KEYS = {"tab_layout"}
-    ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS
+    DICT_KEYS = {
+        "tab_layout",
+    }
+    LIST_KEYS = {
+        "market_resources",
+        "market_fee",
+    }
+    ALL_KEYS = (
+        PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
+    )
 
     def apply_dict(self, settings_dict):
         logger.info("Updating settings")
+        tab_layout = self._preprocess_tab_layout(settings_dict)
+        settings_dict["tab_layout"] = tab_layout
         for key, val in settings_dict.items():
             if key not in Config.ALL_KEYS:
                 logger.info(f"Ignoring unknown setting {key} with value {val}.")
@@ -231,8 +274,7 @@ class Config:
                 val = self._process_path_keys(key, val)
                 if val is None:
                     continue
-            if key == "tab_layout":
-                val = self._process_tab_layout(val)
+
             self.__setattr__(key, val)
             if val != old_val:
                 logger.info(
@@ -263,7 +305,8 @@ class Config:
                 return
         return val
 
-    def _process_tab_layout(self, layout_dict):
+    def _preprocess_tab_layout(self, settings_dict):
+        layout_dict = settings_dict.get("tab_layout", DEFAULT_TAB_LAYOUT)
         if not isinstance(layout_dict, dict):
             logger.error(f"Invalid tab layout configuration: {layout_dict}")
             logger.info(f"Falling back to default tab layout.")
@@ -272,7 +315,13 @@ class Config:
         for tab, plot_list in layout_dict.items():
             if tab == GALAXY_MAP_TAB:
                 logger.warning(f"Ignoring tab {tab}, it is reserved for the galaxy map")
-                pass
+                continue
+            if tab == MARKET_TAB:
+                logger.warning(
+                    f"Ignoring values for tab {tab}, it is filled dynamically"
+                )
+                processed[tab] = []
+                continue
             if not isinstance(plot_list, list):
                 logger.warning(f"Ignoring invalid graph list for tab {tab}")
                 pass

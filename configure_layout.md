@@ -2,7 +2,7 @@
 
 Disabling some graphs means that the dashboard has to do less work, making it faster to browse. Also, you can remove any graphs that you don't care about and arrange them into tabs in whatever way you prefer.
 
-The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Galaxy Map", which is reserved.
+The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Galaxy Map" and "Markets", which are reserved for special tabs and will be ignored.
 
 For example this would be a valid configuration you can add to the config.yml:
 ```yaml
