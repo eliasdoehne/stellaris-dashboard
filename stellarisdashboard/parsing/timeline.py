@@ -179,6 +179,7 @@ class TimelineExtractor:
         yield SystemProcessor()
         yield BypassProcessor()
         yield CountryProcessor()
+        yield FleetOwnershipProcessor()
         yield SystemOwnershipProcessor()
         yield DiplomacyDictProcessor()
         yield DiplomaticRelationsProcessor()
@@ -272,8 +273,11 @@ class SystemProcessor(AbstractGamestateDataProcessor):
         }
         self.starbase_systems = {}
         for ingame_id, system_data in self._gamestate_dict["galactic_object"].items():
-            if "starbase" in system_data:
-                self.starbase_systems[system_data["starbase"]] = ingame_id
+            if "starbases" in system_data:
+                starbases = system_data["starbases"]
+                if len(starbases) > 1:  # TODO REmove
+                    raise ValueError(f"Multiple starbases in {ingame_id} {system_data}")
+                self.starbase_systems[starbases[0]] = ingame_id
             if ingame_id in self.systems_by_ingame_id:
                 self._update_system(
                     system_model=self.systems_by_ingame_id[ingame_id],
@@ -435,16 +439,47 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             self.countries_by_ingame_id[country_id] = country_model
 
 
+class FleetOwnershipProcessor(AbstractGamestateDataProcessor):
+    ID = "fleet_owner"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self.owner_by_fleet_id: Dict[int, datamodel.Country] = None
+
+    def initialize_data(self):
+        self.owner_by_fleet_id = {}
+
+    def data(self) -> Dict[int, Set[datamodel.System]]:
+        return self.owner_by_fleet_id
+
+    def extract_data_from_gamestate(self, dependencies):
+        countries_dict = dependencies[CountryProcessor.ID]
+        for country_id, country_dict in self._gamestate_dict["country"].items():
+            country_model = countries_dict.get(country_id)
+            if not country_model:
+                continue
+            fleets_manager = country_dict.get("fleets_manager", {})
+            if not isinstance(fleets_manager, dict):
+                continue
+            owned_fleets = fleets_manager.get("owned_fleets", [])
+            if not isinstance(owned_fleets, list):
+                continue
+            for fleet_dict in owned_fleets:
+                fleet_id = fleet_dict.get("fleet")
+                self.owner_by_fleet_id[fleet_id] = country_model
+
+
 class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
     ID = "system_owners"
-    DEPENDENCIES = [SystemProcessor.ID, CountryProcessor.ID]
+    DEPENDENCIES = [SystemProcessor.ID, CountryProcessor.ID, FleetOwnershipProcessor.ID]
 
     def __init__(self):
         super().__init__()
         self.systems_by_owner_country_id: Dict[int, Set[datamodel.System]] = None
 
     def initialize_data(self):
-        self.systems_by_owner_country_id = {}
+        self.systems_by_owner_country_id = collections.defaultdict(set)
 
     def data(self) -> Dict[int, Set[datamodel.System]]:
         return self.systems_by_owner_country_id
@@ -455,29 +490,31 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             return
         countries_dict = dependencies[CountryProcessor.ID]
         systems_dict = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        fleet_owners_dict = dependencies[FleetOwnershipProcessor.ID]
+        ship_to_fleet_id_dict = {
+            ship_id: ship_dict["fleet"]
+            for ship_id, ship_dict in self._gamestate_dict["ships"].items()
+        }
         starbase_system_map = dependencies[SystemProcessor.ID]["starbase_system_map"]
+
         starbase_systems = set()
 
         for starbase_id, starbase_dict in starbases.items():
             if not isinstance(starbase_dict, dict):
                 continue
             system_id_in_game = starbase_system_map.get(starbase_id)
-            country_id_in_game = starbase_dict.get("owner")
+            country_model = fleet_owners_dict.get(ship_to_fleet_id_dict.get(starbase_dict.get("station")))
             system_model = systems_dict.get(system_id_in_game)
-            country_model = countries_dict.get(country_id_in_game)
 
             if country_model is None or system_model is None:
                 logger.warning(
-                    f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game} and "
-                    f"country {country_id_in_game}"
+                    f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game}"
                 )
                 continue
 
             starbase_systems.add(system_id_in_game)
 
-            if country_id_in_game not in self.systems_by_owner_country_id:
-                self.systems_by_owner_country_id[country_id_in_game] = set()
-            self.systems_by_owner_country_id[country_id_in_game].add(system_model)
+            self.systems_by_owner_country_id[country_model.country_id_in_game].add(system_model)
 
             if country_model != system_model.country:
                 self._update_owner(
@@ -2330,6 +2367,8 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
         market = self._gamestate_dict.get("market", {})
         fluctuation_dict = market.get("internal_market_fluctuations", {})
         market_countries = fluctuation_dict.get("country", [])
+        if isinstance(market_countries, int):
+            market_countries = [market_countries]
         fluctuation_resources = fluctuation_dict.get("resources", [])
 
         if not all(

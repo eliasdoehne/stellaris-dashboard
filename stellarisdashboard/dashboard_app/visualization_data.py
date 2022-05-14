@@ -1513,7 +1513,7 @@ class GalaxyMapData:
         if country is None:
             return GalaxyMapData.UNCLAIMED
         if config.CONFIG.show_everything:
-            return country.country_name
+            return country.rendered_name
         if not country.has_met_player():
             return GalaxyMapData.UNCLAIMED
-        return country.country_name
+        return country.rendered_name
