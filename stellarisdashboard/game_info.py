@@ -17,10 +17,10 @@ class NameRenderer:
 
         Localization files can be passed in, by default the dashboard tries to locate them from
         """
-        self.name_mapping = {}
+        self.name_mapping = {"global_event_country": "Global event country"}
         for p in self.localization_files:
             # manually parse yaml, yaml.safe_load doesnt seem to work
-            with p.open("rt") as f:
+            with open(p, "rt") as f:
                 for line in f:
                     try:
                         key, val, *rest = line.strip().split('"')
@@ -55,6 +55,19 @@ class NameRenderer:
             ]:
                 rendered = rendered.replace(f"{lparen}{key}{rparen}", value)
         return rendered
+
+
+global_renderer: NameRenderer = None
+
+
+def render_name(json_str: str):
+    global global_renderer
+    if global_renderer is None:
+        from stellarisdashboard import config
+
+        global_renderer = NameRenderer(config.CONFIG.localization_files)
+        global_renderer.load_name_mapping()
+    return global_renderer.render_from_json(json_str)
 
 
 PHYSICS_TECHS = {

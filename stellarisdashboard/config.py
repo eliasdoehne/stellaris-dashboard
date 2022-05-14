@@ -7,7 +7,6 @@ import sys
 import traceback
 from collections import defaultdict
 from typing import List, Dict, Any
-
 import yaml
 
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
@@ -59,7 +58,7 @@ def _get_default_localization_files() -> List[pathlib.Path]:
         pathlib.Path("C:/Program Files (x86)/Steam/steamapps/common/Stellaris/"),
         (pathlib.Path.home() / ".steam/steamapps/common/Stellaris/").absolute(),
     ]:
-        p_abs = (p / "localisation/english/")
+        p_abs = p / "localisation/english/"
         files += p_abs.glob("*.yaml")
         files += p_abs.glob("*.yml")
     return files
@@ -279,6 +278,8 @@ class Config:
                 logger.info(f"Ignoring unknown setting {key} with value {val}.")
                 continue
             old_val = self.__dict__.get(key)
+            if key == "localization_files":
+                val = [pathlib.Path(p) for p in val]
             if key in Config.BOOL_KEYS:
                 val = self._preprocess_bool(val)
             if key in Config.PATH_KEYS:
@@ -359,6 +360,8 @@ class Config:
                 if key in Config.PATH_KEYS:
                     val = str(val)
                 result[key] = val
+            if key == "localization_files":
+                result[key] = [str(p) for p in val]
         return result
 
     def get_adjustable_settings_dict(self):

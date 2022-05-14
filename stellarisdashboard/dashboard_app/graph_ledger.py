@@ -150,7 +150,7 @@ def update_country_select_options(search):
                 and (c.has_met_player() or config.CONFIG.show_everything)
                 and not c.is_other_player
             ):
-                options.append({"label": c.country_name, "value": c.country_id_in_game})
+                options.append({"label": c.rendered_name, "value": c.country_id_in_game})
     return options
 
 

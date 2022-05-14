@@ -337,7 +337,7 @@ def get_available_games_dict() -> Dict[str, Dict[str, str]]:
                 game_id=game_id,
                 game_date=days_to_date(most_recent_gamestate.date),
                 num_saves=session.query(GameState.gamestate_id).count(),
-                country_name=game.player_country_name,
+                country_name=game_info.render_name(game.player_country_name),
                 difficulty=game.difficulty,
                 galaxy=game.galaxy,
                 last_updated=game.last_updated,
@@ -422,7 +422,7 @@ class SharedDescription(Base):
     __tablename__ = "shareddescriptiontable"
     description_id = Column(Integer, primary_key=True)
 
-    text = Column(String(120), index=True)
+    text = Column(String(500), index=True)
 
 
 class System(Base):
@@ -491,10 +491,9 @@ class System(Base):
                 return None
         return self.country
 
-    def get_name(self):
-        if self.name.startswith("NAME_"):
-            return game_info.convert_id_to_name(self.name, remove_prefix="NAME")
-        return self.name
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.name)
 
     def __str__(self):
         return f'System "{self.name}" @ {self.coordinate_x}, {self.coordinate_y}'
@@ -668,6 +667,10 @@ class Country(Base):
         "DiplomaticRelation",
         foreign_keys=lambda: [DiplomaticRelation.target_country_id],
     )
+
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.country_name)
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -1168,6 +1171,10 @@ class Species(Base):
     def traits(self):
         return set(t.name for t in self.db_traits)
 
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.species_name)
+
 
 class SpeciesTrait(Base):
     __tablename__ = "speciestraittable"
@@ -1231,6 +1238,10 @@ class War(Base):
     participants = relationship(
         "WarParticipant", back_populates="war", cascade="all,delete,delete-orphan"
     )
+
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.name)
 
 
 class WarParticipant(Base):
@@ -1325,7 +1336,8 @@ class Leader(Base):
     country_id = Column(ForeignKey(Country.country_id))
     leader_id_in_game = Column(Integer, index=True)
 
-    leader_name = Column(String(80))
+    first_name = Column(String(80))
+    second_name = Column(String(80))
 
     species_id = Column(ForeignKey(Species.species_id))
     leader_class = Column(String(80))
@@ -1349,9 +1361,16 @@ class Leader(Base):
         "HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan"
     )
 
-    def get_name(self):
-        result = f"{self.leader_class.capitalize()} {self.leader_name}"
-        return result[0].upper() + result[1:]
+    def get_name_and_class(self):
+        return f"{self.leader_class.capitalize()} {self.get_name()}"
+
+    @property
+    def rendered_name(self):
+        rendered_first = game_info.render_name(self.first_name)
+        rendered_second = ""
+        if self.second_name and self.second_name != '""':
+            rendered_second = " " + game_info.render_name(self.second_name)
+        return f"{rendered_first}{rendered_second}"
 
     @property
     def agenda(self):
@@ -1385,12 +1404,8 @@ class Planet(Base):
     modifiers_hash = Column(Integer, default=0)
 
     @property
-    def name(self):
-        if self.planet_name is None:
-            return "Unnamed Planet"
-        if self.planet_name.startswith("NAME_"):
-            return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
-        return self.planet_name
+    def rendered_name(self):
+        return game_info.render_name(self.planet_name)
 
     @property
     def planetclass(self):
@@ -1683,6 +1698,11 @@ class HistoricalEvent(Base):
             current_pc = game_info.convert_id_to_name(current_pc, remove_prefix="pc")
             target_pc = game_info.convert_id_to_name(target_pc, remove_prefix="pc")
             return f"from {current_pc} to {target_pc}"
+        elif self.event_type in [
+            HistoricalEventType.envoy_federation,
+            HistoricalEventType.formed_federation,
+        ]:
+            return game_info.render_name(self.db_description.text)
         elif self.db_description:
             return game_info.convert_id_to_name(self.db_description.text)
         else:

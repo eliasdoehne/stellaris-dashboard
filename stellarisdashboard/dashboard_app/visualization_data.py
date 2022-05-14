@@ -276,6 +276,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         added_new_val = False
         self.dates.append(gs.date / 360.0)
         for cd in gs.country_data:
+            country_name = cd.country.rendered_name
             try:
                 if (
                     config.CONFIG.show_all_country_types
@@ -286,10 +287,10 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
                 if new_val is not None:
                     added_new_val = True
                     self._add_new_value_to_data_dict(
-                        cd.country.country_name, new_val, default_val=self.DEFAULT_VAL
+                        country_name, new_val, default_val=self.DEFAULT_VAL
                     )
             except Exception as e:
-                logger.exception(cd.country.country_name)
+                logger.exception(country_name)
         if not added_new_val:
             self.dates.pop()  # if nothing was added, we don't need to remember the date.
         self._pad_data_dict(default_val=self.DEFAULT_VAL)
@@ -414,7 +415,7 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
                         key, new_val, default_val=self.DEFAULT_VAL
                     )
         except Exception as e:
-            logger.exception(player_cd.country.country_name)
+            logger.exception(player_cd.country.rendered_country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
 
     def _get_player_countrydata(self, gs: datamodel.GameState) -> datamodel.CountryData:
@@ -689,7 +690,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsBySpecies)
-        return f"{ps.species.species_name} (ID {ps.species.species_id_in_game})"
+        return f"{ps.species.rendered_name} (ID {ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):
@@ -800,7 +801,7 @@ class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.A
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PlanetStats)
-        return f"{ps.planet.name} (ID {ps.planet.planet_id_in_game})"
+        return f"{ps.planet.rendered_name} (ID {ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):
@@ -1412,7 +1413,7 @@ class GalaxyMapData:
                 assert isinstance(system, datamodel.System)
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
-                    name=system.get_name(),
+                    name=system.rendered_name,
                     country=GalaxyMapData.UNCLAIMED,
                     system_id=system.system_id,
                     pos=[-system.coordinate_x, -system.coordinate_y],

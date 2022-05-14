@@ -375,32 +375,38 @@ class EventTemplateDictBuilder:
     def _get_url_for(self, key, a_class="textlink"):
         if isinstance(key, datamodel.Country):
             return utils.preformat_history_url(
-                key.country_name,
+                key.rendered_name,
                 country=key.country_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.System):
             return utils.preformat_history_url(
-                game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
+                key.rendered_name,
                 system=key.system_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Leader):
             return utils.preformat_history_url(
-                key.leader_name,
+                key.rendered_name,
                 leader=key.leader_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Planet):
             return utils.preformat_history_url(
-                key.name, planet=key.planet_id, a_class=a_class, game_id=self.game_id
+                key.rendered_name,
+                planet=key.planet_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         elif isinstance(key, datamodel.War):
             return utils.preformat_history_url(
-                key.name, war=key.war_id, a_class=a_class, game_id=self.game_id
+                key.rendered_name,
+                war=key.war_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         else:
             return str(key)
@@ -464,9 +470,9 @@ class EventTemplateDictBuilder:
     def leader_details(self, leader_model: datamodel.Leader) -> Dict[str, str]:
         country_url = self._get_url_for(leader_model.country)
         details = {
-            "Leader Name": leader_model.leader_name,
+            "Leader Name": leader_model.get_name(),
             "Gender": game_info.convert_id_to_name(leader_model.gender),
-            "Species": leader_model.species.species_name,
+            "Species": game_info.render_name(leader_model.species.species_name),
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),

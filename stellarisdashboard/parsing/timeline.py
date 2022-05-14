@@ -3,15 +3,19 @@ import collections
 import dataclasses
 import datetime
 import itertools
+import json
 import logging
 import random
-import re
 import time
 from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple
 
 from stellarisdashboard import datamodel, game_info, config
 
 logger = logging.getLogger(__name__)
+
+
+def dump_name(name: dict):
+    return json.dumps(name, sort_keys=True)
 
 
 @dataclasses.dataclass
@@ -116,9 +120,9 @@ class TimelineExtractor:
                 f"{self.basic_info.logger_str} Adding new game {game_id} to database."
             )
             if player_country_id is not None:
-                player_country_name = self._gamestate_dict["country"][
-                    player_country_id
-                ]["name"]
+                player_country_name = dump_name(
+                    self._gamestate_dict["country"][player_country_id]["name"]
+                )
             else:
                 player_country_name = "Observer Mode"
             galaxy_info = self._gamestate_dict["galaxy"]
@@ -298,7 +302,7 @@ class SystemProcessor(AbstractGamestateDataProcessor):
                 f"{self._basic_info.logger_str} Found no data for system with ID {system_id}!"
             )
             return
-        system_name = system_data.get("name")
+        system_name = dump_name(system_data.get("name"))
         coordinate_x = system_data.get("coordinate", {}).get("x", 0)
         coordinate_y = system_data.get("coordinate", {}).get("y", 0)
         system_model = datamodel.System(
@@ -403,7 +407,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             if not isinstance(country_data_dict, dict):
                 continue
             country_type = country_data_dict.get("type")
-            country_name = country_data_dict.get("name", "no name")
+            country_name = dump_name(country_data_dict.get("name", "no name"))
             country_model = (
                 self._session.query(datamodel.Country)
                 .filter_by(game=self._db_game, country_id_in_game=country_id)
@@ -931,7 +935,7 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
                 self._robot_species.add(species_ingame_id)
 
     def _get_or_add_species(self, species_id_in_game: int, species_data: Dict):
-        species_name = species_data.get("name", "Unnamed Species")
+        species_name = dump_name(species_data.get("name", "Unnamed Species"))
         species = (
             self._session.query(datamodel.Species)
             .filter_by(game=self._db_game, species_id_in_game=species_id_in_game)
@@ -1091,10 +1095,9 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
     def get_leader_name(self, leader_dict):
         if "name" not in leader_dict:
             return "Unknown Leader"
-        first_name = leader_dict["name"].get("first_name", "Unknown Leader")
-        last_name = leader_dict["name"].get("second_name", "")
-        leader_name = f"{first_name} {last_name}".strip()
-        return leader_name
+        first_name = dump_name(leader_dict["name"].get("first_name", "Unknown Leader"))
+        last_name = dump_name(leader_dict["name"].get("second_name", ""))
+        return first_name, last_name
 
     def _update_leader_attributes(self, leader: datamodel.Leader, leader_dict):
         if "pre_ruler_class" in leader_dict:
@@ -1103,7 +1106,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader_class = leader_dict.get("class", "unknown class")
         leader_gender = leader_dict.get("gender", "other")
         leader_agenda = leader_dict.get("agenda", "unknown agenda")
-        leader_name = self.get_leader_name(leader_dict)
+        first_name, second_name = self.get_leader_name(leader_dict)
         level = leader_dict.get("level", -1)
         species_id = leader_dict.get("species", -1)
         leader_species = self._species_dict.get(species_id)
@@ -1112,7 +1115,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 f"{self._basic_info.logger_str} Invalid species ID {species_id} for leader {leader_dict}"
             )
         if (
-            leader.leader_name != leader_name
+            leader.first_name != first_name
+            or leader.second_name != second_name
             or leader.leader_class != leader_class
             or leader.gender != leader_gender
             or leader.leader_agenda != leader_agenda
@@ -1130,7 +1134,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                     )
                 )
             leader.last_level = level
-            leader.leader_name = leader_name
+            leader.first_name = first_name
+            leader.second_name = second_name
             leader.leader_class = leader_class
             leader.gender = leader_gender
             leader.leader_agenda = leader_agenda
@@ -1221,7 +1226,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         self, system_model: datamodel.System, planet_id: int, planet_dict: Dict
     ) -> datamodel.Planet:
         planet_class = planet_dict.get("planet_class")
-        planet_name = planet_dict.get("name")
+        planet_name = dump_name(planet_dict.get("name"))
         colonize_date = planet_dict.get("colonize_date")
         if colonize_date:
             colonize_date = datamodel.date_to_days(colonize_date)
@@ -1391,7 +1396,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(sector_info, dict):
                     continue
                 sector_description = self._get_or_add_shared_description(
-                    text=(sector_info.get("name", "Unnamed"))
+                    text=dump_name(sector_info.get("name", "Unnamed"))
                 )
                 governor_model = self._leaders_dict.get(sector_info.get("governor"))
 
@@ -1549,7 +1554,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         if not isinstance(target_pc, str):
             logger.info(
                 f"{self._basic_info.logger_str} Unexpected target planet class for terraforming of "
-                f"{planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}"
+                f"{planet_model.planet_name}: From {planet_model.planet_class} to {target_pc}"  # TODO RENDER?
             )
             return
         text = f"{current_pc},{target_pc}"
@@ -1640,7 +1645,7 @@ class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
 
     def _update_planet_model(self, planet_dict: Dict, planet_model: datamodel.Planet):
         planet_class = planet_dict.get("planet_class")
-        planet_name = planet_dict.get("name")
+        planet_name = dump_name(planet_dict.get("name"))
         if planet_model.planet_name != planet_name:
             planet_model.planet_name = planet_name
             self._session.add(planet_model)
@@ -1863,7 +1868,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
 
         for country_id, country_model in countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
-            gov_name = country_dict.get("name", "Unnamed Country")
+            gov_name = dump_name(country_dict.get("name", "Unnamed Country"))
             ethics_list = country_dict.get("ethos", {}).get("ethic", [])
             if not isinstance(ethics_list, list):
                 ethics_list = [ethics_list]
@@ -1997,7 +2002,7 @@ class FactionProcessor(AbstractGamestateDataProcessor):
             country_model = countries_dict.get(faction_dict.get("country"))
             if country_model is None:
                 continue
-            faction_name = faction_dict.get("name", "Unnamed faction")
+            faction_name = dump_name(faction_dict.get("name", "Unnamed faction"))
             # If the faction is in the database, get it, otherwise add a new faction
             faction_model = self._get_or_add_faction(
                 faction_id_in_game=faction_id,
@@ -2246,7 +2251,7 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                     and target_country_model.country_id_in_game in members
                 ):
                     return self._get_or_add_shared_description(
-                        fed_dict.get("name", "Unnamed Federation")
+                        dump_name(fed_dict.get("name", "Unnamed Federation"))
                     )
         return None
 
@@ -2646,8 +2651,10 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 event_type = datamodel.HistoricalEventType.envoy_federation
                 federations = self._gamestate_dict.get("federation", {})
                 if isinstance(federations, dict):
-                    federation_name = federations.get(location.get("id"), {}).get(
-                        "name", "Unknown Federation"
+                    federation_name = dump_name(
+                        federations.get(location.get("id"), {}).get(
+                            "name", "Unknown Federation"
+                        )
                     )
                     description = self._get_or_add_shared_description(federation_name)
             else:
@@ -2727,7 +2734,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 continue
 
             ships = fleet_dict.get("ships", [])
-            name = fleet_dict.get("name", "Unnamed Fleet")
+            name = dump_name(fleet_dict.get("name", "Unnamed Fleet"))
 
             for ship_id in ships:
                 ship_dict = self._gamestate_dict["ships"].get(ship_id)
@@ -3166,9 +3173,9 @@ class WarProcessor(AbstractGamestateDataProcessor):
                     )
                 )
 
-    def _get_war_name(self, war_name: str):
+    def _get_war_name(self, war_name: dict):
         """Sometimes part of a war name are highlighted which doesn't show correctly"""
-        return re.sub(r"\x11.", "", war_name)
+        return dump_name(war_name)
 
 
 class PopStatsProcessor(AbstractGamestateDataProcessor):
