@@ -44,16 +44,14 @@ class NameRenderer:
         rendered = self.name_mapping.get(name_dict.get("key"), self.default_name)
         for var in name_dict.get("variables", []):
             key = var.get("key")
-            value = var.get("value", {}).get("key")
-            value = self.name_mapping.get(value, value)
-
+            subst_value = self.render_from_dict(var.get("value", {}))
             # try all combinations of escaping identifiers to substitute the variables
             for lparen, rparen in [
                 ("<", ">"),
                 ("[", "]"),
                 ("$", "$"),
             ]:
-                rendered = rendered.replace(f"{lparen}{key}{rparen}", value)
+                rendered = rendered.replace(f"{lparen}{key}{rparen}", subst_value)
         return rendered
 
 

@@ -488,12 +488,12 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
         starbases = self._gamestate_dict.get("starbase_mgr", {}).get("starbases", {})
         if not isinstance(starbases, dict):
             return
-        countries_dict = dependencies[CountryProcessor.ID]
         systems_dict = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
         fleet_owners_dict = dependencies[FleetOwnershipProcessor.ID]
         ship_to_fleet_id_dict = {
             ship_id: ship_dict["fleet"]
             for ship_id, ship_dict in self._gamestate_dict["ships"].items()
+            if isinstance(ship_dict, dict)
         }
         starbase_system_map = dependencies[SystemProcessor.ID]["starbase_system_map"]
 
@@ -2935,6 +2935,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._settle_finished_wars()
 
     def _update_war(self, war_id: int, war_dict):
+        # TODO FIx war names
         war_name = self._get_war_name(war_dict.get("name", "Unnamed war"))
         war_model = (
             self._session.query(datamodel.War)

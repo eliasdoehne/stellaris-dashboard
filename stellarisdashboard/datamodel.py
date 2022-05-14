@@ -1213,6 +1213,10 @@ class PoliticalFaction(Base):
     def type(self):
         return self.db_faction_type.text
 
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.faction_name)
+
 
 class War(Base):
     """Wars are represented by a list of participants and a list of combat events."""
@@ -1614,6 +1618,10 @@ class Fleet(Base):
     name = Column(String(80))
 
     commander = relationship(Leader)
+
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.name)
 
 
 class HistoricalEvent(Base):

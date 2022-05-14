@@ -91,6 +91,32 @@ class NameTestcase:
             expected="Commonwealth of Custom Name",
             description="empire, custom",
         ),
+        NameTestcase(
+            {
+                "key": "PREFIX_NAME_FORMAT",
+                "variables": [
+                    {"key": "NAME", "value": {"key": "ART2_SHIP_Rit-Kwyr"}},
+                    {
+                        "key": "PREFIX",
+                        "value": {
+                            "key": "format.trade_league.1",
+                            "variables": [
+                                {
+                                    "key": "trade_league",
+                                    "value": {"key": "Trading_Consortium"},
+                                },
+                                {
+                                    "key": "This.GetSpeciesName",
+                                    "value": {"key": "SPEC_Qiramulan"},
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+            expected="Qiramulan Trading Consortium Rit-Kwyr",
+            description="fleet, in-game science fleet",
+        ),
     ],
     ids=lambda tc: tc.description,
 )
