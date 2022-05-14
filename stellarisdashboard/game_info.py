@@ -1,3 +1,62 @@
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class NameRenderer:
+    default_name = "Unknown name"
+
+    def __init__(self, localization_files):
+        self.localization_files = localization_files
+        self.name_mapping = None
+
+    def load_name_mapping(self):
+        """
+        Load a mapping of all name keys to their corresponding templates / localized values.
+
+        Localization files can be passed in, by default the dashboard tries to locate them from
+        """
+        self.name_mapping = {}
+        for p in self.localization_files:
+            # manually parse yaml, yaml.safe_load doesnt seem to work
+            with p.open("rt") as f:
+                for line in f:
+                    try:
+                        key, val, *rest = line.strip().split('"')
+                        self.name_mapping[key.strip().rstrip(":0")] = val.strip()
+                    except Exception:
+                        pass
+
+    def render_from_json(self, name_json: str):
+        rendered = self.render_from_dict(json.loads(name_json))
+        if rendered == self.default_name:
+            logger.warning(
+                "Failed to resolve a name, please check if you configured localization files."
+            )
+            logger.warning(f"Instructions can be found in README.md")
+            logger.warning(f"Failed name: {name_json!r}")
+        return rendered
+
+    def render_from_dict(self, name_dict: dict):
+        if name_dict.get("literal") == "yes":
+            return name_dict.get("key", self.default_name)
+        rendered = self.name_mapping.get(name_dict.get("key"), self.default_name)
+        for var in name_dict.get("variables", []):
+            key = var.get("key")
+            value = var.get("value", {}).get("key")
+            value = self.name_mapping.get(value, value)
+
+            # try all combinations of escaping identifiers to substitute the variables
+            for lparen, rparen in [
+                ("<", ">"),
+                ("[", "]"),
+                ("$", "$"),
+            ]:
+                rendered = rendered.replace(f"{lparen}{key}{rparen}", value)
+        return rendered
+
+
 PHYSICS_TECHS = {
     "tech_databank_uplinks",
     "tech_basic_science_lab_1",
