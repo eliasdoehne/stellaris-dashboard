@@ -457,7 +457,7 @@ class System(Base):
         "HyperLane", foreign_keys=lambda: [HyperLane.system_two_id]
     )
 
-    bypasses = relationship("Bypass")
+    bypasses = relationship("Bypass", cascade="all,delete,delete-orphan")
 
     historical_events = relationship(
         "HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan"
@@ -1701,6 +1701,7 @@ class HistoricalEvent(Base):
         elif self.event_type in [
             HistoricalEventType.envoy_federation,
             HistoricalEventType.formed_federation,
+            HistoricalEventType.governed_sector,
         ]:
             return game_info.render_name(self.db_description.text)
         elif self.db_description:

@@ -108,6 +108,7 @@ class TimelineExtractor:
                     {key: all_dependencies[key] for key in data_processor.DEPENDENCIES}
                 )
                 all_dependencies[data_processor.ID] = data_processor.data()
+                self._session.flush()
                 logger.info(
                     f"{self.basic_info.logger_str}         done ({time.process_time() - t_start:.3f} s)"
                 )
@@ -293,7 +294,7 @@ class SystemProcessor(AbstractGamestateDataProcessor):
                 self.systems_by_ingame_id[ingame_id] = system
 
     def _update_system(self, system_model: datamodel.System, system_data: Dict):
-        system_name = system_data.get("name")
+        system_name = dump_name(system_data.get("name"))
         if system_name != system_model.name:
             system_model.name = system_name
             self._session.add(system_model)
@@ -359,7 +360,6 @@ class BypassProcessor(AbstractGamestateDataProcessor):
         }
 
         # Number of bypasses should be manageable. It would be tricky to update changing networks, so let's delete 'em
-
         self._session.query(datamodel.Bypass).delete()
         for sys_id, sys_dict in bypass_systems.items():
             if sys_id not in systems_dict:
@@ -503,7 +503,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             if not isinstance(starbase_dict, dict):
                 continue
             system_id_in_game = starbase_system_map.get(starbase_id)
-            country_model = fleet_owners_dict.get(ship_to_fleet_id_dict.get(starbase_dict.get("station")))
+            country_model = fleet_owners_dict.get(
+                ship_to_fleet_id_dict.get(starbase_dict.get("station"))
+            )
             system_model = systems_dict.get(system_id_in_game)
 
             if country_model is None or system_model is None:
@@ -514,7 +516,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
 
             starbase_systems.add(system_id_in_game)
 
-            self.systems_by_owner_country_id[country_model.country_id_in_game].add(system_model)
+            self.systems_by_owner_country_id[country_model.country_id_in_game].add(
+                system_model
+            )
 
             if country_model != system_model.country:
                 self._update_owner(
@@ -2743,9 +2747,9 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
 class FleetInfoProcessor(AbstractGamestateDataProcessor):
     ID = "fleets"
     DEPENDENCIES = [
-        CountryProcessor.ID,
         LeaderProcessor.ID,
         CountryDataProcessor.ID,
+        FleetOwnershipProcessor.ID,
     ]
 
     def __init__(self):
@@ -2754,21 +2758,21 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
         self._fleet_compos = None
         self._leaders = None
         self._country_datas = None
+        self._fleet_owners = None
 
     def initialize_data(self):
         self._new_fleet_commands = {}
         self._fleet_compos = {}
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        countries = dependencies[CountryProcessor.ID]
         self._leaders = dependencies[LeaderProcessor.ID]
         self._country_datas = dependencies[CountryDataProcessor.ID]
+        self._fleet_owners = dependencies[FleetOwnershipProcessor.ID]
 
         for fleet_id, fleet_dict in self._gamestate_dict["fleet"].items():
             if not isinstance(fleet_dict, dict):
                 continue
-            owner_id = fleet_dict.get("owner")
-            country = countries.get(owner_id)
+            country = self._fleet_owners.get(fleet_id)
             if country is None:
                 continue
 
@@ -2781,7 +2785,9 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                     continue
 
                 self._check_ship_command(fleet_id, name, ship_dict)
-                self._count_ship_for_fleet_composition(owner_id, ship_dict)
+                self._count_ship_for_fleet_composition(
+                    country.country_id_in_game, ship_dict
+                )
 
         self._store_fleet_composition()
         self._update_leader_fleet_commands()

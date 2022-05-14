@@ -362,13 +362,13 @@ class EventTemplateDictBuilder:
         if isinstance(key, datamodel.Country):
             return self._get_url_for(key, a_class="titlelink")
         elif isinstance(key, datamodel.System):
-            return f"{key.get_name()} System"
+            return f"{key.rendered_name} System"
         elif isinstance(key, datamodel.Leader):
-            return key.get_name()
+            return key.rendered_name
         elif isinstance(key, datamodel.War):
-            return key.name
+            return key.rendered_name
         elif isinstance(key, datamodel.Planet):
-            return f"Planet {key.name}"
+            return f"Planet {key.rendered_name}"
         else:
             return ""
 
@@ -419,7 +419,7 @@ class EventTemplateDictBuilder:
             "Star Class": star_class,
         }
         hyperlane_targets = sorted(
-            system_model.neighbors, key=datamodel.System.get_name
+            system_model.neighbors, key=lambda s: s.rendered_name
         )
         details["Hyperlanes"] = ", ".join(
             self._get_url_for(s) for s in hyperlane_targets
@@ -470,9 +470,9 @@ class EventTemplateDictBuilder:
     def leader_details(self, leader_model: datamodel.Leader) -> Dict[str, str]:
         country_url = self._get_url_for(leader_model.country)
         details = {
-            "Leader Name": leader_model.get_name(),
+            "Leader Name": leader_model.rendered_name,
             "Gender": game_info.convert_id_to_name(leader_model.gender),
-            "Species": game_info.render_name(leader_model.species.species_name),
+            "Species": leader_model.species.rendered_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),
