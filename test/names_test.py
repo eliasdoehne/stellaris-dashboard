@@ -3,8 +3,7 @@ import pathlib
 
 import pytest
 
-import config
-import game_info
+from stellarisdashboard import config, game_info
 
 
 @dataclasses.dataclass
