@@ -32,7 +32,7 @@ class NameRenderer:
         try:
             json_dict = json.loads(name_json)
         except (json.JSONDecodeError, TypeError):
-            return  str(name_json)
+            return str(name_json)
         rendered = self.render_from_dict(json_dict)
         if rendered == self.default_name:
             logger.warning(
