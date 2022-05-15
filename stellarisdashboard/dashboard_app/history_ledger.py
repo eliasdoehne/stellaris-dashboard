@@ -131,7 +131,7 @@ class EventFilter:
         else:
             filter_dict = {}
             if self.country_filter is not None:
-                filter_dict = dict(country_id=(self.country_filter))
+                filter_dict = dict(country_id=self.country_filter)
             return (
                 datamodel.Country,
                 "country",
@@ -235,7 +235,7 @@ class EventTemplateDictBuilder:
             event_query_kwargs,
             key_obj_filter_dict,
             key_object_order_column,
-        ) = self.event_filter.query_args_info
+        ) = params = self.event_filter.query_args_info
 
         self._most_recent_date = utils.get_most_recent_date(self._session)
         key_objects = (
@@ -587,12 +587,12 @@ class EventTemplateDictBuilder:
             "Start date": start,
             "End date": "-",
             "Attackers": ", ".join(
-                self._get_url_for(wp.country)
+                self._get_url_for(wp.country) + f" ({wp.call_type})"
                 for wp in war.participants
                 if wp.is_attacker
             ),
             "Defenders": ", ".join(
-                self._get_url_for(wp.country)
+                self._get_url_for(wp.country) + f" ({wp.call_type})"
                 for wp in war.participants
                 if not wp.is_attacker
             ),

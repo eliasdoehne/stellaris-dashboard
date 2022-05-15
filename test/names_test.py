@@ -15,7 +15,7 @@ class NameTestcase:
     description: str = "test"
 
 
-@pytest.mark.skip_github_actions
+@pytest.mark.skip_github_actions  # requires game localization files to run
 @pytest.mark.parametrize(
     "test_case",
     [
@@ -93,12 +93,14 @@ class NameTestcase:
         ),
         NameTestcase(
             {
+                # "$PREFIX$ $NAME$"
                 "key": "PREFIX_NAME_FORMAT",
                 "variables": [
                     {"key": "NAME", "value": {"key": "ART2_SHIP_Rit-Kwyr"}},
                     {
                         "key": "PREFIX",
                         "value": {
+                            # "[This.GetSpeciesName] <trade_league>"
                             "key": "format.trade_league.1",
                             "variables": [
                                 {
@@ -142,8 +144,8 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
                 key="HUM2_KEY_DOES_NOT_EXIST",
                 variables=[{"key": "O", "value": {"key": "1st", "literal": "yes"}}],
             ),
-            expected="Unknown name",
-            description="army, unknown",
+            expected="HUM2_KEY_DOES_NOT_EXIST",
+            description="army, unknown returns top-level key",
         ),
         NameTestcase(
             dict(key="HUMAN1_SHIP_Umlaut"),
@@ -166,6 +168,21 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
             ),
             expected="Combined Mollarnock Suns",
             description="empire, template with variables",
+        ),
+        NameTestcase(
+            dict(
+                key="format.gen_imp.1",
+                variables=[
+                    {"key": "generic_aut_desc", "value": {"key": "Combined"}},
+                    {"key": "generic_states", "value": {"key": "Suns"}},
+                    {
+                        "key": "This.GetSpeciesName",
+                        "value": {"key": "SPEC_DOESNOTEXIST"},
+                    },
+                ],
+            ),
+            expected="Combined SPEC_DOESNOTEXIST Suns",
+            description="empire, template with variables, nested does not exist",
         ),
     ],
     ids=lambda tc: tc.description,

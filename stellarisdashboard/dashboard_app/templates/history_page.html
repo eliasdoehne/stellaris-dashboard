@@ -309,6 +309,15 @@
                  </span>
             </div>
         </li>
+        {% elif event["event_type"] == "embassy" %}
+        <li class="eventitem established_embassy">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    The {{ links[event["country"]] | safe }} have established an embassy in the {{ links[event["target_country"]] | safe }}.
+                 </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "defensive_pact" %}
         <li class="eventitem defensive_pact">
             <div class="eventdescription">
@@ -522,7 +531,7 @@
                     {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
                     {% else %} The
                     {% endif %}
-                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }} conflict.
+                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }} war{{ event["description"] }}{% if event["target_country"] %} {{ links[event["target_country"]] | safe}}{% endif %}.
                 </span>
             </div>
         </li>

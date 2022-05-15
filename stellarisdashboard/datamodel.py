@@ -119,12 +119,9 @@ class CombatType(enum.Enum):
 
 @enum.unique
 class WarOutcome(enum.Enum):
-    status_quo = enum.auto()
-    attacker_victory = enum.auto()
-    defender_victory = enum.auto()
     in_progress = enum.auto()
-    unknown = enum.auto()
-    other = enum.auto()
+    truce = enum.auto()
+    resolution_unknown = enum.auto()
 
     def __str__(self):
         return game_info.convert_id_to_name(self.name)
@@ -189,6 +186,7 @@ class HistoricalEventType(enum.Enum):
     commercial_pact = enum.auto()
     research_agreement = enum.auto()
     migration_treaty = enum.auto()
+    embassy = enum.auto()
 
     closed_borders = enum.auto()
     received_closed_borders = enum.auto()
@@ -244,6 +242,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.envoy_federation,
             HistoricalEventType.envoy_improving_relations,
             HistoricalEventType.envoy_harming_relations,
+            HistoricalEventType.embassy,
         }:
             return HistoricalEventScope.galaxy
         elif self in {
@@ -639,7 +638,10 @@ class Country(Base):
         "PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan"
     )
     war_participation = relationship(
-        "WarParticipant", back_populates="country", cascade="all,delete,delete-orphan"
+        "WarParticipant",
+        back_populates="country",
+        cascade="all,delete,delete-orphan",
+        foreign_keys=lambda: [WarParticipant.country_id],
     )
     systems = relationship(System, back_populates="country")
     leaders = relationship(
@@ -888,6 +890,7 @@ class DiplomaticRelation(Base):
     commercial_pact = Column(Boolean, default=False)
     neighbor = Column(Boolean, default=False)
     research_agreement = Column(Boolean, default=False)
+    embassy = Column(Boolean, default=False)
 
     owner = relationship(
         Country,
@@ -911,6 +914,7 @@ class DiplomaticRelation(Base):
         commercial_pacts="commercial_pact",
         neighbors="neighbor",
         research_agreements="research_agreement",
+        embassies="embassy",
     )
 
     def is_active(self, key: str) -> bool:
@@ -978,6 +982,7 @@ class CountryData(Base):
 
     # Diplomacy towards player
     attitude_towards_player = Column(Enum(Attitude))
+    has_embassy_with_player = Column(Boolean)
     has_research_agreement_with_player = Column(Boolean)
     has_sensor_link_with_player = Column(Boolean)
     has_rivalry_with_player = Column(Boolean)
@@ -1226,7 +1231,7 @@ class War(Base):
     game_id = Column(ForeignKey(Game.game_id))
 
     war_id_in_game = Column(Integer)
-    name = Column(String(100))
+    name = Column(String(100), nullable=True)
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer)
 
@@ -1245,7 +1250,23 @@ class War(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.name)
+        return (
+            ", ".join(a.country.rendered_name for a in self.attackers)
+            + " vs "
+            + ", ".join(d.country.rendered_name for d in self.defenders)
+        )
+
+    @property
+    def attackers(self):
+        for p in self.participants:
+            if p.is_attacker and p.call_type == "primary":
+                yield p
+
+    @property
+    def defenders(self):
+        for p in self.participants:
+            if not p.is_attacker and p.call_type == "primary":
+                yield p
 
 
 class WarParticipant(Base):
@@ -1254,11 +1275,18 @@ class WarParticipant(Base):
 
     war_id = Column(ForeignKey(War.war_id), index=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
+    caller_country_id = Column(ForeignKey(Country.country_id))
     is_attacker = Column(Boolean)
     war_goal = Column(String(80))
+    call_type = Column(String(80))
 
     war = relationship("War", back_populates="participants")
-    country = relationship("Country", back_populates="war_participation")
+
+    country = relationship(
+        "Country", back_populates="war_participation", foreign_keys=[country_id]
+    )
+    caller_country = relationship("Country", foreign_keys=[caller_country_id])
+
     combat_participation = relationship(
         "CombatParticipant", back_populates="war_participant"
     )
@@ -1712,6 +1740,21 @@ class HistoricalEvent(Base):
             HistoricalEventType.governed_sector,
         ]:
             return game_info.render_name(self.db_description.text)
+        elif self.event_type in [HistoricalEventType.war]:
+            call_type = self.db_description.text
+            if call_type == "primary":
+                return " as a primary party"
+            elif call_type == "overlord":
+                return f" called by their overlord"
+            elif call_type == "offensive":
+                return f", attacking on the side of the"
+            elif call_type == "defensive":
+                return f" due to their defensive pact with the"
+            elif call_type == "alliance":
+                return f" due to their alliance with the"
+            else:
+                return f" (called as {call_type})"
+
         elif self.db_description:
             return game_info.convert_id_to_name(self.db_description.text)
         else:
