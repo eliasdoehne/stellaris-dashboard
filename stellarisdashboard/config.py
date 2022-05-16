@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 import logging
 import multiprocessing as mp  # only to get the cpu count
 import pathlib
@@ -14,7 +15,7 @@ CPU_COUNT = mp.cpu_count()
 
 LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-CONFIG = None
+CONFIG: "Config" = None
 logger: logging.Logger = None
 
 
@@ -52,16 +53,15 @@ def _get_default_save_path():
         return home / "Documents/Paradox Interactive/Stellaris/save games/"
 
 
-def _get_default_localization_files() -> List[pathlib.Path]:
-    files = []
+def _get_default_localization_file_dir() -> pathlib.Path:
     for p in [
         pathlib.Path("C:/Program Files (x86)/Steam/steamapps/common/Stellaris/"),
         (pathlib.Path.home() / ".steam/steamapps/common/Stellaris/").absolute(),
     ]:
         p_abs = p / "localisation/english/"
-        files += p_abs.glob("*.yaml")
-        files += p_abs.glob("*.yml")
-    return files
+        if p_abs.exists():
+            return p_abs
+    return pathlib.Path(__file__).parent
 
 
 def _get_default_base_output_path():
@@ -178,7 +178,7 @@ DEFAULT_SETTINGS = dict(
     mp_username="",
     base_output_path=_get_default_base_output_path(),
     threads=_get_default_thread_count(),
-    localization_files=_get_default_localization_files(),
+    localization_file_dir=_get_default_localization_file_dir(),
     port=28053,
     polling_interval=0.5,
     check_version=True,
@@ -205,7 +205,7 @@ class Config:
 
     save_file_path: pathlib.Path = None
     mp_username: str = None
-    localization_files: List[pathlib.Path] = dataclasses.field(default_factory=list)
+    localization_file_dir: pathlib.Path = None
     base_output_path: pathlib.Path = None
     threads: int = None
 
@@ -236,6 +236,7 @@ class Config:
     PATH_KEYS = {
         "base_output_path",
         "save_file_path",
+        "localization_file_dir",
     }
     BOOL_KEYS = {
         "check_version",
@@ -264,7 +265,7 @@ class Config:
     DICT_KEYS = {
         "tab_layout",
     }
-    LIST_KEYS = {"market_resources", "market_fee", "localization_files"}
+    LIST_KEYS = {"market_resources", "market_fee"}
     ALL_KEYS = (
         PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
     )
@@ -278,8 +279,6 @@ class Config:
                 logger.info(f"Ignoring unknown setting {key} with value {val}.")
                 continue
             old_val = self.__dict__.get(key)
-            if key == "localization_files":
-                val = [pathlib.Path(p) for p in val]
             if key in Config.BOOL_KEYS:
                 val = self._preprocess_bool(val)
             if key in Config.PATH_KEYS:
@@ -360,8 +359,6 @@ class Config:
                 if key in Config.PATH_KEYS:
                     val = str(val)
                 result[key] = val
-            if key == "localization_files":
-                result[key] = [str(p) for p in val]
         return result
 
     def get_adjustable_settings_dict(self):
@@ -396,6 +393,17 @@ class Config:
             path.mkdir(parents=True)
         return path
 
+    @property
+    def localization_files(self):
+        files = list(
+            itertools.chain(
+                self.localization_file_dir.glob("*.yaml"),
+                self.localization_file_dir.glob("*.yml"),
+            )
+        )
+        logger.info(f"Loaded {len(files)} localization files from {self.localization_file_dir}")
+        return files
+
 
 def _apply_existing_settings(config: Config):
     settings = dict(DEFAULT_SETTINGS)
@@ -427,6 +435,7 @@ def initialize():
         (CONFIG.base_output_path / "output").mkdir(parents=True)
 
     configure_logger()
+    CONFIG.write_to_file()
 
 
 def configure_logger():
