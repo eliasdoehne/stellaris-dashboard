@@ -401,7 +401,9 @@ class Config:
                 self.localization_file_dir.glob("*.yml"),
             )
         )
-        logger.info(f"Loaded {len(files)} localization files from {self.localization_file_dir}")
+        logger.info(
+            f"Loaded {len(files)} localization files from {self.localization_file_dir}"
+        )
         return files
 
 

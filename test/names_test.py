@@ -169,7 +169,10 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
                 variables=[
                     {"key": "generic_aut_desc", "value": {"key": "Combined"}},
                     {"key": "generic_states", "value": {"key": "Suns"}},
-                    {"key": "This.GetSpeciesName", "value": {"key": "SPEC_DOESNOTEXIST"},},
+                    {
+                        "key": "This.GetSpeciesName",
+                        "value": {"key": "SPEC_DOESNOTEXIST"},
+                    },
                 ],
             ),
             expected="Combined SPEC_DOESNOTEXIST Suns",
@@ -180,7 +183,11 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
 )
 def test_name_rendering_with_test_files_english(test_case: NameTestcase):
     renderer = game_info.NameRenderer(
-        list((pathlib.Path(__file__).parent / "localization_test_files/english").glob("*.yml"))
+        list(
+            (pathlib.Path(__file__).parent / "localization_test_files/english").glob(
+                "*.yml"
+            )
+        )
     )
     renderer.load_name_mapping()
     assert renderer.render_from_dict(test_case.name_dict) == test_case.expected
