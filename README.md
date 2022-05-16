@@ -87,6 +87,28 @@ When using mods that change resources in the game (or if Stellaris is updated in
   
 These values must be configured in the correct order, for vanilla Stellaris, this is the same order in which they are defined in the game file `common/strategic_resources/00_strategic_resources.txt`.
 
+### Names and Localizations
+
+Since Stellaris 3.4, the game no longer stores names (of countries, systems, ships, ...) in the save files as they appear in-game, but instead uses a templating system where names are stored in a more abstract representation. To make names show up in the same way as they do in-game, the dashboard program will try to load the information required from your game files. 
+
+If this system is not configured correctly, you will see some long and cryptic names like 
+```
+{"key": "format.gen_olig.1", "variables": [
+{"key": "generic_oli_desc", "value": {"key": "Sovereign"}}, 
+{"key": "generic_states", "value": {"key": "Realms"}}, 
+{"key": "This.GetSpeciesName", "value": {"key": "SPEC_Klenn"}}]}
+```
+when using the dashboard.
+
+If you are not using any mods and installed Stellaris in the default location at (`C:/Program Files (x86)/Steam/steamapps/common/Stellaris/` on windows), there is a good chance that everything will work without any additional actions. 
+
+However, if you use mods that add new names, if you play the game in another language, or if your Stellaris game files (or steam library) are in a different location, you will need to take some manual actions. While the dashboard application itself does not have any kind of localization (yet), you can also change the localization_file_dir to have names rendered in your preferred language.
+
+In this case, you can fix it like this:
+- Make sure there is a single folder containing all required localization files ending in `.yml`, including the files from your stellaris game and from all mods that introduce new names. You might need to collect these files yourself and copy them to a convenient location. The file names you use does not matter, the dashboard will take them all and build one big name mapping.
+- Update the `Stellaris localization folder` in the dashboard settings (or edit it in config.yml). Restart the dashboard program.
+- Look in the dashboard program for some output like `Loaded 162 localization files from <path-to-your-stellaris>/localisation/english` or similar that matches the number of files you prepared.
+
 ## How to improve performance
 
 If you find that the dashboard is too slow to browse, you can try some of these things:
@@ -100,7 +122,7 @@ If you find that the dashboard is too slow to browse, you can try some of these 
 
 ### Multiplayer
 
-Support for Multiplayer is **experimental**. The dashboard will avoid showing information about other player controlled empires, even if the "Show all empires checkbox" is ticked in the settings. To use the dashboard in multiplayer, you must first configure your multiplayer username in the dashboard settings menu.
+Support for Multiplayer is **experimental**. The dashboard will avoid showing information about other player controlled empires, even if the "Show all empires" checkbox is ticked in the settings. To use the dashboard in multiplayer, you must first configure your multiplayer username in the dashboard settings menu.
 
 ### Observer Mode
 

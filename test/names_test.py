@@ -146,16 +146,11 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
             expected="HUM2_KEY_DOES_NOT_EXIST",
             description="army, unknown returns top-level key",
         ),
-        # NameTestcase(
-        #     dict(key="HUMAN1_SHIP_Umlaut"),
-        #     expected="ÄÖÜäöüéèê",
-        #     description="ship, umlaut",
-        # ),
-        # NameTestcase(
-        #     dict(key="HUMAN1_SHIP_SpecialSymbols"),
-        #     expected=r"Special-Symbols. ''!§$%&/()",
-        #     description="ship, two words",
-        # ),
+        NameTestcase(
+            dict(key="HUMAN1_SHIP_SpecialSymbols"),
+            expected=r"Special-Symbols. ''!$%&/()",
+            description="ship, two words",
+        ),
         NameTestcase(
             dict(
                 key="format.gen_imp.1",

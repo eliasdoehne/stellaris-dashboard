@@ -32,6 +32,12 @@ def settings_page():
             "name": "Save file path (applies after restart, set to empty to restore default, applies after restart)",
             "description": "Where the dashboard will look for new Stellaris save files.",
         },
+        "localization_file_dir": {
+            "type": t_str,
+            "value": current_values["localization_file_dir"],
+            "name": "Stellaris localization folder",
+            "description": "Path where the dashboard will look for Stellaris localization files that define how names are created. Applies after dashboard restart. See README.md for details.",
+        },
         "mp_username": {
             "type": t_str,
             "value": current_values["mp_username"],

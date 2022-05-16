@@ -723,7 +723,7 @@ class AbstractPopStatsByFactionDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByFaction)
-        return ps.faction.faction_name
+        return ps.faction.rendered_name
 
 
 class FactionDistributionDataContainer(AbstractPopStatsByFactionDataContainer):

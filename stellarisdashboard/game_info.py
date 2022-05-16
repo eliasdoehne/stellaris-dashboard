@@ -20,7 +20,7 @@ class NameRenderer:
         self.name_mapping = {"global_event_country": "Global event country"}
         for p in self.localization_files:
             # manually parse yaml, yaml.safe_load doesnt seem to work
-            with open(p, "rt") as f:
+            with open(p, "rt", encoding="utf-8") as f:
                 for line in f:
                     try:
                         key, val, *rest = line.strip().split('"')
