@@ -246,7 +246,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} was leader of the "{{ event["faction"].faction_name}}" faction.
+                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} was leader of the "{{ event["faction"].rendered_name}}" faction.
                  </span>
             </div>
         </li>
@@ -306,6 +306,15 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
                     The {{ links[event["country"]] | safe }} are denied access to the {{ links[event["target_country"]] | safe }} territories.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "embassy" %}
+        <li class="eventitem established_embassy">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    The {{ links[event["country"]] | safe }} have established an embassy in the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -509,7 +518,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The {{ event["faction"].type }} "{{ event["faction"].faction_name }}" faction emerged in the {{ links[event["country"]] | safe}}.
+                    The {{ event["faction"].type }} "{{ event["faction"].rendered_name }}" faction emerged in the {{ links[event["country"]] | safe}}.
                 </span>
             </div>
         </li>
@@ -522,7 +531,7 @@
                     {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
                     {% else %} The
                     {% endif %}
-                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }} conflict.
+                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }} war{{ event["description"] }}{% if event["target_country"] %} {{ links[event["target_country"]] | safe}}{% endif %}.
                 </span>
             </div>
         </li>
@@ -585,7 +594,7 @@
                 <span class="eventtext">
                     {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} commanded the
                     {% if event["fleet"].is_civilian_fleet %} science ship {% else %} fleet {% endif %}
-                    "{{ event["fleet"].name }}".
+                    "{{ event["fleet"].rendered_name }}".
                 </span>
             </div>
         </li>

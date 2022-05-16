@@ -6,8 +6,7 @@ import platform
 import sys
 import traceback
 from collections import defaultdict
-from typing import List, Dict, Optional, Any
-
+from typing import List, Dict, Any
 import yaml
 
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
@@ -51,6 +50,18 @@ def _get_default_save_path():
         return home / ".local/share/Paradox Interactive/Stellaris/save games/"
     else:
         return home / "Documents/Paradox Interactive/Stellaris/save games/"
+
+
+def _get_default_localization_files() -> List[pathlib.Path]:
+    files = []
+    for p in [
+        pathlib.Path("C:/Program Files (x86)/Steam/steamapps/common/Stellaris/"),
+        (pathlib.Path.home() / ".steam/steamapps/common/Stellaris/").absolute(),
+    ]:
+        p_abs = p / "localisation/english/"
+        files += p_abs.glob("*.yaml")
+        files += p_abs.glob("*.yml")
+    return files
 
 
 def _get_default_base_output_path():
@@ -167,6 +178,7 @@ DEFAULT_SETTINGS = dict(
     mp_username="",
     base_output_path=_get_default_base_output_path(),
     threads=_get_default_thread_count(),
+    localization_files=_get_default_localization_files(),
     port=28053,
     polling_interval=0.5,
     check_version=True,
@@ -193,6 +205,7 @@ class Config:
 
     save_file_path: pathlib.Path = None
     mp_username: str = None
+    localization_files: List[pathlib.Path] = dataclasses.field(default_factory=list)
     base_output_path: pathlib.Path = None
     threads: int = None
 
@@ -251,10 +264,7 @@ class Config:
     DICT_KEYS = {
         "tab_layout",
     }
-    LIST_KEYS = {
-        "market_resources",
-        "market_fee",
-    }
+    LIST_KEYS = {"market_resources", "market_fee", "localization_files"}
     ALL_KEYS = (
         PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
     )
@@ -268,6 +278,8 @@ class Config:
                 logger.info(f"Ignoring unknown setting {key} with value {val}.")
                 continue
             old_val = self.__dict__.get(key)
+            if key == "localization_files":
+                val = [pathlib.Path(p) for p in val]
             if key in Config.BOOL_KEYS:
                 val = self._preprocess_bool(val)
             if key in Config.PATH_KEYS:
@@ -345,9 +357,11 @@ class Config:
         result = dict(**DEFAULT_SETTINGS)
         for key, val in self.__dict__.items():
             if key in Config.ALL_KEYS:
-                if key in CONFIG.PATH_KEYS:
+                if key in Config.PATH_KEYS:
                     val = str(val)
                 result[key] = val
+            if key == "localization_files":
+                result[key] = [str(p) for p in val]
         return result
 
     def get_adjustable_settings_dict(self):

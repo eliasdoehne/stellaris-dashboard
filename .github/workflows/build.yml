@@ -37,7 +37,7 @@ jobs:
           black --check .
       - name: Tests
         run: |
-          python -m pytest
+          python -m pytest -m "not skip_github_actions"
       - name: pyInstaller build
         run: |
           pyinstaller pyinstaller-package.spec

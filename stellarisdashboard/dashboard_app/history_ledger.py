@@ -131,7 +131,7 @@ class EventFilter:
         else:
             filter_dict = {}
             if self.country_filter is not None:
-                filter_dict = dict(country_id=(self.country_filter))
+                filter_dict = dict(country_id=self.country_filter)
             return (
                 datamodel.Country,
                 "country",
@@ -235,7 +235,7 @@ class EventTemplateDictBuilder:
             event_query_kwargs,
             key_obj_filter_dict,
             key_object_order_column,
-        ) = self.event_filter.query_args_info
+        ) = params = self.event_filter.query_args_info
 
         self._most_recent_date = utils.get_most_recent_date(self._session)
         key_objects = (
@@ -362,45 +362,51 @@ class EventTemplateDictBuilder:
         if isinstance(key, datamodel.Country):
             return self._get_url_for(key, a_class="titlelink")
         elif isinstance(key, datamodel.System):
-            return f"{key.get_name()} System"
+            return f"{key.rendered_name} System"
         elif isinstance(key, datamodel.Leader):
-            return key.get_name()
+            return key.rendered_name
         elif isinstance(key, datamodel.War):
-            return key.name
+            return key.rendered_name
         elif isinstance(key, datamodel.Planet):
-            return f"Planet {key.name}"
+            return f"Planet {key.rendered_name}"
         else:
             return ""
 
     def _get_url_for(self, key, a_class="textlink"):
         if isinstance(key, datamodel.Country):
             return utils.preformat_history_url(
-                key.country_name,
+                key.rendered_name,
                 country=key.country_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.System):
             return utils.preformat_history_url(
-                game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
+                key.rendered_name,
                 system=key.system_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Leader):
             return utils.preformat_history_url(
-                key.leader_name,
+                key.rendered_name,
                 leader=key.leader_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Planet):
             return utils.preformat_history_url(
-                key.name, planet=key.planet_id, a_class=a_class, game_id=self.game_id
+                key.rendered_name,
+                planet=key.planet_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         elif isinstance(key, datamodel.War):
             return utils.preformat_history_url(
-                key.name, war=key.war_id, a_class=a_class, game_id=self.game_id
+                key.rendered_name,
+                war=key.war_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         else:
             return str(key)
@@ -413,7 +419,7 @@ class EventTemplateDictBuilder:
             "Star Class": star_class,
         }
         hyperlane_targets = sorted(
-            system_model.neighbors, key=datamodel.System.get_name
+            system_model.neighbors, key=lambda s: s.rendered_name
         )
         details["Hyperlanes"] = ", ".join(
             self._get_url_for(s) for s in hyperlane_targets
@@ -464,9 +470,9 @@ class EventTemplateDictBuilder:
     def leader_details(self, leader_model: datamodel.Leader) -> Dict[str, str]:
         country_url = self._get_url_for(leader_model.country)
         details = {
-            "Leader Name": leader_model.leader_name,
+            "Leader Name": leader_model.rendered_name,
             "Gender": game_info.convert_id_to_name(leader_model.gender),
-            "Species": leader_model.species.species_name,
+            "Species": leader_model.species.rendered_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),
@@ -581,12 +587,12 @@ class EventTemplateDictBuilder:
             "Start date": start,
             "End date": "-",
             "Attackers": ", ".join(
-                self._get_url_for(wp.country)
+                self._get_url_for(wp.country) + f" ({wp.call_type})"
                 for wp in war.participants
                 if wp.is_attacker
             ),
             "Defenders": ", ".join(
-                self._get_url_for(wp.country)
+                self._get_url_for(wp.country) + f" ({wp.call_type})"
                 for wp in war.participants
                 if not wp.is_attacker
             ),

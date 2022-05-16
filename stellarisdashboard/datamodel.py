@@ -119,12 +119,9 @@ class CombatType(enum.Enum):
 
 @enum.unique
 class WarOutcome(enum.Enum):
-    status_quo = enum.auto()
-    attacker_victory = enum.auto()
-    defender_victory = enum.auto()
     in_progress = enum.auto()
-    unknown = enum.auto()
-    other = enum.auto()
+    truce = enum.auto()
+    resolution_unknown = enum.auto()
 
     def __str__(self):
         return game_info.convert_id_to_name(self.name)
@@ -189,6 +186,7 @@ class HistoricalEventType(enum.Enum):
     commercial_pact = enum.auto()
     research_agreement = enum.auto()
     migration_treaty = enum.auto()
+    embassy = enum.auto()
 
     closed_borders = enum.auto()
     received_closed_borders = enum.auto()
@@ -244,6 +242,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.envoy_federation,
             HistoricalEventType.envoy_improving_relations,
             HistoricalEventType.envoy_harming_relations,
+            HistoricalEventType.embassy,
         }:
             return HistoricalEventScope.galaxy
         elif self in {
@@ -337,7 +336,7 @@ def get_available_games_dict() -> Dict[str, Dict[str, str]]:
                 game_id=game_id,
                 game_date=days_to_date(most_recent_gamestate.date),
                 num_saves=session.query(GameState.gamestate_id).count(),
-                country_name=game.player_country_name,
+                country_name=game_info.render_name(game.player_country_name),
                 difficulty=game.difficulty,
                 galaxy=game.galaxy,
                 last_updated=game.last_updated,
@@ -422,7 +421,7 @@ class SharedDescription(Base):
     __tablename__ = "shareddescriptiontable"
     description_id = Column(Integer, primary_key=True)
 
-    text = Column(String(120), index=True)
+    text = Column(String(500), index=True)
 
 
 class System(Base):
@@ -457,7 +456,7 @@ class System(Base):
         "HyperLane", foreign_keys=lambda: [HyperLane.system_two_id]
     )
 
-    bypasses = relationship("Bypass")
+    bypasses = relationship("Bypass", cascade="all,delete,delete-orphan")
 
     historical_events = relationship(
         "HistoricalEvent", back_populates="system", cascade="all,delete,delete-orphan"
@@ -491,10 +490,9 @@ class System(Base):
                 return None
         return self.country
 
-    def get_name(self):
-        if self.name.startswith("NAME_"):
-            return game_info.convert_id_to_name(self.name, remove_prefix="NAME")
-        return self.name
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.name)
 
     def __str__(self):
         return f'System "{self.name}" @ {self.coordinate_x}, {self.coordinate_y}'
@@ -640,7 +638,10 @@ class Country(Base):
         "PoliticalFaction", back_populates="country", cascade="all,delete,delete-orphan"
     )
     war_participation = relationship(
-        "WarParticipant", back_populates="country", cascade="all,delete,delete-orphan"
+        "WarParticipant",
+        back_populates="country",
+        cascade="all,delete,delete-orphan",
+        foreign_keys=lambda: [WarParticipant.country_id],
     )
     systems = relationship(System, back_populates="country")
     leaders = relationship(
@@ -668,6 +669,10 @@ class Country(Base):
         "DiplomaticRelation",
         foreign_keys=lambda: [DiplomaticRelation.target_country_id],
     )
+
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.country_name)
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -885,6 +890,7 @@ class DiplomaticRelation(Base):
     commercial_pact = Column(Boolean, default=False)
     neighbor = Column(Boolean, default=False)
     research_agreement = Column(Boolean, default=False)
+    embassy = Column(Boolean, default=False)
 
     owner = relationship(
         Country,
@@ -908,6 +914,7 @@ class DiplomaticRelation(Base):
         commercial_pacts="commercial_pact",
         neighbors="neighbor",
         research_agreements="research_agreement",
+        embassies="embassy",
     )
 
     def is_active(self, key: str) -> bool:
@@ -975,6 +982,7 @@ class CountryData(Base):
 
     # Diplomacy towards player
     attitude_towards_player = Column(Enum(Attitude))
+    has_embassy_with_player = Column(Boolean)
     has_research_agreement_with_player = Column(Boolean)
     has_sensor_link_with_player = Column(Boolean)
     has_rivalry_with_player = Column(Boolean)
@@ -1168,6 +1176,10 @@ class Species(Base):
     def traits(self):
         return set(t.name for t in self.db_traits)
 
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.species_name)
+
 
 class SpeciesTrait(Base):
     __tablename__ = "speciestraittable"
@@ -1206,6 +1218,10 @@ class PoliticalFaction(Base):
     def type(self):
         return self.db_faction_type.text
 
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.faction_name)
+
 
 class War(Base):
     """Wars are represented by a list of participants and a list of combat events."""
@@ -1215,7 +1231,7 @@ class War(Base):
     game_id = Column(ForeignKey(Game.game_id))
 
     war_id_in_game = Column(Integer)
-    name = Column(String(100))
+    name = Column(String(100), nullable=True)
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer)
 
@@ -1232,6 +1248,26 @@ class War(Base):
         "WarParticipant", back_populates="war", cascade="all,delete,delete-orphan"
     )
 
+    @property
+    def rendered_name(self):
+        return (
+            ", ".join(a.country.rendered_name for a in self.attackers)
+            + " vs "
+            + ", ".join(d.country.rendered_name for d in self.defenders)
+        )
+
+    @property
+    def attackers(self):
+        for p in self.participants:
+            if p.is_attacker and p.call_type == "primary":
+                yield p
+
+    @property
+    def defenders(self):
+        for p in self.participants:
+            if not p.is_attacker and p.call_type == "primary":
+                yield p
+
 
 class WarParticipant(Base):
     __tablename__ = "warparticipanttable"
@@ -1239,11 +1275,18 @@ class WarParticipant(Base):
 
     war_id = Column(ForeignKey(War.war_id), index=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
+    caller_country_id = Column(ForeignKey(Country.country_id))
     is_attacker = Column(Boolean)
     war_goal = Column(String(80))
+    call_type = Column(String(80))
 
     war = relationship("War", back_populates="participants")
-    country = relationship("Country", back_populates="war_participation")
+
+    country = relationship(
+        "Country", back_populates="war_participation", foreign_keys=[country_id]
+    )
+    caller_country = relationship("Country", foreign_keys=[caller_country_id])
+
     combat_participation = relationship(
         "CombatParticipant", back_populates="war_participant"
     )
@@ -1325,7 +1368,8 @@ class Leader(Base):
     country_id = Column(ForeignKey(Country.country_id))
     leader_id_in_game = Column(Integer, index=True)
 
-    leader_name = Column(String(80))
+    first_name = Column(String(80))
+    second_name = Column(String(80))
 
     species_id = Column(ForeignKey(Species.species_id))
     leader_class = Column(String(80))
@@ -1349,9 +1393,16 @@ class Leader(Base):
         "HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan"
     )
 
-    def get_name(self):
-        result = f"{self.leader_class.capitalize()} {self.leader_name}"
-        return result[0].upper() + result[1:]
+    def get_name_and_class(self):
+        return f"{self.leader_class.capitalize()} {self.get_name()}"
+
+    @property
+    def rendered_name(self):
+        rendered_first = game_info.render_name(self.first_name)
+        rendered_second = ""
+        if self.second_name and self.second_name != '""':
+            rendered_second = " " + game_info.render_name(self.second_name)
+        return f"{rendered_first}{rendered_second}"
 
     @property
     def agenda(self):
@@ -1385,12 +1436,8 @@ class Planet(Base):
     modifiers_hash = Column(Integer, default=0)
 
     @property
-    def name(self):
-        if self.planet_name is None:
-            return "Unnamed Planet"
-        if self.planet_name.startswith("NAME_"):
-            return game_info.convert_id_to_name(self.planet_name, remove_prefix="NAME")
-        return self.planet_name
+    def rendered_name(self):
+        return game_info.render_name(self.planet_name)
 
     @property
     def planetclass(self):
@@ -1600,6 +1647,10 @@ class Fleet(Base):
 
     commander = relationship(Leader)
 
+    @property
+    def rendered_name(self):
+        return game_info.render_name(self.name)
+
 
 class HistoricalEvent(Base):
     """
@@ -1683,6 +1734,27 @@ class HistoricalEvent(Base):
             current_pc = game_info.convert_id_to_name(current_pc, remove_prefix="pc")
             target_pc = game_info.convert_id_to_name(target_pc, remove_prefix="pc")
             return f"from {current_pc} to {target_pc}"
+        elif self.event_type in [
+            HistoricalEventType.envoy_federation,
+            HistoricalEventType.formed_federation,
+            HistoricalEventType.governed_sector,
+        ]:
+            return game_info.render_name(self.db_description.text)
+        elif self.event_type in [HistoricalEventType.war]:
+            call_type = self.db_description.text
+            if call_type == "primary":
+                return " as a primary party"
+            elif call_type == "overlord":
+                return f" called by their overlord"
+            elif call_type == "offensive":
+                return f", attacking on the side of the"
+            elif call_type == "defensive":
+                return f" due to their defensive pact with the"
+            elif call_type == "alliance":
+                return f" due to their alliance with the"
+            else:
+                return f" (called as {call_type})"
+
         elif self.db_description:
             return game_info.convert_id_to_name(self.db_description.text)
         else:

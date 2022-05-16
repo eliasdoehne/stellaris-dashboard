@@ -1,0 +1,2 @@
+l_english:
+ format.gen_imp.1:0 "<generic_aut_desc> [This.GetSpeciesName] <generic_states>"
