@@ -109,20 +109,6 @@ def draw_frame(day):
     del buf
 
 
-def create_gifs():
-    imgs = (buf for buf in frames())
-    img = next(imgs)  # extract first image from iterator
-    img.save(
-        fp=pathlib.Path(
-            "/home/elias/Documents/projects/stellaris-timeline/output/graph/timelapse.gif"
-        ),
-        format="GIF",
-        append_images=imgs,
-        save_all=True,
-        duration=500,
-        loop=0,
-    )
-
 
 def toImgOpenCV(image: Image.Image) -> np.array:  # Conver image to imgOpenCV
     i = np.array(image)
@@ -158,5 +144,4 @@ def frames():
             yield frame
 
 
-# create_gifs()
 create_video()
