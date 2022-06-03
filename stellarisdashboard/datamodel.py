@@ -1257,7 +1257,7 @@ class War(Base):
         )
 
     @property
-    def attackers(self):
+    def attackers(self) -> Iterable["WarParticipant"]:
         for p in self.participants:
             if p.is_attacker and p.call_type == "primary":
                 yield p
