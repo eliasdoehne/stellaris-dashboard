@@ -1,15 +1,14 @@
-import contextlib
 import datetime
 import io
+import logging
 from collections import defaultdict
 
-import cv2
+import matplotlib
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import tqdm
 from PIL import Image
-import matplotlib
 from matplotlib.collections import PatchCollection
 
 from stellarisdashboard import config, datamodel
@@ -19,16 +18,14 @@ from stellarisdashboard.dashboard_app.visualization_data import (
 )
 
 matplotlib.use("Agg")
-
-config.CONFIG.show_everything = True
+logger = logging.getLogger(__name__)
 
 
 class TimelapseExporter:
     dpi = 120
     width = 16
     height = 9
-    fps = 24
-    frames_per_date = 5
+    save_frames = True
 
     _instances = {}
 
@@ -42,34 +39,37 @@ class TimelapseExporter:
         self.game_id = game_id
         self.galaxy_map_data = GalaxyMapData(game_id=game_id)
         self.galaxy_map_data.initialize_galaxy_graph()
+        self._ts = datetime.datetime.now()
 
-    def create_video(self, start_date: int, end_date: int, step_days: int):
-        video = cv2.VideoWriter(
-            self.output_file(),
-            fourcc=cv2.VideoWriter_fourcc(*"mp4v"),
-            fps=self.fps,
-            frameSize=(self.width * self.dpi, self.height * self.dpi),
+    def create_timelapse(self, start_date: int, end_date: int, step_days: int, tl_duration: int):
+        self._ts = datetime.datetime.now()
+        output_file = self.output_file()
+        logger.info(f"Exporting galaxy timelapse to {output_file}")
+
+        frames = (self.draw_frame(day) for day in tqdm.tqdm(range(start_date, end_date, step_days)))
+        first_frame = next(frames)
+        first_frame.save(
+            output_file, save_all=True, append_images=frames, duration=tl_duration, loop=0
         )
 
-        for day in tqdm.tqdm(range(start_date, end_date, step_days)):
-            with self.draw_frame(day) as frame:
-                img = self.pil_image_to_np(frame)
-                for _ in range(self.frames_per_date):
-                    video.write(img)
-
-        video.release()
-
     def output_file(self) -> str:
-        ts = datetime.datetime.now().isoformat(timespec="seconds")
         out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
         out_dir.mkdir(parents=True, exist_ok=True)
-        return str(out_dir / f"{self.game_id}-{ts}.mp4")
+        return str((self._output_dir() / f"{self._timelapse_id()}.gif").absolute())
+
+    def _output_dir(self):
+        out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return out_dir
+
+    def _timelapse_id(self):
+        ts = self._ts.strftime("%Y-%m-%d-%H%M%S")
+        return f"{self.game_id}-{ts}"
 
     def rgb(self, name: str):
         r, g, b = get_color_vals(name)
         return r / 255.0, g / 255.0, b / 255.0
 
-    @contextlib.contextmanager
     def draw_frame(self, day):
         galaxy = self.galaxy_map_data.get_graph_for_date(day)
 
@@ -80,9 +80,7 @@ class TimelapseExporter:
             galaxy,
             ax=ax,
             pos={node: galaxy.nodes[node]["pos"] for node in galaxy.nodes},
-            node_color=[
-                self.rgb(galaxy.nodes[node]["country"]) for node in galaxy.nodes
-            ],
+            node_color=[self.rgb(galaxy.nodes[node]["country"]) for node in galaxy.nodes],
             edge_color=[self.rgb(galaxy.edges[e]["country"]) for e in galaxy.edges],
             with_labels=False,
             font_weight="bold",
@@ -102,33 +100,36 @@ class TimelapseExporter:
             transform=ax.transAxes,
         )
 
+        if self.save_frames:
+            out_path = (
+                config.CONFIG.base_output_path / f"galaxy-timelapse/frames/{self._timelapse_id()}"
+            )
+            out_path.mkdir(parents=True, exist_ok=True)
+            fig.savefig(out_path / f"{datamodel.days_to_date(day)}.png", format="png", dpi=self.dpi)
         buf = io.BytesIO()
         fig.savefig(buf, format="png", dpi=self.dpi)
-        buf.seek(0)
-        yield Image.open(buf)
         plt.close(fig)
-        del buf
+        buf.seek(0)
+        return Image.open(buf)
 
     def _draw_systems(self, ax, galaxy):
         systems_by_country = defaultdict(lambda: defaultdict(int))
         polygon_patches = []
         for node in galaxy:
             country = galaxy.nodes[node]["country"]
-            nodecolour = (
-                self.rgb(country) if country != GalaxyMapData.UNCLAIMED else (0, 0, 0)
-            )
+            nodecolor = self.rgb(country) if country != GalaxyMapData.UNCLAIMED else (0, 0, 0)
 
             if country != GalaxyMapData.UNCLAIMED:
                 systems_by_country[country]["x"] += galaxy.nodes[node]["pos"][0]
                 systems_by_country[country]["y"] += galaxy.nodes[node]["pos"][1]
                 systems_by_country[country]["count"] += 1
-                systems_by_country[country]["color"] = nodecolour
+                systems_by_country[country]["color"] = nodecolor
 
             polygon_patches.append(
                 matplotlib.patches.Polygon(
                     np.array(list(galaxy.nodes[node]["shape"])).T,
                     fill=True,
-                    facecolor=nodecolour,
+                    facecolor=nodecolor,
                     alpha=0.2,
                     linewidth=0,
                 )
@@ -142,19 +143,5 @@ class TimelapseExporter:
             x = avg_pos["x"] / avg_pos["count"]
             position = avg_pos["y"] / avg_pos["count"]
             ax.text(
-                x,
-                position,
-                country,
-                color=avg_pos["color"],
-                size="x-small",
-                ha="center",
+                x, position, country, color=avg_pos["color"], size="x-small", ha="center",
             )
-
-    def pil_image_to_np(self, image) -> np.array:
-        i = np.array(image)
-        # After mapping from PIL to numpy : [R,G,B,A]
-        # numpy Image Channel system: [B,G,R,A]
-        red = i[:, :, 0].copy()
-        i[:, :, 0] = i[:, :, 2].copy()
-        i[:, :, 2] = red
-        return i[:, :, :3]
