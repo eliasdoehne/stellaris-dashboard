@@ -1,8 +1,5 @@
-import matplotlib
-
-matplotlib.use("Agg")
-
 import contextlib
+import datetime
 import io
 from collections import defaultdict
 
@@ -12,15 +9,16 @@ import networkx as nx
 import numpy as np
 import tqdm
 from PIL import Image
-from matplotlib import patches
+import matplotlib
 from matplotlib.collections import PatchCollection
 
-import datamodel
-from stellarisdashboard import config
+from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app.visualization_data import (
     GalaxyMapData,
     get_color_vals,
 )
+
+matplotlib.use("Agg")
 
 config.CONFIG.show_everything = True
 
@@ -45,8 +43,9 @@ class TimelapseExporter:
         self.galaxy_map_data.initialize_galaxy_graph()
 
     def create_video(self, start_date: int, end_date: int, step_days: int):
+        ts = datetime.datetime.now().isoformat(timespec='seconds')
         video = cv2.VideoWriter(
-            str(config.CONFIG.base_output_path / f"{self.game_id}-timelapse.mp4"),
+            str(config.CONFIG.base_output_path / f"galaxy-timelapse/{self.game_id}-{ts}.mp4"),
             fourcc=cv2.VideoWriter_fourcc(*"mp4v"),
             fps=30,
             frameSize=(self.WIDTH * self.DPI, self.HEIGHT * self.DPI),
@@ -120,7 +119,7 @@ class TimelapseExporter:
                 systems_by_country[country]["color"] = nodecolour
 
             polygon_patches.append(
-                patches.Polygon(
+                matplotlib.patches.Polygon(
                     np.array(list(galaxy.nodes[node]["shape"])).T,
                     fill=True,
                     facecolor=nodecolour,
