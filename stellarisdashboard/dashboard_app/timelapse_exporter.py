@@ -44,11 +44,10 @@ class TimelapseExporter:
 
     def create_video(self, start_date: int, end_date: int, step_days: int):
         ts = datetime.datetime.now().isoformat(timespec="seconds")
+        out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
+        out_dir.mkdir(parents=True, exist_ok=True)
         video = cv2.VideoWriter(
-            str(
-                config.CONFIG.base_output_path
-                / f"galaxy-timelapse/{self.game_id}-{ts}.mp4"
-            ),
+            str(out_dir / f"{self.game_id}-{ts}.mp4"),
             fourcc=cv2.VideoWriter_fourcc(*"mp4v"),
             fps=30,
             frameSize=(self.WIDTH * self.DPI, self.HEIGHT * self.DPI),
