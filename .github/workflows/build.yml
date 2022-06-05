@@ -32,9 +32,6 @@ jobs:
       - name: Build
         run: |
           python setup.py build_ext --inplace
-      - name: Linters
-        run: |
-          black --check .
       - name: Tests
         run: |
           python -m pytest -m "not skip_github_actions"
