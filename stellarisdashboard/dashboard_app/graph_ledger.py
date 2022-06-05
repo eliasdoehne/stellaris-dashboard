@@ -11,7 +11,12 @@ from dash.dependencies import Input, Output
 from flask import render_template
 
 from stellarisdashboard import config, datamodel
-from stellarisdashboard.dashboard_app import utils, flask_app, visualization_data
+from stellarisdashboard.dashboard_app import (
+    utils,
+    flask_app,
+    visualization_data,
+    timelapse_exporter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +192,7 @@ def galaxy_map_system_info(clickData):
 
 
 @timeline_app.callback(
-    Output(component_id="dateslider-container", component_property="style"),
+    Output(component_id="galaxy-tab-ui", component_property="style"),
     [Input("tabs-container", "value")],
 )
 def show_hide_date_slider(tab_value):
@@ -222,6 +227,38 @@ def adjust_slider_values(tab_value, search):
         return marks
     else:
         return {}
+
+
+@timeline_app.callback(
+    Output("hidden-div", "children"),
+    [
+        Input("url", "search"),
+        Input("timelapse-start-input", "value"),
+        Input("timelapse-end-input", "value"),
+        Input("timelapse-step-input", "value"),
+        Input("galaxy-export-button", "n_clicks"),
+    ],
+)
+def trigger_timeline_export(search, tl_start, tl_end, tl_step, clicks):
+    print((tl_start, tl_end, tl_step, clicks))
+    game_id, matches = _get_game_ids_matching_url(search)
+    if not matches:
+        logger.warning(f"Could not find a game matching {game_id}")
+        return "Unknown Game"
+    game_id = matches[0]
+
+    changed_ids = [p["prop_id"].split(".")[0] for p in dash.callback_context.triggered]
+    print(changed_ids)
+    button_pressed = "galaxy-export-button" in changed_ids
+    if button_pressed:
+        logger.info(f"Triggering timelapse export for {game_id}")
+        logger.info((tl_start, tl_end, tl_step, clicks))
+
+        tl_start_days = datamodel.date_to_days(tl_start)
+        tl_end_days = datamodel.date_to_days(tl_end)
+
+        te = timelapse_exporter.TimelapseExporter.from_game_id(game_id)
+        te.create_video(tl_start_days, tl_end_days, tl_step)
 
 
 @timeline_app.callback(
@@ -666,9 +703,41 @@ def get_layout():
                                 step=0.01,
                                 value=100,
                                 marks={},
-                            )
+                            ),
                         ],
-                        id="dateslider-container",
+                        id="galaxy-tab-ui",
+                    ),
+                    html.Div(
+                        [
+                            dcc.Input(
+                                id="timelapse-start-input",
+                                type="text",
+                                placeholder="YYYY.MM.DD",
+                            ),
+                            dcc.Input(
+                                id="timelapse-end-input",
+                                type="text",
+                                placeholder="YYYY.MM.DD",
+                            ),
+                            dcc.Input(
+                                id="timelapse-step-input",
+                                type="number",
+                                placeholder="30",
+                            ),
+                            html.Button(
+                                f"Export Galaxy Timelapse",
+                                id="galaxy-export-button",
+                            ),
+                            html.Div(id="hidden-div", style={"display": "none"}),
+                        ],
+                        style={
+                            "display": "block",
+                            "width": "100%",
+                            "height": "100%",
+                            "margin-left": "auto",
+                            "margin-right": "auto",
+                        },
+                        id="timelapse-export-ui",
                     ),
                 ],
                 style={

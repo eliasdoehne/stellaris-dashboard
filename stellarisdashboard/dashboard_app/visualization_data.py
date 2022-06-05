@@ -1449,8 +1449,8 @@ class GalaxyMapData:
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
 
-        logger.info(
-            f"Updated networkx graph in {time.process_time() - start_time:5.3f} seconds."
+        logger.debug(
+            f"Updated galaxy graph in {time.process_time() - start_time:5.3f} seconds."
         )
         return self.galaxy_graph
 

@@ -31,5 +31,6 @@ scipy==1.8.0
 six==1.16.0
 SQLAlchemy==1.4.34
 tenacity==8.0.1
+tqdm==4.64.0
 Werkzeug==2.0.1
 zipp==3.7.0
