@@ -24,10 +24,11 @@ config.CONFIG.show_everything = True
 
 
 class TimelapseExporter:
-    DPI = 120
-    WIDTH = 16
-    HEIGHT = 9
-    FRAMES_PER_DATE = 5
+    dpi = 120
+    width = 16
+    height = 9
+    fps = 24
+    frames_per_date = 5
 
     _instances = {}
 
@@ -43,23 +44,26 @@ class TimelapseExporter:
         self.galaxy_map_data.initialize_galaxy_graph()
 
     def create_video(self, start_date: int, end_date: int, step_days: int):
-        ts = datetime.datetime.now().isoformat(timespec="seconds")
-        out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
-        out_dir.mkdir(parents=True, exist_ok=True)
         video = cv2.VideoWriter(
-            str(out_dir / f"{self.game_id}-{ts}.mp4"),
+            self.output_file(),
             fourcc=cv2.VideoWriter_fourcc(*"mp4v"),
-            fps=30,
-            frameSize=(self.WIDTH * self.DPI, self.HEIGHT * self.DPI),
+            fps=self.fps,
+            frameSize=(self.width * self.dpi, self.height * self.dpi),
         )
 
         for day in tqdm.tqdm(range(start_date, end_date, step_days)):
             with self.draw_frame(day) as frame:
                 img = self.pil_image_to_np(frame)
-                for _ in range(self.FRAMES_PER_DATE):
+                for _ in range(self.frames_per_date):
                     video.write(img)
 
         video.release()
+
+    def output_file(self) -> str:
+        ts = datetime.datetime.now().isoformat(timespec="seconds")
+        out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return str(out_dir / f"{self.game_id}-{ts}.mp4")
 
     def rgb(self, name: str):
         r, g, b = get_color_vals(name)
@@ -69,7 +73,7 @@ class TimelapseExporter:
     def draw_frame(self, day):
         galaxy = self.galaxy_map_data.get_graph_for_date(day)
 
-        fig = plt.figure(figsize=(self.WIDTH, self.HEIGHT))
+        fig = plt.figure(figsize=(self.width, self.height))
         ax = fig.add_subplot(111)
 
         nx.draw(
@@ -99,7 +103,7 @@ class TimelapseExporter:
         )
 
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=self.DPI)
+        fig.savefig(buf, format="png", dpi=self.dpi)
         buf.seek(0)
         yield Image.open(buf)
         plt.close(fig)
@@ -154,7 +158,3 @@ class TimelapseExporter:
         i[:, :, 0] = i[:, :, 2].copy()
         i[:, :, 2] = red
         return i[:, :, :3]
-
-
-if __name__ == "__main__":
-    TimelapseExporter("chimmconfederation_-579287761").create_video(30, 720, 120)
