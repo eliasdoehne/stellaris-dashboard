@@ -43,9 +43,12 @@ class TimelapseExporter:
         self.galaxy_map_data.initialize_galaxy_graph()
 
     def create_video(self, start_date: int, end_date: int, step_days: int):
-        ts = datetime.datetime.now().isoformat(timespec='seconds')
+        ts = datetime.datetime.now().isoformat(timespec="seconds")
         video = cv2.VideoWriter(
-            str(config.CONFIG.base_output_path / f"galaxy-timelapse/{self.game_id}-{ts}.mp4"),
+            str(
+                config.CONFIG.base_output_path
+                / f"galaxy-timelapse/{self.game_id}-{ts}.mp4"
+            ),
             fourcc=cv2.VideoWriter_fourcc(*"mp4v"),
             fps=30,
             frameSize=(self.WIDTH * self.DPI, self.HEIGHT * self.DPI),
