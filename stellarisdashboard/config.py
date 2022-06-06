@@ -400,9 +400,6 @@ def _apply_existing_settings(config: Config):
         logger.info(f"Reading settings from {settings_file}...")
         with open(settings_file, "r") as f:
             file_settings = yaml.load(f, Loader=yaml.SafeLoader)
-            f.seek(0)
-            multiprocessing.current_process()
-            print(multiprocessing.current_process(), settings_file, repr(f.read()))
             settings.update(file_settings)
     config.apply_dict(settings)
 

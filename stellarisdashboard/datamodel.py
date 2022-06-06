@@ -672,7 +672,9 @@ class Country(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.country_name)
+        rendered = game_info.render_name(self.country_name)
+        rendered += f" ({self.country_id_in_game})"
+        return rendered
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now

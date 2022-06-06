@@ -40,7 +40,7 @@ threads_help_string = (
 
 @click.group()
 def cli():
-    config.initialize()
+    ...
 
 
 @cli.command()

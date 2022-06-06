@@ -661,19 +661,18 @@ def get_layout():
     top_navigation = html.Div(
         [
             html.A(
-                "Game Selection",
+                html.Button("Game Selection", style=BUTTON_STYLE),
                 id="index-link",
                 href="/",
-                style=BUTTON_STYLE,
             ),
             html.A(
-                f"Settings",
+                html.Button(f"Settings", style=BUTTON_STYLE),
                 id="settings-link",
                 href="/settings/",
                 style=BUTTON_STYLE,
             ),
             html.A(
-                f"Event Ledger",
+                html.Button(f"Event Ledger", style=BUTTON_STYLE),
                 id="ledger-link",
                 href="/history",
                 style=BUTTON_STYLE,
@@ -761,7 +760,7 @@ def get_layout():
                         placeholder=TIMELAPSE_DEFAULT_STEP,
                     ),
                 ],
-                style={"display": "inline-block", "width": "15%"},
+                style={"display": "inline-block", "width": "20%"},
             ),
             html.Div(
                 [
@@ -772,7 +771,7 @@ def get_layout():
                         placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
                     ),
                 ],
-                style={"display": "inline-block", "width": "15%"},
+                style={"display": "inline-block", "width": "20%"},
             ),
             html.Div(
                 [
@@ -812,6 +811,22 @@ def get_layout():
         id="galaxy-tab-ui",
     )
 
+    tabs = dcc.Tabs(
+        id="tabs-container",
+        style=TAB_CONTAINER_STYLE,
+        parent_style=TAB_CONTAINER_STYLE,
+        children=[
+            dcc.Tab(
+                id=tab_label,
+                label=tab_label,
+                value=tab_label,
+                style=TAB_STYLE,
+                selected_style=SELECTED_TAB_STYLE,
+            )
+            for tab_label in tab_names
+        ],
+        value=tab_names[0],
+    )
     return html.Div(
         [
             dcc.Location(id="url", refresh=False),
@@ -824,22 +839,7 @@ def get_layout():
                         style=HEADER_STYLE,
                     ),
                     global_graph_controls,
-                    dcc.Tabs(
-                        id="tabs-container",
-                        style=TAB_CONTAINER_STYLE,
-                        parent_style=TAB_CONTAINER_STYLE,
-                        children=[
-                            dcc.Tab(
-                                id=tab_label,
-                                label=tab_label,
-                                value=tab_label,
-                                style=TAB_STYLE,
-                                selected_style=SELECTED_TAB_STYLE,
-                            )
-                            for tab_label in tab_names
-                        ],
-                        value=tab_names[0],
-                    ),
+                    tabs,
                     html.Div(
                         id="tab-content",
                         style={
