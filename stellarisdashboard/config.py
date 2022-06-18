@@ -14,7 +14,7 @@ import yaml
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 CPU_COUNT = mp.cpu_count()
 
-LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+LOG_FORMAT = logging.Formatter("%(processName)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 CONFIG: "Config" = None
 logger: logging.Logger = None
@@ -28,9 +28,6 @@ def initialize_logger():
     stdout_ch.setLevel(logging.INFO)
     stdout_ch.setFormatter(LOG_FORMAT)
     root_logger.addHandler(stdout_ch)
-    if mp.current_process().name != "MainProcess":
-        root_logger.setLevel(logging.ERROR)
-        stdout_ch.setLevel(logging.ERROR)
 
 
 def _get_default_thread_count():
@@ -341,7 +338,7 @@ class Config:
         logger.info(f"Writing settings to {fname}")
         with open(fname, "w") as f:
             settings_dict = self.get_dict()
-            yaml.dump(settings_dict, f, default_flow_style=False)
+            yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
 
     def get_dict(self):
         result = dict(**DEFAULT_SETTINGS)
@@ -399,7 +396,7 @@ def _apply_existing_settings(config: Config):
     if settings_file.exists() and settings_file.is_file():
         logger.info(f"Reading settings from {settings_file}...")
         with open(settings_file, "r") as f:
-            file_settings = yaml.load(f, Loader=yaml.SafeLoader)
+            file_settings = yaml.load(f, Loader=yaml.SafeLoader) or {}
             settings.update(file_settings)
     config.apply_dict(settings)
 

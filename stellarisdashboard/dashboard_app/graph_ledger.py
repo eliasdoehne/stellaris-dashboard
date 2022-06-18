@@ -214,7 +214,7 @@ def adjust_slider_values(tab_value, search):
         marks = {0: "2200.01.01", 100: datamodel.days_to_date(max_date)}
         for x in range(20, 100, 20):
             marks[x] = datamodel.days_to_date(x / 100 * max_date)
-        logger.info(f"Setting marks to {marks}")
+        logger.info(f"Setting slider marks to {marks}")
         return marks
     else:
         raise dash.exceptions.PreventUpdate()
@@ -780,10 +780,18 @@ def get_layout():
                         options=[
                             {
                                 "label": "Export gif (large file)",
+                                "title": (
+                                    "Export the timelapse as a single (large) gif file. "
+                                    "This requires a lot of memory"
+                                ),
                                 "value": "export_gif",
                             },
                             {
                                 "label": "Export frames",
+                                "title": (
+                                    "Export the individual frames of the timelapse in png format. "
+                                    "You can use a tool (e.g. ffmpeg) to stitch them to a video timelapse."
+                                ),
                                 "value": "export_frames",
                             },
                         ],

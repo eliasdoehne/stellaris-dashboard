@@ -133,6 +133,8 @@ def apply_settings():
     for key in previous_settings:
         if key in config.Config.BOOL_KEYS and key not in settings:
             settings[key] = False
+    for unadjustable_key in ["tab_layout", "market_fee"]:
+        settings[unadjustable_key] = previous_settings[unadjustable_key]
     config.CONFIG.apply_dict(settings)
     config.CONFIG.write_to_file()
     return redirect("/")

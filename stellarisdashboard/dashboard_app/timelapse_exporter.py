@@ -53,8 +53,13 @@ class TimelapseExporter:
             config.CONFIG.base_output_path / f"galaxy-timelapse/{self._timelapse_id()}/"
         )
         gif_path = self.output_file()
-        export_days = self._day_list(start_date, end_date, step_days)
 
+        if export_frames:
+            logger.info(f"Exporting timelapse frames to {frames_path}")
+        if export_gif:
+            logger.info(f"Exporting timelapse gif to {gif_path}")
+
+        export_days = self._day_list(start_date, end_date, step_days)
         frames = []
         for i, day in enumerate(tqdm.tqdm(export_days)):
             frame = self.draw_frame(day, x_range, y_range)
@@ -68,7 +73,6 @@ class TimelapseExporter:
                     dpi=(self.dpi, self.dpi),
                 )
         if export_gif:
-            logger.info(f"Exporting gif to {gif_path}")
             frames[0].save(
                 gif_path,
                 save_all=True,
@@ -76,8 +80,6 @@ class TimelapseExporter:
                 duration=tl_duration,
                 loop=0,
             )
-        if export_frames:
-            logger.info(f"Exported frames to {export_days}")
 
     def _day_list(self, start_date, end_date, step_days):
         export_days = list(range(start_date, end_date, step_days))
