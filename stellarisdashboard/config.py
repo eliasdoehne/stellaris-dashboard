@@ -1,6 +1,7 @@
 import dataclasses
 import itertools
 import logging
+import multiprocessing
 import multiprocessing as mp  # only to get the cpu count
 import pathlib
 import platform
@@ -13,7 +14,7 @@ import yaml
 LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
 CPU_COUNT = mp.cpu_count()
 
-LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+LOG_FORMAT = logging.Formatter("%(processName)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 CONFIG: "Config" = None
 logger: logging.Logger = None
@@ -27,9 +28,6 @@ def initialize_logger():
     stdout_ch.setLevel(logging.INFO)
     stdout_ch.setFormatter(LOG_FORMAT)
     root_logger.addHandler(stdout_ch)
-    if mp.current_process().name != "MainProcess":
-        root_logger.setLevel(logging.ERROR)
-        stdout_ch.setLevel(logging.ERROR)
 
 
 def _get_default_thread_count():
@@ -138,11 +136,7 @@ DEFAULT_TAB_LAYOUT = {
         "research_output_by_category_graph",
     ],
     "Military": ["fleet_size_graph", "military_power_graph", "fleet_composition_graph"],
-    "Victory": [
-        "victory_rank_graph",
-        "victory_score_graph",
-        "victory_economy_score_graph",
-    ],
+    "Victory": ["victory_rank_graph", "victory_score_graph", "victory_economy_score_graph",],
     MARKET_TAB: [],  # filled dynamically based on resource config
 }
 DEFAULT_MARKET_RESOURCES = [
@@ -266,9 +260,7 @@ class Config:
         "tab_layout",
     }
     LIST_KEYS = {"market_resources", "market_fee"}
-    ALL_KEYS = (
-        PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
-    )
+    ALL_KEYS = PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
 
     def apply_dict(self, settings_dict):
         logger.info("Updating settings")
@@ -308,9 +300,7 @@ class Config:
                     )
                     return
             except Exception:
-                logger.warning(
-                    f"Error during path creation while updating {key} with value {val}:"
-                )
+                logger.warning(f"Error during path creation while updating {key} with value {val}:")
                 logger.error(traceback.format_exc())
                 logger.info(f"Ignoring setting {key} with value {val}.")
                 return
@@ -328,9 +318,7 @@ class Config:
                 logger.warning(f"Ignoring tab {tab}, it is reserved for the galaxy map")
                 continue
             if tab == MARKET_TAB:
-                logger.warning(
-                    f"Ignoring values for tab {tab}, it is filled dynamically"
-                )
+                logger.warning(f"Ignoring values for tab {tab}, it is filled dynamically")
                 processed[tab] = []
                 continue
             if not isinstance(plot_list, list):
@@ -350,7 +338,7 @@ class Config:
         logger.info(f"Writing settings to {fname}")
         with open(fname, "w") as f:
             settings_dict = self.get_dict()
-            yaml.dump(settings_dict, f, default_flow_style=False)
+            yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
 
     def get_dict(self):
         result = dict(**DEFAULT_SETTINGS)
@@ -382,9 +370,7 @@ class Config:
             return True
         elif val == "false":
             return False
-        raise ValueError(
-            f"Expected either true or false for bool value, received {val}."
-        )
+        raise ValueError(f"Expected either true or false for bool value, received {val}.")
 
     @property
     def db_path(self) -> pathlib.Path:
@@ -397,13 +383,10 @@ class Config:
     def localization_files(self):
         files = list(
             itertools.chain(
-                self.localization_file_dir.glob("*.yaml"),
-                self.localization_file_dir.glob("*.yml"),
+                self.localization_file_dir.glob("*.yaml"), self.localization_file_dir.glob("*.yml"),
             )
         )
-        logger.info(
-            f"Loaded {len(files)} localization files from {self.localization_file_dir}"
-        )
+        logger.info(f"Loaded {len(files)} localization files from {self.localization_file_dir}")
         return files
 
 
@@ -413,7 +396,8 @@ def _apply_existing_settings(config: Config):
     if settings_file.exists() and settings_file.is_file():
         logger.info(f"Reading settings from {settings_file}...")
         with open(settings_file, "r") as f:
-            settings.update(yaml.load(f, Loader=yaml.SafeLoader))
+            file_settings = yaml.load(f, Loader=yaml.SafeLoader) or {}
+            settings.update(file_settings)
     config.apply_dict(settings)
 
 

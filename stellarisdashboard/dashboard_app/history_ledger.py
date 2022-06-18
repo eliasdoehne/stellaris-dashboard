@@ -587,14 +587,12 @@ class EventTemplateDictBuilder:
             "Start date": start,
             "End date": "-",
             "Attackers": ", ".join(
-                self._get_url_for(wp.country) + f" ({wp.call_type})"
-                for wp in war.participants
-                if wp.is_attacker
+                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                for wp in war.attackers
             ),
             "Defenders": ", ".join(
-                self._get_url_for(wp.country) + f" ({wp.call_type})"
-                for wp in war.participants
-                if not wp.is_attacker
+                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                for wp in war.defenders
             ),
             "Outcome": war.outcome,
         }

@@ -59,6 +59,19 @@ For balance and immersion, only some information about other empires is shown by
 - `Store data of all countries`: This will read detailed budgets and pop statistics for non-player countries. It will increase the processing time and database file size, but will allow you to inspect other countries by selecting them from the dropdown menu at the top. (Basic economy information is always read, this setting only controls the very detailed budgets)
 - `Filter history ledger by event type`: By default, the event ledger does not show everything on the main page. For example, more detailed events like leader level-ups are only shown on that specific leader's ledger entry. This setting allows you to change this behavior and see all events on the main page.
 
+## Timelapse Export
+
+Using the controls under the "Galaxy Map" tab to export a gif timelapse of the galaxy map in your game. The timelapse shows the area controlled by each country on the given date. An example can be found here: https://www.youtube.com/watch?v=OoiRCEWs00I 
+
+You can either export the timelapse as a single gif file (which can be large and requires more memory), export the individual frames as png images, or both. The export may take several minutes, check the stellaris dashboard console for progress, and for the exact output location.
+
+The form offers some additional parameters to customize the speed of the animation:
+
+- Start date: The in-game date where the animation starts.
+- End date: This will be where the animation ends. It is always included as the last frame.
+- Step size (days): How many days of game time pass between two frames. Increasing this reduces the total number of frames.
+- Frame time (ms): How long each frame is shown in the animation (only applies to the gif)
+
 ## Market Price Graphs
 
 The dashboard includes graphs of market prices for each resource in the game. To get the correct values, you will need to manually configure some things in the file `config.yml`, as these settings are not available in the built-in settings page. 
@@ -108,6 +121,10 @@ In this case, you can fix it like this:
 - Make sure there is a single folder containing all required localization files ending in `.yml`, including the files from your stellaris game and from all mods that introduce new names. You might need to collect these files yourself and copy them to a convenient location. The file names you use does not matter, the dashboard will take them all and build one big name mapping.
 - Update the `Stellaris localization folder` in the dashboard settings (or edit it in config.yml). Restart the dashboard program.
 - Look in the dashboard program for some output like `Loaded 162 localization files from <path-to-your-stellaris>/localisation/english` or similar that matches the number of files you prepared.
+
+## Colors
+
+Currently, all country colors shown in the dashboard are randomized and completely unrelated to the colors in-game. Unfortunately, it is not that easy to get the country color from the save files, but it could be possible to add this in a future release.
 
 ## How to improve performance
 

@@ -2,10 +2,11 @@ import abc
 import colorsys
 import dataclasses
 import enum
+import functools
 import logging
 import random
 import time
-from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
+from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
 
 import networkx as nx
 import numpy as np
@@ -38,7 +39,7 @@ class PlotSpecification:
 
     # This function specifies which data container class should be used for the plot.
     # The int argument is the country ID for which budgets and pop stats are shown.
-    data_container_factory: Callable[[Optional[int]], "AbstractPlotDataContainer"]
+    data_container_factory: Callable[[Optional[int], Any], "AbstractPlotDataContainer"]
 
     style: PlotStyle
     yrange: Tuple[float, float] = None
@@ -554,7 +555,7 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         return market_fee
 
 
-class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
+class AbstractPlayerBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     DEFAULT_VAL = 0.0
 
     def _iterate_budgetitems(
@@ -574,74 +575,93 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
         return len(player_cd.budget) != 0
 
 
-class EnergyBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class EnergyBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_energy
 
 
-class MineralsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class MineralsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_minerals
 
 
-class AlloysBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class AlloysBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_alloys
 
 
-class ConsumerGoodsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class ConsumerGoodsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_consumer_goods
 
 
-class FoodBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class FoodBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_food
 
 
-class VolatileMotesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class VolatileMotesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_volatile_motes
 
 
-class ExoticGasesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class ExoticGasesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_exotic_gases
 
 
-class RareCrystalsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class RareCrystalsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_rare_crystals
 
 
-class LivingMetalBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class LivingMetalBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_living_metal
 
 
-class ZroBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class ZroBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_zro
 
 
-class DarkMatterBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class DarkMatterBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_dark_matter
 
 
-class NanitesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class NanitesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_nanites
 
 
-class UnityBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class UnityBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_unity
 
 
-class InfluenceBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class InfluenceBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_influence
+
+
+class BudgetSumDataContainer(AbstractPerCountryDataContainer, abc.ABC):
+    DEFAULT_VAL = float("nan")
+
+    def __init__(
+        self,
+        function_from_budgetitem: Callable[[datamodel.BudgetItem], float],
+        country_perspective: Optional[int],
+        **kwargs,
+    ):
+        super().__init__(country_perspective, **kwargs)
+        self.function_from_budgetitem = function_from_budgetitem
+
+    def _get_value_from_countrydata(
+        self, cd: datamodel.CountryData
+    ) -> Union[None, float]:
+        if cd.show_economic_info():
+            return sum(self.function_from_budgetitem(bi) for bi in cd.budget)
 
 
 PopStatsType = Union[
@@ -1285,9 +1305,89 @@ VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
     style=PlotStyle.line,
 )
 
+# Below are not shown by default, but can be enabled in configuration
+TOTAL_MINERAL_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-mineral-income",
+    title="Total Mineral Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_minerals)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ENERGY_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-energy-income",
+    title="Total Energy Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_energy)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ALLOYS_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-alloys-income",
+    title="Total Alloys Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_alloys)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-consumer-goods-income",
+    title="Total Consumer Goods Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_consumer_goods)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_FOOD_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-food-income",
+    title="Total Food Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_food)
+    ),
+    style=PlotStyle.line,
+)
+# Below are not shown by default, but can be enabled in configuration
+TOTAL_MINERAL_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-mineral-expense",
+    title="Total Mineral Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_minerals)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ENERGY_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-energy-expense",
+    title="Total Energy Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_energy)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ALLOYS_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-alloys-expense",
+    title="Total Alloys Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_alloys)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-consumer-goods-expense",
+    title="Total Consumer Goods Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_consumer_goods)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_FOOD_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-food-expense",
+    title="Total Food Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_food)
+    ),
+    style=PlotStyle.line,
+)
 
-# This dictionary defines how the plots are laid out in tabs by the plotly frontend
-# and how they should be split to different image files by matplotlib
 PLOT_SPECIFICATIONS = {
     "planet_count_graph": PLANET_COUNT_GRAPH,
     "system_count_graph": SYSTEM_COUNT_GRAPH,
@@ -1296,6 +1396,16 @@ PLOT_SPECIFICATIONS = {
     "net_alloys_income_graph": NET_ALLOYS_INCOME_GRAPH,
     "net_consumer_goods_income_graph": NET_CONSUMER_GOODS_INCOME_GRAPH,
     "net_food_income_graph": NET_FOOD_INCOME_GRAPH,
+    "total_energy_income_graph": TOTAL_ENERGY_INCOME_GRAPH,
+    "total_mineral_income_graph": TOTAL_MINERAL_INCOME_GRAPH,
+    "total_alloys_income_graph": TOTAL_ALLOYS_INCOME_GRAPH,
+    "total_consumer_goods_income_graph": TOTAL_CONSUMER_GOODS_INCOME_GRAPH,
+    "total_food_income_graph": TOTAL_FOOD_INCOME_GRAPH,
+    "total_energy_expense_graph": TOTAL_ENERGY_EXPENSE_GRAPH,
+    "total_mineral_expense_graph": TOTAL_MINERAL_EXPENSE_GRAPH,
+    "total_alloys_expense_graph": TOTAL_ALLOYS_EXPENSE_GRAPH,
+    "total_consumer_goods_expense_graph": TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH,
+    "total_food_expense_graph": TOTAL_FOOD_EXPENSE_GRAPH,
     "energy_budget": ENERGY_BUDGET,
     "mineral_budget": MINERAL_BUDGET,
     "consumer_goods_budget": CONSUMER_GOODS_BUDGET,
@@ -1449,8 +1559,8 @@ class GalaxyMapData:
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
 
-        logger.info(
-            f"Updated networkx graph in {time.process_time() - start_time:5.3f} seconds."
+        logger.debug(
+            f"Updated galaxy graph in {time.process_time() - start_time:5.3f} seconds."
         )
         return self.galaxy_graph
 

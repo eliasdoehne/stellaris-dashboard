@@ -3,15 +3,18 @@ import time
 from typing import Dict, Any, List
 from urllib import parse
 
-import dash
+import dash.exceptions
 import plotly.graph_objs as go
-from dash import dcc
-from dash import html
-from dash.dependencies import Input, Output
+from dash import Dash, callback_context, dcc, html, Input, Output
 from flask import render_template
 
 from stellarisdashboard import config, datamodel
-from stellarisdashboard.dashboard_app import utils, flask_app, visualization_data
+from stellarisdashboard.dashboard_app import (
+    utils,
+    flask_app,
+    visualization_data,
+    timelapse_exporter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +51,6 @@ HEADER_STYLE = {
     "margin-bottom": "10px",
     "text-align": "center",
 }
-DROPDOWN_STYLE = {
-    "width": "100%",
-    "font-family": "verdana",
-    "color": TEXT_HIGHLIGHT_COLOR,
-    "margin-top": "10px",
-    "margin-bottom": "10px",
-    "text-align": "center",
-    "text-color": TEXT_HIGHLIGHT_COLOR,
-    "background": BACKGROUND_DARK,
-}
 TEXT_STYLE = {
     "font-family": "verdana",
     "color": "rgba(217, 217, 217, 1)",
@@ -89,7 +82,11 @@ SELECT_SYSTEM_DEFAULT = html.P(
     style=dict(width=f"{config.CONFIG.plot_width}px"),
 )
 
-timeline_app = dash.Dash(
+TIMELAPSE_DEFAULT_START = "2200.01.01"
+TIMELAPSE_DEFAULT_STEP = 120
+TIMELAPSE_DEFAULT_FRAME_TIME = 100
+
+timeline_app = Dash(
     __name__,
     title="Stellaris Dashboard",
     server=flask_app,
@@ -180,17 +177,17 @@ def galaxy_map_system_info(clickData):
                 href=utils.flask.url_for(
                     "history_page", game_id=game_id, system=system_id
                 ),
-                # className="textlink",
+                className="textlink",
             ),
         ]
     )
 
 
 @timeline_app.callback(
-    Output(component_id="dateslider-container", component_property="style"),
+    Output(component_id="galaxy-tab-ui", component_property="style"),
     [Input("tabs-container", "value")],
 )
-def show_hide_date_slider(tab_value):
+def show_hide_galaxy_tab_ui(tab_value):
     style_dict = {
         "display": "none",
         "width": f"{int(0.90 * config.CONFIG.plot_width)}px",
@@ -210,18 +207,102 @@ def show_hide_date_slider(tab_value):
     [Input("tabs-container", "value"), Input("url", "search")],
 )
 def adjust_slider_values(tab_value, search):
-    _, matches = _get_game_ids_matching_url(search)
-    with datamodel.get_db_session(matches[0]) as session:
-        max_date = utils.get_most_recent_date(session)
-
     if tab_value == config.GALAXY_MAP_TAB:
+        _, matches = _get_game_ids_matching_url(search)
+        with datamodel.get_db_session(matches[0]) as session:
+            max_date = utils.get_most_recent_date(session)
         marks = {0: "2200.01.01", 100: datamodel.days_to_date(max_date)}
         for x in range(20, 100, 20):
             marks[x] = datamodel.days_to_date(x / 100 * max_date)
-        logger.info(f"Setting marks to {marks}")
+        logger.info(f"Setting slider marks to {marks}")
         return marks
     else:
-        return {}
+        raise dash.exceptions.PreventUpdate()
+
+
+@timeline_app.callback(
+    Output(component_id="timelapse-end-input", component_property="placeholder"),
+    [Input("tabs-container", "value"), Input("url", "search")],
+)
+def adjust_end_date_field_value(tab_value, search):
+    if tab_value == config.GALAXY_MAP_TAB:
+        _, matches = _get_game_ids_matching_url(search)
+        with datamodel.get_db_session(matches[0]) as session:
+            max_date = utils.get_most_recent_date(session)
+
+        return datamodel.days_to_date(max_date)
+    else:
+        raise dash.exceptions.PreventUpdate()
+
+
+@timeline_app.callback(
+    Output("hidden-div", "children"),
+    [
+        Input("url", "search"),
+        Input("timelapse-start-input", "value"),
+        Input("timelapse-end-input", "value"),
+        Input("timelapse-step-input", "value"),
+        Input("timelapse-duration-input", "value"),
+        Input("galaxy-export-button", "n_clicks"),
+        Input("timelapse-export-mode", "value"),
+    ],
+)
+def trigger_timeline_export(
+    search,
+    start_date,
+    end_date,
+    step_days,
+    frame_time_ms,
+    clicks,
+    export_mode,
+):
+    _, matches = _get_game_ids_matching_url(search)
+    if not matches:
+        logger.warning(f"Could not find a game from URL {search}")
+        return "Unknown Game"
+    game_id = matches[0]
+
+    start_date = start_date or TIMELAPSE_DEFAULT_START
+    if not end_date:
+        with datamodel.get_db_session(game_id) as session:
+            end_date = datamodel.days_to_date(utils.get_most_recent_date(session))
+    step_days = step_days or TIMELAPSE_DEFAULT_STEP
+    frame_time_ms = frame_time_ms or TIMELAPSE_DEFAULT_FRAME_TIME
+
+    export_gif = "export_gif" in export_mode
+    export_frames = "export_frames" in export_mode
+
+    changed_ids = [p["prop_id"].split(".")[0] for p in callback_context.triggered]
+    button_pressed = "galaxy-export-button" in changed_ids
+    if button_pressed:
+        logger.info(f"Triggering timelapse export for {game_id}")
+        logger.info(
+            f"{start_date=}, {end_date=}, {step_days=}, {frame_time_ms=}, {export_gif=}, {export_frames=}"
+        )
+        try:
+            tl_start_days = datamodel.date_to_days(start_date)
+            tl_end_days = datamodel.date_to_days(end_date)
+        except ValueError:
+            logger.error(
+                f"Received invalid date(s) {start_date}, {end_date} for timelapse export. "
+                f"Dates must be given in YYYY.MM.DD format."
+            )
+            return
+        if tl_start_days >= tl_end_days:
+            logger.error(
+                f"Start date must be before end date for timelapse export, received {start_date}, {end_date}"
+            )
+            return
+
+        te = timelapse_exporter.TimelapseExporter(game_id)
+        te.create_timelapse(
+            start_date=tl_start_days,
+            end_date=tl_end_days,
+            step_days=step_days,
+            tl_duration=frame_time_ms,
+            export_gif=export_gif,
+            export_frames=export_frames,
+        )
 
 
 @timeline_app.callback(
@@ -245,7 +326,6 @@ def update_content(
         logger.warning(f"Could not find a game matching {game_id}")
         return render_template("404_page.html", game_not_found=True, game_name=game_id)
     game_id = matches[0]
-
     games_dict = datamodel.get_available_games_dict()
     if game_id not in games_dict:
         logger.warning(
@@ -292,10 +372,7 @@ def update_content(
                             style=dict(textAlign="center"),
                         )
                     ],
-                    style=dict(
-                        margin="auto",
-                        width=f"{config.CONFIG.plot_width}px",
-                    ),
+                    style=dict(margin="auto", width=f"{config.CONFIG.plot_width}px"),
                 )
             )
     else:
@@ -303,7 +380,7 @@ def update_content(
 
         children.append(
             html.Div(
-                [get_galaxy(game_id, slider_date), SELECT_SYSTEM_DEFAULT],
+                [get_galaxy(game_id, slider_date)],
                 style=dict(
                     margin="auto",
                     width=f"{config.CONFIG.plot_width}px",
@@ -550,7 +627,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         plot_bgcolor=GALAXY_BACKGROUND,
         paper_bgcolor=BACKGROUND_DARK,
         font={"color": TEXT_COLOR},
-        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)} (click to select systems)",
+        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
     )
 
     fig = go.Figure(data=system_shapes + system_markers + edge_traces, layout=layout)
@@ -581,73 +658,196 @@ def start_dash_app(port):
 def get_layout():
     tab_names = list(config.CONFIG.tab_layout)
     tab_names.append(config.GALAXY_MAP_TAB)
+    top_navigation = html.Div(
+        [
+            html.A(
+                html.Button("Game Selection", style=BUTTON_STYLE),
+                id="index-link",
+                href="/",
+            ),
+            html.A(
+                html.Button(f"Settings", style=BUTTON_STYLE),
+                id="settings-link",
+                href="/settings/",
+                style=BUTTON_STYLE,
+            ),
+            html.A(
+                html.Button(f"Event Ledger", style=BUTTON_STYLE),
+                id="ledger-link",
+                href="/history",
+                style=BUTTON_STYLE,
+            ),
+        ]
+    )
+    global_graph_controls = html.Div(
+        [
+            dcc.Dropdown(
+                id="country-perspective-dropdown",
+                options=[],
+                placeholder="Select a country",
+                value=None,
+                style={
+                    "width": "100%",
+                    "verticalAlign": "middle",
+                    "font-family": "verdana",
+                    "color": TEXT_HIGHLIGHT_COLOR,
+                    # "margin-top": "10px",
+                    # "margin-bottom": "10px",
+                    "text-align": "center",
+                    "text-color": TEXT_HIGHLIGHT_COLOR,
+                    "background": BACKGROUND_DARK,
+                },
+            ),
+            dcc.Checklist(
+                id="dash-plot-checklist",
+                options=[
+                    {
+                        "label": "Normalize stacked plots",
+                        "value": "normalize_stacked_plots",
+                    },
+                ],
+                value=[],
+                labelStyle=dict(color=TEXT_COLOR),
+                style={
+                    "verticalAlign": "center",
+                    "width": "50%",
+                },
+            ),
+        ],
+        style={"display": "flex", "width": "100%"},
+    )
+    galaxy_tab_ui = html.Div(
+        [
+            html.H3("Galaxy Map Controls"),
+            SELECT_SYSTEM_DEFAULT,
+            dcc.Slider(
+                id="dateslider",
+                min=0,
+                max=100,
+                step=0.01,
+                value=100,
+                marks={},
+            ),
+            html.H3("Timelapse Export"),
+            html.Div(
+                [
+                    html.P(f"Start date"),
+                    dcc.Input(
+                        id="timelapse-start-input",
+                        type="text",
+                        placeholder=TIMELAPSE_DEFAULT_START,
+                    ),
+                ],
+                style={"display": "inline-block", "width": "20%"},
+            ),
+            html.Div(
+                [
+                    html.P("End date"),
+                    dcc.Input(
+                        id="timelapse-end-input",
+                        type="text",
+                        placeholder="2210.01.01",
+                    ),
+                ],
+                style={"display": "inline-block", "width": "20%"},
+            ),
+            html.Div(
+                [
+                    html.P(f"Step size (days)"),
+                    dcc.Input(
+                        id="timelapse-step-input",
+                        type="number",
+                        placeholder=TIMELAPSE_DEFAULT_STEP,
+                    ),
+                ],
+                style={"display": "inline-block", "width": "20%"},
+            ),
+            html.Div(
+                [
+                    html.P(f"Frame time (ms)"),
+                    dcc.Input(
+                        id="timelapse-duration-input",
+                        type="number",
+                        placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
+                    ),
+                ],
+                style={"display": "inline-block", "width": "20%"},
+            ),
+            html.Div(
+                [
+                    dcc.Checklist(
+                        id="timelapse-export-mode",
+                        options=[
+                            {
+                                "label": "Export gif (large file)",
+                                "title": (
+                                    "Export the timelapse as a single (large) gif file. "
+                                    "This requires a lot of memory"
+                                ),
+                                "value": "export_gif",
+                            },
+                            {
+                                "label": "Export frames",
+                                "title": (
+                                    "Export the individual frames of the timelapse in png format. "
+                                    "You can use a tool (e.g. ffmpeg) to stitch them to a video timelapse."
+                                ),
+                                "value": "export_frames",
+                            },
+                        ],
+                        value=["export_gif", "export_frames"],
+                        labelStyle=dict(color=TEXT_COLOR),
+                        style={"text-align": "center"},
+                    ),
+                ],
+                style={"display": "inline-block"},
+            ),
+            html.Button(
+                f"Export Timelapse",
+                id="galaxy-export-button",
+                style=BUTTON_STYLE,
+            ),
+            html.Div(id="hidden-div", style={"display": "none"}),
+        ],
+        style={
+            "display": "block",
+            "width": "100%",
+            "height": "100%",
+            "margin-left": "auto",
+            "margin-right": "auto",
+        },
+        id="galaxy-tab-ui",
+    )
+
+    tabs = dcc.Tabs(
+        id="tabs-container",
+        style=TAB_CONTAINER_STYLE,
+        parent_style=TAB_CONTAINER_STYLE,
+        children=[
+            dcc.Tab(
+                id=tab_label,
+                label=tab_label,
+                value=tab_label,
+                style=TAB_STYLE,
+                selected_style=SELECTED_TAB_STYLE,
+            )
+            for tab_label in tab_names
+        ],
+        value=tab_names[0],
+    )
     return html.Div(
         [
             dcc.Location(id="url", refresh=False),
             html.Div(
                 [
-                    html.Div(
-                        [
-                            html.A(
-                                "Game Selection",
-                                id="index-link",
-                                href="/",
-                                style=BUTTON_STYLE,
-                            ),
-                            html.A(
-                                f"Settings",
-                                id="settings-link",
-                                href="/settings/",
-                                style=BUTTON_STYLE,
-                            ),
-                            html.A(
-                                f"Event Ledger",
-                                id="ledger-link",
-                                href="/history",
-                                style=BUTTON_STYLE,
-                            ),
-                        ]
-                    ),
+                    top_navigation,
                     html.H1(
                         children="Unknown Game",
                         id="game-name-header",
                         style=HEADER_STYLE,
                     ),
-                    dcc.Checklist(
-                        id="dash-plot-checklist",
-                        options=[
-                            {
-                                "label": "Normalize stacked plots",
-                                "value": "normalize_stacked_plots",
-                            },
-                        ],
-                        value=[],
-                        labelStyle=dict(color=TEXT_COLOR),
-                        style={"text-align": "center"},
-                    ),
-                    dcc.Dropdown(
-                        id="country-perspective-dropdown",
-                        options=[],
-                        placeholder="Select a country",
-                        value=None,
-                        style=DROPDOWN_STYLE,
-                    ),
-                    dcc.Tabs(
-                        id="tabs-container",
-                        style=TAB_CONTAINER_STYLE,
-                        parent_style=TAB_CONTAINER_STYLE,
-                        children=[
-                            dcc.Tab(
-                                id=tab_label,
-                                label=tab_label,
-                                value=tab_label,
-                                style=TAB_STYLE,
-                                selected_style=SELECTED_TAB_STYLE,
-                            )
-                            for tab_label in tab_names
-                        ],
-                        value=tab_names[0],
-                    ),
+                    global_graph_controls,
+                    tabs,
                     html.Div(
                         id="tab-content",
                         style={
@@ -657,19 +857,7 @@ def get_layout():
                             "margin-right": "auto",
                         },
                     ),
-                    html.Div(
-                        [
-                            dcc.Slider(
-                                id="dateslider",
-                                min=0,
-                                max=100,
-                                step=0.01,
-                                value=100,
-                                marks={},
-                            )
-                        ],
-                        id="dateslider-container",
-                    ),
+                    galaxy_tab_ui,
                 ],
                 style={
                     "width": "100%",

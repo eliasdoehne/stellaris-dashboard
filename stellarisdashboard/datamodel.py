@@ -672,7 +672,9 @@ class Country(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.country_name)
+        rendered = game_info.render_name(self.country_name)
+        rendered += f" ({self.country_id_in_game})"
+        return rendered
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -1257,7 +1259,7 @@ class War(Base):
         )
 
     @property
-    def attackers(self):
+    def attackers(self) -> Iterable["WarParticipant"]:
         for p in self.participants:
             if p.is_attacker and p.call_type == "primary":
                 yield p
