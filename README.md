@@ -122,6 +122,10 @@ In this case, you can fix it like this:
 - Update the `Stellaris localization folder` in the dashboard settings (or edit it in config.yml). Restart the dashboard program.
 - Look in the dashboard program for some output like `Loaded 162 localization files from <path-to-your-stellaris>/localisation/english` or similar that matches the number of files you prepared.
 
+## Colors
+
+Currently, all country colors shown in the dashboard are randomized and completely unrelated to the colors in-game. Unfortunately, it is not that easy to get the country color from the save files, but it could be possible to add this in a future release.
+
 ## How to improve performance
 
 If you find that the dashboard is too slow to browse, you can try some of these things:
