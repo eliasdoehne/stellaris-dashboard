@@ -279,9 +279,10 @@ class SystemProcessor(AbstractGamestateDataProcessor):
         for ingame_id, system_data in self._gamestate_dict["galactic_object"].items():
             if "starbases" in system_data:
                 starbases = system_data["starbases"]
-                if len(starbases) > 1:  # TODO REmove
-                    raise ValueError(f"Multiple starbases in {ingame_id} {system_data}")
-                self.starbase_systems[starbases[0]] = ingame_id
+                if len(starbases) > 1:
+                    logger.debug(f"Found multiple starbases in system {ingame_id}")
+                for starbase in starbases:
+                    self.starbase_systems[starbase] = ingame_id
             if ingame_id in self.systems_by_ingame_id:
                 self._update_system(
                     system_model=self.systems_by_ingame_id[ingame_id],
@@ -512,7 +513,8 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             system_model = systems_dict.get(system_id_in_game)
 
             if country_model is None or system_model is None:
-                logger.warning(
+                # This is no longer an unexpected situation because some megastructures count as starbases since Overlord
+                logger.debug(
                     f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game}"
                 )
                 continue
@@ -1146,10 +1148,10 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         return leader
 
     def get_leader_name(self, leader_dict):
-        if "name" not in leader_dict:
-            return "Unknown Leader"
-        first_name = dump_name(leader_dict["name"].get("first_name", "Unknown Leader"))
-        last_name = dump_name(leader_dict["name"].get("second_name", ""))
+        first_name = dump_name(
+            leader_dict.get("name", {}).get("first_name", "Unknown Leader")
+        )
+        last_name = dump_name(leader_dict.get("name", {}).get("second_name", ""))
         return first_name, last_name
 
     def _update_leader_attributes(self, leader: datamodel.Leader, leader_dict):
