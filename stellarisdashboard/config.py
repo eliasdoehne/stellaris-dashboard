@@ -383,7 +383,7 @@ class Config:
     def localization_files(self):
         files = list(
             itertools.chain(
-                self.localization_file_dir.glob("*.yaml"), self.localization_file_dir.glob("*.yml"),
+                self.localization_file_dir.glob("**/*.yaml"), self.localization_file_dir.glob("**/*.yml"),
             )
         )
         logger.info(f"Loaded {len(files)} localization files from {self.localization_file_dir}")

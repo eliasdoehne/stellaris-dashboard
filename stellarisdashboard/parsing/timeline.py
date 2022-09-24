@@ -356,10 +356,9 @@ class BypassProcessor(AbstractGamestateDataProcessor):
         if not isinstance(bypasses, dict):
             return
 
-        galactic_objects = self._gamestate_dict["galactic_object"]
         bypass_systems = {
             sys_id: sys_dict
-            for sys_id, sys_dict in galactic_objects.items()
+            for sys_id, sys_dict in self._gamestate_dict["galactic_object"].items()
             if "bypasses" in sys_dict
         }
 
