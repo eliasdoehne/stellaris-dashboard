@@ -299,9 +299,9 @@ def days_to_date(days: float) -> str:
     """
     days = int(days)
     year_offset = days // 360
+    year = 2200 + year_offset
     days -= 360 * year_offset
     month_offset = days // 30
-    year = 2200 + year_offset
     month = 1 + month_offset
     day = days - 30 * month_offset + 1
     return f"{year:04}.{month:02}.{day:02}"
