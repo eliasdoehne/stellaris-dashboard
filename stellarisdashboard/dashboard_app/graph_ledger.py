@@ -7,6 +7,7 @@ import dash.exceptions
 import plotly.graph_objs as go
 from dash import Dash, callback_context, dcc, html, Input, Output
 from flask import render_template
+from PIL import features
 
 from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app import (
@@ -270,6 +271,7 @@ def trigger_timeline_export(
     frame_time_ms = frame_time_ms or TIMELAPSE_DEFAULT_FRAME_TIME
 
     export_gif = "export_gif" in export_mode
+    export_webp = "export_webp" in export_mode
     export_frames = "export_frames" in export_mode
 
     changed_ids = [p["prop_id"].split(".")[0] for p in callback_context.triggered]
@@ -277,7 +279,7 @@ def trigger_timeline_export(
     if button_pressed:
         logger.info(f"Triggering timelapse export for {game_id}")
         logger.info(
-            f"{start_date=}, {end_date=}, {step_days=}, {frame_time_ms=}, {export_gif=}, {export_frames=}"
+            f"{start_date=}, {end_date=}, {step_days=}, {frame_time_ms=}, {export_gif=}, {export_webp=}, {export_frames=}"
         )
         try:
             tl_start_days = datamodel.date_to_days(start_date)
@@ -301,6 +303,7 @@ def trigger_timeline_export(
             step_days=step_days,
             tl_duration=frame_time_ms,
             export_gif=export_gif,
+            export_webp=export_webp,
             export_frames=export_frames,
         )
 
@@ -787,6 +790,16 @@ def get_layout():
                                 "value": "export_gif",
                             },
                             {
+                                "label": "Export webp (smaller than gif, slow)",
+                                "title": (
+                                    "Export the timelapse as a single (large) webp file. "
+                                    "Should end up smaller than the equivalent gif. "
+                                    "Requires the system WebP library to support animated WebP."
+                                ),
+                                "value": "export_webp",
+                                "disabled": not features.check("webp_anim"),
+                            },
+                            {
                                 "label": "Export frames",
                                 "title": (
                                     "Export the individual frames of the timelapse in png format. "
@@ -795,7 +808,7 @@ def get_layout():
                                 "value": "export_frames",
                             },
                         ],
-                        value=["export_gif", "export_frames"],
+                        value=["export_gif", ],
                         labelStyle=dict(color=TEXT_COLOR),
                         style={"text-align": "center"},
                     ),

@@ -40,11 +40,12 @@ class TimelapseExporter:
         step_days: int,
         tl_duration: int,
         export_gif: bool,
+        export_webp: bool,
         export_frames: bool,
         x_range: Optional[Tuple[float, float]] = None,
         y_range: Optional[Tuple[float, float]] = None,
     ):
-        if not any([export_gif, export_frames]):
+        if not any([export_gif, export_webp, export_frames]):
             logger.info("Nothing to do, cancelling timelapse")
             return
         self._ts = datetime.datetime.now()
@@ -52,18 +53,17 @@ class TimelapseExporter:
         frames_path = (
             config.CONFIG.base_output_path / f"galaxy-timelapse/{self._timelapse_id()}/"
         )
-        gif_path = self.output_file()
 
         if export_frames:
             logger.info(f"Exporting timelapse frames to {frames_path}")
-        if export_gif:
-            logger.info(f"Exporting timelapse gif to {gif_path}")
+        if export_gif or export_webp:
+            logger.info(f"Exporting animated image")
 
         export_days = self._day_list(start_date, end_date, step_days)
         frames = []
         for i, day in enumerate(tqdm.tqdm(export_days)):
             frame = self.draw_frame(day, x_range, y_range)
-            if export_gif:
+            if export_gif or export_webp:
                 frames.append(frame)
             if export_frames:
                 frames_path.mkdir(parents=True, exist_ok=True)
@@ -71,15 +71,33 @@ class TimelapseExporter:
                     frames_path / f"{datamodel.days_to_date(day)}.png",
                     format="png",
                     dpi=(self.dpi, self.dpi),
+                    optimize=True,
                 )
         if export_gif:
+            path = self.output_file("gif")
+            logger.info(f"Exporting timelapse gif to {path}")
             frames[0].save(
-                gif_path,
+                path,
                 save_all=True,
                 append_images=frames[1:],
                 duration=tl_duration,
                 loop=0,
+                optimize=True,
             )
+        if export_webp:
+            path = self.output_file("webp")
+            logger.info(f"Exporting timelapse webp to {path}")
+            frames[0].save(
+                path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=tl_duration,
+                loop=0,
+                method=4,
+                lossless=True,
+                quality=80,
+            )
+        logger.info("Exports complete.")
 
     def _day_list(self, start_date, end_date, step_days):
         export_days = list(range(start_date, end_date, step_days))
@@ -87,10 +105,10 @@ class TimelapseExporter:
             export_days.append(end_date)
         return export_days
 
-    def output_file(self) -> str:
+    def output_file(self, ext="gif") -> str:
         out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
         out_dir.mkdir(parents=True, exist_ok=True)
-        return str((self._output_dir() / f"{self._timelapse_id()}.gif").absolute())
+        return str((self._output_dir() / f"{self._timelapse_id()}.{ext}").absolute())
 
     def _output_dir(self):
         out_dir = config.CONFIG.base_output_path / "galaxy-timelapse"
