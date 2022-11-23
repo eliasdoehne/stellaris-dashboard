@@ -648,11 +648,11 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
     return color
 
 
-def start_dash_app(port):
+def start_dash_app(host,port):
     timeline_app.css.config.serve_locally = True
     timeline_app.scripts.config.serve_locally = True
     timeline_app.layout = get_layout()
-    timeline_app.run_server(port=port)
+    timeline_app.run_server(host=host,port=port)
 
 
 def get_layout():
