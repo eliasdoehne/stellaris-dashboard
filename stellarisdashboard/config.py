@@ -173,6 +173,7 @@ DEFAULT_SETTINGS = dict(
     base_output_path=_get_default_base_output_path(),
     threads=_get_default_thread_count(),
     localization_file_dir=_get_default_localization_file_dir(),
+    host="127.0.0.1",
     port=28053,
     polling_interval=0.5,
     check_version=True,
@@ -204,6 +205,7 @@ class Config:
     threads: int = None
 
     port: int = None
+    host: str = None
     log_level: str = None
     plot_height: int = None
     plot_width: int = None
@@ -252,6 +254,7 @@ class Config:
         "polling_interval",
     }
     STR_KEYS = {
+        "host",
         "mp_username",
         "save_name_filter",
         "log_level",

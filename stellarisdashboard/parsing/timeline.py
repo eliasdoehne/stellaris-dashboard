@@ -3002,7 +3002,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 logger.warning(
                     f"{self._basic_info.logger_str}     Could not find country matching war participant {war_party_info}"
                 )
-                # continue
+                continue
 
             call_type = war_party_info.get("call_type", "unknown")
             caller = None
