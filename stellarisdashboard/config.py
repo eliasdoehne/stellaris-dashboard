@@ -198,6 +198,7 @@ DEFAULT_SETTINGS = dict(
     tab_layout=DEFAULT_TAB_LAYOUT,
     market_resources=DEFAULT_MARKET_RESOURCES,
     market_fee=DEFAULT_MARKET_FEE,
+    production=False,
 )
 
 
@@ -237,6 +238,8 @@ class Config:
     market_resources: List[Dict[str, Any]] = None
     market_fee: List[Dict[str, float]] = None
 
+    production: bool = False
+
     PATH_KEYS = {
         "base_output_path",
         "save_file_path",
@@ -250,6 +253,7 @@ class Config:
         "show_all_country_types",
         "log_to_file",
         "include_id_in_names",
+        "production",
     }
     INT_KEYS = {
         "port",
