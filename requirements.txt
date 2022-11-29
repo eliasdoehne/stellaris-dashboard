@@ -29,3 +29,4 @@ SQLAlchemy==1.4.41
 tenacity==8.1.0
 tqdm==4.64.1
 Werkzeug==2.2.2
+waitress==2.1.2
