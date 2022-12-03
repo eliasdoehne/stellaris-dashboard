@@ -1598,13 +1598,14 @@ class GalaxyMapData:
         angles = np.linspace(0, 2 * np.pi, 32)
         _sin = np.sin(angles)
         _cos = np.cos(angles)
-        outer = 1.2 * max_radius
+        outer = 1.1 * max_radius
         points += [[outer * _c, outer * _s] for _c, _s in zip(_sin, _cos)]
         inner = 0.8 * min_radius
         points += [[inner * _c, inner * _s] for _c, _s in zip(_sin, _cos)]
 
         voronoi = Voronoi(np.array(points))
         for i, node in enumerate(self.galaxy_graph.nodes):
+            self.galaxy_graph.nodes[node]["index"] = i
             region = voronoi.regions[voronoi.point_region[i]]
 
             vertices = [voronoi.vertices[v] for v in region if v != -1]
@@ -1618,6 +1619,23 @@ class GalaxyMapData:
                 ]
             )
             self.galaxy_graph.nodes[node]["shape"] = shape_x, shape_y
+
+        self.galaxy_graph.graph["galaxy_edge_ridge_vertices"] = set()
+        for ridge_points, ridge_vertices in zip(
+            voronoi.ridge_points, voronoi.ridge_vertices
+        ):
+            for rp in ridge_points:
+                rv1, rv2 = ridge_vertices
+                rv_tuple = (tuple(voronoi.vertices[rv1]), tuple(voronoi.vertices[rv2]))
+
+                if rp < len(self.galaxy_graph):
+                    node = self.galaxy_graph.nodes[rp]
+                    if "ridge_vertices" not in node:
+                        node["ridge_vertices"] = set()
+                    node["ridge_vertices"].add(rv_tuple)
+                else:
+                    # Store artificial ridges in graph metadata
+                    self.galaxy_graph.graph["galaxy_edge_ridge_vertices"].add(rv_tuple)
 
     def _country_display_name(self, country: datamodel.Country) -> str:
         if country is None:

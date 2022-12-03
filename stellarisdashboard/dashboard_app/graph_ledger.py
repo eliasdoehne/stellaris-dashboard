@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import defaultdict
 from typing import Dict, Any, List
 from urllib import parse
 
@@ -556,6 +557,12 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
 
     system_shapes = []
     country_system_markers = {}
+    country_border_ridges = defaultdict(set)
+
+    country_border_ridges[
+        visualization_data.GalaxyMapData.UNCLAIMED
+    ] |= galaxy.galaxy_graph.graph.get("galaxy_edge_ridge_vertices", set())
+
     for i, node in enumerate(graph.nodes):
         country = graph.nodes[node]["country"]
         if country not in country_system_markers:
@@ -595,6 +602,29 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                     showlegend=False,
                 )
             )
+        country_border_ridges[country] |= galaxy.galaxy_graph.nodes[node].get("ridge_vertices", set())
+
+    country_borders = []
+    for c1, r1 in country_border_ridges.items():
+        for c2, r2 in country_border_ridges.items():
+            if c2 <= c1:
+                continue
+            for rv1, rv2 in r1 & r2:
+                country_borders.append(
+                    go.Scatter(
+                        dict(
+                            x=[rv1[0], rv2[0]],
+                            y=[rv1[1], rv2[1]],
+                            text=[],
+                            line=go.scatter.Line(
+                                width=1.0, color="rgba(255,255,255,1)"
+                            ),
+                            hoverinfo="text",
+                            mode="lines",
+                            showlegend=False,
+                        )
+                    )
+                )
 
     for country in country_system_markers:
         country_system_markers[country]["marker"] = go.scatter.Marker(
@@ -633,7 +663,10 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
     )
 
-    fig = go.Figure(data=system_shapes + system_markers + edge_traces, layout=layout)
+    fig = go.Figure(
+        data=system_shapes + system_markers + edge_traces + country_borders,
+        layout=layout,
+    )
     return dcc.Graph(
         id="galaxy-map",
         figure=fig,
@@ -651,11 +684,11 @@ def get_country_color(country_name: str, alpha: float = 1.0) -> str:
     return color
 
 
-def start_dash_app(host,port):
+def start_dash_app(host, port):
     timeline_app.css.config.serve_locally = True
     timeline_app.scripts.config.serve_locally = True
     timeline_app.layout = get_layout()
-    timeline_app.run_server(host=host,port=port)
+    timeline_app.run_server(host=host, port=port)
 
 
 def get_layout():
@@ -808,7 +841,9 @@ def get_layout():
                                 "value": "export_frames",
                             },
                         ],
-                        value=["export_gif", ],
+                        value=[
+                            "export_gif",
+                        ],
                         labelStyle=dict(color=TEXT_COLOR),
                         style={"text-align": "center"},
                     ),

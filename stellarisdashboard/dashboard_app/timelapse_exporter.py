@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class TimelapseExporter:
     dpi = 120
     width = 16
-    height = 9
+    height = 16
 
     def __init__(self, game_id):
         self.game_id = game_id
@@ -170,8 +170,13 @@ class TimelapseExporter:
         buf.seek(0)
         return Image.open(buf)
 
-    def _draw_systems(self, ax, galaxy):
+    def _draw_systems(self, ax, galaxy: nx.Graph):
         systems_by_country = defaultdict(lambda: defaultdict(int))
+        country_border_ridges = defaultdict(set)
+        country_border_ridges[GalaxyMapData.UNCLAIMED] |= galaxy.graph.get(
+            "galaxy_edge_ridge_vertices", set()
+        )
+
         polygon_patches = []
         for node in galaxy:
             country = galaxy.nodes[node]["country"]
@@ -179,11 +184,10 @@ class TimelapseExporter:
                 self.rgb(country) if country != GalaxyMapData.UNCLAIMED else (0, 0, 0)
             )
 
-            if country != GalaxyMapData.UNCLAIMED:
-                systems_by_country[country]["x"] += galaxy.nodes[node]["pos"][0]
-                systems_by_country[country]["y"] += galaxy.nodes[node]["pos"][1]
-                systems_by_country[country]["count"] += 1
-                systems_by_country[country]["color"] = nodecolor
+            systems_by_country[country]["x"] += galaxy.nodes[node]["pos"][0]
+            systems_by_country[country]["y"] += galaxy.nodes[node]["pos"][1]
+            systems_by_country[country]["count"] += 1
+            systems_by_country[country]["color"] = nodecolor
 
             polygon_patches.append(
                 matplotlib.patches.Polygon(
@@ -194,19 +198,33 @@ class TimelapseExporter:
                     linewidth=0,
                 )
             )
-        p = PatchCollection(polygon_patches, match_original=True)
-        ax.add_collection(p)
-        self._draw_country_names(ax, systems_by_country)
-
-    def _draw_country_names(self, ax, systems_by_country):
-        for country, avg_pos in systems_by_country.items():
-            x = avg_pos["x"] / avg_pos["count"]
-            position = avg_pos["y"] / avg_pos["count"]
-            ax.text(
-                x,
-                position,
-                country,
-                color=avg_pos["color"],
-                size="x-small",
-                ha="center",
+            country_border_ridges[country] |= galaxy.nodes[node].get(
+                "ridge_vertices", []
             )
+
+        ax.add_collection(PatchCollection(polygon_patches, match_original=True))
+
+        for country, avg_pos in systems_by_country.items():
+            if country != GalaxyMapData.UNCLAIMED:
+                x = avg_pos["x"] / avg_pos["count"]
+                position = avg_pos["y"] / avg_pos["count"]
+                ax.text(
+                    x,
+                    position,
+                    country,
+                    color=avg_pos["color"],
+                    size="x-small",
+                    ha="center",
+                )
+
+        for c1, r1 in country_border_ridges.items():
+            for c2, r2 in country_border_ridges.items():
+                if c2 <= c1:
+                    continue
+                for rv1, rv2 in r1 & r2:
+                    ax.plot(
+                        [rv1[0], rv2[0]],
+                        [rv1[1], rv2[1]],
+                        linewidth=1.0,
+                        color="w",
+                    )
