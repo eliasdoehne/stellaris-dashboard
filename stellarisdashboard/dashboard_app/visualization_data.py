@@ -1605,7 +1605,6 @@ class GalaxyMapData:
 
         voronoi = Voronoi(np.array(points))
         for i, node in enumerate(self.galaxy_graph.nodes):
-            self.galaxy_graph.nodes[node]["index"] = i
             region = voronoi.regions[voronoi.point_region[i]]
 
             vertices = [voronoi.vertices[v] for v in region if v != -1]
@@ -1621,8 +1620,19 @@ class GalaxyMapData:
             self.galaxy_graph.nodes[node]["shape"] = shape_x, shape_y
 
         self.galaxy_graph.graph["galaxy_edge_ridge_vertices"] = set()
+        self._extract_voronoi_ridges(voronoi)
+
+    def _extract_voronoi_ridges(self, voronoi: Voronoi):
+        """
+        Adjacent systems in the Voronoi are separated by ridges. Each ridge is defined in two ways:
+        - ridge points: Index to the pair of input points separated by the ridge
+        - ridge vertices: Index to the pair of "output" points connected by the ridge
+
+        For each node, we store its ridge vertices in node metadata (transformed to map coordinates).
+        Ridge vertices for artificial nodes are stored in the graph metadata
+        """
         for ridge_points, ridge_vertices in zip(
-            voronoi.ridge_points, voronoi.ridge_vertices
+                voronoi.ridge_points, voronoi.ridge_vertices
         ):
             for rp in ridge_points:
                 rv1, rv2 = ridge_vertices
@@ -1634,7 +1644,7 @@ class GalaxyMapData:
                         node["ridge_vertices"] = set()
                     node["ridge_vertices"].add(rv_tuple)
                 else:
-                    # Store artificial ridges in graph metadata
+                    # Store artificial node ridges in graph metadata
                     self.galaxy_graph.graph["galaxy_edge_ridge_vertices"].add(rv_tuple)
 
     def _country_display_name(self, country: datamodel.Country) -> str:
