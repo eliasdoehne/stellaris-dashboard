@@ -11,7 +11,7 @@ from collections import defaultdict
 from typing import List, Dict, Any
 import yaml
 
-LOG_LEVELS = {"INFO": logging.INFO, "DEBUG": logging.DEBUG}
+LOG_LEVELS = {"CRITICAL": logging.CRITICAL, "ERROR": logging.ERROR, "WARNING": logging.WARNING, "INFO": logging.INFO, "DEBUG": logging.DEBUG}
 CPU_COUNT = mp.cpu_count()
 
 LOG_FORMAT = logging.Formatter("%(processName)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -414,7 +414,7 @@ def initialize():
         return
     global logger
     initialize_logger()
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger()
     CONFIG = Config()
     _apply_existing_settings(CONFIG)
 
@@ -430,10 +430,11 @@ def initialize():
 def configure_logger():
     global logger
     logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
+    for h in logger.handlers:
+        h.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
     if CONFIG.log_to_file:
-        logger = logging.getLogger()
         file_ch = logging.FileHandler(CONFIG.base_output_path / "log.txt")
-        file_ch.setLevel(logging.WARN)
+        file_ch.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.WARN))
         file_ch.setFormatter(LOG_FORMAT)
         logger.addHandler(file_ch)
 
