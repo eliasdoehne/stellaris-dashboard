@@ -617,7 +617,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                             y=[rv1[1], rv2[1]],
                             text=[],
                             line=go.scatter.Line(
-                                width=1.0, color="rgba(255,255,255,1)"
+                                width=0.75, color="rgba(255,255,255,1)"
                             ),
                             hoverinfo="text",
                             mode="lines",

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class TimelapseExporter:
-    dpi = 120
+    dpi = 100
     width = 16
     height = 16
 
@@ -225,6 +225,7 @@ class TimelapseExporter:
                     ax.plot(
                         [rv1[0], rv2[0]],
                         [rv1[1], rv2[1]],
-                        linewidth=1.0,
+                        linewidth=0.75,
                         color="w",
+                        alpha=1,
                     )
