@@ -711,7 +711,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsBySpecies)
-        return f"{ps.species.rendered_name} (ID {ps.species.species_id_in_game})"
+        return f"{ps.species.rendered_name} ({ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):
@@ -822,7 +822,7 @@ class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.A
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PlanetStats)
-        return f"{ps.planet.rendered_name} (ID {ps.planet.planet_id_in_game})"
+        return f"{ps.planet.rendered_name} ({ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):

@@ -493,8 +493,8 @@ class System(Base):
     @property
     def rendered_name(self):
         rendered = game_info.render_name(self.name)
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.system_id_in_game})"
+        # if config.CONFIG.include_id_in_names:
+        #     rendered += f" ({self.system_id_in_game})"
         return rendered
 
     def __str__(self):
@@ -1185,8 +1185,8 @@ class Species(Base):
     @property
     def rendered_name(self):
         rendered = game_info.render_name(self.species_name)
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.species_id_in_game})"
+        # if config.CONFIG.include_id_in_names:
+        #     rendered += f" ({self.species_id_in_game})"
         return rendered
 
 
@@ -1230,8 +1230,8 @@ class PoliticalFaction(Base):
     @property
     def rendered_name(self):
         rendered =  game_info.render_name(self.faction_name)
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.faction_id_in_game})"
+        # if config.CONFIG.include_id_in_names:
+        #     rendered += f" ({self.faction_id_in_game})"
         return rendered
 
 
@@ -1415,8 +1415,8 @@ class Leader(Base):
         if self.second_name and self.second_name != '""':
             rendered_second = " " + game_info.render_name(self.second_name)
         rendered = f"{rendered_first}{rendered_second}"
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.leader_id_in_game})"
+        # if config.CONFIG.include_id_in_names:
+        #     rendered += f" ({self.leader_id_in_game})"
         return rendered
 
     @property
@@ -1453,8 +1453,8 @@ class Planet(Base):
     @property
     def rendered_name(self):
         rendered = game_info.render_name(self.planet_name)
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.planet_id_in_game})"
+        # if config.CONFIG.include_id_in_names:
+        #     rendered += f" ({self.planet_id_in_game})"
         return rendered
 
     @property
@@ -1668,8 +1668,8 @@ class Fleet(Base):
     @property
     def rendered_name(self):
         rendered = game_info.render_name(self.name)
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.fleet_id_in_game})"
+        # if config.CONFIG.include_id_in_names:
+        #     rendered += f" ({self.fleet_id_in_game})"
         return rendered
 
 
