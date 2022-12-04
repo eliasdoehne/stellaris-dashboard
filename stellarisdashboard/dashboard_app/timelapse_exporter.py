@@ -129,7 +129,8 @@ class TimelapseExporter:
         x_range: Optional[Tuple[float, float]],
         y_range: Optional[Tuple[float, float]],
     ) -> Image:
-        galaxy = self.galaxy_map_data.get_graph_for_date(day)
+        self.galaxy_map_data.update_graph_for_date(day)
+        nx_galaxy = self.galaxy_map_data.galaxy_graph
 
         fig = plt.figure(figsize=(self.width, self.height))
         ax = fig.add_subplot(111)
@@ -139,13 +140,13 @@ class TimelapseExporter:
             ax.set_ylim(*y_range)
 
         nx.draw(
-            galaxy,
+            nx_galaxy,
             ax=ax,
-            pos={node: galaxy.nodes[node]["pos"] for node in galaxy.nodes},
+            pos={node: nx_galaxy.nodes[node]["pos"] for node in nx_galaxy.nodes},
             node_color=[
-                self.rgb(galaxy.nodes[node]["country"]) for node in galaxy.nodes
+                self.rgb(nx_galaxy.nodes[node]["country"]) for node in nx_galaxy.nodes
             ],
-            edge_color=[self.rgb(galaxy.edges[e]["country"]) for e in galaxy.edges],
+            edge_color=[self.rgb(nx_galaxy.edges[e]["country"]) for e in nx_galaxy.edges],
             with_labels=False,
             font_weight="bold",
             node_size=10,
@@ -153,7 +154,7 @@ class TimelapseExporter:
         )
         fig.set_facecolor("k")
 
-        self._draw_systems(ax, galaxy)
+        self._draw_systems(ax)
 
         ax.text(
             0.05,
@@ -170,36 +171,37 @@ class TimelapseExporter:
         buf.seek(0)
         return Image.open(buf)
 
-    def _draw_systems(self, ax, galaxy: nx.Graph):
+    def _draw_systems(self, ax):
+        nx_graph = self.galaxy_map_data.galaxy_graph
         systems_by_country = defaultdict(lambda: defaultdict(int))
         country_border_ridges = defaultdict(set)
-        country_border_ridges[GalaxyMapData.UNCLAIMED] |= galaxy.graph.get(
-            "galaxy_edge_ridge_vertices", set()
-        )
+        country_border_ridges[GalaxyMapData.UNCLAIMED] |= nx_graph.graph[
+            "system_borders"
+        ].get(GalaxyMapData.ARTIFICIAL_NODE, set())
 
         polygon_patches = []
-        for node in galaxy:
-            country = galaxy.nodes[node]["country"]
+        for node in nx_graph:
+            country = nx_graph.nodes[node]["country"]
             nodecolor = (
                 self.rgb(country) if country != GalaxyMapData.UNCLAIMED else (0, 0, 0)
             )
 
-            systems_by_country[country]["x"] += galaxy.nodes[node]["pos"][0]
-            systems_by_country[country]["y"] += galaxy.nodes[node]["pos"][1]
+            systems_by_country[country]["x"] += nx_graph.nodes[node]["pos"][0]
+            systems_by_country[country]["y"] += nx_graph.nodes[node]["pos"][1]
             systems_by_country[country]["count"] += 1
             systems_by_country[country]["color"] = nodecolor
 
             polygon_patches.append(
                 matplotlib.patches.Polygon(
-                    np.array(list(galaxy.nodes[node]["shape"])).T,
+                    np.array(list(nx_graph.nodes[node]["shape"])).T,
                     fill=True,
                     facecolor=nodecolor,
                     alpha=0.2,
                     linewidth=0,
                 )
             )
-            country_border_ridges[country] |= galaxy.nodes[node].get(
-                "ridge_vertices", []
+            country_border_ridges[country] |= nx_graph.graph["system_borders"].get(
+                node, set()
             )
 
         ax.add_collection(PatchCollection(polygon_patches, match_original=True))
@@ -217,15 +219,13 @@ class TimelapseExporter:
                     ha="center",
                 )
 
-        for c1, r1 in country_border_ridges.items():
-            for c2, r2 in country_border_ridges.items():
-                if c2 <= c1:
-                    continue
-                for rv1, rv2 in r1 & r2:
-                    ax.plot(
-                        [rv1[0], rv2[0]],
-                        [rv1[1], rv2[1]],
-                        linewidth=0.75,
-                        color="w",
-                        alpha=1,
-                    )
+        for x_values, y_values in self.galaxy_map_data.get_country_system_map(
+            country_border_ridges
+        ):
+            ax.plot(
+                x_values,
+                y_values,
+                linewidth=0.75,
+                color="w",
+                alpha=1,
+            )

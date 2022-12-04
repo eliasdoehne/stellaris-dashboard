@@ -530,11 +530,13 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     :return:
     """
     # adapted from https://plot.ly/python/network-graphs/
-    galaxy = visualization_data.get_galaxy_data(game_id)
-    graph = galaxy.get_graph_for_date(int(slider_date))
+    galaxy_map_data = visualization_data.get_galaxy_data(game_id)
+    galaxy_map_data.update_graph_for_date(int(slider_date))
+    nx_graph = galaxy_map_data.galaxy_graph
+
     edge_traces_data = {}
-    for edge in graph.edges:
-        country = graph.edges[edge]["country"]
+    for edge in nx_graph.edges:
+        country = nx_graph.edges[edge]["country"]
         if country not in edge_traces_data:
             edge_traces_data[country] = dict(
                 x=[],
@@ -545,8 +547,8 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                 mode="lines",
                 showlegend=False,
             )
-        x0, y0 = graph.nodes[edge[0]]["pos"]
-        x1, y1 = graph.nodes[edge[1]]["pos"]
+        x0, y0 = nx_graph.nodes[edge[0]]["pos"]
+        x1, y1 = nx_graph.nodes[edge[1]]["pos"]
         # insert None to prevent dash from joining the lines
         edge_traces_data[country]["x"] += [x0, x1, None]
         edge_traces_data[country]["y"] += [y0, y1, None]
@@ -559,12 +561,11 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     country_system_markers = {}
     country_border_ridges = defaultdict(set)
 
-    country_border_ridges[
-        visualization_data.GalaxyMapData.UNCLAIMED
-    ] |= galaxy.galaxy_graph.graph.get("galaxy_edge_ridge_vertices", set())
-
-    for i, node in enumerate(graph.nodes):
-        country = graph.nodes[node]["country"]
+    country_border_ridges[galaxy_map_data.UNCLAIMED] |= galaxy_map_data.galaxy_graph.graph[
+        "system_borders"
+    ].get(galaxy_map_data.ARTIFICIAL_NODE, set())
+    for i, node in enumerate(nx_graph.nodes):
+        country = nx_graph.nodes[node]["country"]
         if country not in country_system_markers:
             country_system_markers[country] = dict(
                 x=[],
@@ -578,15 +579,15 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
             )
         color = get_country_color(country)
         country_system_markers[country]["marker"]["color"].append(color)
-        x, y = graph.nodes[node]["pos"]
+        x, y = nx_graph.nodes[node]["pos"]
         country_system_markers[country]["x"].append(x)
         country_system_markers[country]["y"].append(y)
-        text = f'{graph.nodes[node]["name"]} ({country})'
+        text = f'{nx_graph.nodes[node]["name"]} ({country})'
         country_system_markers[country]["text"].append(text)
-        customdata = {"system_id": graph.nodes[node]["system_id"], "game_id": game_id}
+        customdata = {"system_id": nx_graph.nodes[node]["system_id"], "game_id": game_id}
         country_system_markers[country]["customdata"].append(customdata)
         if country != visualization_data.GalaxyMapData.UNCLAIMED:
-            shape_x, shape_y = graph.nodes[node].get("shape", ([], []))
+            shape_x, shape_y = nx_graph.nodes[node].get("shape", ([], []))
             system_shapes.append(
                 go.Scatter(
                     x=shape_x,
@@ -602,29 +603,25 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                     showlegend=False,
                 )
             )
-        country_border_ridges[country] |= galaxy.galaxy_graph.nodes[node].get("ridge_vertices", set())
+        country_border_ridges[country] |= galaxy_map_data.galaxy_graph.graph[
+            "system_borders"
+        ].get(node, set())
 
     country_borders = []
-    for c1, r1 in country_border_ridges.items():
-        for c2, r2 in country_border_ridges.items():
-            if c2 <= c1:
-                continue
-            for rv1, rv2 in r1 & r2:
-                country_borders.append(
-                    go.Scatter(
-                        dict(
-                            x=[rv1[0], rv2[0]],
-                            y=[rv1[1], rv2[1]],
-                            text=[],
-                            line=go.scatter.Line(
-                                width=0.75, color="rgba(255,255,255,1)"
-                            ),
-                            hoverinfo="text",
-                            mode="lines",
-                            showlegend=False,
-                        )
-                    )
+    for x_values, y_values in galaxy_map_data.get_country_system_map(country_border_ridges):
+        country_borders.append(
+            go.Scatter(
+                dict(
+                    x=x_values,
+                    y=y_values,
+                    text=[],
+                    line=go.scatter.Line(width=0.75, color="rgba(255,255,255,1)"),
+                    hoverinfo="text",
+                    mode="lines",
+                    showlegend=False,
                 )
+            )
+        )
 
     for country in country_system_markers:
         country_system_markers[country]["marker"] = go.scatter.Marker(

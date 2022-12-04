@@ -6,6 +6,7 @@ import functools
 import logging
 import random
 import time
+from collections import defaultdict
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
 
 import networkx as nx
@@ -1506,10 +1507,14 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
     return _GALAXY_DATA[game_name]
 
 
+GalaxyMapCoordinate = Tuple[float, float]
+
+
 class GalaxyMapData:
     """Maintains the data for the historical galaxy map."""
 
     UNCLAIMED = "Unclaimed"
+    ARTIFICIAL_NODE = "artificial-node"
 
     def __init__(self, game_id: str):
         self.game_id = game_id
@@ -1541,7 +1546,10 @@ class GalaxyMapData:
             f"Initialized galaxy graph in {time.process_time() - start_time} seconds."
         )
 
-    def get_graph_for_date(self, time_days: int) -> nx.Graph:
+    def update_graph_for_date(self, time_days: int):
+        """
+        Update all time-variable properties of the galaxy in the networkx graph (primarily system ownership).
+        """
         start_time = time.process_time()
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
@@ -1562,7 +1570,17 @@ class GalaxyMapData:
         logger.debug(
             f"Updated galaxy graph in {time.process_time() - start_time:5.3f} seconds."
         )
-        return self.galaxy_graph
+
+    def get_country_system_map(
+        self,
+        country_ridges: Dict[str, Set[Tuple[GalaxyMapCoordinate, GalaxyMapCoordinate]]],
+    ) -> Iterable[Tuple[List[float], List[float]]]:
+        for c1, r1 in country_ridges.items():
+            for c2, r2 in country_ridges.items():
+                if c2 <= c1:
+                    continue
+                for rv1, rv2 in r1 & r2:
+                    yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
 
     def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
         owned_systems = set()
@@ -1631,21 +1649,20 @@ class GalaxyMapData:
         For each node, we store its ridge vertices in node metadata (transformed to map coordinates).
         Ridge vertices for artificial nodes are stored in the graph metadata
         """
+        self.galaxy_graph.graph["system_borders"] = defaultdict(set)
+
         for ridge_points, ridge_vertices in zip(
-                voronoi.ridge_points, voronoi.ridge_vertices
+            voronoi.ridge_points, voronoi.ridge_vertices
         ):
             for rp in ridge_points:
+                if rp > len(self.galaxy_graph):
+                    # substitute a common placeholder for artificial nodes
+                    rp = GalaxyMapData.ARTIFICIAL_NODE
+
                 rv1, rv2 = ridge_vertices
                 rv_tuple = (tuple(voronoi.vertices[rv1]), tuple(voronoi.vertices[rv2]))
 
-                if rp < len(self.galaxy_graph):
-                    node = self.galaxy_graph.nodes[rp]
-                    if "ridge_vertices" not in node:
-                        node["ridge_vertices"] = set()
-                    node["ridge_vertices"].add(rv_tuple)
-                else:
-                    # Store artificial node ridges in graph metadata
-                    self.galaxy_graph.graph["galaxy_edge_ridge_vertices"].add(rv_tuple)
+                self.galaxy_graph.graph["system_borders"][rp].add(rv_tuple)
 
     def _country_display_name(self, country: datamodel.Country) -> str:
         if country is None:
