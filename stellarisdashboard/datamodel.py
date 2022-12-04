@@ -492,7 +492,8 @@ class System(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.name)
+        rendered = game_info.render_name(self.name)
+        return rendered
 
     def __str__(self):
         return f'System "{self.name}" @ {self.coordinate_x}, {self.coordinate_y}'
@@ -673,7 +674,8 @@ class Country(Base):
     @property
     def rendered_name(self):
         rendered = game_info.render_name(self.country_name)
-        rendered += f" ({self.country_id_in_game})"
+        if config.CONFIG.include_id_in_names:
+            rendered += f" ({self.country_id_in_game})"
         return rendered
 
     def get_government_for_date(self, date_in_days) -> "Government":
@@ -1180,7 +1182,8 @@ class Species(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.species_name)
+        rendered = game_info.render_name(self.species_name)
+        return rendered
 
 
 class SpeciesTrait(Base):
@@ -1222,7 +1225,8 @@ class PoliticalFaction(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.faction_name)
+        rendered =  game_info.render_name(self.faction_name)
+        return rendered
 
 
 class War(Base):
@@ -1404,7 +1408,8 @@ class Leader(Base):
         rendered_second = ""
         if self.second_name and self.second_name != '""':
             rendered_second = " " + game_info.render_name(self.second_name)
-        return f"{rendered_first}{rendered_second}"
+        rendered = f"{rendered_first}{rendered_second}"
+        return rendered
 
     @property
     def agenda(self):
@@ -1439,7 +1444,8 @@ class Planet(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.planet_name)
+        rendered = game_info.render_name(self.planet_name)
+        return rendered
 
     @property
     def planetclass(self):
@@ -1651,7 +1657,8 @@ class Fleet(Base):
 
     @property
     def rendered_name(self):
-        return game_info.render_name(self.name)
+        rendered = game_info.render_name(self.name)
+        return rendered
 
 
 class HistoricalEvent(Base):

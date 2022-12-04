@@ -6,6 +6,7 @@ import functools
 import logging
 import random
 import time
+from collections import defaultdict
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
 
 import networkx as nx
@@ -280,7 +281,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
             country_name = cd.country.rendered_name
             try:
                 if (
-                    config.CONFIG.show_all_country_types
+                    not config.CONFIG.show_all_country_types
                     and cd.country.country_type != "default"
                 ):
                     continue
@@ -710,7 +711,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsBySpecies)
-        return f"{ps.species.rendered_name} (ID {ps.species.species_id_in_game})"
+        return f"{ps.species.rendered_name} ({ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):
@@ -821,7 +822,7 @@ class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.A
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PlanetStats)
-        return f"{ps.planet.rendered_name} (ID {ps.planet.planet_id_in_game})"
+        return f"{ps.planet.rendered_name} ({ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):
@@ -1506,10 +1507,14 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
     return _GALAXY_DATA[game_name]
 
 
+GalaxyMapCoordinate = Tuple[float, float]
+
+
 class GalaxyMapData:
     """Maintains the data for the historical galaxy map."""
 
     UNCLAIMED = "Unclaimed"
+    ARTIFICIAL_NODE = "artificial-node"
 
     def __init__(self, game_id: str):
         self.game_id = game_id
@@ -1541,7 +1546,10 @@ class GalaxyMapData:
             f"Initialized galaxy graph in {time.process_time() - start_time} seconds."
         )
 
-    def get_graph_for_date(self, time_days: int) -> nx.Graph:
+    def update_graph_for_date(self, time_days: int):
+        """
+        Update all time-variable properties of the galaxy in the networkx graph (primarily system ownership).
+        """
         start_time = time.process_time()
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
@@ -1562,7 +1570,22 @@ class GalaxyMapData:
         logger.debug(
             f"Updated galaxy graph in {time.process_time() - start_time:5.3f} seconds."
         )
-        return self.galaxy_graph
+
+    def get_country_border_ridges(
+        self,
+        country_ridges: Dict[str, Set[Tuple[GalaxyMapCoordinate, GalaxyMapCoordinate]]],
+    ) -> Iterable[Tuple[List[float], List[float]]]:
+        """
+        :param country_ridges: Dict mapping country name to ridges (defined by pairs of vertices)
+        :return: Iterate over those ridges which lie at the border of a country (to another country,
+            to unclaimed space, or to the edge of the galaxy)
+        """
+        for c1, r1 in country_ridges.items():
+            for c2, r2 in country_ridges.items():
+                if c2 <= c1:
+                    continue
+                for rv1, rv2 in r1 & r2:
+                    yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
 
     def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
         owned_systems = set()
@@ -1598,7 +1621,7 @@ class GalaxyMapData:
         angles = np.linspace(0, 2 * np.pi, 32)
         _sin = np.sin(angles)
         _cos = np.cos(angles)
-        outer = 1.2 * max_radius
+        outer = 1.1 * max_radius
         points += [[outer * _c, outer * _s] for _c, _s in zip(_sin, _cos)]
         inner = 0.8 * min_radius
         points += [[inner * _c, inner * _s] for _c, _s in zip(_sin, _cos)]
@@ -1618,6 +1641,34 @@ class GalaxyMapData:
                 ]
             )
             self.galaxy_graph.nodes[node]["shape"] = shape_x, shape_y
+
+        self.galaxy_graph.graph["galaxy_edge_ridge_vertices"] = set()
+        self._extract_voronoi_ridges(voronoi)
+
+    def _extract_voronoi_ridges(self, voronoi: Voronoi):
+        """
+        Adjacent systems in the Voronoi diagram are separated by ridges, which can be described in two ways:
+        - ridge points: Index to the pair of input points separated by the ridge
+        - ridge vertices: Index to the pair of "output" points connected by the ridge
+
+        For each node, we collect all ridges for which it is a ridge point, transform the ridge vertices
+        into map coordinates, and store these in the graph metadata. Ridge vertices for artificial nodes are stored
+        as well (so the borders can also be drawn around the edge of the galaxy).
+        """
+        self.galaxy_graph.graph["system_borders"] = defaultdict(set)
+
+        for ridge_points, ridge_vertices in zip(
+            voronoi.ridge_points, voronoi.ridge_vertices
+        ):
+            for rp in ridge_points:
+                if rp >= len(self.galaxy_graph):
+                    # substitute a common placeholder for artificial nodes
+                    rp = GalaxyMapData.ARTIFICIAL_NODE
+
+                rv1, rv2 = ridge_vertices
+                rv_tuple = (tuple(voronoi.vertices[rv1]), tuple(voronoi.vertices[rv2]))
+
+                self.galaxy_graph.graph["system_borders"][rp].add(rv_tuple)
 
     def _country_display_name(self, country: datamodel.Country) -> str:
         if country is None:
