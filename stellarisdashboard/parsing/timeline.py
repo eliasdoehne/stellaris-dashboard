@@ -894,6 +894,15 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             )
         return attitude_towards_player
 
+    def _check_returned_number(self, item_name, value):
+         if not isinstance(value, (float, int)):
+             logger.warning(f"{self._basic_info.logger_str} {item_name}: Found unexpected type {type(value).__name__} with value {value}.")
+             if isinstance(value, list) and len(value) > 0 and isinstance(value[0], (float, int)):
+                 value = value[0]
+             else:
+                 value = 0.0
+         return value
+
     def _extract_country_economy(
         self, country_data: datamodel.CountryData, country_data_dict
     ):
@@ -909,27 +918,23 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 continue
             if not values:
                 continue
-            energy = values.get("energy", 0.0)
-            minerals = values.get("minerals", 0.0)
-            alloys = values.get("alloys", 0.0)
-            consumer_goods = values.get("consumer_goods", 0.0)
-            food = values.get("food", 0.0)
-            unity = values.get("unity", 0.0)
-            influence = values.get("influence", 0.0)
-            physics = values.get("physics_research", 0.0)
-            society = values.get("society_research", 0.0)
-            engineering = values.get("engineering_research", 0.0)
+            resources = {}
+            for resource in ["energy", "minerals", "alloys", "consumer_goods", "food", "unity", "influence", "physics_research", "society_research", "engineering_research",]:
+                if resource in values:
+                    resources[resource] = self._check_returned_number(item_name, values.get(resource))
+                else:
+                    resources[resource] = 0.0
 
-            country_data.net_energy += energy
-            country_data.net_minerals += minerals
-            country_data.net_alloys += alloys
-            country_data.net_consumer_goods += consumer_goods
-            country_data.net_food += food
-            country_data.net_unity += unity
-            country_data.net_influence += influence
-            country_data.net_physics_research += physics
-            country_data.net_society_research += society
-            country_data.net_engineering_research += engineering
+            country_data.net_energy += resources.get("energy")
+            country_data.net_minerals += resources.get("minerals")
+            country_data.net_alloys += resources.get("alloys")
+            country_data.net_consumer_goods += resources.get("consumer_goods")
+            country_data.net_food += resources.get("food")
+            country_data.net_unity += resources.get("unity")
+            country_data.net_influence += resources.get("influence")
+            country_data.net_physics_research += resources.get("physics_research")
+            country_data.net_society_research += resources.get("society_research")
+            country_data.net_engineering_research += resources.get("engineering_research")
 
             if country.country_id_in_game in self._basic_info.other_players:
                 continue
@@ -940,13 +945,13 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                         db_budget_item_name=self._get_or_add_shared_description(
                             item_name
                         ),
-                        net_energy=energy,
-                        net_minerals=minerals,
-                        net_food=food,
-                        net_alloys=alloys,
-                        net_consumer_goods=consumer_goods,
-                        net_unity=unity,
-                        net_influence=influence,
+                        net_energy=resources.get("energy"),
+                        net_minerals=resources.get("minerals"),
+                        net_food=resources.get("food"),
+                        net_alloys=resources.get("alloys"),
+                        net_consumer_goods=resources.get("consumer_goods"),
+                        net_unity=resources.get("unity"),
+                        net_influence=resources.get("influence"),
                         net_volatile_motes=values.get("volatile_motes", 0.0),
                         net_exotic_gases=values.get("exotic_gases", 0.0),
                         net_rare_crystals=values.get("rare_crystals", 0.0),
@@ -954,9 +959,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                         net_zro=values.get("zro", 0.0),
                         net_dark_matter=values.get("dark_matter", 0.0),
                         net_nanites=values.get("nanites", 0.0),
-                        net_physics_research=physics,
-                        net_society_research=society,
-                        net_engineering_research=engineering,
+                        net_physics_research=resources.get("physics_research"),
+                        net_society_research=resources.get("society_research"),
+                        net_engineering_research=resources.get("engineering_research"),
                     )
                 )
         self._session.add(country_data)  # update
