@@ -98,14 +98,6 @@ def settings_page():
             "name": "Initial graph resolution (set to 0 to load the full data)",
             "description": "Number of points used when first loading the graphs.",
         },
-        "plot_height": {
-            "type": t_int,
-            "value": current_values["plot_height"],
-            "min": 300,
-            "max": 2000,
-            "name": "Graph height (pixels)",
-            "description": "Height of graphs.",
-        },
         "plot_width": {
             "type": t_int,
             "value": current_values["plot_width"],
@@ -113,6 +105,14 @@ def settings_page():
             "max": 2000,
             "name": "Graph width (pixels)",
             "description": "Width of graphs.",
+        },
+        "plot_height": {
+            "type": t_int,
+            "value": current_values["plot_height"],
+            "min": 300,
+            "max": 2000,
+            "name": "Graph height (pixels)",
+            "description": "Height of graphs.",
         },
     }
     return render_template("settings_page.html", current_settings=settings)

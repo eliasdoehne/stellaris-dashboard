@@ -23,15 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 class TimelapseExporter:
-    dpi = 100
-    width = 16
-    height = 16
-
-    def __init__(self, game_id):
+    def __init__(self, game_id, width=16, height=16, dpi=100):
         self.game_id = game_id
         self.galaxy_map_data = GalaxyMapData(game_id=game_id)
         self.galaxy_map_data.initialize_galaxy_graph()
         self._ts = datetime.datetime.now()
+
+        self.width = width
+        self.height = height
+        self.dpi = dpi
 
     def create_timelapse(
         self,
@@ -146,7 +146,9 @@ class TimelapseExporter:
             node_color=[
                 self.rgb(nx_galaxy.nodes[node]["country"]) for node in nx_galaxy.nodes
             ],
-            edge_color=[self.rgb(nx_galaxy.edges[e]["country"]) for e in nx_galaxy.edges],
+            edge_color=[
+                self.rgb(nx_galaxy.edges[e]["country"]) for e in nx_galaxy.edges
+            ],
             with_labels=False,
             font_weight="bold",
             node_size=10,

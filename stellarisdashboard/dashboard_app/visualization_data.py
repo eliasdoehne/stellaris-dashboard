@@ -1655,7 +1655,7 @@ class GalaxyMapData:
             voronoi.ridge_points, voronoi.ridge_vertices
         ):
             for rp in ridge_points:
-                if rp > len(self.galaxy_graph):
+                if rp >= len(self.galaxy_graph):
                     # substitute a common placeholder for artificial nodes
                     rp = GalaxyMapData.ARTIFICIAL_NODE
 
