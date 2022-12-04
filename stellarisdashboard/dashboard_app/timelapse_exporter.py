@@ -221,7 +221,7 @@ class TimelapseExporter:
                     ha="center",
                 )
 
-        for x_values, y_values in self.galaxy_map_data.get_country_system_map(
+        for x_values, y_values in self.galaxy_map_data.get_country_border_ridges(
             country_border_ridges
         ):
             ax.plot(

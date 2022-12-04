@@ -625,7 +625,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         ].get(node, set())
 
     country_borders = []
-    for x_values, y_values in galaxy_map_data.get_country_system_map(
+    for x_values, y_values in galaxy_map_data.get_country_border_ridges(
         country_border_ridges
     ):
         country_borders.append(

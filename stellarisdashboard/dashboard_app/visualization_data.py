@@ -1571,10 +1571,15 @@ class GalaxyMapData:
             f"Updated galaxy graph in {time.process_time() - start_time:5.3f} seconds."
         )
 
-    def get_country_system_map(
+    def get_country_border_ridges(
         self,
         country_ridges: Dict[str, Set[Tuple[GalaxyMapCoordinate, GalaxyMapCoordinate]]],
     ) -> Iterable[Tuple[List[float], List[float]]]:
+        """
+        :param country_ridges: Dict mapping country name to ridges (defined by pairs of vertices)
+        :return: Iterate over those ridges which lie at the border of a country (to another country,
+            to unclaimed space, or to the edge of the galaxy)
+        """
         for c1, r1 in country_ridges.items():
             for c2, r2 in country_ridges.items():
                 if c2 <= c1:
