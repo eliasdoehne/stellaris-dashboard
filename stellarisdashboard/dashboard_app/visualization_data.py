@@ -1642,12 +1642,13 @@ class GalaxyMapData:
 
     def _extract_voronoi_ridges(self, voronoi: Voronoi):
         """
-        Adjacent systems in the Voronoi are separated by ridges. Each ridge is defined in two ways:
+        Adjacent systems in the Voronoi diagram are separated by ridges, which can be described in two ways:
         - ridge points: Index to the pair of input points separated by the ridge
         - ridge vertices: Index to the pair of "output" points connected by the ridge
 
-        For each node, we store its ridge vertices in node metadata (transformed to map coordinates).
-        Ridge vertices for artificial nodes are stored in the graph metadata
+        For each node, we collect all ridges for which it is a ridge point, transform the ridge vertices
+        into map coordinates, and store these in the graph metadata. Ridge vertices for artificial nodes are stored
+        as well (so the borders can also be drawn around the edge of the galaxy).
         """
         self.galaxy_graph.graph["system_borders"] = defaultdict(set)
 
