@@ -281,7 +281,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
             country_name = cd.country.rendered_name
             try:
                 if (
-                    config.CONFIG.show_all_country_types
+                    not config.CONFIG.show_all_country_types
                     and cd.country.country_type != "default"
                 ):
                     continue

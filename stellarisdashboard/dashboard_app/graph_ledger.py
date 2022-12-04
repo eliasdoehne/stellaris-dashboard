@@ -81,7 +81,7 @@ TAB_STYLE = {
 SELECT_SYSTEM_DEFAULT = html.P(
     children=[f"Click the map to select a system"],
     id="click-data",
-    # style=dict(width=f"{config.CONFIG.plot_width}px"),
+    style=dict(width=f"{config.CONFIG.plot_width}px"),
 )
 
 TIMELAPSE_DEFAULT_START = "2200.01.01"
@@ -193,7 +193,7 @@ def galaxy_map_system_info(clickData):
 def show_hide_galaxy_tab_ui(tab_value):
     style_dict = {
         "display": "none",
-        "width": f"{int(0.90 * config.CONFIG.plot_width)}px",
+        "width": f"{config.CONFIG.plot_width}px",
         "margin": "auto",
         "text-align": "center",
         "padding-left": "1%",
@@ -790,7 +790,7 @@ def get_layout():
                         placeholder=TIMELAPSE_DEFAULT_START,
                     ),
                 ],
-                style={"display": "inline-block", "width": "17%"},
+                style={"display": "inline-block"},
             ),
             html.Div(
                 [
@@ -801,7 +801,7 @@ def get_layout():
                         placeholder="2210.01.01",
                     ),
                 ],
-                style={"display": "inline-block", "width": "17%"},
+                style={"display": "inline-block"},
             ),
             html.Div(
                 [
@@ -812,7 +812,7 @@ def get_layout():
                         placeholder=TIMELAPSE_DEFAULT_STEP,
                     ),
                 ],
-                style={"display": "inline-block", "width": "17%"},
+                style={"display": "inline-block"},
             ),
             html.Div(
                 [
@@ -823,7 +823,7 @@ def get_layout():
                         placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
                     ),
                 ],
-                style={"display": "inline-block", "width": "17%"},
+                style={"display": "inline-block"},
             ),
             html.Div(
                 [
@@ -834,7 +834,7 @@ def get_layout():
                         placeholder=TIMELAPSE_DEFAULT_DPI,
                     ),
                 ],
-                style={"display": "inline-block", "width": "17%"},
+                style={"display": "inline-block"},
             ),
             html.Div(
                 [
