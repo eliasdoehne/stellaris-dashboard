@@ -178,6 +178,48 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
             expected="Combined SPEC_DOESNOTEXIST Suns",
             description="empire, template with variables, nested does not exist",
         ),
+        NameTestcase(
+            dict(
+                key="%ADJECTIVE%",
+                variables=[
+                    {"key": "adjective", "value": {"key": "Nexitron"}},
+                    {"key": "1", "value": {"key": "Awareness"}},
+                ],
+            ),
+            expected="Nexitron Awareness",
+            description="%ADJECTIVE% template",
+        ),
+        NameTestcase(
+            dict(
+                key="%ADJ%",
+                variables=[
+                    {"key": "1", "value": {"key": "Allied", "variables": [
+                        {"key": "1", "value": {"key": "%ADJECTIVE%", "variables": [
+                            {"key": "adjective", "value": {"key": "Jing"}},
+                            {"key": "1", "value": {"key": "Systems"}}
+                        ]}}
+                    ]}}
+                ]
+            ),
+            expected="Allied Jing Systems",
+            description="%ADJ% test",
+        ),
+        NameTestcase(
+            dict(
+                key="%ADJECTIVE%",
+                variables=[
+                    {"key": "adjective", "value": {"key": "Quetzan"}},
+                    {"key": "1", "value": {"key": "%ADJ%", "variables": [
+                        {"key": "1", "value": {"key": "Consolidated", "variables": [
+                            {"key": "1", "value": {"key": "Worlds"}}
+                        ]}}
+                    ]}}
+                ]
+
+            ),
+            expected="Quetzan Consolidated Worlds",
+            description="Nested %ADJECTIVE% and %ADJ% test",
+        ),
     ],
     ids=lambda tc: tc.description,
 )

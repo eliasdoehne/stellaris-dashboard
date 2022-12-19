@@ -27,6 +27,12 @@ class NameRenderer:
                         self.name_mapping[key.strip().rstrip(":0")] = val.strip()
                     except Exception:
                         pass
+        # Add missing format that is similar to but not the same as adj_format in practice
+        if "%ADJECTIVE%" not in self.name_mapping:
+          self.name_mapping["%ADJECTIVE%"] = "$adjective$ $1$"
+        # Alternate format with no template (meant to be concatenated?). Incomplete solution.
+#        if "%ADJ%" not in self.name_mapping:
+#          self.name_mapping["%ADJ%"] = "$1$"
 
     def render_from_json(self, name_json: str):
         try:
@@ -52,6 +58,11 @@ class NameRenderer:
             return key
 
         render_template = self.name_mapping.get(key, key)
+        # The %ADJ% template is odd. See GitHub #90
+        if render_template == "%ADJ%":
+            render_template = "$1$"
+            if "variables" in name_dict and "value" in name_dict["variables"][0] and "key" in name_dict["variables"][0]["value"]:
+                name_dict["variables"][0]["value"]["key"] += " $1$"
 
         substitution_values = []
         if "value" in name_dict:
@@ -69,6 +80,7 @@ class NameRenderer:
                 ("<", ">"),
                 ("[", "]"),
                 ("$", "$"),
+                ("%", "%"),
             ]:
                 render_template = render_template.replace(
                     f"{lparen}{subst_key}{rparen}", subst_value
