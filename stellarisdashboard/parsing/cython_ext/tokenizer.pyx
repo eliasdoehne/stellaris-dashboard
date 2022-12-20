@@ -1,3 +1,4 @@
+#cython: language_level=3
 from cpython cimport bool
 
 def tokenizer(str gamestate, bool debug=False):
