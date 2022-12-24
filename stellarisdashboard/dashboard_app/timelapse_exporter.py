@@ -6,6 +6,7 @@ from typing import Tuple, Optional
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
 import networkx as nx
 import numpy as np
 import tqdm
@@ -216,9 +217,10 @@ class TimelapseExporter:
                     x,
                     position,
                     country,
-                    color=avg_pos["color"],
-                    size="x-small",
+                    color="white",
+                    size="medium",
                     ha="center",
+                    path_effects=[path_effects.withStroke(linewidth=2, foreground="black")],
                 )
 
         for x_values, y_values in self.galaxy_map_data.get_country_border_ridges(
