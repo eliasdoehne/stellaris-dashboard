@@ -33,6 +33,8 @@ class NameRenderer:
         # Alternate format with no template (meant to be concatenated?). Incomplete solution.
 #        if "%ADJ%" not in self.name_mapping:
 #          self.name_mapping["%ADJ%"] = "$1$"
+        if "%LEADER_1%" not in self.name_mapping:
+          self.name_mapping["%LEADER_1%"] = "$1$ $2$"
         if "%LEADER_2%" not in self.name_mapping:
           self.name_mapping["%LEADER_2%"] = "$1$ $2$"
 
