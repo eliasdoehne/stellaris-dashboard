@@ -704,7 +704,11 @@ def start_dash_app(host, port):
     timeline_app.css.config.serve_locally = True
     timeline_app.scripts.config.serve_locally = True
     timeline_app.layout = get_layout()
-    timeline_app.run_server(host=host, port=port)
+    if config.CONFIG.production == True:
+        from waitress import serve
+        serve(timeline_app.server, host=host, port=port)
+    else:
+        timeline_app.run_server(host=host, port=port)
 
 
 def get_layout():
