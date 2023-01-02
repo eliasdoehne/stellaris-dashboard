@@ -180,6 +180,17 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
         ),
         NameTestcase(
             dict(
+                key="%LEADER_2%",
+                variables=[
+                    {"key": "1", "value": {"key": "Golveso"}},
+                    {"key": "2", "value": {"key": "Selvayn"}},
+                ],
+            ),
+            expected="Golveso Selvayn",
+            description="%LEADER_2% template",
+        ),
+        NameTestcase(
+            dict(
                 key="%ADJECTIVE%",
                 variables=[
                     {"key": "adjective", "value": {"key": "Nexitron"}},
