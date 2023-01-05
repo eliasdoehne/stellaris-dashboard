@@ -1,16 +1,17 @@
 use std::cmp::min;
 use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map::Entry;
 use std::time::Instant;
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until, take_while, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
 use nom::combinator::{map, map_res, opt, recognize};
-use nom::error::context;
+use nom::error::{context, Error};
 use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
-use nom::sequence::{delimited, preceded, separated_pair, tuple};
+use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use serde::Serialize;
 
 use crate::file_io::SaveFile;
@@ -126,6 +127,14 @@ fn parse_value(input: &str) -> IResult<&str, Value> {
     )(input)
 }
 
+fn parse_list(input: &str) -> IResult<&str, Vec<Value>> {
+    delimited(
+        terminated(tag("{"), multispace0),
+        parse_list_inner,
+        preceded(multispace0, tag("}")),
+    )(input)
+}
+
 fn parse_list_inner(input: &str) -> IResult<&str, Vec<Value>> {
     separated_list0(
         multispace1,
@@ -133,10 +142,10 @@ fn parse_list_inner(input: &str) -> IResult<&str, Vec<Value>> {
     )(input)
 }
 
-fn parse_list(input: &str) -> IResult<&str, Vec<Value>> {
+fn parse_map(input: &str) -> IResult<&str, HashMap<&str, Value>> {
     delimited(
-        tag("{"),
-        parse_list_inner,
+        preceded(multispace0, tag("{")),
+        parse_map_inner,
         preceded(multispace0, tag("}")),
     )(input)
 }
@@ -174,14 +183,6 @@ fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
         }
         Err(e) => Err(e),
     }
-}
-
-fn parse_map(input: &str) -> IResult<&str, HashMap<&str, Value>> {
-    delimited(
-        preceded(multispace0, tag("{")),
-        parse_map_inner,
-        preceded(multispace0, tag("}")),
-    )(input)
 }
 
 fn parse_date_str(input: &str) -> IResult<&str, &str> {
@@ -320,28 +321,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_map_repeated_key() {
-        assert_eq!(
-            parse_value("{x=1 x=1 y=1 y=2 z=1 z=\"asdf\"}"),
-            Ok(
-                (
-                    "",
-                    Value::Map(HashMap::from([
-                        (
-                            "x", Value::List(Vec::from([Value::Int(1), Value::Int(1)]))
-                        ),
-                        (
-                            "y", Value::List(Vec::from([Value::Int(1), Value::Int(2)]))
-                        ),
-                        (
-                            "z", Value::List(Vec::from([Value::Int(1), Value::Str("asdf")]))),
-                    ]))
-                )
-            )
-        );
-    }
-
-    #[test]
     fn test_parse_map() {
         assert_eq!(
             parse_value("{a.1=2}"),
@@ -399,6 +378,96 @@ mod tests {
                                 ]))),
                             ]))
                         ),
+                    ]))
+                )
+            )
+        );
+
+        assert_eq!(
+            parse_value("{intel_manager={ intel={ { 13 { intel=0 stale_intel={} } } { 62 {intel=0 stale_intel={}}} { 63 {intel=0 stale_intel={}}} }}}"),
+            Ok((
+                "",
+                Value::Map(HashMap::from([
+                    (
+                        "intel_manager",
+                        Value::Map(HashMap::from([
+                            (
+                                "intel",
+                                Value::List(
+                                    vec![
+                                        Value::List(vec![
+                                            Value::Int(13), Value::Map(HashMap::from([("intel", Value::Int(0)), ("stale_intel", Value::List(vec![]))])),
+                                        ]),
+                                        Value::List(vec![
+                                            Value::Int(62), Value::Map(HashMap::from([("intel", Value::Int(0)), ("stale_intel", Value::List(vec![]))])),
+                                        ]),
+                                        Value::List(vec![
+                                            Value::Int(63), Value::Map(HashMap::from([("intel", Value::Int(0)), ("stale_intel", Value::List(vec![]))])),
+                                        ]),
+                                    ]
+                                )
+                            )
+                        ]))
+                    )
+                ]))
+            )
+            ));
+        assert_eq!(
+            parse_value("{intel_manager={ intel={ { 67 { intel=10 stale_intel={ } } } } }}"),
+            Ok((
+                "",
+                Value::Map(HashMap::from([
+                    (
+                        "intel_manager",
+                        Value::Map(HashMap::from([
+                            (
+                                "intel",
+                                Value::List(
+                                    vec![
+                                        Value::List(vec![
+                                            Value::Int(67), Value::Map(HashMap::from([("intel", Value::Int(10)), ("stale_intel", Value::List(vec![]))])),
+                                        ]),
+                                    ]
+                                )
+                            )
+                        ]))
+                    )
+                ]))
+            )
+            ));
+    }
+
+    #[test]
+    fn test_json_representation() {
+        let v = parse_value("{intel_manager={intel={{13 {intel=0 stale_intel={}}} {62 {intel=0 stale_intel={}}} {63 {intel=0 stale_intel={}}} }}}").expect("").1;
+        assert_eq!(
+            serde_json::json!(v).to_string(),
+            "{\"intel_manager\":{\"intel\":[[13,{\"intel\":0,\"stale_intel\":[]}],[62,{\"intel\":0,\"stale_intel\":[]}],[63,{\"intel\":0,\"stale_intel\":[]}]]}}"
+        );
+
+        let v = parse_value("{intel_manager={ intel={ { 67 { intel=10 stale_intel={ } } } } }}").expect("").1;
+        assert_eq!(
+            serde_json::json!(v).to_string(),
+            "{\"intel_manager\":{\"intel\":[[67,{\"intel\":10,\"stale_intel\":[]}]]}}"
+        );
+    }
+
+    #[test]
+    fn test_parse_map_repeated_key() {
+        assert_eq!(
+            parse_value("{x=1 x=1 y=1 y=2 z=1 z=\"asdf\"}"),
+            Ok(
+                (
+                    "",
+                    Value::Map(HashMap::from([
+                        (
+                            "x", Value::List(Vec::from([Value::Int(1), Value::Int(1)]))
+                        ),
+                        (
+                            "y", Value::List(Vec::from([Value::Int(1), Value::Int(2)]))
+                        ),
+                        (
+                            "z", Value::List(Vec::from([Value::Int(1), Value::Str("asdf")]))),
                     ]))
                 )
             )
@@ -522,20 +591,19 @@ mod tests {
             ).unwrap(),
             Value::Map(HashMap::from([
                 (
-                    ("intel"),
+                    "intel",
                     Value::List(Vec::from([
-                        Value::Map(HashMap::from([
-                            (
-                                ("77"),
-                                Value::Map(HashMap::from([
-                                    (("intel"), Value::Int(10)),
-                                    (("stale_intel"), Value::List(Vec::new())),
-                                ])),
-                            )
-                        ]))
+                        Value::List(Vec::from([
+                            Value::Int(77),
+                            Value::Map(HashMap::from([
+                                ("intel", Value::Int(10)),
+                                ("stale_intel", Value::List(Vec::new())),
+                            ])),
+                        ])),
                     ]))
                 ),
-            ]))
+            ])
+            )
         );
     }
 }
