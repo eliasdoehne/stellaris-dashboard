@@ -38,7 +38,7 @@ On Linux (and mac?) you should run the applications from a terminal otherwise th
 I unfortunately don't have access to a mac and can't check every release on all platforms as thoroughly as I'd like... If there are problems, please make discussion thread on Steam or open a new issue on github.
 
 ### Build it yourself
-- Get Python 3.7 (should also work with 3.8)
+- Get Python 3.10 (it may work on other versions too)
 - (Recommended) create & activate a virtual environment 
 - `pip install .`
 - `stellarisdashboard`
