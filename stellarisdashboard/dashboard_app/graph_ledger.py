@@ -485,23 +485,43 @@ def _get_raw_data_for_stacked_and_budget_plots(
                 net_gain = [0.0 for _ in x_values]
             net_gain = [net + y for (net, y) in zip(net_gain, y_values)]
 
-        stackgroup = "pos"
-        if min(y_values) < 0:
-            stackgroup = "neg"
-        lines.append(
-            dict(
-                x=x_values,
-                y=y_values,
-                name=dict_key_to_legend_label(key),
-                hoverinfo="text",
-                mode="lines",
-                line=dict(width=0.5, color=get_country_color(key, 1.0)),
-                stackgroup=stackgroup,
-                groupnorm="percent" if normalized else "",
-                fillcolor=get_country_color(key, 0.5),
-                text=get_plot_value_labels(x_values, y_values, key),
+        # Usually, each budget item contributes only positively or only negatively to the budget. To make this clear,
+        # we separate them to separate stack groups that are drawn on the plot independently.
+        # We must handle the edge case where a budget item has both positive and negative contributions at different times:
+        if min(y_values) < 0 < max(y_values):
+            # split negative and positive values, add them to separate groups and only show one legend entry
+            neg, pos = [], []
+            for y in y_values:
+                if y < 0:
+                    neg.append(y)
+                    pos.append(0)
+                else:
+                    neg.append(0)
+                    pos.append(y)
+            series = [(pos, "pos"), (neg, "neg")]
+        else:
+            if min(y_values) < 0:
+                stackgroup = "neg"
+            else:
+                stackgroup = "pos"
+            series = [(y_values, stackgroup)]
+        for i, (yv, stackgroup) in enumerate(series):
+            lines.append(
+                dict(
+                    x=x_values,
+                    y=yv,
+                    name=dict_key_to_legend_label(key),
+                    legendgroup=key,  # ensure that budget contributions with mixed signs still behave as a single entry
+                    hoverinfo="text",
+                    mode="lines",
+                    line=dict(width=0.5, color=get_country_color(key, 1.0)),
+                    stackgroup=stackgroup,
+                    groupnorm="percent" if normalized else "",
+                    fillcolor=get_country_color(key, 0.5),
+                    text=get_plot_value_labels(x_values, yv, key),
+                    showlegend=i == 0,  # only show one legend entry
+                )
             )
-        )
 
     if lines and plot_spec.style == visualization_data.PlotStyle.budget:
         # Add net value over time
@@ -706,6 +726,7 @@ def start_dash_app(host, port):
     timeline_app.layout = get_layout()
     if config.CONFIG.production == True:
         from waitress import serve
+
         serve(timeline_app.server, host=host, port=port)
     else:
         timeline_app.run_server(host=host, port=port)
