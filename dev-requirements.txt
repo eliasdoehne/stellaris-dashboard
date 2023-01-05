@@ -2,3 +2,4 @@ pytest
 Cython
 pyinstaller
 black==22.3.0
+maturin[patchelf]
