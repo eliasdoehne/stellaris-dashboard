@@ -58,7 +58,7 @@ jobs:
           zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
           popd
       - name: Publish
-        if: github.event_name != 'pull_request'
+        # if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v3
         with:
           name: stellarisdashboard-${{ matrix.os }}.zip
