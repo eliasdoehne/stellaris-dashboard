@@ -1152,10 +1152,14 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         return leader
 
     def get_leader_name(self, leader_dict):
+        name_dict = leader_dict.get("name", {})
+        # Look for "first_name" then "full_names" (3.6+)
         first_name = dump_name(
-            leader_dict.get("name", {}).get("first_name", "Unknown Leader")
+            name_dict.get("first_name",
+                          name_dict.get("full_names", "Unknown Leader")
+            )
         )
-        last_name = dump_name(leader_dict.get("name", {}).get("second_name", ""))
+        last_name = dump_name(name_dict.get("second_name", ""))
         return first_name, last_name
 
     def _update_leader_attributes(self, leader: datamodel.Leader, leader_dict):
