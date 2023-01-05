@@ -14,17 +14,17 @@ fn parse_save_file(save_path: String) -> PyResult<String> {
     println!("Reading save {}", save_path);
     let save_file = match load_save_content(save_path.as_str()) {
         Ok(sf) => sf,
-        Err(_) => {
-            return Err(PyValueError::new_err(format!("Failed to read save file in {}", save_path)));
+        Err(msg) => {
+            return Err(PyValueError::new_err(format!("Failed to read {}: {msg}", save_path)));
         }
     };
     match parse_save(&save_file) {
         Ok(parsed_save) => {
             Ok(serde_json::json!(parsed_save.gamestate).to_string())
         }
-        Err(_) => {
+        Err(msg) => {
             return Err(
-                PyValueError::new_err(format!("Failed to parse {}", save_path))
+                PyValueError::new_err(format!("Failed to parse {}: {}", save_path, msg))
             );
         }
     }

@@ -1,13 +1,12 @@
 use std::cmp::min;
-use std::collections::{HashMap, VecDeque};
-use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until, take_while, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
 use nom::combinator::{map, map_res, opt, recognize};
-use nom::error::{context, Error};
+use nom::error::context;
 use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
@@ -151,6 +150,7 @@ fn parse_map(input: &str) -> IResult<&str, HashMap<&str, Value>> {
 }
 
 fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
+    let mut handled_nested_list_keys: HashSet<&str> = HashSet::new();
     match delimited(
         multispace0,
         separated_list1(
@@ -165,14 +165,24 @@ fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
         Ok((remainder, kv_list)) => {
             let mut hm = HashMap::new();
             for (key, value) in kv_list {
-                let mut existing_value = hm.remove(key);
-                match existing_value {
+                let old_value = hm.remove(key);
+                match old_value {
                     None => {
                         hm.insert(key, value);
                     }
                     Some(Value::List(mut vec)) => {
-                        vec.push(value);
-                        hm.insert(key, Value::List(vec));
+                        let value_to_insert = match (value, handled_nested_list_keys.contains(key)) {
+                            (Value::List(new_vec), false) => {
+                                handled_nested_list_keys.insert(key);
+                                Value::List(Vec::from([Value::List(vec), Value::List(new_vec)]))
+                            }
+                            (value, _) => {
+                                vec.push(value);
+                                Value::List(vec)
+                            }
+                        }
+                            ;
+                        hm.insert(key, value_to_insert);
                     }
                     Some(other_value) => {
                         hm.insert(key, Value::List(vec![other_value, value]));
@@ -471,6 +481,20 @@ mod tests {
                     ]))
                 )
             )
+        );
+        assert_eq!(
+            parse_value("{x={1 1 1} x={2 2 2} x={3 3 3}}").unwrap().1,
+            Value::Map(HashMap::from([
+                (
+                    "x",
+                    Value::List(Vec::from([
+                        Value::List(Vec::from([Value::Int(1), Value::Int(1), Value::Int(1)])),
+                        // when the second key with x is encountered, values above should be place in a NESTED list
+                        Value::List(Vec::from([Value::Int(2), Value::Int(2), Value::Int(2)])),
+                        Value::List(Vec::from([Value::Int(3), Value::Int(3), Value::Int(3)])),
+                    ]))
+                ),
+            ]))
         );
     }
 
