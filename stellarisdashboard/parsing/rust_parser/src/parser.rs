@@ -155,8 +155,20 @@ fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
     )(input) {
         Ok((remainder, kv_list)) => {
             let mut hm = HashMap::new();
-            for (k, v) in kv_list {
-                hm.insert(k, v);
+            for (key, value) in kv_list {
+                let mut existing_value = hm.remove(key);
+                match existing_value {
+                    None => {
+                        hm.insert(key, value);
+                    }
+                    Some(Value::List(mut vec)) => {
+                        vec.push(value);
+                        hm.insert(key, Value::List(vec));
+                    }
+                    Some(other_value) => {
+                        hm.insert(key, Value::List(vec![other_value, value]));
+                    }
+                }
             }
             Ok((remainder, hm))
         }
@@ -301,6 +313,28 @@ mod tests {
                         Value::Int(1),
                         Value::List(Vec::from([Value::Str("inner")])),
                         Value::Int(3)
+                    ]))
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_map_repeated_key() {
+        assert_eq!(
+            parse_value("{x=1 x=1 y=1 y=2 z=1 z=\"asdf\"}"),
+            Ok(
+                (
+                    "",
+                    Value::Map(HashMap::from([
+                        (
+                            "x", Value::List(Vec::from([Value::Int(1), Value::Int(1)]))
+                        ),
+                        (
+                            "y", Value::List(Vec::from([Value::Int(1), Value::Int(2)]))
+                        ),
+                        (
+                            "z", Value::List(Vec::from([Value::Int(1), Value::Str("asdf")]))),
                     ]))
                 )
             )
