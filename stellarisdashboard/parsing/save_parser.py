@@ -3,6 +3,7 @@ import collections
 import concurrent.futures
 import enum
 import itertools
+import json
 import logging
 import multiprocessing as mp
 import os
@@ -261,26 +262,21 @@ def parse_save(filename) -> Dict[str, Any]:
     :param filename: Path to a .sav file
     :return: The gamestate dictionary
     """
-    gamestate = None
-    parser = SaveFileParser()
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            gamestate = parser.parse_save(filename)
-            break
-        except KeyboardInterrupt:
-            raise
-        except zipfile.BadZipFile as e:
-            remaining = max_attempts - attempt - 1
-            if not remaining:
-                raise
-            delay_seconds = 0.5
-            logger.info(
-                f"Encountered BadZipFile error {e}. Next attempt in {delay_seconds} seconds, {remaining} attempts remaining."
-            )
-            time.sleep(delay_seconds)
-    return gamestate
+    import rust_parser
 
+    def fix_dict(d):
+        x = {}
+        for k, v in d.items():
+            try:
+                x[int(k)] = v
+            except:
+                x[k] = v
+        return x
+
+    return json.loads(
+        rust_parser.parse_save_file(str(filename.absolute())),
+        object_hook=fix_dict,
+    )
 
 class TokenType(enum.Enum):
     BRACE_OPEN = enum.auto()
