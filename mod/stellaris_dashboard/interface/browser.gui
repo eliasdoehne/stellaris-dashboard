@@ -97,7 +97,7 @@ guiTypes = {
 			quadTextureSprite = "GFX_button_timeline_graphs"
 			position = { x = -220 y = 17 }
 			Orientation = UPPER_RIGHT
-			web_link="http://127.0.0.1:28053/checkversion/v4.4"
+			web_link="http://127.0.0.1:28053/timeline"
 			shortcut = "K"
 		}
 		buttonType =
