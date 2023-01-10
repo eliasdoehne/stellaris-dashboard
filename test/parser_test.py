@@ -56,3 +56,9 @@ def test_deep_recursion_depth():
         inner_value = inner_value[f"key_{i}"]
     # and that the last value is an empty list:
     assert inner_value == []
+
+
+def test_real_save():
+    # Test a real save end to end
+    from stellarisdashboard import cli
+    cli.f_parse_saves(save_path="test/saves")
