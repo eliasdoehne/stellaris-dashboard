@@ -60,5 +60,8 @@ def test_deep_recursion_depth():
 
 def test_real_save():
     # Test a real save end to end
-    from stellarisdashboard import cli
+    from stellarisdashboard import cli, config
+    from pathlib import Path
+    output_db = Path(f"{config.CONFIG.base_output_path}/db/nexitronawareness_1329922464.db")
     cli.f_parse_saves(save_path="test/saves")
+    output_db.unlink(missing_ok=True)
