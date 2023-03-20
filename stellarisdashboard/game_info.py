@@ -1,8 +1,10 @@
 import json
+import re
 import logging
 
 logger = logging.getLogger(__name__)
-
+# Regex explanation: https://regex101.com/r/l76XGd/1
+loc_re = re.compile(r'\s(?P<key>\S+?):\d+\s"(?P<value>.*)"')
 
 class NameRenderer:
     default_name = "Unknown name"
@@ -23,10 +25,15 @@ class NameRenderer:
             with open(p, "rt", encoding="utf-8") as f:
                 for line in f:
                     try:
-                        key, val, *rest = line.strip().split('"')
-                        self.name_mapping[key.strip().rstrip(":0")] = val.strip()
-                    except Exception:
-                        pass
+                        re_match = loc_re.match(line)
+                        if re_match:
+                            self.name_mapping[ re_match.group('key') ] = re_match.group('value')
+                        else:
+                            if not line.startswith( ('#', "  ", " #", "  #", "   #", "\ufeffl_english:", "l_english:", "\n", " \n" ) ):
+                                # This error prints the offending line as numbers because not only did we encounter whitespace, we encountered the Zero Width No-Break Space (BOM)
+                                logger.debug(f"Unexpected unmatched localisation line found. Characters (as integers) follow: {[ord(x) for x in line]}")
+                    except Exception as e:
+                        logger.warning(f"Caught exception reading localisation files: {e}")
         # Add missing format that is similar to but not the same as adj_format in practice
         if "%ADJECTIVE%" not in self.name_mapping:
           self.name_mapping["%ADJECTIVE%"] = "$adjective$ $1$"

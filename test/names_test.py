@@ -202,6 +202,17 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
         ),
         NameTestcase(
             dict(
+                key="%ADJECTIVE%",
+                variables=[
+                    {"key": "adjective", "value": {"key": "NAME_Ketling_Multitude"}},
+                    {"key": "1", "value": {"key": "Nation"}},
+                ],
+            ),
+            expected="Ketling Star Pack Nation",
+            description=":1 template",
+        ),
+        NameTestcase(
+            dict(
                 key="%ADJ%",
                 variables=[
                     {"key": "1", "value": {"key": "Allied", "variables": [
