@@ -264,19 +264,10 @@ def parse_save(filename) -> Dict[str, Any]:
     """
     import rust_parser
 
-    def fix_dict(d):
-        x = {}
-        for k, v in d.items():
-            try:
-                x[int(k)] = v
-            except:
-                x[k] = v
-        return x
-
-    return json.loads(
-        rust_parser.parse_save_file(str(filename.absolute())),
-        object_hook=fix_dict,
-    )
+    parsed = rust_parser.parse_save_file(str(filename.absolute()))
+    if not isinstance(parsed, dict):
+        raise ValueError(f"Could not parse {filename}")
+    return parsed
 
 class TokenType(enum.Enum):
     BRACE_OPEN = enum.auto()

@@ -11,6 +11,8 @@ use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
+use pyo3::{PyAny, PyObject, PyResult, Python, ToPyObject};
+use pyo3::types::PyString;
 use serde::Serialize;
 
 use crate::file_io::SaveFile;
@@ -23,6 +25,18 @@ pub enum Value<'a> {
     Float(f64),
     List(Vec<Value<'a>>),
     Map(HashMap<&'a str, Value<'a>>),
+}
+
+impl ToPyObject for Value<'_> {
+    fn to_object(&self, py: Python<'_>) -> PyObject {
+        match self {
+            Value::Str(s) => s.to_object(py),
+            Value::Int(n) => n.to_object(py),
+            Value::Float(x) => x.to_object(py),
+            Value::List(vec) => vec.to_object(py),
+            Value::Map(hm) => hm.to_object(py),
+        }
+    }
 }
 
 impl Value<'_> {

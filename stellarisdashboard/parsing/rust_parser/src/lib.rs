@@ -10,7 +10,7 @@ mod file_io;
 
 /// Reads the save file at the provided location and returns a dictionary of the parsed contents.
 #[pyfunction]
-fn parse_save_file(save_path: String) -> PyResult<String> {
+fn parse_save_file_to_json(save_path: String) -> PyResult<String> {
     println!("Reading save {}", save_path);
     let save_file = match load_save_content(save_path.as_str()) {
         Ok(sf) => sf,
@@ -30,11 +30,31 @@ fn parse_save_file(save_path: String) -> PyResult<String> {
     }
 }
 
-
+#[pyfunction]
+fn parse_save_file(py: Python, save_path: String) -> PyResult<PyObject> {
+    println!("Reading save {}", save_path);
+    let save_file = match load_save_content(save_path.as_str()) {
+        Ok(sf) => sf,
+        Err(msg) => {
+            return Err(PyValueError::new_err(format!("Failed to read {}: {msg}", save_path)));
+        }
+    };
+    match parse_save(&save_file) {
+        Ok(parsed_save) => {
+            Ok(parsed_save.gamestate.to_object(py))
+        }
+        Err(msg) => {
+            return Err(
+                PyValueError::new_err(format!("Failed to parse {}: {}", save_path, msg))
+            );
+        }
+    }
+}
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn rust_parser(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(parse_save_file_to_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_save_file, m)?)?;
     Ok(())
 }
