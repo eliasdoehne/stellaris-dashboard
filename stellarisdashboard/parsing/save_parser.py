@@ -3,7 +3,6 @@ import collections
 import concurrent.futures
 import enum
 import itertools
-import json
 import logging
 import multiprocessing as mp
 import os
@@ -268,6 +267,7 @@ def parse_save(filename) -> Dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError(f"Could not parse {filename}")
     return parsed
+
 
 class TokenType(enum.Enum):
     BRACE_OPEN = enum.auto()

@@ -1,3 +1,4 @@
+use std::time::Instant;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyMapping};
@@ -33,6 +34,7 @@ fn parse_save_file_to_json(save_path: String) -> PyResult<String> {
 #[pyfunction]
 fn parse_save_file(py: Python, save_path: String) -> PyResult<PyObject> {
     println!("Reading save {}", save_path);
+    let start = Instant::now();
     let save_file = match load_save_content(save_path.as_str()) {
         Ok(sf) => sf,
         Err(msg) => {
@@ -41,7 +43,10 @@ fn parse_save_file(py: Python, save_path: String) -> PyResult<PyObject> {
     };
     match parse_save(&save_file) {
         Ok(parsed_save) => {
-            Ok(parsed_save.gamestate.to_object(py))
+            let pyobject = parsed_save.gamestate.to_object(py);
+            let duration = start.elapsed();
+            println!("Parsed save contents in {:?}", duration);
+            Ok(pyobject)
         }
         Err(msg) => {
             return Err(

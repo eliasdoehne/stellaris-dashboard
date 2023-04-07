@@ -12,7 +12,7 @@ use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use pyo3::{PyAny, PyObject, PyResult, Python, ToPyObject};
-use pyo3::types::PyString;
+use pyo3::types::{PyString, IntoPyDict};
 use serde::Serialize;
 
 use crate::file_io::SaveFile;
@@ -34,7 +34,17 @@ impl ToPyObject for Value<'_> {
             Value::Int(n) => n.to_object(py),
             Value::Float(x) => x.to_object(py),
             Value::List(vec) => vec.to_object(py),
-            Value::Map(hm) => hm.to_object(py),
+            Value::Map(hm) => {
+                let mut key_vals = Vec::new();
+                for (key, val) in hm.into_iter() {
+                    let fixed_key = match key.parse::<i64>() {
+                        Ok(i) => i.to_object(py),
+                        Err(_) => key.to_object(py),
+                    };
+                    key_vals.push((fixed_key, val));
+                }
+                key_vals.into_py_dict(py).to_object(py)
+            }
         }
     }
 }
@@ -85,7 +95,6 @@ pub struct ParsedSaveFile<'a> {
 }
 
 pub fn parse_save<'a>(save_file: &'a SaveFile) -> Result<ParsedSaveFile<'a>, &'static str> {
-    let start = Instant::now();
     let meta_contents = save_file.meta.as_str();
     let meta = match parse_file(meta_contents) {
         Ok(result) => {
@@ -100,9 +109,6 @@ pub fn parse_save<'a>(save_file: &'a SaveFile) -> Result<ParsedSaveFile<'a>, &'s
         }
         Err(_) => return Err("Failed to parse save gamestate")
     };
-
-    let duration = start.elapsed();
-    println!("Parsed save contents in {:?}", duration);
     Ok(ParsedSaveFile {
         gamestate,
         meta,
