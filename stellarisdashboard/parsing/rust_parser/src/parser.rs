@@ -35,6 +35,8 @@ impl ToPyObject for Value<'_> {
             Value::Float(x) => x.to_object(py),
             Value::List(vec) => vec.to_object(py),
             Value::Map(hm) => {
+                // For consistency with the old parser behaviour, attempt to convert each hashmap key
+                // into an integer when building the python dict.
                 let mut key_vals = Vec::new();
                 for (key, val) in hm.into_iter() {
                     let fixed_key = match key.parse::<i64>() {
