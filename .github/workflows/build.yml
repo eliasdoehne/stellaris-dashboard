@@ -40,7 +40,7 @@ jobs:
           working-directory: "stellarisdashboard/parsing/rust_parser"
       - name: Check
         run: |
-          ls -laR target
+          ls -laR "stellarisdashboard/parsing/rust_parser/target"
           ls -la "stellarisdashboard/parsing/rust_parser"
 
 #      - name: Tests
