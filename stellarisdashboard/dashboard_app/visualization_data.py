@@ -1542,7 +1542,7 @@ class GalaxyMapData:
 
         self._prepare_system_shapes()
 
-        logger.info(
+        logger.debug(
             f"Initialized galaxy graph in {time.process_time() - start_time} seconds."
         )
 
@@ -1584,7 +1584,8 @@ class GalaxyMapData:
             for c2, r2 in country_ridges.items():
                 if c2 <= c1:
                     continue
-                for rv1, rv2 in r1 & r2:
+                intersecting_ridges = r1 & r2
+                for rv1, rv2 in intersecting_ridges:
                     yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
 
     def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
@@ -1607,7 +1608,8 @@ class GalaxyMapData:
 
     def _prepare_system_shapes(self):
         points = [
-            self.galaxy_graph.nodes[node]["pos"] for node in self.galaxy_graph.nodes
+            self.galaxy_graph.nodes[node]["pos"]
+            for node in sorted(self.galaxy_graph.nodes)
         ]
 
         min_radius = float("inf")
@@ -1627,7 +1629,7 @@ class GalaxyMapData:
         points += [[inner * _c, inner * _s] for _c, _s in zip(_sin, _cos)]
 
         voronoi = Voronoi(np.array(points))
-        for i, node in enumerate(self.galaxy_graph.nodes):
+        for i, node in enumerate(sorted(self.galaxy_graph.nodes)):
             region = voronoi.regions[voronoi.point_region[i]]
 
             vertices = [voronoi.vertices[v] for v in region if v != -1]
@@ -1642,7 +1644,6 @@ class GalaxyMapData:
             )
             self.galaxy_graph.nodes[node]["shape"] = shape_x, shape_y
 
-        self.galaxy_graph.graph["galaxy_edge_ridge_vertices"] = set()
         self._extract_voronoi_ridges(voronoi)
 
     def _extract_voronoi_ridges(self, voronoi: Voronoi):
@@ -1661,8 +1662,8 @@ class GalaxyMapData:
             voronoi.ridge_points, voronoi.ridge_vertices
         ):
             for rp in ridge_points:
-                if rp >= len(self.galaxy_graph):
-                    # substitute a common placeholder for artificial nodes
+                if rp not in self.galaxy_graph:
+                    # substitute placeholder for artificial nodes
                     rp = GalaxyMapData.ARTIFICIAL_NODE
 
                 rv1, rv2 = ridge_vertices
