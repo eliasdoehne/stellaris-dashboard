@@ -33,7 +33,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release -o ..
+          args: --release -o target
           working-directory: "stellarisdashboard/parsing/rust_parser"
       - name: Install rust-parser
         if: matrix.os != 'windows-latest'
