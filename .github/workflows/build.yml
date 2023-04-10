@@ -42,7 +42,7 @@ jobs:
       - name: Install rust-parser windows
 #        if: matrix.os == 'windows-latest'
         run: |
-          pip install --find-links=stellarisdashboard\parsing\rust_parser\target rust-parser
+          pip install --find-links=stellarisdashboard/parsing/rust_parser/target rust-parser
 #      - name: Tests
 #        run: |
 #          python -m pytest -m "not skip_github_actions"
