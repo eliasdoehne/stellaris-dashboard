@@ -35,14 +35,14 @@ jobs:
           command: build
           args: --release -o target
           working-directory: "stellarisdashboard/parsing/rust_parser"
-      - name: Install rust-parser
-        if: matrix.os != 'windows-latest'
-        run: |
-          pip install stellarisdashboard/parsing/rust_parser/target/*.whl
+#      - name: Install rust-parser
+#        if: matrix.os != 'windows-latest'
+#        run: |
+#          pip install stellarisdashboard/parsing/rust_parser/target/*.whl
       - name: Install rust-parser windows
-        if: matrix.os == 'windows-latest'
+#        if: matrix.os == 'windows-latest'
         run: |
-          pip install stellarisdashboard\parsing\rust_parser\target\*.whl
+          pip install --find-links=stellarisdashboard\parsing\rust_parser\target rust-parser
 #      - name: Tests
 #        run: |
 #          python -m pytest -m "not skip_github_actions"
