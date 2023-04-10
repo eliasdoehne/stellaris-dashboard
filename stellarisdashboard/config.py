@@ -1,7 +1,6 @@
 import dataclasses
 import itertools
 import logging
-import multiprocessing as mp  # only to get the cpu count
 import pathlib
 import platform
 import sys
@@ -12,7 +11,6 @@ from typing import List, Dict, Any
 import yaml
 
 LOG_LEVELS = {"CRITICAL": logging.CRITICAL, "ERROR": logging.ERROR, "WARNING": logging.WARNING, "INFO": logging.INFO, "DEBUG": logging.DEBUG}
-CPU_COUNT = mp.cpu_count()
 
 LOG_FORMAT = logging.Formatter(
     "%(processName)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -30,16 +28,6 @@ def initialize_logger():
     stdout_ch.setLevel(logging.INFO)
     stdout_ch.setFormatter(LOG_FORMAT)
     root_logger.addHandler(stdout_ch)
-
-
-def _get_default_thread_count():
-    if CPU_COUNT < 4:
-        threads = 1
-    elif CPU_COUNT == 4:
-        threads = 2
-    else:
-        threads = max(1, CPU_COUNT // 2 - 1)
-    return threads
 
 
 def _get_default_save_path():
@@ -177,7 +165,7 @@ DEFAULT_SETTINGS = dict(
     save_file_path=_get_default_save_path(),
     mp_username="",
     base_output_path=_get_default_base_output_path(),
-    threads=_get_default_thread_count(),
+    threads=1,
     localization_file_dir=_get_default_localization_file_dir(),
     host="127.0.0.1",
     port=28053,
