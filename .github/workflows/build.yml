@@ -34,10 +34,10 @@ jobs:
         with:
           command: build
           args: --release -o ./target
-          working-directory: "stellarisdashboard/parsing/rust_parser"
+          working-directory: ".stellarisdashboard/parsing/rust_parser"
       - name: Install rust-parser
         run: |
-          pip install "stellarisdashboard/parsing/rust_parser/target/*"
+          pip install .stellarisdashboard/parsing/rust_parser/target/*
       - name: Tests
         run: |
           python -m pytest -m "not skip_github_actions"
