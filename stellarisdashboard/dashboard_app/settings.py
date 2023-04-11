@@ -48,7 +48,6 @@ def settings_page():
             "type": t_int,
             "value": current_values["threads"],
             "min": 1,
-            "max": config.CPU_COUNT,
             "name": "Number of threads (applies after restart)",
             "description": "Number of threads for reading save files, updates apply after restarting the dashboard.",
         },
