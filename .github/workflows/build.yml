@@ -35,7 +35,7 @@ jobs:
           toolchain:
             stable
           working-directory: "stellarisdashboard/parsing/rust_parser"
-        run: cargo test
+      - run: cargo test
       - name: Build rust-parser
         uses: PyO3/maturin-action@v1
         with:
