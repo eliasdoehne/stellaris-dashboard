@@ -1,18 +1,19 @@
 use std::cmp::min;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
+use std::fmt::{Display, Formatter};
 use std::time::Instant;
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until, take_while, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
-use nom::combinator::{map, map_res, opt, recognize};
+use nom::combinator::{map, map_res, recognize};
 use nom::error::context;
 use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
-use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
-use pyo3::{PyAny, PyObject, PyResult, Python, ToPyObject};
-use pyo3::types::{PyString, IntoPyDict};
+use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
+use pyo3::{PyObject, Python, ToPyObject};
+use pyo3::types::IntoPyDict;
 use serde::Serialize;
 
 use crate::file_io::SaveFile;
@@ -51,43 +52,18 @@ impl ToPyObject for Value<'_> {
     }
 }
 
-impl Value<'_> {
-    pub fn lookup<'a>(&'a self, key_seq: Vec<&'a str>) -> Option<&'a Value> {
-        Value::lookup_inner(&self, VecDeque::from(key_seq)).ok()
-    }
-
-    fn lookup_inner<'a, 'b>(node: &'a Value, mut key_seq: VecDeque<&'a str>) -> Result<&'a Value<'a>, &'a str> {
-        for key in &key_seq {
-            let next_node = match node {
-                Value::Map(hm) => {
-                    match hm.get(key) {
-                        Some(next_node) => next_node,
-                        _ => {
-                            return Err("Could not find matching node");
-                        }
-                    }
-                }
-                Value::List(list) => {
-                    if let Ok(int_key) = key.parse::<usize>() {
-                        match list.get(int_key) {
-                            Some(v) => v,
-                            None => return Err("Index failed")
-                        }
-                    } else {
-                        return Err("Could not convert key to list index");
-                    }
-                }
-                v => {
-                    println!("Found unexpected scalar value: {:?}", v);
-                    return Err("Could not find matching node");
-                }
-            };
-            key_seq.remove(0);
-            return Value::lookup_inner(next_node, key_seq);
+impl Display for Value<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Str(s) => write!(f, "{}", s),
+            Value::Int(n) => write!(f, "{}", n),
+            Value::Float(x) => write!(f, "{}", x),
+            Value::List(vec) => write!(f, "[{:?}]", vec),
+            Value::Map(hm) => write!(f, "{:?}", hm),
         }
-        Ok(&node)
     }
 }
+
 
 pub struct ParsedSaveFile<'a> {
     pub gamestate: Value<'a>,
@@ -129,11 +105,12 @@ pub fn parse_file<'a>(input: &'a str) -> Result<Value<'a>, &str> {
                 Err(remainder)
             }
         }
-        Err(_) => Err("Parsing failed")
+        _ => Err("Parsing failed")
     }
 }
 
 fn parse_value(input: &str) -> IResult<&str, Value> {
+    // print!("Parsing next value from: ");
     // debug_str(input);
     alt(
         (
@@ -173,17 +150,7 @@ fn parse_map(input: &str) -> IResult<&str, HashMap<&str, Value>> {
 
 fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
     let mut handled_nested_list_keys: HashSet<&str> = HashSet::new();
-    match delimited(
-        multispace0,
-        separated_list1(
-            multispace1,
-            separated_pair(
-                alt((parse_str, parse_unquoted_str)),
-                delimited(multispace0, opt(tag("=")), multispace0),
-                parse_value,
-            ),
-        ), multispace0,
-    )(input) {
+    match parse_map_kv_list(input) {
         Ok((remainder, kv_list)) => {
             let mut hm = HashMap::new();
             for (key, value) in kv_list {
@@ -217,6 +184,34 @@ fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
     }
 }
 
+fn parse_map_kv_list(input: &str) -> IResult<&str, Vec<(&str, Value<>)>> {
+    delimited(
+        multispace0,
+        separated_list1(
+            multispace1,
+            parse_map_key_value_pair,
+        ),
+        multispace0,
+    )(input)
+}
+
+fn parse_map_key_value_pair<'a>(input: &'a str) -> IResult<&str, (&str, Value<'a>)> {
+    separated_pair(
+        alt((parse_str, parse_unquoted_str)),
+        parse_map_key_value_separator,
+        alt((
+            // key can be missing in some cases, see test_skipped_key_in_mapping.
+            // in this case, discard the second key
+            preceded(pair(parse_unquoted_str, parse_map_key_value_separator), parse_value),
+            parse_value,
+        )),
+    )(input)
+}
+
+fn parse_map_key_value_separator(input: &str) -> IResult<&str, &str> {
+    delimited(multispace0, tag("="), multispace0)(input)
+}
+
 fn parse_date_str(input: &str) -> IResult<&str, &str> {
     recognize(tuple((
         take_while(|c: char| c.is_digit(10)),
@@ -242,6 +237,7 @@ fn parse_float(input: &str) -> IResult<&str, f64> {
 }
 
 fn parse_str(input: &str) -> IResult<&str, &str> {
+    // debug_str(input);
     preceded(
         multispace0,
         delimited(char('"'), take_until("\""), char('"')),
@@ -253,6 +249,7 @@ fn _is_valid_unquoted_str_char(c: char) -> bool {
 }
 
 fn parse_unquoted_str(input: &str) -> IResult<&str, &str> {
+    // debug_str(input);
     preceded(
         multispace0,
         take_while1(_is_valid_unquoted_str_char),
@@ -261,7 +258,7 @@ fn parse_unquoted_str(input: &str) -> IResult<&str, &str> {
 
 #[allow(dead_code)]
 pub fn debug_str(input: &str) -> () {
-    let prefix = &input[..min(input.len(), 50)];
+    let prefix = &input[..min(input.len(), 150)];
     println!("{:?}", prefix);
 }
 
@@ -362,6 +359,22 @@ mod tests {
                     Value::Map(HashMap::from([
                         (("a.1"), Value::Int(2)),
                     ]))
+                )
+            )
+        );
+        assert_eq!(
+            parse_file(r#"key1=value1
+                key2={ list of values }
+                key3={ {} {1 2 3} }"#),
+            Ok(
+                Value::Map(HashMap::from([
+                    ("key1", Value::Str("value1")),
+                    ("key2", Value::List(vec![Value::Str("list"), Value::Str("of"), Value::Str("values")])),
+                    ("key3", Value::List(vec![
+                        Value::List(vec![]),
+                        Value::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)]),
+                    ])),
+                ])
                 )
             )
         );
@@ -474,20 +487,20 @@ mod tests {
         let v = parse_value("{intel_manager={intel={{13 {intel=0 stale_intel={}}} {62 {intel=0 stale_intel={}}} {63 {intel=0 stale_intel={}}} }}}").expect("").1;
         assert_eq!(
             serde_json::json!(v).to_string(),
-            "{\"intel_manager\":{\"intel\":[[13,{\"intel\":0,\"stale_intel\":[]}],[62,{\"intel\":0,\"stale_intel\":[]}],[63,{\"intel\":0,\"stale_intel\":[]}]]}}"
+            r#"{"intel_manager":{"intel":[[13,{"intel":0,"stale_intel":[]}],[62,{"intel":0,"stale_intel":[]}],[63,{"intel":0,"stale_intel":[]}]]}}"#
         );
 
         let v = parse_value("{intel_manager={ intel={ { 67 { intel=10 stale_intel={ } } } } }}").expect("").1;
         assert_eq!(
             serde_json::json!(v).to_string(),
-            "{\"intel_manager\":{\"intel\":[[67,{\"intel\":10,\"stale_intel\":[]}]]}}"
+            r#"{"intel_manager":{"intel":[[67,{"intel":10,"stale_intel":[]}]]}}"#
         );
     }
 
     #[test]
     fn test_parse_map_repeated_key() {
         assert_eq!(
-            parse_value("{x=1 x=1 y=1 y=2 z=1 z=\"asdf\"}"),
+            parse_value(r#"{x=1 x=1 y=1 y=2 z=1 z="asdf"}"#),
             Ok(
                 (
                     "",
@@ -521,6 +534,64 @@ mod tests {
     }
 
     #[test]
+    fn test_deep_nested_object() {
+        let test_depth = 250;
+        let test_input = format!(
+            "outer_key={}{}{}",
+            "{".repeat(test_depth),
+            "key=value",
+            "}".repeat(test_depth)
+        );
+        // println!("{}", test_input);
+        parse_file(test_input.as_str()).expect("Should parse");
+    }
+
+    #[test]
+    fn test_skipped_key_in_mapping() {
+        assert_eq!(
+            parse_map_key_value_pair("key=other_key=value_1").expect("asdf"),
+            ("", ("key", Value::Str("value_1")))
+        );
+
+        assert_eq!(
+            parse_map_kv_list("key=other_key=value_2").expect("asdf"),
+            ("", vec![("key", Value::Str("value_2"))])
+        );
+
+        // basic example:
+        assert_eq!(
+            parse_file("key=other_key=value"),
+            Ok(Value::Map(
+                HashMap::from([
+                    ("key", Value::Str("value")),
+                ])
+            ))
+        );
+        // example found in real save:
+        let save_content = r#"expired=yes
+        event_id=					scope={
+        type=none
+        id=0
+        random={ 0 3991148998 }
+        }"#;
+        assert_eq!(
+            parse_file(save_content).unwrap(),
+            Value::Map(
+                HashMap::from([
+                    ("expired", Value::Str("yes")),
+                    ("event_id", Value::Map(
+                        HashMap::from([
+                            ("type", Value::Str("none")),
+                            ("id", Value::Int(0)),
+                            ("random", Value::List(vec![Value::Int(0), Value::Int(3991148998)])),
+                        ])
+                    )),
+                ])
+            )
+        )
+    }
+
+    #[test]
     fn test_parse_file() {
         assert_eq!(
             parse_file(r#"
@@ -533,7 +604,7 @@ mod tests {
             Value::Map(
                 HashMap::from([
                     (
-                        ("required_dlcs"),
+                        "required_dlcs",
                         Value::List(
                             Vec::from([
                                 Value::Str("Ancient Relics Story Pack"),
@@ -555,7 +626,7 @@ mod tests {
             Value::Map(
                 HashMap::from([
                     (
-                        ("ship_names"),
+                        "ship_names",
                         Value::Map(HashMap::from([
                             (
                                 ("HUMAN1_SHIP_Drake"), Value::Int(1)

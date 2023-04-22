@@ -31,16 +31,13 @@ You can also access the dashboard by opening [http://localhost:28053](http://loc
 1. Download the latest release of the dashboard from the [releases page](https://github.com/eliasdoehne/stellaris-dashboard/releases) for your OS.
 2. Extract the zip archive to a location of your choice.
 3. Run the `parse_saves` application to read any existing save files. This will attempt to load any existing save files into the dashboard's database.
-4. Run the `stellarisdashboard` application. 
-
-On Linux (and mac?) you should run the applications from a terminal otherwise there won't be any output and it can be difficult to tell if it is working. Looking into improving this in the future.
-
-I unfortunately don't have access to a mac and can't check every release on all platforms as thoroughly as I'd like... If there are problems, please make discussion thread on Steam or open a new issue on github.
+4. Run the `stellarisdashboard` application. (recommended to run from a terminal in Linux and macOs to see the dashboard output)
 
 ### Build it yourself
 - Get Python 3.10 (it may work on other versions too)
 - (Recommended) create & activate a virtual environment 
 - `pip install .`
+- `pip install maturin` and `maturin develop -r` in `stellarisdashboard/parsing/rust_parser`
 - `stellarisdashboard`
 
 # Other information
