@@ -10,8 +10,6 @@ data
 
 *.yml
 
-parsing/rust_parser/target
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
