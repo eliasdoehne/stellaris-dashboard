@@ -35,41 +35,34 @@ jobs:
           command: build
           args: --release -o target
           working-directory: "stellarisdashboard/parsing/rust_parser"
-#      - name: Install rust-parser
-#        if: matrix.os != 'windows-latest'
-#        run: |
-#          pip install stellarisdashboard/parsing/rust_parser/target/*.whl
       - name: Install rust-parser windows
-#        if: matrix.os == 'windows-latest'
         run: |
           pip install --find-links=stellarisdashboard/parsing/rust_parser/target rust-parser
-#      - name: Tests
-#        run: |
-#          python -m pytest -m "not skip_github_actions"
+      - name: Tests
+        run: |
+          python -m pytest -m "not skip_github_actions"
       - name: pyInstaller build
         run: |
           pyinstaller pyinstaller-package.spec
       - name: pyInstaller run
         run: |
           dist/stellarisdashboard-build/parse_saves
-      # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
-      # (probably too many individual files?)
+      # Zip the file, makes a zip containing a zip but fixes download problems due to too many small files
       - name: package files (win)
-        if: matrix.os == 'windows-latest' # && github.event_name != 'pull_request'
+        if: matrix.os == 'windows-latest'
         run: |
           cd dist
           powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
           cd ..
           ls
       - name: package files
-        if: matrix.os != 'windows-latest' # && github.event_name != 'pull_request'
+        if: matrix.os != 'windows-latest'
         run: |
           base_dir=`pwd`
           pushd dist/stellarisdashboard-build/
           zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
           popd
       - name: Publish
-#        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v3
         with:
           name: stellarisdashboard-${{ matrix.os }}.zip
