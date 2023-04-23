@@ -13,7 +13,7 @@ import yaml
 LOG_LEVELS = {"CRITICAL": logging.CRITICAL, "ERROR": logging.ERROR, "WARNING": logging.WARNING, "INFO": logging.INFO, "DEBUG": logging.DEBUG}
 
 LOG_FORMAT = logging.Formatter(
-    "%(processName)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 CONFIG: "Config" = None

@@ -9,7 +9,6 @@ import pathlib
 import signal
 import sys
 import time
-import traceback
 from typing import (
     Any,
     Dict,
@@ -22,6 +21,8 @@ from typing import (
     Optional,
     TypeVar,
 )
+
+import rust_parser
 
 from stellarisdashboard import config
 
@@ -152,24 +153,17 @@ class ContinuousSavePathMonitor(SavePathMonitor):
             Tuple[pathlib.PurePath, mp.pool.AsyncResult, float]
         ] = collections.deque()
 
-    def get_gamestates_and_check_for_new_files(
-        self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(self):
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
                 fname, result, submit_time = self._pending_results.popleft()
-                logger.info(
-                    f"Parsed save file {fname} in {time.time() - submit_time} seconds."
-                )
-                logger.info(f"Retrieving gamestate for {fname}")
                 try:
                     yield fname.parent.stem, result.get()
                 except KeyboardInterrupt:
                     raise
                 except Exception:
-                    logger.error(f"Error while reading save file {fname}:")
-                    logger.error(traceback.format_exc())
+                    logger.exception(f"Error while reading save file {fname}:")
             else:
                 break
 
@@ -195,9 +189,7 @@ class BatchSavePathMonitor(SavePathMonitor):
     the CLI command `stellarisdashboardcli --parse-saves`.
     """
 
-    def get_gamestates_and_check_for_new_files(
-        self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(self):
         """
         Check the save directory for new files. If any are found, parse them and
         return the results as gamestate dictionaries as they come in.
@@ -247,9 +239,12 @@ def parse_save(filename) -> Dict[str, Any]:
     :param filename: Path to a .sav file
     :return: The gamestate dictionary
     """
-    import rust_parser
 
+    logger.info(f"Reading save file {filename}.")
+    start = time.time()
     parsed = rust_parser.parse_save_file(str(filename.absolute()))
     if not isinstance(parsed, dict):
         raise ValueError(f"Could not parse {filename}")
+    dt = time.time() - start
+    logger.info(f"Parsed save file {filename} in {dt:.3f} seconds.")
     return parsed
