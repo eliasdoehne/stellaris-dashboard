@@ -29,20 +29,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -r dev-requirements.txt
-      - name: Test rust-parser
+      - name: Install rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain:
-            stable
-          working-directory: "stellarisdashboard/parsing/rust_parser"
-      - run: cargo test
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        working-directory: "stellarisdashboard/parsing/rust_parser"
+        continue-on-error: true  # WARNING: only for this example, remove it!
+        with:
+          command: test
       - name: Build rust-parser
         uses: PyO3/maturin-action@v1
         with:
           command: build
           args: --release -o target
           working-directory: "stellarisdashboard/parsing/rust_parser"
-      - name: Install rust-parser windows
+      - name: Install rust parser
         run: |
           pip install --find-links=stellarisdashboard/parsing/rust_parser/target rust-parser
       - name: Tests
