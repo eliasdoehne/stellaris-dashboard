@@ -17,7 +17,6 @@ added_files = [
     (str(Path("README.md")), "./"),
     (str(Path("stellarisdashboard/dashboard_app/assets")), "stellarisdashboard/dashboard_app/assets/"),
     (str(Path("stellarisdashboard/dashboard_app/templates")), "stellarisdashboard/dashboard_app/templates/"),
-    (str(Path("stellarisdashboard/parsing/cython_ext")), "stellarisdashboard/parsing/cython_ext/"),
 ]
 
 a_main = Analysis(

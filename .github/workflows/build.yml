@@ -29,9 +29,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -r dev-requirements.txt
-      - name: Build
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Run cargo test
         run: |
-          python setup.py build_ext --inplace
+          cargo test
+        working-directory: "stellarisdashboard/parsing/rust_parser"
+      - name: Build rust-parser
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release -o target
+          working-directory: "stellarisdashboard/parsing/rust_parser"
+      - name: Install rust parser
+        run: |
+          pip install --find-links=stellarisdashboard/parsing/rust_parser/target rust-parser
       - name: Tests
         run: |
           python -m pytest -m "not skip_github_actions"
@@ -41,24 +57,22 @@ jobs:
       - name: pyInstaller run
         run: |
           dist/stellarisdashboard-build/parse_saves
-      # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
-      # (probably too many individual files?)
+      # Zip the file, makes a zip containing a zip but fixes download problems due to too many small files
       - name: package files (win)
-        if: matrix.os == 'windows-latest' && github.event_name != 'pull_request'
+        if: matrix.os == 'windows-latest'
         run: |
           cd dist
           powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
           cd ..
           ls
       - name: package files
-        if: matrix.os != 'windows-latest' && github.event_name != 'pull_request'
+        if: matrix.os != 'windows-latest'
         run: |
           base_dir=`pwd`
           pushd dist/stellarisdashboard-build/
           zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
           popd
       - name: Publish
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v3
         with:
           name: stellarisdashboard-${{ matrix.os }}.zip

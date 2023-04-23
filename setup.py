@@ -24,27 +24,12 @@ SOFTWARE.
 
 from setuptools import setup
 
-try:
-    # Try to build the cython extension locally
-    from Cython.Build import cythonize
-
-    extension_modules = cythonize("stellarisdashboard/parsing/cython_ext/tokenizer.pyx")
-except ImportError:
-    print(
-        "Cython is not installed, using pre-built C-extension if available, or (slow) fallback solution."
-    )
-    extension_modules = []
-except RuntimeError as e:
-    print(f"Warning: RuntimeError while building Cython extension: {e}")
-    print("Using pre-built C-extension if available, or (slow) fallback solution.")
-    extension_modules = []
-
 with open("requirements.txt", "r") as f:
     install_requires = f.read().strip().split()
 
 setup(
     name="stellarisdashboard",
-    ext_modules=extension_modules,
+    ext_modules=[],
     install_requires=install_requires,
     entry_points={
         "console_scripts": [
