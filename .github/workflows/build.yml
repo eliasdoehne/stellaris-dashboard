@@ -36,11 +36,9 @@ jobs:
           toolchain: stable
           override: true
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
+        run: |
+          cargo test
         working-directory: "stellarisdashboard/parsing/rust_parser"
-        continue-on-error: true  # WARNING: only for this example, remove it!
-        with:
-          command: test
       - name: Build rust-parser
         uses: PyO3/maturin-action@v1
         with:
