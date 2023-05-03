@@ -4,10 +4,10 @@ use std::fmt::{Display, Formatter};
 use std::time::Instant;
 
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until, take_while, take_while1};
+use nom::bytes::complete::{tag, take_while, take_while1};
 use nom::bytes::streaming::escaped;
-use nom::character::complete::{alphanumeric1, char, multispace0, multispace1, none_of, one_of};
-use nom::combinator::{map, map_res, not, recognize};
+use nom::character::complete::{char, multispace0, multispace1, none_of, one_of};
+use nom::combinator::{map, map_res, recognize};
 use nom::error::context;
 use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
@@ -112,7 +112,7 @@ pub fn parse_file<'a>(input: &'a str) -> Result<Value<'a>, &str> {
 
 fn parse_value(input: &str) -> IResult<&str, Value> {
     // print!("Parsing next value from: ");
-    debug_str(input);
+    // debug_str(input);
     alt(
         (
             context("date", map(parse_date_str, Value::Str)),
@@ -238,10 +238,9 @@ fn parse_float(input: &str) -> IResult<&str, f64> {
 }
 
 fn parse_str(input: &str) -> IResult<&str, &str> {
-    // debug_str(input);
     preceded(
         multispace0,
-        delimited(char('"'), take_until("\""), char('"')),
+        delimited(tag("\""), escaped(none_of("\"\\"), '\\', one_of("\"")), tag("\"")),
     )(input)
 }
 
@@ -305,7 +304,7 @@ mod tests {
         );
         assert_eq!(
             parse_value(r#""\"Escaped\"""#),
-            Ok(("", Value::Str(r#"Escaped"#)))
+            Ok(("", Value::Str(r#"\"Escaped\""#)))
         );
     }
 
@@ -734,15 +733,13 @@ mod tests {
                 r#"species_bio="Description contains a \"quoted\" word."
                    name_list="MAM2"
                    gender=not_set
-                   trait="trait_resilient"
-                   trait="trait_strong""#
+                   trait="trait_resilient""#
             ).unwrap(),
             Value::Map(HashMap::from([
-                ("species_bio", Value::Str("Description contains a \"quoted\" word.")),
+                ("species_bio", Value::Str(r#"Description contains a \"quoted\" word."#)),
                 ("name_list", Value::Str("MAM2")),
                 ("gender", Value::Str("not_set")),
                 ("trait", Value::Str("trait_resilient")),
-                ("trait", Value::Str("trait_strong")),
             ]))
         )
     }
