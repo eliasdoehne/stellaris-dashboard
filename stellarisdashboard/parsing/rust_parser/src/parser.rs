@@ -4,8 +4,9 @@ use std::fmt::{Display, Formatter};
 use std::time::Instant;
 
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until, take_while, take_while1};
-use nom::character::complete::{char, multispace0, multispace1};
+use nom::bytes::complete::{tag, take_while, take_while1};
+use nom::bytes::streaming::escaped;
+use nom::character::complete::{char, multispace0, multispace1, none_of, one_of};
 use nom::combinator::{map, map_res, recognize};
 use nom::error::context;
 use nom::IResult;
@@ -237,10 +238,9 @@ fn parse_float(input: &str) -> IResult<&str, f64> {
 }
 
 fn parse_str(input: &str) -> IResult<&str, &str> {
-    // debug_str(input);
     preceded(
         multispace0,
-        delimited(char('"'), take_until("\""), char('"')),
+        delimited(tag("\""), escaped(none_of("\"\\"), '\\', one_of("\"")), tag("\"")),
     )(input)
 }
 
@@ -249,7 +249,6 @@ fn _is_valid_unquoted_str_char(c: char) -> bool {
 }
 
 fn parse_unquoted_str(input: &str) -> IResult<&str, &str> {
-    // debug_str(input);
     preceded(
         multispace0,
         take_while1(_is_valid_unquoted_str_char),
@@ -260,6 +259,7 @@ fn parse_unquoted_str(input: &str) -> IResult<&str, &str> {
 pub fn debug_str(input: &str) -> () {
     let prefix = &input[..min(input.len(), 150)];
     println!("{:?}", prefix);
+    println!("{}", prefix);
 }
 
 #[cfg(test)]
@@ -301,6 +301,10 @@ mod tests {
         assert_eq!(
             parse_value("\"flag_human_9.dds\""),
             Ok(("", Value::Str("flag_human_9.dds")))
+        );
+        assert_eq!(
+            parse_value(r#""\"Escaped\"""#),
+            Ok(("", Value::Str(r#"\"Escaped\""#)))
         );
     }
 
@@ -722,5 +726,21 @@ mod tests {
             ])
             )
         );
+
+        // Bug report: parser does not handle escaped quotes
+        assert_eq!(
+            parse_file(
+                r#"species_bio="Description contains a \"quoted\" word."
+                   name_list="MAM2"
+                   gender=not_set
+                   trait="trait_resilient""#
+            ).unwrap(),
+            Value::Map(HashMap::from([
+                ("species_bio", Value::Str(r#"Description contains a \"quoted\" word."#)),
+                ("name_list", Value::Str("MAM2")),
+                ("gender", Value::Str("not_set")),
+                ("trait", Value::Str("trait_resilient")),
+            ]))
+        )
     }
 }
