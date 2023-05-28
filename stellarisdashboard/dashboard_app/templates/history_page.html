@@ -79,7 +79,7 @@
                     {% if "leader" in event %} Under ruler {{ links[event["leader"]] | safe}}, the
                     {% else %} The
                     {% endif %}
-                    {{ links[event["country"]] | safe }} relocated their capital to the {{ event["planet"].planetclass }} planet {{ links[event["planet"]] | safe }}
+                    {{ links[event["country"]] | safe }} relocated their capital to the {{ event["planet"].planetclass }} {{ links[event["planet"]] | safe }}
                     in the {{ links[event["system"]] | safe }} system.
                 </span>
             </div>
@@ -90,7 +90,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
                     The {{ links[event["country"]] | safe }} colonized the {{ event["planet"].planetclass }}
-                    planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
+                    {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
                     {% if "leader" in event%} under Governor {{ links[event["leader"]] | safe}}{% endif %}.
                  </span>
             </div>
@@ -574,7 +574,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     The planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system, owned by the
-                    {{ links[event["country"]] | safe }} was destroyed. It is now a {{ event["planet"].planet_class }} planet.
+                    {{ links[event["country"]] | safe }} was destroyed. It is now a {{ event["planet"].planetclass }}.
                  </span>
             </div>
         </li>

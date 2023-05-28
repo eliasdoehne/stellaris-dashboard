@@ -1443,7 +1443,7 @@ class Planet(Base):
 
     @property
     def planetclass(self):
-        return game_info.convert_id_to_name(self.planet_class, remove_prefix="pc")
+        return game_info.lookup_key(self.planet_class)
 
 
 class PlanetDistrict(Base):
@@ -1709,19 +1709,13 @@ class HistoricalEvent(Base):
     def description(self) -> str:
         """A brief description associated with the event, e.g. technology name or changes in government reform."""
         if self.event_type == HistoricalEventType.tradition:
-            return game_info.convert_id_to_name(
-                self.db_description.text, remove_prefix="tr"
-            )
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.researched_technology:
-            return game_info.convert_id_to_name(
-                self.db_description.text, remove_prefix="tech"
-            )
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.edict:
-            return game_info.convert_id_to_name(self.db_description.text)
+            return game_info.lookup_key("edict_" + self.db_description.text)
         elif self.event_type == HistoricalEventType.ascension_perk:
-            return game_info.convert_id_to_name(
-                self.db_description.text, remove_prefix="ap"
-            )
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.government_reform:
             old_gov = self.country.get_government_for_date(self.start_date_days - 1)
             new_gov = self.country.get_government_for_date(self.start_date_days)
@@ -1734,15 +1728,15 @@ class HistoricalEvent(Base):
             return ref
         elif self.event_type == HistoricalEventType.terraforming:
             current_pc, target_pc = self.db_description.text.split(",")
-            current_pc = game_info.convert_id_to_name(current_pc, remove_prefix="pc")
-            target_pc = game_info.convert_id_to_name(target_pc, remove_prefix="pc")
+            current_pc = game_info.lookup_key(current_pc)
+            target_pc = game_info.lookup_key(target_pc)
             return f"from {current_pc} to {target_pc}"
         elif self.event_type in [
             HistoricalEventType.envoy_federation,
             HistoricalEventType.formed_federation,
             HistoricalEventType.governed_sector,
         ]:
-            return game_info.render_name(self.db_description.text)
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type in [HistoricalEventType.war]:
             call_type = self.db_description.text
             if call_type == "primary":
@@ -1758,11 +1752,13 @@ class HistoricalEvent(Base):
             else:
                 return f" (called as {call_type})"
         elif self.event_type == HistoricalEventType.councilor:
-            return game_info.render_name(json.dumps({"key": self.db_description.text}))
+            return game_info.lookup_key(self.db_description.text)
         elif self.db_description:
-            return game_info.convert_id_to_name(self.db_description.text)
+            return game_info.lookup_key(self.db_description.text)
         else:
             return "Unknown Event"
+
+
 
     def involved_countries(self):
         if self.country_id is not None:

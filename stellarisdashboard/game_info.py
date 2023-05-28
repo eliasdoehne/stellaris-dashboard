@@ -159,10 +159,10 @@ class NameRenderer:
     def _strip_unresolved_variables(self, render_template):
         # remove any identifiers remaining after substitution:
         for pattern in [
-            r"\[[a-z0-9]*\]",
-            r"\$[a-z0-9]*\$",
-            r"%[a-z0-9]*%",
-            r"<[a-z0-9]*>",
+            r"\[[0-9]*\]",
+            r"\$[0-9]*\$",
+            r"%[0-9]*%",
+            r"<[0-9]*>",
         ]:
             # in some cases, the template can be left with some unresolved fields. Example from a game:
             # LEADER_2 -> "$1$ $2$", then $2$ = MAM4_CHR_daughterofNagg -> "$1$, daughter of Nagg"
@@ -171,6 +171,12 @@ class NameRenderer:
         # post-processing: The above issue can cause
         render_template = ", ".join(s.strip() for s in render_template.split(","))
         render_template = ". ".join(s.strip() for s in render_template.split("."))
+
+        # Special case: tradition and technology have same name...
+        match_indirect_reference = re.match(r"\$([a-z0-9_]*)\$", render_template)
+        if match_indirect_reference:
+            second_lookup = match_indirect_reference.group(1)
+            render_template = self.render_from_dict({"key": second_lookup})
         return render_template
 
     def _fmt_ord_number(self, num: int):
@@ -208,13 +214,21 @@ global_renderer: NameRenderer = None
 
 
 def render_name(json_str: str):
+    return get_global_renderer().render_from_json(json_str)
+
+
+def lookup_key(key: str) -> str:
+    return get_global_renderer().render_from_dict({"key": key})
+
+
+def get_global_renderer() -> NameRenderer:
     global global_renderer
     if global_renderer is None:
         from stellarisdashboard import config
 
         global_renderer = NameRenderer(config.CONFIG.localization_files)
         global_renderer.load_name_mapping()
-    return global_renderer.render_from_json(json_str)
+    return global_renderer
 
 
 COLONIZABLE_PLANET_CLASSES_PLANETS = {
