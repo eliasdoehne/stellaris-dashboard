@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 # Regex explanation: https://regex101.com/r/l76XGd/1
 loc_re = re.compile(r'\s*(?P<key>\S+?):\d*\s*"(?P<value>.*)"\s*(#.*)?')
 
+
 class NameRenderer:
     default_name = "Unknown name"
 
@@ -20,30 +21,32 @@ class NameRenderer:
         Localization files can be passed in, by default the dashboard tries to locate them from
         """
         self.name_mapping = {"global_event_country": "Global event country"}
-        for p in self.localization_files:
-            # manually parse yaml, yaml.safe_load doesnt seem to work
-            with open(p, "rt", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        re_match = loc_re.match(line)
-                        if re_match:
-                            self.name_mapping[ re_match.group('key') ] = re_match.group('value')
-                        else:
-                            if not line.startswith( ('#', "  ", " #", "  #", "   #", "\ufeffl_english:", "l_english:", "\n", " \n" ) ):
-                                # This error prints the offending line as numbers because not only did we encounter whitespace, we encountered the Zero Width No-Break Space (BOM)
-                                logger.debug(f"Unexpected unmatched localisation line found. Characters (as integers) follow: {[ord(x) for x in line]}")
-                    except Exception as e:
-                        logger.warning(f"Caught exception reading localisation files: {e}")
+        # manually parse the yaml files, yaml.safe_load doesn't seem to work
+        for line in self._iter_localization_lines():
+            try:
+                re_match = loc_re.match(line)
+                if re_match:
+                    self.name_mapping[re_match.group("key")] = re_match.group("value")
+                else:
+                    ignored_prefixes = ("#", "  ", " #", "  #", "   #", "\ufeffl_english:", "l_english:", "\n", " \n")
+                    if not line.startswith(ignored_prefixes):
+                        # This error prints the offending line as numbers because not only did we encounter whitespace, we encountered the Zero Width No-Break Space (BOM)
+                        logger.debug(
+                            f"Unexpected unmatched localisation line found. "
+                            f"Characters (as integers) follow: {[ord(x) for x in line]}"
+                        )
+            except Exception as e:
+                logger.warning(f"Caught exception reading localisation files: {e}")
         # Add missing format that is similar to but not the same as adj_format in practice
         if "%ADJECTIVE%" not in self.name_mapping:
-          self.name_mapping["%ADJECTIVE%"] = "$adjective$ $1$"
+            self.name_mapping["%ADJECTIVE%"] = "$adjective$ $1$"
         # Alternate format with no template (meant to be concatenated?). Incomplete solution.
-#        if "%ADJ%" not in self.name_mapping:
-#          self.name_mapping["%ADJ%"] = "$1$"
+        #        if "%ADJ%" not in self.name_mapping:
+        #          self.name_mapping["%ADJ%"] = "$1$"
         if "%LEADER_1%" not in self.name_mapping:
-          self.name_mapping["%LEADER_1%"] = "$1$ $2$"
+            self.name_mapping["%LEADER_1%"] = "$1$ $2$"
         if "%LEADER_2%" not in self.name_mapping:
-          self.name_mapping["%LEADER_2%"] = "$1$ $2$"
+            self.name_mapping["%LEADER_2%"] = "$1$ $2$"
 
     def render_from_json(self, name_json: str):
         try:
@@ -72,8 +75,16 @@ class NameRenderer:
         # The %ADJ% template is odd. See GitHub #90
         if render_template == "%ADJ%":
             render_template = "$1$"
-            if "variables" in name_dict and "value" in name_dict["variables"][0] and "key" in name_dict["variables"][0]["value"] and "$1$" not in self.name_mapping.get(name_dict["variables"][0]["value"]["key"], ""):
-                name_dict["variables"][0]["value"]["key"] += " $1$"
+            if (
+                "variables" in name_dict
+                and "value" in name_dict["variables"][0]
+                and "key" in name_dict["variables"][0]["value"]
+            ):
+                # substitute predefined constants
+                tmp = name_dict["variables"][0]["value"]["key"]
+                name_dict["variables"][0]["value"]["key"] = self.name_mapping.get(
+                    tmp, tmp
+                )
 
         substitution_values = []
         if "value" in name_dict:
@@ -97,6 +108,11 @@ class NameRenderer:
                     f"{lparen}{subst_key}{rparen}", subst_value
                 )
         return render_template
+
+    def _iter_localization_lines(self):
+        for p in self.localization_files:
+            with open(p, "rt", encoding="utf-8") as f:
+                yield from f
 
 
 global_renderer: NameRenderer = None
