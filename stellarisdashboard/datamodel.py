@@ -1,6 +1,7 @@
 import contextlib
 import enum
 import itertools
+import json
 import logging
 import pathlib
 import threading
@@ -141,7 +142,6 @@ class HistoricalEventType(enum.Enum):
     ruled_empire = enum.auto()
     governed_sector = enum.auto()
     councilor = enum.auto()
-    research_leader = enum.auto() # DEPRECATED
     faction_leader = enum.auto()
     leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
@@ -255,7 +255,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.sector_creation,
             HistoricalEventType.planetary_unrest,
             HistoricalEventType.governed_sector,
-            HistoricalEventType.research_leader,
+            HistoricalEventType.councilor,
             HistoricalEventType.faction_leader,
             HistoricalEventType.leader_recruited,
             HistoricalEventType.leader_died,
@@ -706,27 +706,6 @@ class Country(Base):
             or self.country_type == "fallen_empire"
             or self.country_type == "awakened_fallen_empire"
         )
-
-    def get_research_leader(self, key: str):
-        if key == "physics":
-            return self.scientist_physics
-        elif key == "society":
-            return self.scientist_society
-        elif key == "engineering":
-            return self.scientist_engineering
-        else:
-            logger.warning(f"Unknown research leader ID: {key}")
-            return None
-
-    def set_research_leader(self, key: str, new_leader: "Leader"):
-        if key == "physics":
-            self.scientist_physics = new_leader
-        elif key == "society":
-            self.scientist_society = new_leader
-        elif key == "engineering":
-            self.scientist_engineering = new_leader
-        else:
-            logger.warning(f"Could not set research leader for {key}")
 
     def diplo_relation_details(self):
         countries_by_relation = {}
@@ -1766,7 +1745,8 @@ class HistoricalEvent(Base):
                 return f" due to their alliance with the"
             else:
                 return f" (called as {call_type})"
-
+        elif self.event_type == HistoricalEventType.councilor:
+            return game_info.render_name(json.dumps({"key": self.db_description.text}))
         elif self.db_description:
             return game_info.convert_id_to_name(self.db_description.text)
         else:

@@ -161,12 +161,12 @@
                  </span>
             </div>
         </li>
-        {% elif event["event_type"] == "research_leader" %}
-        <li class="eventitem research_leader">
+        {% elif event["event_type"] == "councilor" %}
+        <li class="eventitem councilor">
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    Scientist {{ links[event["leader"]] | safe }} led the {{ links[event["country"]] | safe}}'s {{event["description"]}} research efforts.
+                    {{ links[event["leader"]] | safe }} served as {{event["description"]}} on the council of the {{ links[event["country"]] | safe}}.
                  </span>
             </div>
         </li>

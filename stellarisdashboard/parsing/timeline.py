@@ -193,6 +193,7 @@ class TimelineExtractor:
         yield InternalMarketProcessor()
         yield SpeciesProcessor()
         yield LeaderProcessor()
+        yield CouncilProcessor()
         yield PlanetProcessor()
         yield SectorColonyEventProcessor()
         yield PlanetUpdateProcessor()
@@ -411,7 +412,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
         return self.countries_by_ingame_id
 
     def extract_data_from_gamestate(self, dependencies):
-        for country_id, country_data_dict in self._gamestate_dict["country"].items():
+        for country_id, country_data_dict in sorted(self._gamestate_dict["country"].items()):
             if not isinstance(country_data_dict, dict):
                 continue
             country_type = country_data_dict.get("type")
@@ -907,13 +908,19 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
         return attitude_towards_player
 
     def _check_returned_number(self, item_name, value):
-         if not isinstance(value, (float, int)):
-             logger.warning(f"{self._basic_info.logger_str} {item_name}: Found unexpected type {type(value).__name__} with value {value}.")
-             if isinstance(value, list) and len(value) > 0 and isinstance(value[0], (float, int)):
-                 value = value[0]
-             else:
-                 value = 0.0
-         return value
+        if not isinstance(value, (float, int)):
+            logger.warning(
+                f"{self._basic_info.logger_str} {item_name}: Found unexpected type {type(value).__name__} with value {value}."
+            )
+            if (
+                isinstance(value, list)
+                and len(value) > 0
+                and isinstance(value[0], (float, int))
+            ):
+                value = value[0]
+            else:
+                value = 0.0
+        return value
 
     def _extract_country_economy(
         self, country_data: datamodel.CountryData, country_data_dict
@@ -931,9 +938,22 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             if not values:
                 continue
             resources = {}
-            for resource in ["energy", "minerals", "alloys", "consumer_goods", "food", "unity", "influence", "physics_research", "society_research", "engineering_research",]:
+            for resource in [
+                "energy",
+                "minerals",
+                "alloys",
+                "consumer_goods",
+                "food",
+                "unity",
+                "influence",
+                "physics_research",
+                "society_research",
+                "engineering_research",
+            ]:
                 if resource in values:
-                    resources[resource] = self._check_returned_number(item_name, values.get(resource))
+                    resources[resource] = self._check_returned_number(
+                        item_name, values.get(resource)
+                    )
                 else:
                     resources[resource] = 0.0
 
@@ -946,7 +966,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_influence += resources.get("influence")
             country_data.net_physics_research += resources.get("physics_research")
             country_data.net_society_research += resources.get("society_research")
-            country_data.net_engineering_research += resources.get("engineering_research")
+            country_data.net_engineering_research += resources.get(
+                "engineering_research"
+            )
 
             if country.country_id_in_game in self._basic_info.other_players:
                 continue
@@ -1167,9 +1189,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         name_dict = leader_dict.get("name", {})
         # Look for "first_name" then "full_names" (3.6+)
         first_name = dump_name(
-            name_dict.get("first_name",
-                          name_dict.get("full_names", "Unknown Leader")
-            )
+            name_dict.get("first_name", name_dict.get("full_names", "Unknown Leader"))
         )
         last_name = dump_name(name_dict.get("second_name", ""))
         return first_name, last_name
@@ -1216,6 +1236,63 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader.leader_agenda = leader_agenda
             leader.species = leader_species
             self._session.add(leader)
+
+
+class CouncilProcessor(AbstractGamestateDataProcessor):
+    ID = "councilors"
+    DEPENDENCIES = [LeaderProcessor.ID, CountryProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self.planets_by_ingame_id = None
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries_by_id = dependencies[CountryProcessor.ID]
+        leaders_by_id = dependencies[LeaderProcessor.ID]
+
+        for cp_id, council_position in self._gamestate_dict["council_positions"][
+            "council_positions"
+        ].items():
+            if not isinstance(council_position, dict):
+                continue
+            country_model = countries_by_id.get(council_position.get("country"))
+            leader_model = leaders_by_id.get(council_position.get("leader"))
+            councilor_type = council_position.get("type", "unknown councilor type")
+            if not all([country_model, leader_model, councilor_type]):
+                logger.debug(f"No councilor assigned: %s", council_position)
+                continue
+            desc = self._get_or_add_shared_description(councilor_type)
+
+            previous_event = (
+                self._session.query(datamodel.HistoricalEvent)
+                .filter_by(
+                    event_type=datamodel.HistoricalEventType.councilor,
+                    country=country_model,
+                    db_description=desc,
+                )
+                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .first()
+            )
+            add_new_event = True
+            if previous_event is not None:
+                previous_event.event_is_known_to_player = country_model.has_met_player()
+                if previous_event.leader_id != leader_model.leader_id:
+                    previous_event.end_date_days = self._basic_info.date_in_days - 1
+                else:
+                    add_new_event = False
+                self._session.add(previous_event)
+
+            if add_new_event:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.councilor,
+                        country=country_model,
+                        leader=leader_model,
+                        db_description=desc,
+                        start_date_days=self._basic_info.date_in_days,
+                        event_is_known_to_player=country_model.has_met_player(),
+                    )
+                )
 
 
 class PlanetProcessor(AbstractGamestateDataProcessor):
@@ -2572,10 +2649,6 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
         if not isinstance(tech_status_dict, dict):
             return
         for tech_type in ["physics", "society", "engineering"]:
-            scientist_id = tech_status_dict.get("leaders", {}).get(tech_type)
-            scientist = self._leader_dict.get(scientist_id)
-            self.history_add_research_leader_events(country_model, scientist, tech_type)
-
             progress_dict = tech_status_dict.get(f"{tech_type}_queue")
             if progress_dict and isinstance(progress_dict, list):
                 progress_dict = progress_dict[0]
@@ -2616,7 +2689,6 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.researched_technology,
                         country=country_model,
-                        leader=scientist,
                         start_date_days=start_date,
                         db_description=matching_description,
                         event_is_known_to_player=country_model.has_met_player(),
@@ -2651,51 +2723,6 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
             .one_or_none()
         )
         return matching_event
-
-    def history_add_research_leader_events(
-        self,
-        country_model: datamodel.Country,
-        current_research_leader: datamodel.Leader,
-        tech_type: str,
-    ):
-        previous_research_leader = country_model.get_research_leader(tech_type)
-        if current_research_leader == previous_research_leader:
-            return
-
-        country_model.set_research_leader(tech_type, current_research_leader)
-        self._session.add(country_model)
-
-        if previous_research_leader is not None:
-            matching_event = (
-                self._session.query(datamodel.HistoricalEvent)
-                .filter_by(
-                    event_type=datamodel.HistoricalEventType.research_leader,
-                    country=country_model,
-                    leader=previous_research_leader,
-                )
-                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
-                .first()
-            )
-            matching_event.end_date_days = self._basic_info.date_in_days - 1
-            matching_event.event_is_known_to_player = (
-                matching_event.event_is_known_to_player
-                or country_model.has_met_player()
-            )
-            self._session.add(matching_event)
-        if current_research_leader is not None:
-            description = self._get_or_add_shared_description(
-                text=tech_type.capitalize()
-            )
-            self._session.add(
-                datamodel.HistoricalEvent(
-                    event_type=datamodel.HistoricalEventType.research_leader,
-                    country=country_model,
-                    leader=current_research_leader,
-                    start_date_days=self._basic_info.date_in_days,
-                    db_description=description,
-                    event_is_known_to_player=country_model.has_met_player(),
-                )
-            )
 
 
 class EnvoyEventProcessor(AbstractGamestateDataProcessor):
