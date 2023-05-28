@@ -140,7 +140,8 @@ class HistoricalEventType(enum.Enum):
     # tied to a specific leader:
     ruled_empire = enum.auto()
     governed_sector = enum.auto()
-    research_leader = enum.auto()
+    councilor = enum.auto()
+    research_leader = enum.auto() # DEPRECATED
     faction_leader = enum.auto()
     leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
