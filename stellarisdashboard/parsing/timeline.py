@@ -278,7 +278,9 @@ class SystemProcessor(AbstractGamestateDataProcessor):
             s.system_id_in_game: s for s in self._session.query(datamodel.System)
         }
         self.starbase_systems = {}
-        for ingame_id, system_data in self._gamestate_dict["galactic_object"].items():
+        for ingame_id, system_data in sorted(
+            self._gamestate_dict["galactic_object"].items()
+        ):
             if "starbases" in system_data:
                 starbases = system_data["starbases"]
                 if len(starbases) > 1:
@@ -412,7 +414,9 @@ class CountryProcessor(AbstractGamestateDataProcessor):
         return self.countries_by_ingame_id
 
     def extract_data_from_gamestate(self, dependencies):
-        for country_id, country_data_dict in sorted(self._gamestate_dict["country"].items()):
+        for country_id, country_data_dict in sorted(
+            self._gamestate_dict["country"].items()
+        ):
             if not isinstance(country_data_dict, dict):
                 continue
             country_type = country_data_dict.get("type")
@@ -1019,9 +1023,9 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
         return self._species_by_ingame_id, self._robot_species
 
     def extract_data_from_gamestate(self, dependencies):
-        for species_ingame_id, species_dict in self._gamestate_dict.get(
-            "species_db", {}
-        ).items():
+        for species_ingame_id, species_dict in sorted(
+            self._gamestate_dict.get("species_db", {}).items()
+        ):
             species_model = self._get_or_add_species(species_ingame_id, species_dict)
             self._species_by_ingame_id[species_ingame_id] = species_model
             if species_dict.get("class") == "ROBOT":
@@ -1250,9 +1254,9 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
         countries_by_id = dependencies[CountryProcessor.ID]
         leaders_by_id = dependencies[LeaderProcessor.ID]
 
-        for cp_id, council_position in self._gamestate_dict["council_positions"][
-            "council_positions"
-        ].items():
+        for cp_id, council_position in sorted(
+            self._gamestate_dict["council_positions"]["council_positions"].items()
+        ):
             if not isinstance(council_position, dict):
                 continue
             country_model = countries_by_id.get(council_position.get("country"))
@@ -1315,7 +1319,9 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         }
         systems_by_id = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
 
-        for system_id, system_dict in self._gamestate_dict["galactic_object"].items():
+        for system_id, system_dict in sorted(
+            self._gamestate_dict["galactic_object"].items()
+        ):
             planets = system_dict.get("planet", [])
             if isinstance(planets, int):
                 planets = [planets]
@@ -2148,9 +2154,9 @@ class FactionProcessor(AbstractGamestateDataProcessor):
         countries_dict = dependencies[CountryProcessor.ID]
         self._leaders_dict = dependencies[LeaderProcessor.ID]
 
-        for faction_id, faction_dict in self._gamestate_dict.get(
-            "pop_factions", {}
-        ).items():
+        for faction_id, faction_dict in sorted(
+            self._gamestate_dict.get("pop_factions", {}).items()
+        ):
             if not faction_dict or not isinstance(faction_dict, dict):
                 continue
             country_model = countries_dict.get(faction_dict.get("country"))
@@ -2733,7 +2739,9 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
         countries_dict = dependencies[CountryProcessor.ID]
         leaders = dependencies[LeaderProcessor.ID]
 
-        for envoy_id_ingame, raw_leader_dict in self._gamestate_dict["leaders"].items():
+        for envoy_id_ingame, raw_leader_dict in sorted(
+            self._gamestate_dict["leaders"].items()
+        ):
             if not isinstance(raw_leader_dict, dict):
                 continue
             if raw_leader_dict.get("class") != "envoy":
@@ -2833,7 +2841,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
         self._country_datas = dependencies[CountryDataProcessor.ID]
         self._fleet_owners = dependencies[FleetOwnershipProcessor.ID]
 
-        for fleet_id, fleet_dict in self._gamestate_dict["fleet"].items():
+        for fleet_id, fleet_dict in sorted(self._gamestate_dict["fleet"].items()):
             if not isinstance(fleet_dict, dict):
                 continue
             country = self._fleet_owners.get(fleet_id)
@@ -3551,7 +3559,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
     def _initialize_planet_owner_dict(self):
         self.country_by_planet_id = {}
-        for country_id, country_dict in self._gamestate_dict["country"].items():
+        for country_id, country_dict in sorted(self._gamestate_dict["country"].items()):
             if not isinstance(country_dict, dict):
                 continue
             for planet_id in country_dict.get("owned_planets", []):
