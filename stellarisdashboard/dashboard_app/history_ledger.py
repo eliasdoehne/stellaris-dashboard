@@ -105,21 +105,21 @@ class EventFilter:
                 datamodel.Leader,
                 "leader",
                 dict(leader_id=self.leader_filter),
-                datamodel.Leader.leader_id.asc(),
+                datamodel.Leader.leader_id_in_game.asc(),
             )
         elif self.system_filter is not None:
             return (
                 datamodel.System,
                 "system",
                 dict(system_id=self.system_filter),
-                datamodel.System.system_id.asc(),
+                datamodel.System.system_id_in_game.asc(),
             )
         elif self.planet_filter is not None:
             return (
                 datamodel.Planet,
                 "planet",
                 dict(planet_id=self.planet_filter),
-                datamodel.Planet.planet_id.asc(),
+                datamodel.Planet.planet_id_in_game.asc(),
             )
         elif self.war_filter is not None:
             return (
@@ -136,7 +136,7 @@ class EventFilter:
                 datamodel.Country,
                 "country",
                 filter_dict,
-                datamodel.Country.country_id.asc(),
+                datamodel.Country.country_id_in_game.asc(),
             )
 
     @property
@@ -235,7 +235,7 @@ class EventTemplateDictBuilder:
             event_query_kwargs,
             key_obj_filter_dict,
             key_object_order_column,
-        ) = params = self.event_filter.query_args_info
+        ) = self.event_filter.query_args_info
 
         self._most_recent_date = utils.get_most_recent_date(self._session)
         key_objects = (
@@ -330,7 +330,10 @@ class EventTemplateDictBuilder:
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
             return []
-        return [key for key in self._formatted_urls if isinstance(key, datamodel.War)]
+        return sorted(
+            [key for key in self._formatted_urls if isinstance(key, datamodel.War)],
+            key=lambda w: w.start_date_days,
+        )
 
     def _get_details(self, key) -> Dict[str, str]:
         if isinstance(key, datamodel.Country):

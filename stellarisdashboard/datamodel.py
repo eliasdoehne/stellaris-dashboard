@@ -1207,7 +1207,7 @@ class PoliticalFaction(Base):
 
     @property
     def rendered_name(self):
-        rendered =  game_info.render_name(self.faction_name)
+        rendered = game_info.render_name(self.faction_name)
         return rendered
 
 
@@ -1255,6 +1255,18 @@ class War(Base):
         for p in self.participants:
             if not p.is_attacker and p.call_type == "primary":
                 yield p
+
+    @property
+    def start_date(self):
+        if self.start_date_days is not None:
+            return days_to_date(self.start_date_days)
+        return None
+
+    @property
+    def end_date(self):
+        if self.end_date_days is not None:
+            return days_to_date(self.end_date_days)
+        return None
 
 
 class WarParticipant(Base):

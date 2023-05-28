@@ -2775,7 +2775,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
             else:
                 event_type = None
 
-            event_is_known = country.is_player or country.has_met_player()
+            event_is_known = country.has_met_player()
             if target_country is not None:
                 event_is_known &= target_country.has_met_player()
 
@@ -2795,6 +2795,8 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                     self._session.add(previous_assignment)
 
             if not assignment_is_the_same and event_type is not None:
+                # print(f"{assignment_is_the_same=} {event_type=} {country.country_id} "
+                #       f"{previous_assignment.event_type} {previous_assignment.target_country_id}")
                 new_assignment_event = datamodel.HistoricalEvent(
                     start_date_days=self._basic_info.date_in_days,
                     country=country,
@@ -2806,7 +2808,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 )
                 self._session.add(new_assignment_event)
 
-    def _previous_assignment(self, envoy: datamodel.Leader):
+    def _previous_assignment(self, envoy: datamodel.Leader) -> Optional[datamodel.HistoricalEvent]:
         return (
             self._session.query(datamodel.HistoricalEvent)
             .filter(datamodel.HistoricalEvent.end_date_days.is_(None))

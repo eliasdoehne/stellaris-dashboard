@@ -11,7 +11,7 @@
     <a href="#wars">War logs</a>
     <ul>
         {% for war in wars %}
-        <li class="toc-item">{{ links[war] | safe }}</li>
+        <li class="toc-item"> {{ war.start_date }}{% if war.end_date %} - {{ war.end_date }}{% endif %}: {{ links[war] | safe }}</li>
         {% endfor %}
     </ul>
     {% endif %}
