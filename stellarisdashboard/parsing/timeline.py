@@ -2717,7 +2717,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
             country = envoy.country
             target_country = None
             location = raw_leader_dict.get("location", {})
-            assignment = location.get("assignment")
+            assignment = location.get("assignment", "idle")
             description = None
             if assignment == "improve_relations":
                 event_type = datamodel.HistoricalEventType.envoy_improving_relations
