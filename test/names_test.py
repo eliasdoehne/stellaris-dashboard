@@ -169,6 +169,37 @@ class NameTestcase:
             expected="Democratic Cevantian Assembly",
             description="nested_country_species_adjective",
         ),
+        NameTestcase(
+            {
+                "key": "PREFIX_NAME_FORMAT",
+                "variables": [
+                    {"key": "NAME", "value": {"key": "PLANT2_SHIP_Perennia"}},
+                    {
+                        "key": "PREFIX",
+                        "value": {
+                            "key": "%ACRONYM%",
+                            "variables": [
+                                {
+                                    "key": "base",
+                                    "value": {
+                                        "key": "%ADJECTIVE%",
+                                        "variables": [
+                                            {
+                                                "key": "adjective",
+                                                "value": {"key": "SPEC_Panaxala"},
+                                            },
+                                            {"key": "1", "value": {"key": "Theocracy"}},
+                                        ],
+                                    },
+                                }
+                            ],
+                        },
+                    },
+                ],
+            },
+            expected="PTY Perennia",
+            description="ACRONYM test",
+        ),
     ],
     ids=lambda tc: tc.description,
 )

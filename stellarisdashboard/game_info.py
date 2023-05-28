@@ -133,6 +133,11 @@ class NameRenderer:
         return render_template
 
     def _substitute_variables(self, render_template, substitution_values):
+        if render_template == "%ACRONYM%":
+            for key, acronym_base in substitution_values:
+                if key == "base":
+                    render_template = "".join(s[0].upper() for s in acronym_base.split())
+                    render_template += acronym_base[-1].upper()
         # try all combinations of escaping identifiers
         parentheses = [
             ("<", ">"),
