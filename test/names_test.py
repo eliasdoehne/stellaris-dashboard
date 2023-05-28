@@ -9,7 +9,6 @@ from stellarisdashboard import config, game_info
 @dataclasses.dataclass
 class NameTestcase:
     name_dict: dict
-    context: dict = dataclasses.field(default_factory=dict)
     expected: str = ""
     description: str = "test"
 
@@ -118,6 +117,58 @@ class NameTestcase:
             expected="Qiramulan Trading Consortium Rit-Kwyr",
             description="fleet, in-game science fleet",
         ),
+        NameTestcase(
+            {
+                "key": "%LEADER_2%",
+                "variables": [
+                    {"key": "1", "value": {"key": "MAM4_CHR_Tibb"}},
+                    {"key": "2", "value": {"key": "MAM4_CHR_daughterofNagg"}},
+                ],
+            },
+            expected="Tibb, daughter of Nagg",
+            description="LEADER_2",
+        ),
+        NameTestcase(
+            {
+                "key": "%SEQ%",
+                "variables": [
+                    {"key": "fmt", "value": {"key": "MAM4_STARORDER"}},
+                    {"key": "num", "value": {"key": "73"}},
+                ],
+            },
+            expected="73rd Star Order",
+            description="SEQ",
+        ),
+        NameTestcase(
+            {
+                "key": "%ADJ%",
+                "variables": [
+                    {
+                        "key": "1",
+                        "value": {
+                            "key": "Democratic",
+                            "variables": [
+                                {
+                                    "key": "1",
+                                    "value": {
+                                        "key": "%ADJECTIVE%",
+                                        "variables": [
+                                            {
+                                                "key": "adjective",
+                                                "value": {"key": "SPEC_Cevanti"},
+                                            },
+                                            {"key": "1", "value": {"key": "Assembly"}},
+                                        ],
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
+            },
+            expected="Democratic Cevantian Assembly",
+            description="nested_country_species_adjective",
+        ),
     ],
     ids=lambda tc: tc.description,
 )
@@ -215,13 +266,28 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
             dict(
                 key="%ADJ%",
                 variables=[
-                    {"key": "1", "value": {"key": "Allied", "variables": [
-                        {"key": "1", "value": {"key": "%ADJECTIVE%", "variables": [
-                            {"key": "adjective", "value": {"key": "Jing"}},
-                            {"key": "1", "value": {"key": "Systems"}}
-                        ]}}
-                    ]}}
-                ]
+                    {
+                        "key": "1",
+                        "value": {
+                            "key": "Allied",
+                            "variables": [
+                                {
+                                    "key": "1",
+                                    "value": {
+                                        "key": "%ADJECTIVE%",
+                                        "variables": [
+                                            {
+                                                "key": "adjective",
+                                                "value": {"key": "Jing"},
+                                            },
+                                            {"key": "1", "value": {"key": "Systems"}},
+                                        ],
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
             ),
             expected="Allied Jing Systems",
             description="%ADJ% test",
@@ -231,13 +297,24 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
                 key="%ADJECTIVE%",
                 variables=[
                     {"key": "adjective", "value": {"key": "Quetzan"}},
-                    {"key": "1", "value": {"key": "%ADJ%", "variables": [
-                        {"key": "1", "value": {"key": "Consolidated", "variables": [
-                            {"key": "1", "value": {"key": "Worlds"}}
-                        ]}}
-                    ]}}
-                ]
-
+                    {
+                        "key": "1",
+                        "value": {
+                            "key": "%ADJ%",
+                            "variables": [
+                                {
+                                    "key": "1",
+                                    "value": {
+                                        "key": "Consolidated",
+                                        "variables": [
+                                            {"key": "1", "value": {"key": "Worlds"}}
+                                        ],
+                                    },
+                                }
+                            ],
+                        },
+                    },
+                ],
             ),
             expected="Quetzan Consolidated Worlds",
             description="Nested %ADJECTIVE% and %ADJ% test",
