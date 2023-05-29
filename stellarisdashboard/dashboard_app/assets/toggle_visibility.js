@@ -2,6 +2,7 @@
 
 function toggle_visibility(className) {
     var elements = document.getElementsByClassName(className);
+    console.log("lalalal");
     for (var i = 0; i < elements.length; i++) {
         elements[i].style.display = (elements[i].style.display == 'list-item' || elements[i].style.display == "") ? 'none' : 'list-item';
     }

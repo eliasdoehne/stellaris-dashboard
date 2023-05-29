@@ -1,7 +1,6 @@
 import contextlib
 import enum
 import itertools
-import json
 import logging
 import pathlib
 import threading
@@ -44,7 +43,6 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
             s.close()
 
 
-### Some enum types representing various in-game concepts
 @enum.unique
 class Attitude(enum.Enum):
     is_player = enum.auto()
@@ -170,6 +168,8 @@ class HistoricalEventType(enum.Enum):
     new_faction = enum.auto()
     government_reform = enum.auto()
     species_rights_reform = enum.auto()  # TODO
+    new_policy = enum.auto()
+    changed_policy = enum.auto()
 
     # Galactic community and council
     joined_galactic_community = enum.auto()
@@ -279,7 +279,6 @@ class HistoricalEventType(enum.Enum):
         return HistoricalEventScope.all
 
 
-### Some convenience functions
 def date_to_days(date_str: str) -> int:
     """Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
     2200.01.01.
@@ -308,7 +307,6 @@ def days_to_date(days: float) -> str:
     return f"{year:04}.{month:02}.{day:02}"
 
 
-### Some helper functions to conveniently access the databases.
 def get_last_modified_time(path: pathlib.Path) -> int:
     return path.stat().st_mtime
 
@@ -401,15 +399,15 @@ class Game(Base):
 
     @property
     def galaxy_template(self):
-        return game_info.convert_id_to_name(self.db_galaxy_template)
+        return game_info.lookup_key(self.db_galaxy_template)
 
     @property
     def galaxy_shape(self):
-        return game_info.convert_id_to_name(self.db_galaxy_shape)
+        return game_info.lookup_key(self.db_galaxy_shape)
 
     @property
     def difficulty(self):
-        return game_info.convert_id_to_name(self.db_difficulty)
+        return game_info.lookup_key(self.db_difficulty)
 
     @property
     def last_updated(self):
@@ -659,6 +657,10 @@ class Country(Base):
     ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
     technologies = relationship("Technology", cascade="all,delete,delete-orphan")
 
+    policies = relationship(
+        "Policy", foreign_keys=lambda: [Policy.country_id]
+    )
+
     historical_events = relationship(
         "HistoricalEvent",
         back_populates="country",
@@ -856,8 +858,37 @@ class Government(Base):
         return f"{self.authority} {self.gov_type} {self.civics} {self.ethics}"
 
 
+class Policy(Base):
+    __tablename__ = "policy"
+
+    policy_id = Column(Integer, primary_key=True)
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+
+    policy_date = Column(Integer)
+    is_active = Column(Boolean)
+
+    policy_name_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+    selected_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+
+    country_model = relationship(
+        Country,
+        back_populates="policies",
+        foreign_keys=[country_id],
+    )
+
+    policy_name = relationship(
+        SharedDescription,
+        foreign_keys=[policy_name_id],
+    )
+    selected = relationship(
+        SharedDescription,
+        foreign_keys=[selected_id],
+    )
+
+
+
 class DiplomaticRelation(Base):
-    __tablename__ = "diplo_relation_table"
+    __tablename__ = "diplo_relation"
 
     diplo_relation_id = Column(Integer, primary_key=True)
 
@@ -1447,7 +1478,7 @@ class Planet(Base):
 
 
 class PlanetDistrict(Base):
-    __tablename__ = "planet_district_table"
+    __tablename__ = "planet_district"
     district_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1466,7 +1497,7 @@ class PlanetDistrict(Base):
 
 
 class PlanetDeposit(Base):
-    __tablename__ = "planet_deposit_table"
+    __tablename__ = "planet_deposit"
     deposit_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1491,7 +1522,7 @@ class PlanetDeposit(Base):
 
 
 class PlanetBuilding(Base):
-    __tablename__ = "planet_building_table"
+    __tablename__ = "planet_building"
     building_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1510,7 +1541,7 @@ class PlanetBuilding(Base):
 
 
 class PlanetModifier(Base):
-    __tablename__ = "planet_modifier_table"
+    __tablename__ = "planet_modifier"
     modifier_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1529,7 +1560,7 @@ class PlanetModifier(Base):
 
 
 class PopStatsBySpecies(Base):
-    __tablename__ = "popstats_species_table"
+    __tablename__ = "popstats_species"
     pop_stats_species_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     species_id = Column(ForeignKey(Species.species_id))
@@ -1544,7 +1575,7 @@ class PopStatsBySpecies(Base):
 
 
 class PopStatsByFaction(Base):
-    __tablename__ = "popstats_faction_table"
+    __tablename__ = "popstats_faction"
     pop_stats_faction_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id))
@@ -1562,7 +1593,7 @@ class PopStatsByFaction(Base):
 
 
 class PopStatsByJob(Base):
-    __tablename__ = "popstats_job_table"
+    __tablename__ = "popstats_job"
     pop_stats_job_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     job_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1581,7 +1612,7 @@ class PopStatsByJob(Base):
 
 
 class PopStatsByStratum(Base):
-    __tablename__ = "popstats_stratum_table"
+    __tablename__ = "popstats_stratum"
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     stratum_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1600,7 +1631,7 @@ class PopStatsByStratum(Base):
 
 
 class PopStatsByEthos(Base):
-    __tablename__ = "popstats_ethos_table"
+    __tablename__ = "popstats_ethos"
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     ethos_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1619,7 +1650,7 @@ class PopStatsByEthos(Base):
 
 
 class PlanetStats(Base):
-    __tablename__ = "planetstats_table"
+    __tablename__ = "planetstats"
     planet_stats_id = Column(Integer, primary_key=True)
     countrydata_id = Column(ForeignKey(CountryData.country_data_id), index=True)
 
@@ -1753,12 +1784,21 @@ class HistoricalEvent(Base):
                 return f" (called as {call_type})"
         elif self.event_type == HistoricalEventType.councilor:
             return game_info.lookup_key(self.db_description.text)
+        elif self.event_type == HistoricalEventType.new_policy:
+            name, selected = self.db_description.text.split("|")
+            name_rendered = game_info.convert_id_to_name(name)
+            selected_rendered = game_info.lookup_key(selected)
+            return f"{name_rendered!r}: {selected_rendered!r}"
+        elif self.event_type == HistoricalEventType.changed_policy:
+            name, old, new = self.db_description.text.split("|")
+            name_rendered = game_info.convert_id_to_name(name)
+            old_rendered = game_info.lookup_key(old)
+            new_rendered = game_info.lookup_key(new)
+            return f"{name_rendered!r} from {old_rendered!r} to {new_rendered!r}"
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
             return "Unknown Event"
-
-
 
     def involved_countries(self):
         if self.country_id is not None:

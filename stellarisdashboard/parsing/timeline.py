@@ -7,7 +7,7 @@ import json
 import logging
 import random
 import time
-from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple
+from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple, Collection
 
 import sqlalchemy
 
@@ -199,6 +199,7 @@ class TimelineExtractor:
         yield PlanetUpdateProcessor()
         yield RulerEventProcessor()
         yield GovernmentProcessor()
+        yield PolicyProcessor()
         yield FactionProcessor()
         yield DiplomacyUpdatesProcessor()
         yield GalacticCommunityProcessor()
@@ -1987,7 +1988,11 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
             if not isinstance(edict, dict):
                 continue
             expiry_date = edict.get("date")
-            if not expiry_date or expiry_date == "1.01.01" or "perpetual" == "yes":
+            if (
+                not expiry_date
+                or expiry_date == "1.01.01"
+                or edict.get("perpetual") == "yes"
+            ):
                 expiry_date = None
             else:
                 expiry_date = datamodel.date_to_days(expiry_date)
@@ -2109,6 +2114,97 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=country_model.has_met_player(),
                     )
                 )
+
+
+class PolicyProcessor(AbstractGamestateDataProcessor):
+    ID = "policy"
+    DEPENDENCIES = [CountryProcessor.ID, RulerEventProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies):
+        countries_dict = dependencies[CountryProcessor.ID]
+        rulers_dict = dependencies[RulerEventProcessor.ID]
+
+        for country_id, country_model in countries_dict.items():
+            current_stance_per_policy = self._get_current_policies(country_id)
+
+            previous_policy_by_name = self._load_previous_policies(country_model)
+
+            for policy_name, (
+                current_selected,
+                date,
+            ) in current_stance_per_policy.items():
+                policy_date_days = (
+                    datamodel.date_to_days(date)
+                    if date
+                    else self._basic_info.date_in_days
+                )
+                add_new_policy = False
+                event_type = None
+                event_description = None
+                if policy_name not in previous_policy_by_name:
+                    add_new_policy = True
+                    event_type = datamodel.HistoricalEventType.new_policy
+                    event_description = f"{policy_name}|{current_selected}"
+                else:
+                    previous_policy = previous_policy_by_name[policy_name]
+                    previous_selected = previous_policy.selected.text
+                    if previous_selected != current_selected:
+                        add_new_policy = True
+                        previous_policy.is_active = False
+                        self._session.add(previous_policy)
+                        event_type = datamodel.HistoricalEventType.changed_policy
+                        event_description = (
+                            f"{policy_name}|{previous_selected}|{current_selected}"
+                        )
+                if add_new_policy:
+                    self._session.add(
+                        datamodel.Policy(
+                            country_model=country_model,
+                            policy_date=policy_date_days,
+                            is_active=True,
+                            policy_name=self._get_or_add_shared_description(
+                                policy_name
+                            ),
+                            selected=self._get_or_add_shared_description(
+                                current_selected
+                            ),
+                        )
+                    )
+                if event_type and event_description:
+                    self._session.add(
+                        datamodel.HistoricalEvent(
+                            event_type=event_type,
+                            country=country_model,
+                            leader=rulers_dict.get(country_id),
+                            start_date_days=policy_date_days,
+                            db_description=self._get_or_add_shared_description(
+                                event_description
+                            ),
+                        )
+                    )
+
+    def _get_current_policies(self, country_id) -> dict[str, (str, str)]:
+        country_gs_dict = self._gamestate_dict["country"][country_id]
+        current_policies = country_gs_dict.get("active_policies")
+        if not isinstance(current_policies, list):
+            current_policies = []
+        current_stance_per_policy = {
+            p.get("policy"): (p.get("selected"), p.get("date"))
+            for p in current_policies
+        }
+        return current_stance_per_policy
+
+    def _load_previous_policies(self, country_model):
+        previous_policy_by_name: dict[str, datamodel.Policy] = {
+            p.policy_name.text: p
+            for p in self._session.query(datamodel.Policy)
+            .filter_by(
+                country_model=country_model,
+                is_active=True,
+            )
+            .all()
+        }
+        return previous_policy_by_name
 
 
 class FactionProcessor(AbstractGamestateDataProcessor):
@@ -2808,7 +2904,9 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 )
                 self._session.add(new_assignment_event)
 
-    def _previous_assignment(self, envoy: datamodel.Leader) -> Optional[datamodel.HistoricalEvent]:
+    def _previous_assignment(
+        self, envoy: datamodel.Leader
+    ) -> Optional[datamodel.HistoricalEvent]:
         return (
             self._session.query(datamodel.HistoricalEvent)
             .filter(datamodel.HistoricalEvent.end_date_days.is_(None))

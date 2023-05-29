@@ -47,6 +47,7 @@
     <div style="text-align: center;"><div><span>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('researched_technology');">Technologies</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('edict');">Edicts</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('policy');">Policies</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('tradition');">Traditions</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('colonization');">Colonizations</a>
             <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('army_combat');">Army Combat</a>
@@ -199,6 +200,26 @@
                 <span class="eventtext">
                     {% if "leader" in event %}Ruler {{ links[event["leader"]] | safe}}{% else %}The {{ links[event["country"]] | safe}}{% endif %}
                     enacted the "{{event["description"]}}" edict.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "new_policy" %}
+        <li class="eventitem policy">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %}Under ruler {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {{ links[event["country"]] | safe}} enacted a new policy on {{event["description"]}}.
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "changed_policy" %}
+        <li class="eventitem policy">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %}Under ruler {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {{ links[event["country"]] | safe}} changed their policy on {{event["description"]}}.
                  </span>
             </div>
         </li>
