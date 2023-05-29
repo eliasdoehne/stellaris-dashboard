@@ -363,7 +363,7 @@ def get_gamestates_since(game_name: str, date: float):
 class Game(Base):
     """Root object representing an entire game."""
 
-    __tablename__ = "gametable"
+    __tablename__ = "game"
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
 
@@ -417,7 +417,7 @@ class Game(Base):
 class SharedDescription(Base):
     """Represents short descriptions like technology names that are likely to occur many times for various empires."""
 
-    __tablename__ = "shareddescriptiontable"
+    __tablename__ = "shared_description"
     description_id = Column(Integer, primary_key=True)
 
     text = Column(String(500), index=True)
@@ -426,10 +426,10 @@ class SharedDescription(Base):
 class System(Base):
     """Represents a single star system/galactic_object."""
 
-    __tablename__ = "systemtable"
+    __tablename__ = "system"
     system_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    country_id = Column(ForeignKey("countrytable.country_id"), index=True)
+    country_id = Column(ForeignKey("country.country_id"), index=True)
 
     name = Column(String(80))
     system_id_in_game = Column(Integer, index=True)
@@ -501,11 +501,11 @@ class System(Base):
 class SystemOwnership(Base):
     """Represent the timespan during which some empire owned a given system."""
 
-    __tablename__ = "systemownershiptable"
+    __tablename__ = "system_ownership"
     system_ownership_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), index=True)
-    owner_country_id = Column(ForeignKey("countrytable.country_id"))
+    owner_country_id = Column(ForeignKey("country.country_id"))
 
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer, index=True)
@@ -531,7 +531,7 @@ class HyperLane(Base):
     represented as a directed edge, it should be interpreted as undirected.
     """
 
-    __tablename__ = "hyperlanetable"
+    __tablename__ = "hyperlane"
     hyperlane_id = Column(Integer, primary_key=True)
 
     system_one_id = Column(ForeignKey(System.system_id))
@@ -554,7 +554,7 @@ class Bypass(Base):
     Represent bypasses.
     """
 
-    __tablename__ = "bypasstable"
+    __tablename__ = "bypass"
     bypass_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
@@ -578,7 +578,7 @@ class Bypass(Base):
 class GameState(Base):
     """Represents the state of the game at a specific moment."""
 
-    __tablename__ = "gamestatetable"
+    __tablename__ = "gamestate"
     gamestate_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     date = Column(Integer, index=True, nullable=False)  # Days since 2200.1.1
@@ -598,15 +598,12 @@ class GameState(Base):
 
 
 class Country(Base):
-    __tablename__ = "countrytable"
+    __tablename__ = "country"
     country_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    capital_planet_id = Column(ForeignKey("planettable.planet_id"))
+    capital_planet_id = Column(ForeignKey("planet.planet_id"))
 
-    ruler_id = Column(ForeignKey("leadertable.leader_id"))
-    scientist_physics_id = Column(ForeignKey("leadertable.leader_id"))
-    scientist_society_id = Column(ForeignKey("leadertable.leader_id"))
-    scientist_engineering_id = Column(ForeignKey("leadertable.leader_id"))
+    ruler_id = Column(ForeignKey("leader.leader_id"))
 
     is_player = Column(Boolean)
     is_other_player = Column(Boolean)
@@ -621,11 +618,6 @@ class Country(Base):
     capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)
 
     ruler = relationship("Leader", foreign_keys=[ruler_id])
-    scientist_physics = relationship("Leader", foreign_keys=[scientist_physics_id])
-    scientist_society = relationship("Leader", foreign_keys=[scientist_society_id])
-    scientist_engineering = relationship(
-        "Leader", foreign_keys=[scientist_engineering_id]
-    )
 
     governments = relationship(
         "Government", back_populates="country", cascade="all,delete,delete-orphan"
@@ -720,7 +712,7 @@ class Country(Base):
 
 
 class Tradition(Base):
-    __tablename__ = "traditionstable"
+    __tablename__ = "tradition"
     tradition_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     tradition_name_id = Column(ForeignKey(SharedDescription.description_id))
@@ -734,7 +726,7 @@ class Tradition(Base):
 
 
 class AscensionPerk(Base):
-    __tablename__ = "ascensionperkstable"
+    __tablename__ = "ascension_perk"
     tradition_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     perk_name_id = Column(ForeignKey(SharedDescription.description_id))
@@ -748,7 +740,7 @@ class AscensionPerk(Base):
 
 
 class Technology(Base):
-    __tablename__ = "technologytable"
+    __tablename__ = "technology"
     technology_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -771,7 +763,7 @@ class Government(Base):
     and civics.
     """
 
-    __tablename__ = "govtable"
+    __tablename__ = "government"
     gov_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -885,10 +877,8 @@ class Policy(Base):
         foreign_keys=[selected_id],
     )
 
-
-
 class DiplomaticRelation(Base):
-    __tablename__ = "diplo_relation"
+    __tablename__ = "diplomatic_relation"
 
     diplo_relation_id = Column(Integer, primary_key=True)
 
@@ -957,7 +947,7 @@ class DiplomaticRelation(Base):
 class CountryData(Base):
     """Representation of the state of a single country at a specific time."""
 
-    __tablename__ = "countrydatatable"
+    __tablename__ = "country_data"
     country_data_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
@@ -1095,7 +1085,7 @@ class GalacticMarketResource(Base):
     The name of the resource and its
     """
 
-    __tablename__ = "galacticmarketresourcetable"
+    __tablename__ = "galactic_market_resource"
     galactic_market_resource_id = Column(Integer, primary_key=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
@@ -1117,7 +1107,7 @@ class GalacticMarketResource(Base):
 
 
 class InternalMarketResource(Base):
-    __tablename__ = "internalmarketresourcetable"
+    __tablename__ = "internal_market_resource"
     internal_market_resource_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
 
@@ -1133,7 +1123,7 @@ class InternalMarketResource(Base):
 
 
 class BudgetItem(Base):
-    __tablename__ = "budgetitemtable"
+    __tablename__ = "budget_item"
     budget_item_id = Column(Integer, primary_key=True)
 
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
@@ -1174,11 +1164,11 @@ class BudgetItem(Base):
 class Species(Base):
     """Represents a species in a game. Not tied to any specific time."""
 
-    __tablename__ = "speciestable"
+    __tablename__ = "species"
     species_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     species_id_in_game = Column(Integer)
-    home_planet_id = Column(ForeignKey("planettable.planet_id"))
+    home_planet_id = Column(ForeignKey("planet.planet_id"))
 
     species_name = Column(String(80))
     species_class = Column(String(20))
@@ -1200,7 +1190,7 @@ class Species(Base):
 
 
 class SpeciesTrait(Base):
-    __tablename__ = "speciestraittable"
+    __tablename__ = "species_trait"
     trait_id = Column(Integer, primary_key=True)
 
     description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1217,7 +1207,7 @@ class SpeciesTrait(Base):
 class PoliticalFaction(Base):
     """Represents a single political faction in a game. Not tied to any specific time."""
 
-    __tablename__ = "factiontable"
+    __tablename__ = "political_faction"
     faction_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -1245,7 +1235,7 @@ class PoliticalFaction(Base):
 class War(Base):
     """Wars are represented by a list of participants and a list of combat events."""
 
-    __tablename__ = "wartable"
+    __tablename__ = "war"
     war_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
 
@@ -1301,7 +1291,7 @@ class War(Base):
 
 
 class WarParticipant(Base):
-    __tablename__ = "warparticipanttable"
+    __tablename__ = "war_participant"
     warparticipant_id = Column(Integer, primary_key=True)
 
     war_id = Column(ForeignKey(War.war_id), index=True)
@@ -1329,11 +1319,11 @@ class WarParticipant(Base):
 
 
 class Combat(Base):
-    __tablename__ = "combattable"
+    __tablename__ = "combat"
     combat_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), nullable=False)
-    planet_id = Column(ForeignKey("planettable.planet_id"))
+    planet_id = Column(ForeignKey("planet.planet_id"))
     war_id = Column(ForeignKey(War.war_id), nullable=False)
 
     date = Column(Integer, nullable=False, index=True)
@@ -1347,6 +1337,7 @@ class Combat(Base):
     system = relationship("System")
     planet = relationship("Planet")
     war = relationship("War", back_populates="combat")
+
     attackers = relationship(
         "CombatParticipant",
         primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)",
@@ -1371,7 +1362,7 @@ class CombatParticipant(Base):
     overall war.
     """
 
-    __tablename__ = "combatparticipant"
+    __tablename__ = "combat_participant"
     combat_participant_id = Column(Integer, primary_key=True)
 
     combat_id = Column(ForeignKey(Combat.combat_id), index=True)
@@ -1392,7 +1383,7 @@ class CombatParticipant(Base):
 
 
 class Leader(Base):
-    __tablename__ = "leadertable"
+    __tablename__ = "leader"
 
     leader_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
@@ -1412,7 +1403,7 @@ class Leader(Base):
     date_born = Column(Integer)  # estimated birthday
     last_date = Column(Integer)  # estimated death / dismissal
     is_active = Column(Boolean, index=True)
-    fleet_id = Column(ForeignKey("fleettable.fleet_id"), nullable=True)
+    fleet_id = Column(ForeignKey("fleet.fleet_id"), nullable=True)
 
     game = relationship("Game", back_populates="leaders")
     country = relationship(
@@ -1442,7 +1433,7 @@ class Leader(Base):
 
 
 class Planet(Base):
-    __tablename__ = "planettable"
+    __tablename__ = "planet"
     planet_id = Column(Integer, primary_key=True)
 
     planet_name = Column(String(50))
@@ -1671,7 +1662,7 @@ class PlanetStats(Base):
 
 
 class Fleet(Base):
-    __tablename__ = "fleettable"
+    __tablename__ = "fleet"
     fleet_id = Column(Integer, primary_key=True)
 
     fleet_id_in_game = Column(Integer, nullable=False, index=True)
@@ -1693,7 +1684,7 @@ class HistoricalEvent(Base):
     certain columns may be null.
     """
 
-    __tablename__ = "historicaleventtable"
+    __tablename__ = "historical_event"
     historical_event_id = Column(Integer, primary_key=True)
 
     event_type = Column(Enum(HistoricalEventType), nullable=False, index=True)
