@@ -649,9 +649,7 @@ class Country(Base):
     ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
     technologies = relationship("Technology", cascade="all,delete,delete-orphan")
 
-    policies = relationship(
-        "Policy", foreign_keys=lambda: [Policy.country_id]
-    )
+    policies = relationship("Policy", foreign_keys=lambda: [Policy.country_id])
 
     historical_events = relationship(
         "HistoricalEvent",
@@ -876,6 +874,7 @@ class Policy(Base):
         SharedDescription,
         foreign_keys=[selected_id],
     )
+
 
 class DiplomaticRelation(Base):
     __tablename__ = "diplomatic_relation"
@@ -1338,14 +1337,15 @@ class Combat(Base):
     planet = relationship("Planet")
     war = relationship("War", back_populates="combat")
 
-    attackers = relationship(
-        "CombatParticipant",
-        primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)",
-    )
-    defenders = relationship(
-        "CombatParticipant",
-        primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)",
-    )
+    participants = relationship("CombatParticipant")
+
+    @property
+    def attackers(self):
+        return [p for p in self.participants if p.is_attacker]
+
+    @property
+    def defenders(self):
+        return [p for p in self.participants if not p.is_attacker]
 
     def involved_countries(self) -> Iterable[Country]:
         for cp in itertools.chain(self.attackers, self.defenders):
@@ -1375,7 +1375,7 @@ class CombatParticipant(Base):
     war_participant = relationship(
         "WarParticipant", back_populates="combat_participation"
     )
-    combat = relationship("Combat")
+    combat = relationship("Combat", back_populates="participants")
 
     @property
     def country(self):
