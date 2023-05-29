@@ -152,6 +152,8 @@ class HistoricalEventType(enum.Enum):
     ascension_perk = enum.auto()
     edict = enum.auto()
     expanded_to_system = enum.auto()
+    agenda_preparation = enum.auto()
+    agenda_launch = enum.auto()
 
     # Planets and sectors:
     colonization = enum.auto()
@@ -649,6 +651,9 @@ class Country(Base):
     ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
     technologies = relationship("Technology", cascade="all,delete,delete-orphan")
 
+    council_agendas = relationship(
+        "CouncilAgenda", back_populates="country", cascade="all,delete,delete-orphan"
+    )
     policies = relationship("Policy", foreign_keys=lambda: [Policy.country_id])
 
     historical_events = relationship(
@@ -866,14 +871,30 @@ class Policy(Base):
         foreign_keys=[country_id],
     )
 
-    policy_name = relationship(
-        SharedDescription,
-        foreign_keys=[policy_name_id],
-    )
-    selected = relationship(
-        SharedDescription,
-        foreign_keys=[selected_id],
-    )
+    policy_name = relationship(SharedDescription, foreign_keys=[policy_name_id])
+    selected = relationship(SharedDescription, foreign_keys=[selected_id])
+
+
+class CouncilAgenda(Base):
+    __tablename__ = "council_agenda"
+
+    agenda_id = Column(Integer, primary_key=True)
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+
+    start_date = Column(Integer)
+    launch_date = Column(Integer)
+    cooldown_date = Column(Integer)
+
+    is_resolved = Column(Boolean)
+
+    name_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+
+    country = relationship(Country, foreign_keys=[country_id], back_populates="council_agendas")
+    db_name = relationship(SharedDescription, foreign_keys=[name_id])
+
+    @property
+    def rendered_name(self) -> str:
+        return game_info.lookup_key(self.db_name.text + "_name")
 
 
 class DiplomaticRelation(Base):
@@ -1396,7 +1417,6 @@ class Leader(Base):
     species_id = Column(ForeignKey(Species.species_id))
     leader_class = Column(String(80))
     gender = Column(String(20))
-    leader_agenda = Column(String(80))
     last_level = Column(Integer)
 
     date_hired = Column(Integer)  # The date when this leader was first encountered
@@ -1426,10 +1446,6 @@ class Leader(Base):
             rendered_second = " " + game_info.render_name(self.second_name)
         rendered = f"{rendered_first}{rendered_second}"
         return rendered
-
-    @property
-    def agenda(self):
-        return game_info.convert_id_to_name(self.leader_agenda, remove_prefix="agenda")
 
 
 class Planet(Base):
@@ -1786,6 +1802,8 @@ class HistoricalEvent(Base):
             old_rendered = game_info.lookup_key(old)
             new_rendered = game_info.lookup_key(new)
             return f"{name_rendered!r} from {old_rendered!r} to {new_rendered!r}"
+        elif self.event_type in (HistoricalEventType.agenda_launch, HistoricalEventType.agenda_preparation):
+            return game_info.lookup_key(f"council_agenda_{self.db_description.text}_name")
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:

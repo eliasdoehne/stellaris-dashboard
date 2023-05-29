@@ -67,8 +67,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
                     {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} ruled the {{ links[event["country"]] | safe}}
-                    {% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system {% endif %}
-                    with agenda "{{ event["leader"].agenda }}".
+                    {% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system {% endif %}.
                 </span>
             </div>
         </li>
@@ -171,15 +170,32 @@
                  </span>
             </div>
         </li>
+        {% elif event["event_type"] == "agenda_preparation" %}
+        <li class="eventitem agenda">
+            <div class="eventdescription">
+                <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %}Under ruler {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {{ links[event["country"]] | safe}} prepared a new agenda "{{event["description"]}}".
+                 </span>
+            </div>
+        </li>
+        {% elif event["event_type"] == "agenda_launch" %}
+        <li class="eventitem agenda">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {% if "leader" in event %}Under ruler {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {{ links[event["country"]] | safe}} launched the agenda "{{event["description"]}}".
+                 </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "researched_technology" %}
         <li class="eventitem researched_technology">
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Scientist {{ links[event["leader"]] | safe}}
-                    {% else %} The {{ links[event["country"]] | safe}}
-                    {% endif %}
-                    researched the "{{event["description"]}}" technology.
+                    The {{ links[event["country"]] | safe}} researched the "{{event["description"]}}" technology.
                  </span>
             </div>
         </li>

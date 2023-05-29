@@ -193,11 +193,11 @@ class TimelineExtractor:
         yield InternalMarketProcessor()
         yield SpeciesProcessor()
         yield LeaderProcessor()
-        yield CouncilProcessor()
         yield PlanetProcessor()
         yield SectorColonyEventProcessor()
         yield PlanetUpdateProcessor()
         yield RulerEventProcessor()
+        yield CouncilProcessor()
         yield GovernmentProcessor()
         yield PolicyProcessor()
         yield FactionProcessor()
@@ -1205,7 +1205,6 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         else:
             leader_class = leader_dict.get("class", "unknown class")
         leader_gender = leader_dict.get("gender", "other")
-        leader_agenda = leader_dict.get("agenda", "unknown agenda")
         first_name, second_name = self.get_leader_name(leader_dict)
         level = leader_dict.get("level", -1)
         species_id = leader_dict.get("species", -1)
@@ -1219,7 +1218,6 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             or leader.second_name != second_name
             or leader.leader_class != leader_class
             or leader.gender != leader_gender
-            or leader.leader_agenda != leader_agenda
             or leader.species != leader_species
         ):
             if leader.last_level != level:
@@ -1238,66 +1236,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader.second_name = second_name
             leader.leader_class = leader_class
             leader.gender = leader_gender
-            leader.leader_agenda = leader_agenda
             leader.species = leader_species
             self._session.add(leader)
-
-
-class CouncilProcessor(AbstractGamestateDataProcessor):
-    ID = "councilors"
-    DEPENDENCIES = [LeaderProcessor.ID, CountryProcessor.ID]
-
-    def __init__(self):
-        super().__init__()
-        self.planets_by_ingame_id = None
-
-    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
-        countries_by_id = dependencies[CountryProcessor.ID]
-        leaders_by_id = dependencies[LeaderProcessor.ID]
-
-        for cp_id, council_position in sorted(
-            self._gamestate_dict["council_positions"]["council_positions"].items()
-        ):
-            if not isinstance(council_position, dict):
-                continue
-            country_model = countries_by_id.get(council_position.get("country"))
-            leader_model = leaders_by_id.get(council_position.get("leader"))
-            councilor_type = council_position.get("type", "unknown councilor type")
-            if not all([country_model, leader_model, councilor_type]):
-                logger.debug(f"No councilor assigned: %s", council_position)
-                continue
-            desc = self._get_or_add_shared_description(councilor_type)
-
-            previous_event = (
-                self._session.query(datamodel.HistoricalEvent)
-                .filter_by(
-                    event_type=datamodel.HistoricalEventType.councilor,
-                    country=country_model,
-                    db_description=desc,
-                )
-                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
-                .first()
-            )
-            add_new_event = True
-            if previous_event is not None:
-                previous_event.event_is_known_to_player = country_model.has_met_player()
-                if previous_event.leader_id != leader_model.leader_id:
-                    previous_event.end_date_days = self._basic_info.date_in_days - 1
-                else:
-                    add_new_event = False
-                self._session.add(previous_event)
-
-            if add_new_event:
-                self._session.add(
-                    datamodel.HistoricalEvent(
-                        event_type=datamodel.HistoricalEventType.councilor,
-                        country=country_model,
-                        leader=leader_model,
-                        db_description=desc,
-                        start_date_days=self._basic_info.date_in_days,
-                        event_is_known_to_player=country_model.has_met_player(),
-                    )
-                )
 
 
 class PlanetProcessor(AbstractGamestateDataProcessor):
@@ -2021,6 +1961,183 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
                         and country_data.attitude_towards_player.reveals_economy_info(),
                     )
                 )
+
+
+class CouncilProcessor(AbstractGamestateDataProcessor):
+    ID = "council"
+    DEPENDENCIES = [RulerEventProcessor.ID, LeaderProcessor.ID, CountryProcessor.ID]
+
+    def __init__(self):
+        super().__init__()
+        self.planets_by_ingame_id = None
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries_by_id = dependencies[CountryProcessor.ID]
+        leaders_by_id = dependencies[LeaderProcessor.ID]
+        rulers_by_id = dependencies[RulerEventProcessor.ID]
+
+        self._update_council_positions(countries_by_id, leaders_by_id)
+        self._update_council_agenda(countries_by_id, rulers_by_id)
+
+    def _update_council_positions(self, countries_by_id, leaders_by_id):
+        for cp_id, council_position in sorted(
+            self._gamestate_dict["council_positions"]["council_positions"].items()
+        ):
+            if not isinstance(council_position, dict):
+                continue
+            country_model = countries_by_id.get(council_position.get("country"))
+            leader_model = leaders_by_id.get(council_position.get("leader"))
+            councilor_type = council_position.get("type", "unknown councilor type")
+            if not all([country_model, leader_model, councilor_type]):
+                logger.debug(f"No councilor assigned: %s", council_position)
+                continue
+            desc = self._get_or_add_shared_description(councilor_type)
+
+            previous_event = (
+                self._session.query(datamodel.HistoricalEvent)
+                .filter_by(
+                    event_type=datamodel.HistoricalEventType.councilor,
+                    country=country_model,
+                    db_description=desc,
+                )
+                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .first()
+            )
+            add_new_event = True
+            if previous_event is not None:
+                previous_event.event_is_known_to_player = country_model.has_met_player()
+                if previous_event.leader_id != leader_model.leader_id:
+                    previous_event.end_date_days = self._basic_info.date_in_days - 1
+                else:
+                    add_new_event = False
+                self._session.add(previous_event)
+
+            if add_new_event:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.councilor,
+                        country=country_model,
+                        leader=leader_model,
+                        db_description=desc,
+                        start_date_days=self._basic_info.date_in_days,
+                        event_is_known_to_player=country_model.has_met_player(),
+                    )
+                )
+
+    def _update_council_agenda(self, countries_by_id, rulers_by_id):
+        for country_id, country_model in countries_by_id.items():
+            gov_dict = self._gamestate_dict["country"][country_id].get("government")
+            if not isinstance(gov_dict, dict):
+                continue
+            ruler = rulers_by_id.get(country_id)
+
+            # 'agenda_finding_the_voice'
+            in_progress_agenda = gov_dict.get("council_agenda")
+
+            # [{'council_agenda': 'agenda_gestalt_boost_scientist', 'start_date': '2349.01.01'}]
+            agenda_cooldowns = {
+                a.get("council_agenda"): a
+                for a in gov_dict.get("council_agenda_cooldowns", [])
+                if isinstance(a, dict) and "council_agenda" in a
+            }
+
+            unresolved_db_agenda = (
+                self._session.query(datamodel.CouncilAgenda)
+                .filter_by(country=country_model, is_resolved=False)
+                .one_or_none()
+            )
+            dbagenda = (
+                unresolved_db_agenda
+                if unresolved_db_agenda is None
+                else unresolved_db_agenda.db_name.text
+            )
+            last_prep_event: Optional[datamodel.HistoricalEvent] = (
+                self._session.query(datamodel.HistoricalEvent)
+                .filter_by(
+                    country=country_model,
+                    event_type=datamodel.HistoricalEventType.agenda_preparation,
+                )
+                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .first()
+            )
+            if unresolved_db_agenda is None:
+                if in_progress_agenda is not None:
+                    self._session.add(
+                        datamodel.CouncilAgenda(
+                            country=country_model,
+                            start_date=self._basic_info.date_in_days,
+                            is_resolved=False,
+                            db_name=self._get_or_add_shared_description(
+                                in_progress_agenda
+                            ),
+                        )
+                    )
+                    self._session.add(
+                        datamodel.HistoricalEvent(
+                            event_type=datamodel.HistoricalEventType.agenda_preparation,
+                            country=country_model,
+                            leader=ruler,
+                            db_description=self._get_or_add_shared_description(
+                                in_progress_agenda
+                            ),
+                            start_date_days=self._basic_info.date_in_days,
+                            event_is_known_to_player=country_model.has_met_player(),
+                        )
+                    )
+            else:
+                a_key = unresolved_db_agenda.db_name.text
+                if a_key in agenda_cooldowns:
+                    cooldown_date = datamodel.date_to_days(
+                        agenda_cooldowns[a_key]["start_date"]
+                    )
+                    unresolved_db_agenda.cooldown_date = cooldown_date
+                    unresolved_db_agenda.launch_date = self._basic_info.date_in_days
+                    unresolved_db_agenda.is_resolved = True
+                    self._session.add(unresolved_db_agenda)
+
+                    if last_prep_event is not None:
+                        last_prep_event.end_date_days = self._basic_info.date_in_days
+                        self._session.add(last_prep_event)
+                    self._session.add(
+                        datamodel.HistoricalEvent(
+                            event_type=datamodel.HistoricalEventType.agenda_launch,
+                            country=country_model,
+                            leader=ruler,
+                            db_description=self._get_or_add_shared_description(a_key),
+                            start_date_days=self._basic_info.date_in_days,
+                            event_is_known_to_player=country_model.has_met_player(),
+                        )
+                    )
+                elif a_key != in_progress_agenda:
+                    # agenda changed without launch
+                    unresolved_db_agenda.is_resolved = True
+                    self._session.add(unresolved_db_agenda)
+                    if last_prep_event is not None:
+                        last_prep_event.end_date_days = self._basic_info.date_in_days
+                        self._session.add(last_prep_event)
+                    if in_progress_agenda is not None:
+                        self._session.add(
+                            datamodel.CouncilAgenda(
+                                country=country_model,
+                                start_date=self._basic_info.date_in_days,
+                                is_resolved=False,
+                                db_name=self._get_or_add_shared_description(
+                                    in_progress_agenda
+                                ),
+                            )
+                        )
+                        self._session.add(
+                            datamodel.HistoricalEvent(
+                                event_type=datamodel.HistoricalEventType.agenda_preparation,
+                                country=country_model,
+                                leader=ruler,
+                                db_description=self._get_or_add_shared_description(
+                                    in_progress_agenda
+                                ),
+                                start_date_days=self._basic_info.date_in_days,
+                                event_is_known_to_player=country_model.has_met_player(),
+                            )
+                        )
 
 
 class GovernmentProcessor(AbstractGamestateDataProcessor):
