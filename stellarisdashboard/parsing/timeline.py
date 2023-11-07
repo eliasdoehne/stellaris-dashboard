@@ -1448,7 +1448,9 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
 
         for country_id, country_model in self._countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
-            country_sectors = country_dict.get("sectors", {}).get("owned", [])
+            # some countries have an empty object for "sectors", which gets parsed as an empty list
+            # so we need to wrap that in dict()
+            country_sectors = dict(country_dict.get("sectors", {})).get("owned", [])
             unprocessed_systems = set(
                 s.system_id_in_game for s in self._systems_by_owner.get(country_id, [])
             )
@@ -2702,7 +2704,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
             envoy = leaders[envoy_id_ingame]
             country = envoy.country
             target_country = None
-            location = raw_leader_dict.get("location")
+            location = raw_leader_dict.get("location", {})
             assignment = location.get("assignment")
             description = None
             if assignment == "improve_relations":
