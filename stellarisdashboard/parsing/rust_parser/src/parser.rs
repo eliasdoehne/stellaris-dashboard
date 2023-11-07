@@ -245,7 +245,7 @@ fn parse_str(input: &str) -> IResult<&str, &str> {
 }
 
 fn _is_valid_unquoted_str_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '.'
+    c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '.' || c == '@'
 }
 
 fn parse_unquoted_str(input: &str) -> IResult<&str, &str> {
