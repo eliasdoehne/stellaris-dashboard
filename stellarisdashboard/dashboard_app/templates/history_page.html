@@ -287,6 +287,15 @@
                  </span>
             </div>
         </li>
+        {% elif event["event_type"] == "gained_trait" %}
+        <li class="eventitem gained_trait">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} gained the "{{ event["description"] }}" trait.
+                 </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "first_contact" %}
         <li class="eventitem first_contact">
             <div class="eventdescription">
@@ -620,7 +629,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} died or was fired.
+                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} died or retired.
                 </span>
             </div>
         </li>

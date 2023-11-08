@@ -145,6 +145,8 @@ class HistoricalEventType(enum.Enum):
     leader_died = enum.auto()  # TODO
     level_up = enum.auto()
     fleet_command = enum.auto()
+    gained_trait = enum.auto()
+    lost_trait = enum.auto()
 
     # empire progress:
     researched_technology = enum.auto()
@@ -889,7 +891,9 @@ class CouncilAgenda(Base):
 
     name_id = Column(ForeignKey(SharedDescription.description_id), index=True)
 
-    country = relationship(Country, foreign_keys=[country_id], back_populates="council_agendas")
+    country = relationship(
+        Country, foreign_keys=[country_id], back_populates="council_agendas"
+    )
     db_name = relationship(SharedDescription, foreign_keys=[name_id])
 
     @property
@@ -1419,6 +1423,9 @@ class Leader(Base):
     gender = Column(String(20))
     last_level = Column(Integer)
 
+    subclass =  Column(String())  # optional
+    leader_traits = Column(String())  # comma-separated
+
     date_hired = Column(Integer)  # The date when this leader was first encountered
     date_born = Column(Integer)  # estimated birthday
     last_date = Column(Integer)  # estimated death / dismissal
@@ -1446,6 +1453,13 @@ class Leader(Base):
             rendered_second = " " + game_info.render_name(self.second_name)
         rendered = f"{rendered_first}{rendered_second}"
         return rendered
+
+    @property
+    def rendered_traits(self) -> List[str]:
+        # todo: add level to this?
+        # todo: Imperial heir and ruler traits map to "[triggered_imperial_name]" which is
+        #  then resolved in common/scripted_loc/08_scripted_loc_paragon.txt
+        return [game_info.lookup_key(t.rstrip("_0123456789")) for t in sorted(self.leader_traits.split(","))]
 
 
 class Planet(Base):
@@ -1802,8 +1816,18 @@ class HistoricalEvent(Base):
             old_rendered = game_info.lookup_key(old)
             new_rendered = game_info.lookup_key(new)
             return f"{name_rendered!r} from {old_rendered!r} to {new_rendered!r}"
-        elif self.event_type in (HistoricalEventType.agenda_launch, HistoricalEventType.agenda_preparation):
-            return game_info.lookup_key(f"council_agenda_{self.db_description.text}_name")
+        elif self.event_type in (
+            HistoricalEventType.agenda_launch,
+            HistoricalEventType.agenda_preparation,
+        ):
+            return game_info.lookup_key(
+                f"council_agenda_{self.db_description.text}_name"
+            )
+        elif self.event_type in (
+            HistoricalEventType.gained_trait,
+            HistoricalEventType.lost_trait,
+        ):
+            return game_info.lookup_key(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:

@@ -1165,6 +1165,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             - 360 * leader_dict.get("age", 0.0)
             + self._random_instance.randint(-15, 15)
         )
+        subclass, leader_traits = self._get_leader_traits(leader_dict)
         leader = datamodel.Leader(
             country=country_model,
             leader_id_in_game=leader_id,
@@ -1173,6 +1174,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             date_hired=date_hired,
             date_born=date_born,
             is_active=True,
+            subclass=subclass,
+            leader_traits=leader_traits,
         )
         self._update_leader_attributes(
             leader=leader, leader_dict=leader_dict
@@ -1209,6 +1212,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         level = leader_dict.get("level", -1)
         species_id = leader_dict.get("species", -1)
         leader_species = self._species_dict.get(species_id)
+        subclass, leader_traits = self._get_leader_traits(leader_dict)
         if leader_species is None:
             logger.warning(
                 f"{self._basic_info.logger_str} Invalid species ID {species_id} for leader {leader_dict}"
@@ -1217,27 +1221,86 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader.first_name != first_name
             or leader.second_name != second_name
             or leader.leader_class != leader_class
+            or leader.subclass != subclass
             or leader.gender != leader_gender
             or leader.species != leader_species
+            or leader.leader_traits != leader_traits
         ):
+            hist_event_kwargs = dict(
+                country=leader.country,
+                start_date_days=self._basic_info.date_in_days,
+                leader=leader,
+                event_is_known_to_player=leader.country.is_player,
+            )
             if leader.last_level != level:
                 self._session.add(
                     datamodel.HistoricalEvent(
+                        **hist_event_kwargs,
                         event_type=datamodel.HistoricalEventType.level_up,
-                        country=leader.country,
-                        start_date_days=self._basic_info.date_in_days,
-                        leader=leader,
-                        event_is_known_to_player=leader.country.is_player,
                         db_description=self._get_or_add_shared_description(str(level)),
                     )
                 )
+            if leader.leader_traits != leader_traits:
+                gained_traits, lost_traits = self._get_gained_lost_traits(
+                    old_traits=leader.leader_traits, new_traits=leader_traits
+                )
+                for event_type, trait in itertools.chain(
+                    zip(
+                        itertools.repeat(datamodel.HistoricalEventType.lost_trait),
+                        gained_traits,
+                    ),
+                    zip(
+                        itertools.repeat(datamodel.HistoricalEventType.gained_trait),
+                        lost_traits,
+                    ),
+                ):
+                    self._session.add(
+                        datamodel.HistoricalEvent(
+                            **hist_event_kwargs,
+                            event_type=event_type,
+                            db_description=self._get_or_add_shared_description(trait),
+                        )
+                    )
+
             leader.last_level = level
             leader.first_name = first_name
             leader.second_name = second_name
             leader.leader_class = leader_class
+            leader.subclass = subclass
             leader.gender = leader_gender
             leader.species = leader_species
+            leader.leader_traits = leader_traits
             self._session.add(leader)
+
+    def _get_leader_traits(self, leader_dict) -> (str, str):
+        leader_traits = leader_dict.get("traits", [])
+        if not isinstance(leader_traits, list):
+            leader_traits = [leader_traits]
+        subclass = ""
+        for trait in leader_traits:
+            if trait.startswith("subclass"):
+                subclass = trait
+                break
+
+        traits = ",".join(t for t in sorted(leader_traits) if not t.startswith("subclass"))
+        return subclass, traits
+
+
+    def _get_gained_lost_traits(self, old_traits: str, new_traits: str):
+        old_traits = set(old_traits.split(","))
+        new_traits = set(new_traits.split(","))
+        gained_traits = old_traits - new_traits
+        lost_traits = new_traits - old_traits
+
+        # Only consider a trait "lost" if it is not replaced by a direct upgrade, e.g.
+        # trait_ruler_charismatic  -> trait_ruler_charismatic_2
+        lost_traits = {
+            lt
+            for lt in lost_traits
+            if not any(gt.startswith(lt.rstrip("_0123456789")) for gt in gained_traits)
+        }
+
+        return gained_traits, lost_traits
 
 
 class PlanetProcessor(AbstractGamestateDataProcessor):
@@ -1484,9 +1547,10 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
 
         for country_id, country_model in self._countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
-            # some countries have an empty object for "sectors", which gets parsed as an empty list
-            # so we need to wrap that in dict()
-            country_sectors = dict(country_dict.get("sectors", {})).get("owned", [])
+            country_sector_dict = country_dict.get("sectors")
+            if not isinstance(country_sector_dict, dict):
+                continue
+            country_sectors = country_sector_dict.get("owned", [])
             unprocessed_systems = set(
                 s.system_id_in_game for s in self._systems_by_owner.get(country_id, [])
             )

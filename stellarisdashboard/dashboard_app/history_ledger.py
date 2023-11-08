@@ -477,6 +477,8 @@ class EventTemplateDictBuilder:
             "Gender": game_info.convert_id_to_name(leader_model.gender),
             "Species": leader_model.species.rendered_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
+            "Subclass": f"{game_info.lookup_key(leader_model.subclass)}" or "None",
+            "Traits": ", ".join(leader_model.rendered_traits),
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),
             "Last active": datamodel.days_to_date(
@@ -484,7 +486,7 @@ class EventTemplateDictBuilder:
                 if leader_model.is_active
                 else leader_model.last_date
             ),
-            "Status": "Active" if leader_model.is_active else "Dead or Dismissed",
+            "Status": "Active" if leader_model.is_active else "Dead or retired",
         }
         return details
 
@@ -497,23 +499,13 @@ class EventTemplateDictBuilder:
             details.update(
                 {
                     "Personality": game_info.convert_id_to_name(gov.personality),
-                    "Government Type": game_info.convert_id_to_name(
-                        gov.gov_type, remove_prefix="gov"
-                    ),
-                    "Authority": game_info.convert_id_to_name(
-                        gov.authority, remove_prefix="auth"
-                    ),
+                    "Government Type": game_info.lookup_key(gov.gov_type),
+                    "Authority": game_info.lookup_key(gov.authority),
                     "Ethics": ", ".join(
-                        [
-                            game_info.convert_id_to_name(e, remove_prefix="ethic")
-                            for e in sorted(gov.ethics)
-                        ]
+                        [game_info.lookup_key(e) for e in sorted(gov.ethics)]
                     ),
                     "Civics": ", ".join(
-                        [
-                            game_info.convert_id_to_name(c, remove_prefix="civic")
-                            for c in sorted(gov.civics)
-                        ]
+                        [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
                 }
             )
