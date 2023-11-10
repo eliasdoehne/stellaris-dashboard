@@ -110,14 +110,11 @@ If this system is not configured correctly, you will see some long and cryptic n
 ```
 when using the dashboard.
 
-If you are not using any mods and installed Stellaris in the default location at (`C:/Program Files (x86)/Steam/steamapps/common/Stellaris/` on windows), there is a good chance that everything will work without any additional actions. 
+If you installed Stellaris in the default location at (`C:/Program Files (x86)/Steam/steamapps/common/Stellaris/` on windows), there is a good chance that everything will work without any additional actions. If your game (or Steam library) is not in the default location, you will need to change the "Stellaris install folder" setting and restart the dashboard.
 
-However, if you use mods that add new names, if you play the game in another language, or if your Stellaris game files (or steam library) are in a different location, you will need to take some manual actions. While the dashboard application itself does not have any kind of localization (yet), you can also change the localization_file_dir to have names rendered in your preferred language.
+If you play the game in another language, you can change the "Stellaris language" and restart the dashboard. Note that this setting should be the language code used by the game (ie `l_braz_por`, `l_english`, `l_french`, `l_german`, `l_japanese`, `l_korean`, `l_polish`, `l_russian`, `l_simp_chinese`, `l_spanish`).
 
-In this case, you can fix it like this:
-- Make sure there is a single folder containing all required localization files ending in `.yml`, including the files from your stellaris game and from all mods that introduce new names. You might need to collect these files yourself and copy them to a convenient location. The file names you use does not matter, the dashboard will take them all and build one big name mapping.
-- Update the `Stellaris localization folder` in the dashboard settings (or edit it in config.yml). Restart the dashboard program.
-- Look in the dashboard program for some output like `Loaded 162 localization files from <path-to-your-stellaris>/localisation/english` or similar that matches the number of files you prepared.
+If you use mods that add new names, the dashboard *should* automatically find the required files. Note that if you restart change your mod list, any new modded names will not be loaded until you restart the dashboard. If modded names are not working at all, you might need to change your "Stellaris user data folder" setting and restart the dashboard. This should be the folder containing the `dlc_load.json` file as well as the `mod/` folder.
 
 ## Colors
 
