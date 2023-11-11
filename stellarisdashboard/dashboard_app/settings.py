@@ -32,11 +32,23 @@ def settings_page():
             "name": "Save file path (applies after restart, set to empty to restore default, applies after restart)",
             "description": "Where the dashboard will look for new Stellaris save files.",
         },
-        "localization_file_dir": {
+        "stellaris_user_data_path": {
             "type": t_str,
-            "value": current_values["localization_file_dir"],
-            "name": "Stellaris localization folder",
-            "description": "Path where the dashboard will look for Stellaris localization files that define how names are created. Applies after dashboard restart. See README.md for details.",
+            "value": current_values["stellaris_user_data_path"],
+            "name": "Stellaris user data folder",
+            "description": "Where the dashboard will look for user data such as enabled mods. It should contain the dlc_load.json file.",
+        },
+        "stellaris_install_path": {
+            "type": t_str,
+            "value": current_values["stellaris_install_path"],
+            "name": "Stellaris install folder",
+            "description": "Where the dashboard will look for Stellaris game data.",
+        },
+        "stellaris_language": {
+            "type": t_str,
+            "value": current_values["stellaris_language"],
+            "name": "Stellaris language",
+            "description": "The language to use for localizing Stellaris text. In the format l_<language> (for example, l_english)"
         },
         "mp_username": {
             "type": t_str,

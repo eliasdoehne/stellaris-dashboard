@@ -1,8 +1,10 @@
 import dataclasses
 import itertools
+import json
 import logging
 import pathlib
 import platform
+import re
 import sys
 import traceback
 from collections import defaultdict
@@ -10,11 +12,15 @@ from typing import List, Dict, Any
 
 import yaml
 
-LOG_LEVELS = {"CRITICAL": logging.CRITICAL, "ERROR": logging.ERROR, "WARNING": logging.WARNING, "INFO": logging.INFO, "DEBUG": logging.DEBUG}
+LOG_LEVELS = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+}
 
-LOG_FORMAT = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 CONFIG: "Config" = None
 logger: logging.Logger = None
@@ -30,25 +36,29 @@ def initialize_logger():
     root_logger.addHandler(stdout_ch)
 
 
-def _get_default_save_path():
+def _get_default_stellaris_user_data_path():
     # according to https://stellaris.paradoxwikis.com/Save-game_editing
     home = pathlib.Path.home()
     if platform.system() == "Windows":
-        return home / "Documents/Paradox Interactive/Stellaris/save games/"
+        return home / "Documents/Paradox Interactive/Stellaris/"
     elif platform.system() == "Linux":
-        return home / ".local/share/Paradox Interactive/Stellaris/save games/"
+        return home / ".local/share/Paradox Interactive/Stellaris/"
     else:
-        return home / "Documents/Paradox Interactive/Stellaris/save games/"
+        return home / "Documents/Paradox Interactive/Stellaris/"
 
 
-def _get_default_localization_file_dir() -> pathlib.Path:
+def _get_default_save_path():
+    return _get_default_stellaris_user_data_path() / "save games"
+
+
+def _get_default_stellaris_install_path():
     for p in [
         pathlib.Path("C:/Program Files (x86)/Steam/steamapps/common/Stellaris/"),
         (pathlib.Path.home() / ".steam/steamapps/common/Stellaris/").absolute(),
+        (pathlib.Path.home() / ".steam/root/steamapps/common/Stellaris/").absolute(),
     ]:
-        p_abs = p / "localisation/english/"
-        if p_abs.exists():
-            return p_abs
+        if p.exists():
+            return p
     return pathlib.Path(__file__).parent
 
 
@@ -163,10 +173,12 @@ DEFAULT_MARKET_FEE = [{"date": "2200.01.01", "fee": 0.3}]
 
 DEFAULT_SETTINGS = dict(
     save_file_path=_get_default_save_path(),
+    stellaris_install_path=_get_default_stellaris_install_path(),
+    stellaris_user_data_path=_get_default_stellaris_user_data_path(),
+    stellaris_language="l_english",
     mp_username="",
     base_output_path=_get_default_base_output_path(),
     threads=1,
-    localization_file_dir=_get_default_localization_file_dir(),
     host="127.0.0.1",
     port=28053,
     polling_interval=0.5,
@@ -195,8 +207,10 @@ class Config:
     """Stores the settings for the dashboard."""
 
     save_file_path: pathlib.Path = None
+    stellaris_install_path: pathlib.Path = None
+    stellaris_user_data_path: pathlib.Path = None
+    stellaris_language: str = None
     mp_username: str = None
-    localization_file_dir: pathlib.Path = None
     base_output_path: pathlib.Path = None
     threads: int = None
 
@@ -231,7 +245,8 @@ class Config:
     PATH_KEYS = {
         "base_output_path",
         "save_file_path",
-        "localization_file_dir",
+        "stellaris_install_path",
+        "stellaris_user_data_path",
     }
     BOOL_KEYS = {
         "check_version",
@@ -259,6 +274,7 @@ class Config:
         "mp_username",
         "save_name_filter",
         "log_level",
+        "stellaris_language",
     }
     DICT_KEYS = {
         "tab_layout",
@@ -392,17 +408,68 @@ class Config:
         return path
 
     @property
+    def game_data_dirs(self):
+        dlc_load_path = self.stellaris_user_data_path / "dlc_load.json"
+        try:
+            with open(dlc_load_path, "r") as f:
+                dlc_load = json.load(f)
+                mod_descriptor_paths = [
+                    self.stellaris_user_data_path / relative_mod_descriptor_path
+                    for relative_mod_descriptor_path in dlc_load.get("enabled_mods", [])
+                ]
+                mod_data_paths = [
+                    _get_mod_data_dir(descriptor_path)
+                    for descriptor_path in mod_descriptor_paths
+                    if descriptor_path.exists()
+                ]
+                return [self.stellaris_install_path] + [
+                    mod_data_path
+                    for mod_data_path in mod_data_paths
+                    if mod_data_path is not None
+                ]
+        except Exception as e:
+            logger.error(f"Failed to read enabled mods {dlc_load_path}")
+            logger.error(e)
+            return [self.stellaris_install_path]
+
+    @property
     def localization_files(self):
+        YAML_SUFFIXES = ("yaml", "yml")
         files = list(
-            itertools.chain(
-                self.localization_file_dir.glob("**/*.yaml"),
-                self.localization_file_dir.glob("**/*.yml"),
+            path
+            for path in itertools.chain(
+                *(
+                    (data_dir / "localisation").glob(f"**/*.{yaml_suffix}")
+                    for data_dir in self.game_data_dirs
+                    for yaml_suffix in YAML_SUFFIXES
+                )
             )
+            if _localization_file_matches_language(path, self.stellaris_language)
         )
         logger.info(
-            f"Loaded {len(files)} localization files from {self.localization_file_dir}"
+            f"Loaded {len(files)} localization files from {self.game_data_dirs}"
         )
         return files
+
+
+def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):
+    try:
+        with open(mod_descriptor_path, "r") as f:
+            for line in f:
+                match = re.match('^\s*path\s*=\s*"(.*)"\s*$', line)
+                if match:
+                    return pathlib.Path(match.group(1))
+    except Exception as e:
+        logger.error(f"Failed to read mod path from {mod_descriptor_path}")
+        logger.error(e)
+    return None
+
+
+def _localization_file_matches_language(file_path: pathlib.Path, language: str):
+    with open(file_path, "r") as f:
+        first_line = f.readline()
+        match = re.match(f"^\ufeff\s*{language}\s*:\s*$", first_line)
+        return match is not None
 
 
 def _apply_existing_settings(config: Config):
