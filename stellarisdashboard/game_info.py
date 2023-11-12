@@ -4,8 +4,9 @@ import re
 from typing import Iterable
 
 logger = logging.getLogger(__name__)
-# Regex explanation: https://regex101.com/r/l76XGd/1
+# Regex explanation: https://regex101.com/r/qc0QhS/1
 loc_re = re.compile(r'\s*(?P<key>\S+?):\d*\s*"(?P<value>.*)"\s*(#.*)?')
+var_re = re.compile(r"\$(?P<key>\S+)\$")
 
 
 class NameRenderer:
@@ -98,7 +99,7 @@ class NameRenderer:
         render_template = self._substitute_variables(
             render_template, substitution_values
         )
-        render_template = self._strip_unresolved_variables(render_template)
+        render_template = self._handle_unresolved_variables(render_template)
         return render_template
 
     def _collect_substitution_values(self, name_dict):
@@ -136,7 +137,9 @@ class NameRenderer:
         if render_template == "%ACRONYM%":
             for key, acronym_base in substitution_values:
                 if key == "base":
-                    render_template = "".join(s[0].upper() for s in acronym_base.split())
+                    render_template = "".join(
+                        s[0].upper() for s in acronym_base.split()
+                    )
                     render_template += acronym_base[-1].upper()
         # try all combinations of escaping identifiers
         parentheses = [
@@ -161,7 +164,7 @@ class NameRenderer:
                 )
         return render_template
 
-    def _strip_unresolved_variables(self, render_template):
+    def _handle_unresolved_variables(self, render_template):
         # remove any identifiers remaining after substitution:
         for pattern in [
             r"\[[0-9]*\]",
@@ -181,7 +184,15 @@ class NameRenderer:
         match_indirect_reference = re.match(r"\$([a-z0-9_]*)\$", render_template)
         if match_indirect_reference:
             second_lookup = match_indirect_reference.group(1)
-            render_template = self.render_from_dict({"key": second_lookup})
+            render_template = lookup_key(second_lookup)
+
+        # Find variables that were not resolved so far:
+        for match in var_re.findall(render_template):
+            if match == "ORD":
+                continue
+            resolved = lookup_key(match)
+            render_template = re.sub(f"\${match}\$", resolved, render_template)
+
         return render_template
 
     def _fmt_ord_number(self, num: int):

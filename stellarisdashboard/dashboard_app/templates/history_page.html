@@ -296,6 +296,15 @@
                  </span>
             </div>
         </li>
+        {% elif event["event_type"] == "lost_trait" %}
+        <li class="eventitem lost_trait">
+            <div class="eventdescription">
+                <span class="dateblock">{{event["start_date"]}}:</span>
+                <span class="eventtext">
+                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} lost the "{{ event["description"] }}" trait.
+                 </span>
+            </div>
+        </li>
         {% elif event["event_type"] == "first_contact" %}
         <li class="eventitem first_contact">
             <div class="eventdescription">

@@ -1247,11 +1247,11 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 for event_type, trait in itertools.chain(
                     zip(
                         itertools.repeat(datamodel.HistoricalEventType.lost_trait),
-                        gained_traits,
+                        lost_traits,
                     ),
                     zip(
                         itertools.repeat(datamodel.HistoricalEventType.gained_trait),
-                        lost_traits,
+                        gained_traits,
                     ),
                 ):
                     self._session.add(
@@ -1282,22 +1282,26 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 subclass = trait
                 break
 
-        traits = ",".join(t for t in sorted(leader_traits) if not t.startswith("subclass"))
+        traits = "|".join(
+            t for t in sorted(leader_traits) if not t.startswith("subclass")
+        )
         return subclass, traits
 
-
     def _get_gained_lost_traits(self, old_traits: str, new_traits: str):
-        old_traits = set(old_traits.split(","))
-        new_traits = set(new_traits.split(","))
-        gained_traits = old_traits - new_traits
-        lost_traits = new_traits - old_traits
+        old_traits = set(old_traits.split("|"))
+        new_traits = set(new_traits.split("|"))
+        lost_traits = old_traits - new_traits
+        gained_traits = new_traits - old_traits
+
+        def strip_level(t: str) -> str:
+            return t.rstrip("_0123456789")
 
         # Only consider a trait "lost" if it is not replaced by a direct upgrade, e.g.
-        # trait_ruler_charismatic  -> trait_ruler_charismatic_2
+        # trait_ruler_charismatic -> trait_ruler_charismatic_2 is not considered a lost trait
         lost_traits = {
-            lt
-            for lt in lost_traits
-            if not any(gt.startswith(lt.rstrip("_0123456789")) for gt in gained_traits)
+            t
+            for t in lost_traits
+            if all(strip_level(nt) != strip_level(t) for nt in new_traits)
         }
 
         return gained_traits, lost_traits

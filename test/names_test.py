@@ -26,6 +26,11 @@ class NameTestcase:
             description="empire, built-in",
         ),
         NameTestcase(
+            {"key": "civic_selective_kinship"},
+            expected="Selective Kinship",
+            description="yml line without number",
+        ),
+        NameTestcase(
             dict(
                 key="EMPIRE_DESIGN_humans2",
                 literal="yes",
@@ -207,6 +212,8 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
     renderer = game_info.NameRenderer(config.CONFIG.localization_files)
     renderer.load_name_mapping()
     assert renderer.render_from_dict(test_case.name_dict) == test_case.expected
+
+
 
 
 @pytest.mark.parametrize(

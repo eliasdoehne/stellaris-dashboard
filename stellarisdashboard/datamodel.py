@@ -1423,7 +1423,7 @@ class Leader(Base):
     gender = Column(String(20))
     last_level = Column(Integer)
 
-    subclass =  Column(String())  # optional
+    subclass = Column(String())  # optional
     leader_traits = Column(String())  # comma-separated
 
     date_hired = Column(Integer)  # The date when this leader was first encountered
@@ -1456,10 +1456,21 @@ class Leader(Base):
 
     @property
     def rendered_traits(self) -> List[str]:
-        # todo: add level to this?
-        # todo: Imperial heir and ruler traits map to "[triggered_imperial_name]" which is
-        #  then resolved in common/scripted_loc/08_scripted_loc_paragon.txt
-        return [game_info.lookup_key(t.rstrip("_0123456789")) for t in sorted(self.leader_traits.split(","))]
+        return [self.render_trait(t) for t in sorted(self.leader_traits.split("|"))]
+
+    def render_trait(self, text: str):
+        key = text.rstrip("_0123456789")
+        description = game_info.lookup_key(key)
+
+        if description == "[triggered_imperial_name]":
+            # logic from common/scripted_loc/08_scripted_loc_paragon.txt
+            key = "imperial_ruler" if self == self.country.ruler else "imperial_heir"
+            return game_info.lookup_key(key)
+        else:
+            level = text.removeprefix(key).lstrip("_")
+            if level:
+                description = f"{description} ({level})"
+            return description
 
 
 class Planet(Base):
@@ -1827,7 +1838,7 @@ class HistoricalEvent(Base):
             HistoricalEventType.gained_trait,
             HistoricalEventType.lost_trait,
         ):
-            return game_info.lookup_key(self.db_description.text)
+            return self.leader.render_trait(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
