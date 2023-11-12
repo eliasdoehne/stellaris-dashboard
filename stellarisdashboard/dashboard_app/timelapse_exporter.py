@@ -121,7 +121,7 @@ class TimelapseExporter:
         return f"{self.game_id}-{ts}"
 
     def rgb(self, name: str):
-        r, g, b = get_color_vals(name)
+        r, g, b = get_color_vals(self.game_id, name)
         return r / 255.0, g / 255.0, b / 255.0
 
     def draw_frame(

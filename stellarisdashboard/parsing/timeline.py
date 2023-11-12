@@ -12,6 +12,7 @@ from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple
 import sqlalchemy
 
 from stellarisdashboard import datamodel, game_info, config
+from stellarisdashboard.dashboard_app.visualization_data import clear_cached_country_colors
 
 logger = logging.getLogger(__name__)
 
@@ -415,11 +416,18 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                 continue
             country_type = country_data_dict.get("type")
             country_name = dump_name(country_data_dict.get("name", "no name"))
+            flag_colors = country_data_dict.get("flag", {}).get("colors", [])
+            primary_color = flag_colors[0] if len(flag_colors) >= 1 else "black"
+            secondary_color = flag_colors[1] if len(flag_colors) >= 2 else primary_color
             country_model = (
                 self._session.query(datamodel.Country)
                 .filter_by(game=self._db_game, country_id_in_game=country_id)
                 .one_or_none()
             )
+
+            if country_model is None or primary_color != country_model.primary_color or secondary_color != country_model.secondary_color:
+                clear_cached_country_colors()
+
             if country_model is None:
                 country_model = datamodel.Country(
                     is_player=(country_id == self._basic_info.player_country_id),
@@ -428,6 +436,8 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                     game=self._db_game,
                     country_type=country_type,
                     country_name=country_name,
+                    primary_color=primary_color,
+                    secondary_color=secondary_color,
                 )
                 if country_id == self._basic_info.player_country_id:
                     country_model.first_player_contact_date = 0
@@ -435,6 +445,8 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             if (
                 country_name != country_model.country_name
                 or country_type != country_model.country_type
+                or primary_color != country_model.primary_color
+                or secondary_color != country_model.secondary_color
             ):
                 country_model.country_name = country_name
                 country_model.country_type = country_type
