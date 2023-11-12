@@ -1725,7 +1725,7 @@ class CountryColors:
                 break
 
         with datamodel.get_db_session(game_id) as session:
-            for c in session.query(datamodel.Country):
+            for c in session.query(datamodel.Country).order_by("country_id_in_game"):
                 name = c.rendered_name
                 # avoid grayscale colors if possible; they can be hard to distinguish
                 color = (
@@ -1759,7 +1759,7 @@ class CountryColors:
     
     @staticmethod
     def _round_hsv(h: float, s: float, v: float):
-        return round(h / 0.2) * 0.2, round(s / 0.2) * 0.2, round(v / 0.2) * 0.2
+        return round(h, 1), round(s, 1), round(v, 1)
 
     def _is_grayscale_color(self, key: str):
         r, g, b = self.map_colors.get(key, (0, 0, 0))
