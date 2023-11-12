@@ -364,7 +364,7 @@ def update_content(
             if not plot_spec:
                 continue  # just in case it's possible to sneak in an invalid ID
             start = time.time()
-            figure_data = get_raw_plot_data_dicts(plot_data, plot_spec)
+            figure_data = get_raw_plot_data_dicts(game_id, plot_data, plot_spec)
             end = time.time()
             logger.debug(
                 f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds."
@@ -422,6 +422,7 @@ def _get_game_ids_matching_url(url):
 
 
 def get_raw_plot_data_dicts(
+    game_id: str,
     plot_data: visualization_data.PlotDataManager,
     plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
@@ -434,18 +435,19 @@ def get_raw_plot_data_dicts(
     :return:
     """
     if plot_spec.style == visualization_data.PlotStyle.line:
-        return _get_raw_data_for_line_plot(plot_data, plot_spec)
+        return _get_raw_data_for_line_plot(game_id, plot_data, plot_spec)
     elif plot_spec.style in [
         visualization_data.PlotStyle.stacked,
         visualization_data.PlotStyle.budget,
     ]:
-        return _get_raw_data_for_stacked_and_budget_plots(plot_data, plot_spec)
+        return _get_raw_data_for_stacked_and_budget_plots(game_id, plot_data, plot_spec)
     else:
         logger.warning(f"Unknown Plot type {plot_spec}")
         return []
 
 
 def _get_raw_data_for_line_plot(
+    game_id: str,
     plot_data: visualization_data.PlotDataManager,
     plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
@@ -459,7 +461,7 @@ def _get_raw_data_for_line_plot(
             x=x_values,
             y=y_values,
             name=dict_key_to_legend_label(key),
-            line={"color": get_country_color(key, 1.0)},
+            line={"color": get_country_color(game_id, key, 1.0)},
             text=get_plot_value_labels(x_values, y_values, key),
             hoverinfo="text",
         )
@@ -468,6 +470,7 @@ def _get_raw_data_for_line_plot(
 
 
 def _get_raw_data_for_stacked_and_budget_plots(
+    game_id: str,
     plot_data: visualization_data.PlotDataManager,
     plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
@@ -514,10 +517,10 @@ def _get_raw_data_for_stacked_and_budget_plots(
                     legendgroup=key,  # ensure that budget contributions with mixed signs still behave as a single entry
                     hoverinfo="text",
                     mode="lines",
-                    line=dict(width=0.5, color=get_country_color(key, 1.0)),
+                    line=dict(width=0.5, color=get_country_color(game_id, key, 1.0)),
                     stackgroup=stackgroup,
                     groupnorm="percent" if normalized else "",
-                    fillcolor=get_country_color(key, 0.5),
+                    fillcolor=get_country_color(game_id, key, 0.5),
                     text=get_plot_value_labels(x_values, yv, key),
                     showlegend=i == 0,  # only show one legend entry
                 )
@@ -574,7 +577,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                 x=[],
                 y=[],
                 text=[],
-                line=go.scatter.Line(width=0.5, color=get_country_color(country)),
+                line=go.scatter.Line(width=0.5, color=get_country_color(game_id, country)),
                 hoverinfo="text",
                 mode="lines",
                 showlegend=False,
@@ -611,7 +614,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
                 marker=dict(color=[], size=4),
                 name=country,
             )
-        color = get_country_color(country)
+        color = get_country_color(game_id, country)
         country_system_markers[country]["marker"]["color"].append(color)
         x, y = nx_graph.nodes[node]["pos"]
         country_system_markers[country]["x"].append(x)
@@ -712,10 +715,10 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     )
 
 
-def get_country_color(country_name: str, alpha: float = 1.0) -> str:
+def get_country_color(game_id: int, country_name: str, alpha: float = 1.0) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
-    r, g, b = visualization_data.get_color_vals(country_name)
+    r, g, b = visualization_data.get_color_vals(game_id, country_name)
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 

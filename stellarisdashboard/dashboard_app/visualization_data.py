@@ -3,8 +3,11 @@ import colorsys
 import dataclasses
 import enum
 import functools
+import itertools
 import logging
+import pathlib
 import random
+import re
 import time
 from collections import defaultdict
 from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
@@ -14,6 +17,7 @@ import numpy as np
 from scipy.spatial import Voronoi
 
 from stellarisdashboard import datamodel, config, game_info
+from stellarisdashboard.parsing.save_parser import rust_parser
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +96,15 @@ def get_current_execution_plot_data(
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
+_GAME_COUNTRY_COLORS = {}
+
+
+def clear_cached_country_colors():
+    _GAME_COUNTRY_COLORS.clear()
+
+
 def get_color_vals(
-    key_str: str, range_min: float = 0.1, range_max: float = 1.0
+    game_id: str, key_str: str, range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
     """Generate RGB values for the given identifier. Some special values (tech categories)
     have hardcoded colors to roughly match the game's look and feel.
@@ -101,6 +112,13 @@ def get_color_vals(
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
     the random number generator. This makes colors consistent across figures and executions.
     """
+    if game_id not in _GAME_COUNTRY_COLORS:
+        country_colors = CountryColors()
+        country_colors.load(game_id)
+        _GAME_COUNTRY_COLORS[game_id] = country_colors
+    else:
+        country_colors = _GAME_COUNTRY_COLORS[game_id]
+
     if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
     elif key_str.lower() == "society":
@@ -113,6 +131,8 @@ def get_color_vals(
         r, g, b = 255, 0, 0
     elif key_str.endswith("internal_market"):
         r, g, b = 0, 0, 255
+    elif country_colors.has_color_for_name(key_str):
+        r, g, b = country_colors.get_color_by_name(key_str)
     else:
         random.seed(key_str)
         h = random.uniform(0, 1)
@@ -1679,3 +1699,94 @@ class GalaxyMapData:
         if not country.has_met_player():
             return GalaxyMapData.UNCLAIMED
         return country.rendered_name
+
+
+_MIN_V = 0.4
+_MAX_V = 1.0
+_V_SHIFTS = [
+    0.2,
+    0.4,
+    0.6,
+]
+_GRAYSCALE_S = 0.2
+
+
+class CountryColors:
+    def __init__(self):
+        self.map_colors: Dict[str, tuple] = {}
+        self.country_name_to_primary_color: Dict[str, tuple] = {}
+        self._used_hsv = set()
+
+    def load(self, game_id: str):
+        for game_data_dir in reversed(config.CONFIG.game_data_dirs):
+            colors_path = game_data_dir / "flags/colors.txt"
+            if colors_path.exists():
+                self.map_colors = self._parse_map_colors(colors_path)
+                break
+
+        with datamodel.get_db_session(game_id) as session:
+            for c in session.query(datamodel.Country).order_by("country_id_in_game"):
+                name = c.rendered_name
+                # avoid grayscale colors if possible; they can be hard to distinguish
+                color = (
+                    c.secondary_color
+                    if self._is_grayscale_color(c.primary_color)
+                    and not self._is_grayscale_color(c.secondary_color)
+                    else c.primary_color
+                )
+                # try to avoid duplicate colors
+                # don't bother for non-default-or-fallen-empire countries, so that the "real" countries are more likely to get their color
+                rgb = self._get_rgb(color, avoid_used=c.is_real_country())
+                self.country_name_to_primary_color[name] = rgb
+
+    def _get_rgb(self, key: str, avoid_used: bool):
+        r, g, b = self.map_colors.get(key, (0, 0, 0))
+        h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        v = min(v, _MAX_V)
+        v = max(v, _MIN_V)
+        if avoid_used:
+            for shift in itertools.chain([0.0], *((v, -v) for v in _V_SHIFTS)):
+                v_shifted = s + shift
+                if (
+                    v_shifted >= _MIN_V
+                    and v_shifted <= _MAX_V
+                    and self._round_hsv(h, s, v_shifted) not in self._used_hsv
+                ):
+                    v = v_shifted
+                    break
+            self._used_hsv.add(self._round_hsv(h, s, v))
+        return tuple(int(v * 255) for v in colorsys.hsv_to_rgb(h, s, v))
+    
+    @staticmethod
+    def _round_hsv(h: float, s: float, v: float):
+        return round(h, 1), round(s, 1), round(v, 1)
+
+    def _is_grayscale_color(self, key: str):
+        r, g, b = self.map_colors.get(key, (0, 0, 0))
+        _, s, _ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        return s < _GRAYSCALE_S
+
+    def has_color_for_name(self, country_name: str):
+        return country_name in self.country_name_to_primary_color
+
+    def get_color_by_name(self, country_name: str):
+        return self.country_name_to_primary_color[country_name]
+
+    @staticmethod
+    def _parse_map_colors(path: pathlib.Path):
+        with open(path, "r") as f:
+            prepared_str = re.sub("#[^\n]*", "", f.read())  # strip out comments
+            data = rust_parser.parse_save_from_string(prepared_str)
+
+            colors = data.get("colors", {})
+            map_colors = {}
+            for key in colors:
+                space, v1, v2, v3 = colors[key]["map"]
+                if space == "rgb":
+                    map_colors[key] = (int(v1), int(v2), int(v3))
+                elif space == "hsv":
+                    rgb = tuple(int(v * 255) for v in colorsys.hsv_to_rgb(v1, v2, v3))
+                    map_colors[key] = rgb
+                else:
+                    raise RuntimeError(f"Unexpected color space: {space}")
+            return map_colors

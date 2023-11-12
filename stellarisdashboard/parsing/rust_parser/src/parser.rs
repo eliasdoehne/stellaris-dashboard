@@ -27,6 +27,7 @@ pub enum Value<'a> {
     Float(f64),
     List(Vec<Value<'a>>),
     Map(HashMap<&'a str, Value<'a>>),
+    Color((&'a str, f64, f64, f64)),
 }
 
 impl ToPyObject for Value<'_> {
@@ -49,6 +50,7 @@ impl ToPyObject for Value<'_> {
                 }
                 key_vals.into_py_dict(py).to_object(py)
             }
+            Value::Color(color_tuple) => color_tuple.to_object(py),
         }
     }
 }
@@ -61,6 +63,7 @@ impl Display for Value<'_> {
             Value::Float(x) => write!(f, "{}", x),
             Value::List(vec) => write!(f, "[{:?}]", vec),
             Value::Map(hm) => write!(f, "{:?}", hm),
+            Value::Color((space, v1, v2, v3)) => write!(f, "{} {{ {} {} {} }}", space, v1, v2, v3),
         }
     }
 }
@@ -119,6 +122,7 @@ fn parse_value(input: &str) -> IResult<&str, Value> {
             context("int", map(parse_int, Value::Int)),
             context("float", map(parse_float, Value::Float)),
             context("str", map(parse_str, Value::Str)),
+            context("color", map(parse_color, Value::Color)),
             context("unquoted_str", map(parse_unquoted_str, Value::Str)),
             context("list", map(parse_list, Value::List)),
             context("map", map(parse_map, Value::Map)),
@@ -253,6 +257,14 @@ fn parse_unquoted_str(input: &str) -> IResult<&str, &str> {
         multispace0,
         take_while1(_is_valid_unquoted_str_char),
     )(input)
+}
+
+fn parse_color(input: &str) -> IResult<&str, (&str, f64, f64, f64)> {
+    let (input, color_space) = preceded(multispace0, alt((tag("rgb"), tag("hsv"))))(input)?;
+    let (input, _) = preceded(multispace0, tag("{"))(input)?;
+    let (input, (v1, v2, v3)) = tuple((parse_float, parse_float, parse_float))(input)?;
+    let (input, _) = preceded(multispace0, tag("}"))(input)?;
+    Ok((input, (color_space, v1, v2, v3)))
 }
 
 #[allow(dead_code)]
@@ -740,6 +752,13 @@ mod tests {
                 ("name_list", Value::Str("MAM2")),
                 ("gender", Value::Str("not_set")),
                 ("trait", Value::Str("trait_resilient")),
+            ]))
+        );
+
+        assert_eq!(
+            parse_file("color = rgb { 1 2 3 }").unwrap(),
+            Value::Map(HashMap::from([
+                ("color", Value::Color(("rgb", 1.0, 2.0, 3.0)))
             ]))
         )
     }
