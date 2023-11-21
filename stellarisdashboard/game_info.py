@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Regex explanation: https://regex101.com/r/l76XGd/1
-loc_re = re.compile(r'\s(?P<key>\S+?):\d+\s"(?P<value>.*)"')
+loc_re = re.compile(r'\s*(?P<key>\S+?):\d*\s*"(?P<value>.*)"\s*(#.*)?')
 
 class NameRenderer:
     default_name = "Unknown name"
@@ -72,7 +72,7 @@ class NameRenderer:
         # The %ADJ% template is odd. See GitHub #90
         if render_template == "%ADJ%":
             render_template = "$1$"
-            if "variables" in name_dict and "value" in name_dict["variables"][0] and "key" in name_dict["variables"][0]["value"]:
+            if "variables" in name_dict and "value" in name_dict["variables"][0] and "key" in name_dict["variables"][0]["value"] and "$1$" not in self.name_mapping.get(name_dict["variables"][0]["value"]["key"], ""):
                 name_dict["variables"][0]["value"]["key"] += " $1$"
 
         substitution_values = []
