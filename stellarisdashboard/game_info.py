@@ -37,7 +37,7 @@ class NameRenderer:
                     value = re_match.group("value")
                     if key.startswith("adj_NN"):
                         key = key.removeprefix("adj_NN")
-                        value = value.split("|")[0]  # ignore gender :shrug:
+                        value = value.split("|")[0]
                         key = key.lstrip("*")
                         self.adjective_templates[key] = value
                     else:
