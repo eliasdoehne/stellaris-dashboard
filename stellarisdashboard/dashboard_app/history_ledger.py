@@ -105,21 +105,21 @@ class EventFilter:
                 datamodel.Leader,
                 "leader",
                 dict(leader_id=self.leader_filter),
-                datamodel.Leader.leader_id.asc(),
+                datamodel.Leader.leader_id_in_game.asc(),
             )
         elif self.system_filter is not None:
             return (
                 datamodel.System,
                 "system",
                 dict(system_id=self.system_filter),
-                datamodel.System.system_id.asc(),
+                datamodel.System.system_id_in_game.asc(),
             )
         elif self.planet_filter is not None:
             return (
                 datamodel.Planet,
                 "planet",
                 dict(planet_id=self.planet_filter),
-                datamodel.Planet.planet_id.asc(),
+                datamodel.Planet.planet_id_in_game.asc(),
             )
         elif self.war_filter is not None:
             return (
@@ -136,7 +136,7 @@ class EventFilter:
                 datamodel.Country,
                 "country",
                 filter_dict,
-                datamodel.Country.country_id.asc(),
+                datamodel.Country.country_id_in_game.asc(),
             )
 
     @property
@@ -235,7 +235,7 @@ class EventTemplateDictBuilder:
             event_query_kwargs,
             key_obj_filter_dict,
             key_object_order_column,
-        ) = params = self.event_filter.query_args_info
+        ) = self.event_filter.query_args_info
 
         self._most_recent_date = utils.get_most_recent_date(self._session)
         key_objects = (
@@ -330,7 +330,10 @@ class EventTemplateDictBuilder:
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
             return []
-        return [key for key in self._formatted_urls if isinstance(key, datamodel.War)]
+        return sorted(
+            [key for key in self._formatted_urls if isinstance(key, datamodel.War)],
+            key=lambda w: w.start_date_days,
+        )
 
     def _get_details(self, key) -> Dict[str, str]:
         if isinstance(key, datamodel.Country):
@@ -474,6 +477,8 @@ class EventTemplateDictBuilder:
             "Gender": game_info.convert_id_to_name(leader_model.gender),
             "Species": leader_model.species.rendered_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
+            "Subclass": f"{game_info.lookup_key(leader_model.subclass)}" or "None",
+            "Traits": ", ".join(leader_model.rendered_traits),
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),
             "Last active": datamodel.days_to_date(
@@ -481,7 +486,7 @@ class EventTemplateDictBuilder:
                 if leader_model.is_active
                 else leader_model.last_date
             ),
-            "Status": "Active" if leader_model.is_active else "Dead or Dismissed",
+            "Status": "Active" if leader_model.is_active else "Dead or retired",
         }
         return details
 
@@ -494,23 +499,13 @@ class EventTemplateDictBuilder:
             details.update(
                 {
                     "Personality": game_info.convert_id_to_name(gov.personality),
-                    "Government Type": game_info.convert_id_to_name(
-                        gov.gov_type, remove_prefix="gov"
-                    ),
-                    "Authority": game_info.convert_id_to_name(
-                        gov.authority, remove_prefix="auth"
-                    ),
+                    "Government Type": game_info.lookup_key(gov.gov_type),
+                    "Authority": game_info.lookup_key(gov.authority),
                     "Ethics": ", ".join(
-                        [
-                            game_info.convert_id_to_name(e, remove_prefix="ethic")
-                            for e in sorted(gov.ethics)
-                        ]
+                        [game_info.lookup_key(e) for e in sorted(gov.ethics)]
                     ),
                     "Civics": ", ".join(
-                        [
-                            game_info.convert_id_to_name(c, remove_prefix="civic")
-                            for c in sorted(gov.civics)
-                        ]
+                        [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
                 }
             )

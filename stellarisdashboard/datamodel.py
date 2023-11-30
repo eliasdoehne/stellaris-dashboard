@@ -43,7 +43,6 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
             s.close()
 
 
-### Some enum types representing various in-game concepts
 @enum.unique
 class Attitude(enum.Enum):
     is_player = enum.auto()
@@ -140,12 +139,14 @@ class HistoricalEventType(enum.Enum):
     # tied to a specific leader:
     ruled_empire = enum.auto()
     governed_sector = enum.auto()
-    research_leader = enum.auto()
+    councilor = enum.auto()
     faction_leader = enum.auto()
     leader_recruited = enum.auto()
     leader_died = enum.auto()  # TODO
     level_up = enum.auto()
     fleet_command = enum.auto()
+    gained_trait = enum.auto()
+    lost_trait = enum.auto()
 
     # empire progress:
     researched_technology = enum.auto()
@@ -153,6 +154,8 @@ class HistoricalEventType(enum.Enum):
     ascension_perk = enum.auto()
     edict = enum.auto()
     expanded_to_system = enum.auto()
+    agenda_preparation = enum.auto()
+    agenda_launch = enum.auto()
 
     # Planets and sectors:
     colonization = enum.auto()
@@ -169,6 +172,8 @@ class HistoricalEventType(enum.Enum):
     new_faction = enum.auto()
     government_reform = enum.auto()
     species_rights_reform = enum.auto()  # TODO
+    new_policy = enum.auto()
+    changed_policy = enum.auto()
 
     # Galactic community and council
     joined_galactic_community = enum.auto()
@@ -254,7 +259,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.sector_creation,
             HistoricalEventType.planetary_unrest,
             HistoricalEventType.governed_sector,
-            HistoricalEventType.research_leader,
+            HistoricalEventType.councilor,
             HistoricalEventType.faction_leader,
             HistoricalEventType.leader_recruited,
             HistoricalEventType.leader_died,
@@ -278,7 +283,6 @@ class HistoricalEventType(enum.Enum):
         return HistoricalEventScope.all
 
 
-### Some convenience functions
 def date_to_days(date_str: str) -> int:
     """Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
     2200.01.01.
@@ -307,7 +311,6 @@ def days_to_date(days: float) -> str:
     return f"{year:04}.{month:02}.{day:02}"
 
 
-### Some helper functions to conveniently access the databases.
 def get_last_modified_time(path: pathlib.Path) -> int:
     return path.stat().st_mtime
 
@@ -364,7 +367,7 @@ def get_gamestates_since(game_name: str, date: float):
 class Game(Base):
     """Root object representing an entire game."""
 
-    __tablename__ = "gametable"
+    __tablename__ = "game"
     game_id = Column(Integer, primary_key=True)
     game_name = Column(String(50))
 
@@ -400,15 +403,15 @@ class Game(Base):
 
     @property
     def galaxy_template(self):
-        return game_info.convert_id_to_name(self.db_galaxy_template)
+        return game_info.lookup_key(self.db_galaxy_template)
 
     @property
     def galaxy_shape(self):
-        return game_info.convert_id_to_name(self.db_galaxy_shape)
+        return game_info.lookup_key(self.db_galaxy_shape)
 
     @property
     def difficulty(self):
-        return game_info.convert_id_to_name(self.db_difficulty)
+        return game_info.lookup_key(self.db_difficulty)
 
     @property
     def last_updated(self):
@@ -418,7 +421,7 @@ class Game(Base):
 class SharedDescription(Base):
     """Represents short descriptions like technology names that are likely to occur many times for various empires."""
 
-    __tablename__ = "shareddescriptiontable"
+    __tablename__ = "shared_description"
     description_id = Column(Integer, primary_key=True)
 
     text = Column(String(500), index=True)
@@ -427,10 +430,10 @@ class SharedDescription(Base):
 class System(Base):
     """Represents a single star system/galactic_object."""
 
-    __tablename__ = "systemtable"
+    __tablename__ = "system"
     system_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    country_id = Column(ForeignKey("countrytable.country_id"), index=True)
+    country_id = Column(ForeignKey("country.country_id"), index=True)
 
     name = Column(String(80))
     system_id_in_game = Column(Integer, index=True)
@@ -502,11 +505,11 @@ class System(Base):
 class SystemOwnership(Base):
     """Represent the timespan during which some empire owned a given system."""
 
-    __tablename__ = "systemownershiptable"
+    __tablename__ = "system_ownership"
     system_ownership_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), index=True)
-    owner_country_id = Column(ForeignKey("countrytable.country_id"))
+    owner_country_id = Column(ForeignKey("country.country_id"))
 
     start_date_days = Column(Integer, index=True)
     end_date_days = Column(Integer, index=True)
@@ -532,7 +535,7 @@ class HyperLane(Base):
     represented as a directed edge, it should be interpreted as undirected.
     """
 
-    __tablename__ = "hyperlanetable"
+    __tablename__ = "hyperlane"
     hyperlane_id = Column(Integer, primary_key=True)
 
     system_one_id = Column(ForeignKey(System.system_id))
@@ -555,7 +558,7 @@ class Bypass(Base):
     Represent bypasses.
     """
 
-    __tablename__ = "bypasstable"
+    __tablename__ = "bypass"
     bypass_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
@@ -579,7 +582,7 @@ class Bypass(Base):
 class GameState(Base):
     """Represents the state of the game at a specific moment."""
 
-    __tablename__ = "gamestatetable"
+    __tablename__ = "gamestate"
     gamestate_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     date = Column(Integer, index=True, nullable=False)  # Days since 2200.1.1
@@ -599,15 +602,12 @@ class GameState(Base):
 
 
 class Country(Base):
-    __tablename__ = "countrytable"
+    __tablename__ = "country"
     country_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    capital_planet_id = Column(ForeignKey("planettable.planet_id"))
+    capital_planet_id = Column(ForeignKey("planet.planet_id"))
 
-    ruler_id = Column(ForeignKey("leadertable.leader_id"))
-    scientist_physics_id = Column(ForeignKey("leadertable.leader_id"))
-    scientist_society_id = Column(ForeignKey("leadertable.leader_id"))
-    scientist_engineering_id = Column(ForeignKey("leadertable.leader_id"))
+    ruler_id = Column(ForeignKey("leader.leader_id"))
 
     is_player = Column(Boolean)
     is_other_player = Column(Boolean)
@@ -622,11 +622,6 @@ class Country(Base):
     capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)
 
     ruler = relationship("Leader", foreign_keys=[ruler_id])
-    scientist_physics = relationship("Leader", foreign_keys=[scientist_physics_id])
-    scientist_society = relationship("Leader", foreign_keys=[scientist_society_id])
-    scientist_engineering = relationship(
-        "Leader", foreign_keys=[scientist_engineering_id]
-    )
 
     governments = relationship(
         "Government", back_populates="country", cascade="all,delete,delete-orphan"
@@ -657,6 +652,11 @@ class Country(Base):
     traditions = relationship("Tradition", cascade="all,delete,delete-orphan")
     ascension_perks = relationship("AscensionPerk", cascade="all,delete,delete-orphan")
     technologies = relationship("Technology", cascade="all,delete,delete-orphan")
+
+    council_agendas = relationship(
+        "CouncilAgenda", back_populates="country", cascade="all,delete,delete-orphan"
+    )
+    policies = relationship("Policy", foreign_keys=lambda: [Policy.country_id])
 
     historical_events = relationship(
         "HistoricalEvent",
@@ -706,27 +706,6 @@ class Country(Base):
             or self.country_type == "awakened_fallen_empire"
         )
 
-    def get_research_leader(self, key: str):
-        if key == "physics":
-            return self.scientist_physics
-        elif key == "society":
-            return self.scientist_society
-        elif key == "engineering":
-            return self.scientist_engineering
-        else:
-            logger.warning(f"Unknown research leader ID: {key}")
-            return None
-
-    def set_research_leader(self, key: str, new_leader: "Leader"):
-        if key == "physics":
-            self.scientist_physics = new_leader
-        elif key == "society":
-            self.scientist_society = new_leader
-        elif key == "engineering":
-            self.scientist_engineering = new_leader
-        else:
-            logger.warning(f"Could not set research leader for {key}")
-
     def diplo_relation_details(self):
         countries_by_relation = {}
         for relation in self.outgoing_relations:
@@ -738,7 +717,7 @@ class Country(Base):
 
 
 class Tradition(Base):
-    __tablename__ = "traditionstable"
+    __tablename__ = "tradition"
     tradition_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     tradition_name_id = Column(ForeignKey(SharedDescription.description_id))
@@ -752,7 +731,7 @@ class Tradition(Base):
 
 
 class AscensionPerk(Base):
-    __tablename__ = "ascensionperkstable"
+    __tablename__ = "ascension_perk"
     tradition_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     perk_name_id = Column(ForeignKey(SharedDescription.description_id))
@@ -766,7 +745,7 @@ class AscensionPerk(Base):
 
 
 class Technology(Base):
-    __tablename__ = "technologytable"
+    __tablename__ = "technology"
     technology_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -789,7 +768,7 @@ class Government(Base):
     and civics.
     """
 
-    __tablename__ = "govtable"
+    __tablename__ = "government"
     gov_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -876,8 +855,54 @@ class Government(Base):
         return f"{self.authority} {self.gov_type} {self.civics} {self.ethics}"
 
 
+class Policy(Base):
+    __tablename__ = "policy"
+
+    policy_id = Column(Integer, primary_key=True)
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+
+    policy_date = Column(Integer)
+    is_active = Column(Boolean)
+
+    policy_name_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+    selected_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+
+    country_model = relationship(
+        Country,
+        back_populates="policies",
+        foreign_keys=[country_id],
+    )
+
+    policy_name = relationship(SharedDescription, foreign_keys=[policy_name_id])
+    selected = relationship(SharedDescription, foreign_keys=[selected_id])
+
+
+class CouncilAgenda(Base):
+    __tablename__ = "council_agenda"
+
+    agenda_id = Column(Integer, primary_key=True)
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+
+    start_date = Column(Integer)
+    launch_date = Column(Integer)
+    cooldown_date = Column(Integer)
+
+    is_resolved = Column(Boolean)
+
+    name_id = Column(ForeignKey(SharedDescription.description_id), index=True)
+
+    country = relationship(
+        Country, foreign_keys=[country_id], back_populates="council_agendas"
+    )
+    db_name = relationship(SharedDescription, foreign_keys=[name_id])
+
+    @property
+    def rendered_name(self) -> str:
+        return game_info.lookup_key(self.db_name.text + "_name")
+
+
 class DiplomaticRelation(Base):
-    __tablename__ = "diplo_relation_table"
+    __tablename__ = "diplomatic_relation"
 
     diplo_relation_id = Column(Integer, primary_key=True)
 
@@ -946,7 +971,7 @@ class DiplomaticRelation(Base):
 class CountryData(Base):
     """Representation of the state of a single country at a specific time."""
 
-    __tablename__ = "countrydatatable"
+    __tablename__ = "country_data"
     country_data_id = Column(Integer, primary_key=True)
     country_id = Column(ForeignKey(Country.country_id), index=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
@@ -1084,7 +1109,7 @@ class GalacticMarketResource(Base):
     The name of the resource and its
     """
 
-    __tablename__ = "galacticmarketresourcetable"
+    __tablename__ = "galactic_market_resource"
     galactic_market_resource_id = Column(Integer, primary_key=True)
     game_state_id = Column(ForeignKey(GameState.gamestate_id), index=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
@@ -1106,7 +1131,7 @@ class GalacticMarketResource(Base):
 
 
 class InternalMarketResource(Base):
-    __tablename__ = "internalmarketresourcetable"
+    __tablename__ = "internal_market_resource"
     internal_market_resource_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
 
@@ -1122,7 +1147,7 @@ class InternalMarketResource(Base):
 
 
 class BudgetItem(Base):
-    __tablename__ = "budgetitemtable"
+    __tablename__ = "budget_item"
     budget_item_id = Column(Integer, primary_key=True)
 
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
@@ -1163,11 +1188,11 @@ class BudgetItem(Base):
 class Species(Base):
     """Represents a species in a game. Not tied to any specific time."""
 
-    __tablename__ = "speciestable"
+    __tablename__ = "species"
     species_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
     species_id_in_game = Column(Integer)
-    home_planet_id = Column(ForeignKey("planettable.planet_id"))
+    home_planet_id = Column(ForeignKey("planet.planet_id"))
 
     species_name = Column(String(80))
     species_class = Column(String(20))
@@ -1189,7 +1214,7 @@ class Species(Base):
 
 
 class SpeciesTrait(Base):
-    __tablename__ = "speciestraittable"
+    __tablename__ = "species_trait"
     trait_id = Column(Integer, primary_key=True)
 
     description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1206,7 +1231,7 @@ class SpeciesTrait(Base):
 class PoliticalFaction(Base):
     """Represents a single political faction in a game. Not tied to any specific time."""
 
-    __tablename__ = "factiontable"
+    __tablename__ = "political_faction"
     faction_id = Column(Integer, primary_key=True)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
@@ -1227,14 +1252,14 @@ class PoliticalFaction(Base):
 
     @property
     def rendered_name(self):
-        rendered =  game_info.render_name(self.faction_name)
+        rendered = game_info.render_name(self.faction_name)
         return rendered
 
 
 class War(Base):
     """Wars are represented by a list of participants and a list of combat events."""
 
-    __tablename__ = "wartable"
+    __tablename__ = "war"
     war_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
 
@@ -1276,9 +1301,21 @@ class War(Base):
             if not p.is_attacker and p.call_type == "primary":
                 yield p
 
+    @property
+    def start_date(self):
+        if self.start_date_days is not None:
+            return days_to_date(self.start_date_days)
+        return None
+
+    @property
+    def end_date(self):
+        if self.end_date_days is not None:
+            return days_to_date(self.end_date_days)
+        return None
+
 
 class WarParticipant(Base):
-    __tablename__ = "warparticipanttable"
+    __tablename__ = "war_participant"
     warparticipant_id = Column(Integer, primary_key=True)
 
     war_id = Column(ForeignKey(War.war_id), index=True)
@@ -1306,11 +1343,11 @@ class WarParticipant(Base):
 
 
 class Combat(Base):
-    __tablename__ = "combattable"
+    __tablename__ = "combat"
     combat_id = Column(Integer, primary_key=True)
 
     system_id = Column(ForeignKey(System.system_id), nullable=False)
-    planet_id = Column(ForeignKey("planettable.planet_id"))
+    planet_id = Column(ForeignKey("planet.planet_id"))
     war_id = Column(ForeignKey(War.war_id), nullable=False)
 
     date = Column(Integer, nullable=False, index=True)
@@ -1324,14 +1361,16 @@ class Combat(Base):
     system = relationship("System")
     planet = relationship("Planet")
     war = relationship("War", back_populates="combat")
-    attackers = relationship(
-        "CombatParticipant",
-        primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==True)",
-    )
-    defenders = relationship(
-        "CombatParticipant",
-        primaryjoin="and_(Combat.combat_id==CombatParticipant.combat_id, CombatParticipant.is_attacker==False)",
-    )
+
+    participants = relationship("CombatParticipant")
+
+    @property
+    def attackers(self):
+        return [p for p in self.participants if p.is_attacker]
+
+    @property
+    def defenders(self):
+        return [p for p in self.participants if not p.is_attacker]
 
     def involved_countries(self) -> Iterable[Country]:
         for cp in itertools.chain(self.attackers, self.defenders):
@@ -1348,7 +1387,7 @@ class CombatParticipant(Base):
     overall war.
     """
 
-    __tablename__ = "combatparticipant"
+    __tablename__ = "combat_participant"
     combat_participant_id = Column(Integer, primary_key=True)
 
     combat_id = Column(ForeignKey(Combat.combat_id), index=True)
@@ -1361,7 +1400,7 @@ class CombatParticipant(Base):
     war_participant = relationship(
         "WarParticipant", back_populates="combat_participation"
     )
-    combat = relationship("Combat")
+    combat = relationship("Combat", back_populates="participants")
 
     @property
     def country(self):
@@ -1369,7 +1408,7 @@ class CombatParticipant(Base):
 
 
 class Leader(Base):
-    __tablename__ = "leadertable"
+    __tablename__ = "leader"
 
     leader_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
@@ -1382,14 +1421,16 @@ class Leader(Base):
     species_id = Column(ForeignKey(Species.species_id))
     leader_class = Column(String(80))
     gender = Column(String(20))
-    leader_agenda = Column(String(80))
     last_level = Column(Integer)
+
+    subclass = Column(String())  # optional
+    leader_traits = Column(String())  # comma-separated
 
     date_hired = Column(Integer)  # The date when this leader was first encountered
     date_born = Column(Integer)  # estimated birthday
     last_date = Column(Integer)  # estimated death / dismissal
     is_active = Column(Boolean, index=True)
-    fleet_id = Column(ForeignKey("fleettable.fleet_id"), nullable=True)
+    fleet_id = Column(ForeignKey("fleet.fleet_id"), nullable=True)
 
     game = relationship("Game", back_populates="leaders")
     country = relationship(
@@ -1414,12 +1455,26 @@ class Leader(Base):
         return rendered
 
     @property
-    def agenda(self):
-        return game_info.convert_id_to_name(self.leader_agenda, remove_prefix="agenda")
+    def rendered_traits(self) -> List[str]:
+        return [self.render_trait(t) for t in sorted(self.leader_traits.split("|"))]
+
+    def render_trait(self, text: str):
+        key = text.rstrip("_0123456789")
+        description = game_info.lookup_key(key)
+
+        if description == "[triggered_imperial_name]":
+            # logic from common/scripted_loc/08_scripted_loc_paragon.txt
+            key = "imperial_ruler" if self == self.country.ruler else "imperial_heir"
+            return game_info.lookup_key(key)
+        else:
+            level = text.removeprefix(key).lstrip("_")
+            if level:
+                description = f"{description} ({level})"
+            return description
 
 
 class Planet(Base):
-    __tablename__ = "planettable"
+    __tablename__ = "planet"
     planet_id = Column(Integer, primary_key=True)
 
     planet_name = Column(String(50))
@@ -1451,11 +1506,11 @@ class Planet(Base):
 
     @property
     def planetclass(self):
-        return game_info.convert_id_to_name(self.planet_class, remove_prefix="pc")
+        return game_info.lookup_key(self.planet_class)
 
 
 class PlanetDistrict(Base):
-    __tablename__ = "planet_district_table"
+    __tablename__ = "planet_district"
     district_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1474,7 +1529,7 @@ class PlanetDistrict(Base):
 
 
 class PlanetDeposit(Base):
-    __tablename__ = "planet_deposit_table"
+    __tablename__ = "planet_deposit"
     deposit_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1499,7 +1554,7 @@ class PlanetDeposit(Base):
 
 
 class PlanetBuilding(Base):
-    __tablename__ = "planet_building_table"
+    __tablename__ = "planet_building"
     building_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1518,7 +1573,7 @@ class PlanetBuilding(Base):
 
 
 class PlanetModifier(Base):
-    __tablename__ = "planet_modifier_table"
+    __tablename__ = "planet_modifier"
     modifier_id = Column(Integer, primary_key=True)
 
     planet_id = Column(ForeignKey(Planet.planet_id), nullable=False, index=True)
@@ -1537,7 +1592,7 @@ class PlanetModifier(Base):
 
 
 class PopStatsBySpecies(Base):
-    __tablename__ = "popstats_species_table"
+    __tablename__ = "popstats_species"
     pop_stats_species_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     species_id = Column(ForeignKey(Species.species_id))
@@ -1552,7 +1607,7 @@ class PopStatsBySpecies(Base):
 
 
 class PopStatsByFaction(Base):
-    __tablename__ = "popstats_faction_table"
+    __tablename__ = "popstats_faction"
     pop_stats_faction_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     faction_id = Column(ForeignKey(PoliticalFaction.faction_id))
@@ -1570,7 +1625,7 @@ class PopStatsByFaction(Base):
 
 
 class PopStatsByJob(Base):
-    __tablename__ = "popstats_job_table"
+    __tablename__ = "popstats_job"
     pop_stats_job_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     job_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1589,7 +1644,7 @@ class PopStatsByJob(Base):
 
 
 class PopStatsByStratum(Base):
-    __tablename__ = "popstats_stratum_table"
+    __tablename__ = "popstats_stratum"
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     stratum_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1608,7 +1663,7 @@ class PopStatsByStratum(Base):
 
 
 class PopStatsByEthos(Base):
-    __tablename__ = "popstats_ethos_table"
+    __tablename__ = "popstats_ethos"
     pop_stats_stratum_id = Column(Integer, primary_key=True)
     country_data_id = Column(ForeignKey(CountryData.country_data_id), index=True)
     ethos_description_id = Column(ForeignKey(SharedDescription.description_id))
@@ -1627,7 +1682,7 @@ class PopStatsByEthos(Base):
 
 
 class PlanetStats(Base):
-    __tablename__ = "planetstats_table"
+    __tablename__ = "planetstats"
     planet_stats_id = Column(Integer, primary_key=True)
     countrydata_id = Column(ForeignKey(CountryData.country_data_id), index=True)
 
@@ -1648,7 +1703,7 @@ class PlanetStats(Base):
 
 
 class Fleet(Base):
-    __tablename__ = "fleettable"
+    __tablename__ = "fleet"
     fleet_id = Column(Integer, primary_key=True)
 
     fleet_id_in_game = Column(Integer, nullable=False, index=True)
@@ -1670,7 +1725,7 @@ class HistoricalEvent(Base):
     certain columns may be null.
     """
 
-    __tablename__ = "historicaleventtable"
+    __tablename__ = "historical_event"
     historical_event_id = Column(Integer, primary_key=True)
 
     event_type = Column(Enum(HistoricalEventType), nullable=False, index=True)
@@ -1717,19 +1772,13 @@ class HistoricalEvent(Base):
     def description(self) -> str:
         """A brief description associated with the event, e.g. technology name or changes in government reform."""
         if self.event_type == HistoricalEventType.tradition:
-            return game_info.convert_id_to_name(
-                self.db_description.text, remove_prefix="tr"
-            )
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.researched_technology:
-            return game_info.convert_id_to_name(
-                self.db_description.text, remove_prefix="tech"
-            )
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.edict:
-            return game_info.convert_id_to_name(self.db_description.text)
+            return game_info.lookup_key("edict_" + self.db_description.text)
         elif self.event_type == HistoricalEventType.ascension_perk:
-            return game_info.convert_id_to_name(
-                self.db_description.text, remove_prefix="ap"
-            )
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.government_reform:
             old_gov = self.country.get_government_for_date(self.start_date_days - 1)
             new_gov = self.country.get_government_for_date(self.start_date_days)
@@ -1742,15 +1791,15 @@ class HistoricalEvent(Base):
             return ref
         elif self.event_type == HistoricalEventType.terraforming:
             current_pc, target_pc = self.db_description.text.split(",")
-            current_pc = game_info.convert_id_to_name(current_pc, remove_prefix="pc")
-            target_pc = game_info.convert_id_to_name(target_pc, remove_prefix="pc")
+            current_pc = game_info.lookup_key(current_pc)
+            target_pc = game_info.lookup_key(target_pc)
             return f"from {current_pc} to {target_pc}"
         elif self.event_type in [
             HistoricalEventType.envoy_federation,
             HistoricalEventType.formed_federation,
             HistoricalEventType.governed_sector,
         ]:
-            return game_info.render_name(self.db_description.text)
+            return game_info.lookup_key(self.db_description.text)
         elif self.event_type in [HistoricalEventType.war]:
             call_type = self.db_description.text
             if call_type == "primary":
@@ -1765,9 +1814,33 @@ class HistoricalEvent(Base):
                 return f" due to their alliance with the"
             else:
                 return f" (called as {call_type})"
-
+        elif self.event_type == HistoricalEventType.councilor:
+            return game_info.lookup_key(self.db_description.text)
+        elif self.event_type == HistoricalEventType.new_policy:
+            name, selected = self.db_description.text.split("|")
+            name_rendered = game_info.convert_id_to_name(name)
+            selected_rendered = game_info.lookup_key(selected)
+            return f"{name_rendered!r}: {selected_rendered!r}"
+        elif self.event_type == HistoricalEventType.changed_policy:
+            name, old, new = self.db_description.text.split("|")
+            name_rendered = game_info.convert_id_to_name(name)
+            old_rendered = game_info.lookup_key(old)
+            new_rendered = game_info.lookup_key(new)
+            return f"{name_rendered!r} from {old_rendered!r} to {new_rendered!r}"
+        elif self.event_type in (
+            HistoricalEventType.agenda_launch,
+            HistoricalEventType.agenda_preparation,
+        ):
+            return game_info.lookup_key(
+                f"council_agenda_{self.db_description.text}_name"
+            )
+        elif self.event_type in (
+            HistoricalEventType.gained_trait,
+            HistoricalEventType.lost_trait,
+        ):
+            return self.leader.render_trait(self.db_description.text)
         elif self.db_description:
-            return game_info.convert_id_to_name(self.db_description.text)
+            return game_info.lookup_key(self.db_description.text)
         else:
             return "Unknown Event"
 
