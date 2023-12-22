@@ -250,6 +250,7 @@ fn parse_str(input: &str) -> IResult<&str, &str> {
 
 fn _is_valid_unquoted_str_char(c: char) -> bool {
     !c.is_whitespace() &&
+    c != '"' &&
     c != '=' &&
     c != '{' &&
     c != '}' &&
@@ -279,7 +280,7 @@ fn parse_color(input: &str) -> IResult<&str, (&str, f64, f64, f64)> {
 
 #[allow(dead_code)]
 pub fn debug_str(input: &str) -> () {
-    let prefix = &input[..min(input.len(), 150)];
+    let prefix: String = input.chars().take(150).collect();
     println!("{:?}", prefix);
     println!("{}", prefix);
 }
