@@ -1,4 +1,5 @@
 import pytest
+import pathlib
 from rust_parser import rust_parser
 
 import parser_test_cases
@@ -24,14 +25,21 @@ def test_deep_recursion_depth():
     )
     rust_parser.parse_save_from_string(test_input)
 
-
-def test_real_save():
+@pytest.mark.parametrize(
+    "save_dir",
+    [path for path in pathlib.Path(__file__).parent.glob(r"saves/*")],
+    ids=lambda path: path.stem,
+)
+def test_real_save(save_dir, tmp_path):
     # Test a real save end to end
     from stellarisdashboard import cli, config
-    from pathlib import Path
+    debug = config.CONFIG.debug_mode
+    base_path = config.CONFIG.base_output_path
+
     config.CONFIG.debug_mode = True
-    output_db = Path(
-        f"{config.CONFIG.base_output_path}/db/nexitronawareness_1329922464.db"
-    )
-    cli.f_parse_saves(save_path="test/saves")
-    output_db.unlink(missing_ok=True)
+    config.CONFIG.base_output_path = tmp_path
+    try:
+      cli.f_parse_saves(save_path=save_dir)
+    finally:
+        config.CONFIG.debug_mode = debug
+        config.CONFIG.base_output_path = base_path
