@@ -29,7 +29,7 @@ def test_real_save():
     # Test a real save end to end
     from stellarisdashboard import cli, config
     from pathlib import Path
-
+    config.CONFIG.debug_mode = True
     output_db = Path(
         f"{config.CONFIG.base_output_path}/db/nexitronawareness_1329922464.db"
     )

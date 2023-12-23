@@ -2048,6 +2048,8 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
         self._update_council_agenda(countries_by_id, rulers_by_id)
 
     def _update_council_positions(self, countries_by_id, leaders_by_id):
+        if "council_positions" not in self._gamestate_dict:
+          return
         for cp_id, council_position in sorted(
             self._gamestate_dict["council_positions"]["council_positions"].items()
         ):
