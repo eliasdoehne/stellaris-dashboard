@@ -1775,7 +1775,7 @@ class CountryColors:
     @staticmethod
     def _parse_map_colors(path: pathlib.Path):
         with open(path, "r") as f:
-            prepared_str = re.sub("#[^\n]*", "", f.read())  # strip out comments
+            prepared_str = re.sub(r"#[^\n]*", "", f.read())  # strip out comments
             data = rust_parser.parse_save_from_string(prepared_str)
 
             colors = data.get("colors", {})
