@@ -6,7 +6,7 @@ dash==2.15.0
 dash-core-components==2.0.0
 dash-html-components==2.0.0
 dash-table==5.0.0
-Flask==2.2.2
+Flask==2.2.5
 Flask-Compress==1.13
 fonttools==4.38.0
 greenlet==3.0.3
