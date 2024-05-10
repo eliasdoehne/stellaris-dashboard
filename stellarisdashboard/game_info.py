@@ -191,7 +191,7 @@ class NameRenderer:
             if match == "ORD":
                 continue
             resolved = lookup_key(match)
-            render_template = re.sub(f"\${match}\$", resolved, render_template)
+            render_template = re.sub(rf"\${match}\$", resolved, render_template)
 
         return render_template
 
