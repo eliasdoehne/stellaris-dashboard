@@ -62,7 +62,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           cd dist
-          powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
+          [IO.Compression.ZipFile]::CreateFromDirectory( (Join-Path -Path (Get-Location) -ChildPath "stellarisdashboard-build"), (Join-Path -Path (Get-Location) -ChildPath "../stellarisdashboard-${{ matrix.os }}.zip"), 'Optimal', $false )
           cd ..
       - name: package files
         if: matrix.os != 'windows-latest'
