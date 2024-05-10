@@ -1,4 +1,4 @@
 pytest
 pyinstaller
-black==22.3.0
+black==24.3.0
 maturin
