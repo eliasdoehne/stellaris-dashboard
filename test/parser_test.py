@@ -25,13 +25,11 @@ def test_deep_recursion_depth():
     rust_parser.parse_save_from_string(test_input)
 
 
-def test_real_save():
+def test_real_save(tmp_path):
     # Test a real save end to end
     from stellarisdashboard import cli, config
     from pathlib import Path
     config.CONFIG.debug_mode = True
-    output_db = Path(
-        f"{config.CONFIG.base_output_path}/db/nexitronawareness_1329922464.db"
-    )
+    config.CONFIG.base_output_path = tmp_path
     cli.f_parse_saves(save_path="test/saves")
-    output_db.unlink(missing_ok=True)
+    assert len(list(tmp_path.glob('**/*.db'))) > 0, f"When parsing saves, no output .db files were produced (output folder: {tmp_path})"
