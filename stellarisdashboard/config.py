@@ -456,7 +456,7 @@ def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):
     try:
         with open(mod_descriptor_path, "r") as f:
             for line in f:
-                match = re.match('^\s*path\s*=\s*"(.*)"\s*$', line)
+                match = re.match(r'^\s*path\s*=\s*"(.*)"\s*$', line)
                 if match:
                     return pathlib.Path(match.group(1))
     except Exception as e:
@@ -468,7 +468,7 @@ def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):
 def _localization_file_matches_language(file_path: pathlib.Path, language: str):
     with open(file_path, "r") as f:
         first_line = f.readline()
-        match = re.match(f"^\ufeff\s*{language}\s*:\s*$", first_line)
+        match = re.match(rf"^\ufeff\s*{language}\s*:\s*$", first_line)
         return match is not None
 
 
