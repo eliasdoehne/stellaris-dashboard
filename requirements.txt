@@ -6,9 +6,9 @@ dash==2.15.0
 dash-core-components==2.0.0
 dash-html-components==2.0.0
 dash-table==5.0.0
-Flask==2.2.2
+Flask==2.2.5
 Flask-Compress==1.13
-fonttools==4.38.0
+fonttools==4.43.0
 greenlet==3.0.3
 itsdangerous==2.1.2
 Jinja2==3.1.4
@@ -18,7 +18,7 @@ matplotlib==3.6.2
 networkx==2.8.8
 numpy==1.24.1
 packaging==22.0
-Pillow==9.4.0
+Pillow==10.3.0
 plotly==5.11.0
 pyparsing==3.0.9
 python-dateutil==2.8.2
@@ -27,6 +27,6 @@ scipy==1.10.0
 six==1.16.0
 SQLAlchemy==1.4.46
 tenacity==8.1.0
-tqdm==4.64.1
+tqdm==4.66.3
 waitress==2.1.2
 Werkzeug==2.2.3

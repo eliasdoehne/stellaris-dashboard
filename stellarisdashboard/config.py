@@ -428,8 +428,8 @@ class Config:
                     if mod_data_path is not None
                 ]
         except Exception as e:
-            logger.error(f"Failed to read enabled mods {dlc_load_path}")
-            logger.error(e)
+            logger.warn(f"Failed to read enabled mods from {dlc_load_path}. Using only base game data.")
+            logger.warn(e)
             return [self.stellaris_install_path]
 
     @property
@@ -460,13 +460,13 @@ def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):
                 if match:
                     return pathlib.Path(match.group(1))
     except Exception as e:
-        logger.error(f"Failed to read mod path from {mod_descriptor_path}")
-        logger.error(e)
+        logger.warn(f"Failed to read mod path from {mod_descriptor_path}")
+        logger.warn(e)
     return None
 
 
 def _localization_file_matches_language(file_path: pathlib.Path, language: str):
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         first_line = f.readline()
         match = re.match(rf"^\ufeff\s*{language}\s*:\s*$", first_line)
         return match is not None
