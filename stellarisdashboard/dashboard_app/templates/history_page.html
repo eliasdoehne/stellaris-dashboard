@@ -1,10 +1,13 @@
 {% extends "layout.html" %}
-{% block body %}
 
+{% block nav %}
 <a class="button" href={{url_for("/timeline/", game_name=game_name)}}>Graph Dashboard</a>
 {% if is_filtered_page %}
 <a class="button" href={{url_for("history_page", game_id=game_name)}}>Global event ledger</a>
 {% endif %}
+{% endblock %}
+
+{% block body %}
 {% if not is_filtered_page %}
 <div class="ledgerbox">
     {% if wars %}

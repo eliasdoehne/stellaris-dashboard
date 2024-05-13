@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 BACKGROUND = "rgba(33,43,39,1)"
 GALAXY_BACKGROUND = "rgba(0,0,0,1)"
 BACKGROUND_DARK = "rgba(20,25,25,1)"
+BACKGROUND_LIGHT = "rgba(43, 59, 52, 1)"
 TEXT_COLOR = "rgba(217,217,217,1)"
 TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
 DEFAULT_PLOT_LAYOUT = dict(
@@ -36,16 +37,20 @@ DEFAULT_PLOT_LAYOUT = dict(
 BUTTON_STYLE = {
     "color": TEXT_HIGHLIGHT_COLOR,
     "font-family": "verdana",
-    "font-size": "20px",
+    "font-size": "16px",
     "-webkit-appearance": "button",
     "-moz-appearance": "button",
     "appearance": "button",
-    "background-color": BACKGROUND,
-    "display": "inline",
+    "background-color": BACKGROUND_LIGHT,
+    "display": "inline-block",
     "text-decoration": "none",
-    "padding": "0.1cm",
-    "margin": "0.1cm",
+    "padding": "0.2cm",
+    "border": f"1px solid {TEXT_HIGHLIGHT_COLOR}"
 }
+EXTERNAL_LINK_STYLE = dict(BUTTON_STYLE)
+EXTERNAL_LINK_STYLE["border"] = "1px solid transparent"
+EXTERNAL_LINK_STYLE["background"] = "transparent"
+EXTERNAL_LINK_STYLE["float"] = "right"
 HEADER_STYLE = {
     "font-family": "verdana",
     "color": TEXT_COLOR,
@@ -741,21 +746,31 @@ def get_layout():
     top_navigation = html.Div(
         [
             html.A(
-                html.Button("Game Selection", style=BUTTON_STYLE),
+                "Game Selection",
+                style=BUTTON_STYLE,
                 id="index-link",
                 href="/",
             ),
+            " ",
             html.A(
-                html.Button(f"Settings", style=BUTTON_STYLE),
+                "Settings",
+                style=BUTTON_STYLE,
                 id="settings-link",
                 href="/settings/",
-                style=BUTTON_STYLE,
             ),
+            " ",
             html.A(
-                html.Button(f"Event Ledger", style=BUTTON_STYLE),
+                "Event Ledger",
+                style=BUTTON_STYLE,
                 id="ledger-link",
                 href="/history",
-                style=BUTTON_STYLE,
+            ),
+            " ",
+            html.A(
+                "Stellaris Wiki 🔗",
+                style=EXTERNAL_LINK_STYLE,
+                id="wiki-link",
+                href="https://stellaris.paradoxwikis.com/Stellaris_Wiki",
             ),
         ]
     )
