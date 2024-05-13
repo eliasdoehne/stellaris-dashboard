@@ -20,6 +20,8 @@ jobs:
           - macOS-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -50,7 +52,7 @@ jobs:
           pip install --find-links=stellarisdashboard/parsing/rust_parser/target rust-parser
       - name: Tests
         run: |
-          python -m pytest -m "not skip_github_actions"
+          python -m pytest -m "not skip_github_actions" --verbose
       - name: pyInstaller build
         run: |
           pyinstaller pyinstaller-package.spec
