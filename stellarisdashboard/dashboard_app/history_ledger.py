@@ -507,6 +507,7 @@ class EventTemplateDictBuilder:
                     "Civics": ", ".join(
                         [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
+                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN")
                 }
             )
         for key, countries in country_model.diplo_relation_details().items():

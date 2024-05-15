@@ -617,6 +617,7 @@ class Country(Base):
     country_type = Column(String(50))
     primary_color = Column(String(80))
     secondary_color = Column(String(80))
+    origin = Column(String(80))
 
     game = relationship("Game", back_populates="countries")
     capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)
