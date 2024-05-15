@@ -172,7 +172,7 @@ class TimelineExtractor:
                     else:
                         self._other_players.add(player["country"])
                 if playercountry is None:
-                    raise ValueError(
+                    logger.warn(
                         f"Could not find player matching Multiplayer username {config.CONFIG.mp_username}"
                     )
                 return playercountry
@@ -425,6 +425,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             flag_colors = country_data_dict.get("flag", {}).get("colors", [])
             primary_color = flag_colors[0] if len(flag_colors) >= 1 else "black"
             secondary_color = flag_colors[1] if len(flag_colors) >= 2 else primary_color
+            origin = country_data_dict.get("government", {}).get("origin")
             country_model = (
                 self._session.query(datamodel.Country)
                 .filter_by(game=self._db_game, country_id_in_game=country_id)
@@ -444,6 +445,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                     country_name=country_name,
                     primary_color=primary_color,
                     secondary_color=secondary_color,
+                    origin=origin
                 )
                 if country_id == self._basic_info.player_country_id:
                     country_model.first_player_contact_date = 0
@@ -453,9 +455,13 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                 or country_type != country_model.country_type
                 or primary_color != country_model.primary_color
                 or secondary_color != country_model.secondary_color
+                or origin != country_model.origin
             ):
                 country_model.country_name = country_name
                 country_model.country_type = country_type
+                country_model.primary_color = primary_color
+                country_model.secondary_color = secondary_color
+                country_model.origin = origin
                 self._session.add(country_model)
             self.countries_by_ingame_id[country_id] = country_model
 
