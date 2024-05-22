@@ -11,6 +11,11 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 
+from alembic.autogenerate import produce_migrations
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.operations.ops import ModifyTableOps
+
 from stellarisdashboard import config, game_info
 
 logger = logging.getLogger(__name__)
@@ -29,7 +34,28 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
         if not db_file.exists():
             logger.info(f"Creating database for game {game_id} in file {db_file}.")
         engine = sqlalchemy.create_engine(f"sqlite:///{db_file}", echo=False)
-        Base.metadata.create_all(bind=engine)
+
+        # auto-migrate the DB
+        # based on https://alembic.sqlalchemy.org/en/latest/cookbook.html#run-alembic-operation-objects-directly-as-in-from-autogenerate
+        with engine.connect() as connection:
+            mc = MigrationContext.configure(connection)
+            migrations = produce_migrations(mc, Base.metadata)
+            operations = Operations(mc)
+            use_batch = engine.name == "sqlite"
+            stack = [migrations.upgrade_ops]
+            while stack:
+                elem = stack.pop(0)
+                if use_batch and isinstance(elem, ModifyTableOps):
+                    with operations.batch_alter_table(
+                        elem.table_name, schema=elem.schema
+                    ) as batch_ops:
+                        for table_elem in elem.ops:
+                            batch_ops.invoke(table_elem)
+                elif hasattr(elem, "ops"):
+                    stack.extend(elem.ops)
+                else:
+                    operations.invoke(elem)
+
         _ENGINES[game_id] = engine
         _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
         _DB_LOCKS[game_id] = threading.Lock()
@@ -605,9 +631,9 @@ class Country(Base):
     __tablename__ = "country"
     country_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    capital_planet_id = Column(ForeignKey("planet.planet_id"))
+    capital_planet_id = Column(ForeignKey("planet.planet_id", use_alter=True))
 
-    ruler_id = Column(ForeignKey("leader.leader_id"))
+    ruler_id = Column(ForeignKey("leader.leader_id", use_alter=True))
 
     is_player = Column(Boolean)
     is_other_player = Column(Boolean)
