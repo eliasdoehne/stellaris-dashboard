@@ -428,8 +428,8 @@ class Config:
                     if mod_data_path is not None
                 ]
         except Exception as e:
-            logger.warn(f"Failed to read enabled mods from {dlc_load_path}. Using only base game data.")
-            logger.warn(e)
+            logger.warning(f"Failed to read enabled mods from {dlc_load_path}. Using only base game data.")
+            logger.warning(e)
             return [self.stellaris_install_path]
 
     @property
