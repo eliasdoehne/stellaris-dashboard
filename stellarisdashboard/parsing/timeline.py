@@ -2385,7 +2385,8 @@ class PolicyProcessor(AbstractGamestateDataProcessor):
             current_policies = []
         current_stance_per_policy = {
             p.get("policy"): (p.get("selected"), p.get("date"))
-            for p in current_policies
+            for p in current_policies if isinstance(p, dict) # ambiguous {} is parsed as empty list, not empty dict
+
         }
         return current_stance_per_policy
 
