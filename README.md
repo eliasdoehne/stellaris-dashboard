@@ -114,11 +114,7 @@ If you installed Stellaris in the default location at (`C:/Program Files (x86)/S
 
 If you play the game in another language, you can change the "Stellaris language" and restart the dashboard. Note that this setting should be the language code used by the game (ie `l_braz_por`, `l_english`, `l_french`, `l_german`, `l_japanese`, `l_korean`, `l_polish`, `l_russian`, `l_simp_chinese`, `l_spanish`).
 
-If you use mods that add new names, the dashboard *should* automatically find the required files. Note that if you restart change your mod list, any new modded names will not be loaded until you restart the dashboard. If modded names are not working at all, you might need to change your "Stellaris user data folder" setting and restart the dashboard. This should be the folder containing the `dlc_load.json` file as well as the `mod/` folder.
-
-## Colors
-
-Currently, all country colors shown in the dashboard are randomized and completely unrelated to the colors in-game. Unfortunately, it is not that easy to get the country color from the save files, but it could be possible to add this in a future release.
+If you use mods that add new names, the dashboard *should* automatically find the required files. Note that if you change your mod list, any new modded names will not be loaded until you restart the dashboard. If modded names are not working at all, you might need to change your "Stellaris user data folder" setting and restart the dashboard. This should be the folder containing the `dlc_load.json` file as well as the `mod/` folder.
 
 ## How to improve performance
 
