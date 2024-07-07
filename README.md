@@ -129,7 +129,7 @@ If you find that the dashboard is too slow to browse, you can try some of these 
 
 ### Multiplayer
 
-Support for Multiplayer is **experimental**. The dashboard will avoid showing information about other player controlled empires, even if the "Show all empires" checkbox is ticked in the settings. To use the dashboard in multiplayer, you must first configure your multiplayer username in the dashboard settings menu.
+Support for Multiplayer is **experimental**. The dashboard will avoid showing information about other player controlled empires, even if the "Show all empires" checkbox is ticked in the settings. To use the dashboard in multiplayer, you must first configure your multiplayer username in the dashboard settings menu. You can disable this behavior, uncheck the "Hide other players" setting.
 
 ### Observer Mode
 

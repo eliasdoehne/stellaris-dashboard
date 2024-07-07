@@ -182,6 +182,7 @@ DEFAULT_SETTINGS = dict(
     stellaris_user_data_path=_get_default_stellaris_user_data_path(),
     stellaris_language="l_english",
     mp_username="",
+    hide_other_players=True,
     base_output_path=_get_default_base_output_path(),
     threads=1,
     host="127.0.0.1",
@@ -230,6 +231,7 @@ class Config:
     check_version: bool = None
     filter_events_by_type: bool = None
     show_everything: bool = None
+    hide_other_players: bool = None
     read_all_countries: bool = None
     show_all_country_types: bool = None
     include_id_in_names: bool = None
@@ -262,6 +264,7 @@ class Config:
         "check_version",
         "filter_events_by_type",
         "show_everything",
+        "hide_other_players",
         "read_all_countries",
         "show_all_country_types",
         "log_to_file",
@@ -397,6 +400,7 @@ class Config:
             f"  base_output_path: {repr(self.base_output_path)}",
             f"  threads: {repr(self.threads)}",
             f"  show_everything: {repr(self.show_everything)}",
+            f"  hide_other_players: {repr(self.hide_other_players)}",
             f"  show_all_country_types: {repr(self.show_all_country_types)}",
         ]
         return "\n".join(lines)

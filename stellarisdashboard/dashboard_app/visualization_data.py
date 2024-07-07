@@ -325,7 +325,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
 
 
 def _override_visibility(cd: datamodel.CountryData):
-    return not cd.country.is_other_player and config.CONFIG.show_everything
+    return not cd.country.is_hidden_country() and config.CONFIG.show_everything
 
 
 class PlanetCountDataContainer(AbstractPerCountryDataContainer):
@@ -443,7 +443,7 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
     def _get_player_countrydata(self, gs: datamodel.GameState) -> datamodel.CountryData:
         player_cd = None
         for cd in gs.country_data:
-            if cd.country.is_other_player:
+            if cd.country.is_hidden_country():
                 continue
             if (
                 self._country_perspective is None and cd.country.is_player

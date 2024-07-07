@@ -732,6 +732,13 @@ class Country(Base):
             or self.country_type == "fallen_empire"
             or self.country_type == "awakened_fallen_empire"
         )
+    
+    def is_hidden_country(self):
+        if self.is_other_player and config.CONFIG.hide_other_players:
+            return True
+        if not self.has_met_player() and not config.CONFIG.show_everything:
+            return True
+        return False
 
     def diplo_relation_details(self):
         countries_by_relation = {}

@@ -273,7 +273,7 @@ class EventTemplateDictBuilder:
                 continue
             if (
                 event.country
-                and any(c.is_other_player for c in event.involved_countries())
+                and any(c.is_hidden_country() for c in event.involved_countries())
                 and not event.event_is_known_to_player
             ):
                 continue
@@ -446,13 +446,7 @@ class EventTemplateDictBuilder:
         if bypasses:
             details["Unknown Bypasses"] = ", ".join(bypasses)
 
-        if system_model.country is not None and (
-            system_model.country.has_met_player()
-            or (
-                config.CONFIG.show_everything
-                and not system_model.country.is_other_player
-            )
-        ):
+        if system_model.country is not None and not system_model.country.is_hidden_country():
             details["Owner"] = self._get_url_for(system_model.country)
 
         details["Planets"] = ", ".join(
@@ -515,8 +509,7 @@ class EventTemplateDictBuilder:
             relations_to_display = [
                 self._get_url_for(c)
                 for c in sorted(countries, key=lambda c: c.country_name)
-                if c.has_met_player()
-                or (config.CONFIG.show_everything and not c.is_other_player)
+                if not c.is_hidden_country()
             ]
             if relations_to_display:
                 details[relation_type] = ", ".join(relations_to_display)

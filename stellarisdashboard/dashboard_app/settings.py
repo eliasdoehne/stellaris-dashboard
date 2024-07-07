@@ -56,6 +56,12 @@ def settings_page():
             "name": "Your Multiplayer username",
             "description": "",
         },
+        "hide_other_players": {
+            "type": t_bool,
+            "value": _bool_to_lowercase(current_values["hide_other_players"]),
+            "name": "Hide other players",
+            "description": "If enabled, hides information for countries controlled by players that do not match the above Multiplayer Username",
+        },
         "threads": {
             "type": t_int,
             "value": current_values["threads"],
