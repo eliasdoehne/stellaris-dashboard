@@ -128,8 +128,10 @@ class TimelineExtractor:
                 player_country_name = dump_name(
                     self._gamestate_dict["country"][player_country_id]["name"]
                 )
-            else:
+            elif len(self._other_players) == 0:
                 player_country_name = "Observer Mode"
+            else:
+                player_country_name = "Player Not Found"
             galaxy_info = self._gamestate_dict["galaxy"]
             game = datamodel.Game(
                 game_name=game_id,
