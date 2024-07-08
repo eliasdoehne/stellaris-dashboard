@@ -5,30 +5,40 @@
 
 <form class="settingsform" action="/applysettings/" method="POST">
     <div class="settings">
-        {% for key, setting in current_settings.items() %}
-        <div class="setting">
-            <span class="settingname"  title="{{ setting['description'] }}"> {{ setting["name"] }}: </span>
-            <span class="settinginput">
-            {% if setting["type"] == "bool" %}
-            <input type="checkbox" title="{{ setting['description'] }}" name={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>
-            {% endif %}
-            {% if setting["type"] == "int" %}
-            <input type="number" title="{{ setting['description'] }}" name={{key}} min={{setting["min"]}} max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
-            {% endif %}
-            {% if setting["type"] == "str" %}
-            <input type="text" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
-            {% endif %}
-            {% if setting["type"] == "float" %}
-            <input type="number" step="0.01" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
-            {% endif %}
-            </span>
-        </div>
+        <dl>
+            <dt>*</dt>
+            <dl>applies after restart</dl>
+        </dl>
+        {% for category, settings in current_settings.items() %}
+            <h2>{{ category }}</h2>
+            {% for key, setting in settings.items() %}
+            <div class="setting">
+                <span class="settingname">
+                    <label for="{{ key }}"> {{ setting["name"] }}: </label>
+                    <span class="settinginfo" title="{{ setting['description'] }}">🛈</span>
+                </span>
+                <span class="settinginput">
+                    {% if setting["type"] == "bool" %}
+                    <input id="{{key}}" type="checkbox" title="{{ setting['description'] }}" name={{key}} {% if setting["value"] == "true" %} checked {% endif %} > <br>
+                    {% endif %}
+                    {% if setting["type"] == "int" %}
+                    <input id="{{key}}" type="number" title="{{ setting['description'] }}" name={{key}} min={{setting["min"]}} max={{setting["max"]}} step=1 value={{setting["value"]}}> <br>
+                    {% endif %}
+                    {% if setting["type"] == "str" %}
+                    <input id="{{key}}" type="text" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
+                    {% endif %}
+                    {% if setting["type"] == "float" %}
+                    <input id="{{key}}" type="number" step="0.01" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
         {% endfor %}
     </div>
 
     <div class="settingsbuttons">
-        <input type="submit" class="button" value="Apply Settings"/>
-        <input type="reset" class="button" value="Reset Values"/>
+        <button type="submit" class="button">Apply Settings</button>
+        <button type="reset" class="button">Reset Values</button>
     </div>
 </form>
 {% endblock %}

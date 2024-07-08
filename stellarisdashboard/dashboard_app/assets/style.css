@@ -39,10 +39,11 @@ input {
     font-size: 20px;
 }
 
-a.button, input.button {
+a.button, input.button, button.button {
     -webkit-appearance: button;
     -moz-appearance: button;
     appearance: button;
+    cursor: pointer;
 
     color: rgba(195, 133, 33, 1);
     font-family: verdana;
@@ -83,19 +84,41 @@ li.toc-item {
 }
 
 form.settingsform {
-    padding: 0.25cm;
+    padding: 1rem
 }
 
 div.settings {
     width: 80%;
-    color: rgba(195, 133, 33, 1);
-    padding: 0.25cm;
-    margin: 0.25cm auto;
+    max-width: 64rem;
+    color: rgba(217, 217, 217, 1);
+    margin: 1rem auto 0 auto;
 }
+
+.settingsbuttons {
+    margin-block-start: 1rem;
+    margin-inline-start: -1rem;
+    position: sticky;
+    bottom: 0;
+}
+
+.settings label,
+.settings dt {
+    color: rgba(195, 133, 33, 1);
+}
+
+.settings dl {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.settinginfo {
+    cursor: help;
+}
+
 
 div.setting {
     padding: 0.1cm;
-    margin: 0.1cm;
+    margin: 0.1cm 0;
 
     align-self: flex-start;
 
@@ -112,7 +135,12 @@ span.settingname {
 
 span.settinginput {
     align-self: flex-end;
-    flex: 1 0 20%;
+    flex: 1 0 40%;
+}
+
+span.settinginput input:not([type=checkbox]) {
+    box-sizing: border-box;
+    width: 100%;
 }
 
 div.objectdetails {
