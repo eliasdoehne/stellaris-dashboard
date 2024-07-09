@@ -40,7 +40,12 @@ def _get_default_stellaris_user_data_path():
     # according to https://stellaris.paradoxwikis.com/Save-game_editing
     home = pathlib.Path.home()
     if platform.system() == "Windows":
-        return home / "Documents/Paradox Interactive/Stellaris/"
+        one_drive_path = home / "OneDrive/Documents/Paradox Interactive/Stellaris/"
+        non_one_drive_path = home / "OneDrive/Documents/Paradox Interactive/Stellaris/"
+        if one_drive_path.exists():
+            return one_drive_path
+        else:
+            return non_one_drive_path
     elif platform.system() == "Linux":
         return home / ".local/share/Paradox Interactive/Stellaris/"
     else:
@@ -242,11 +247,16 @@ class Config:
 
     production: bool = False
 
-    PATH_KEYS = {
-        "base_output_path",
+    EXISTING_PATH_KEYS = {
+        # these paths should already exist
+        # if not, the setting is reset to default
+        # this helps with issues related to OneDrive
         "save_file_path",
         "stellaris_install_path",
         "stellaris_user_data_path",
+    }
+    PATH_KEYS = EXISTING_PATH_KEYS | {
+        "base_output_path",
     }
     BOOL_KEYS = {
         "check_version",
@@ -311,6 +321,8 @@ class Config:
             val = DEFAULT_SETTINGS[key]
         else:
             val = pathlib.Path(val)
+            if key in Config.EXISTING_PATH_KEYS and not val.exists():
+                val = DEFAULT_SETTINGS[key]
         if key == "base_output_path":
             try:
                 if not val.exists():

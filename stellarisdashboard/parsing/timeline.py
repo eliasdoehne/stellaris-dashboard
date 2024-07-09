@@ -2,6 +2,7 @@ import abc
 import collections
 import dataclasses
 import datetime
+from functools import cache
 import itertools
 import json
 import logging
@@ -247,6 +248,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         pass
 
+    @cache
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
         matching_description = (
             self._session.query(datamodel.SharedDescription)
@@ -2383,7 +2385,8 @@ class PolicyProcessor(AbstractGamestateDataProcessor):
             current_policies = []
         current_stance_per_policy = {
             p.get("policy"): (p.get("selected"), p.get("date"))
-            for p in current_policies
+            for p in current_policies if isinstance(p, dict) # ambiguous {} is parsed as empty list, not empty dict
+
         }
         return current_stance_per_policy
 
