@@ -128,8 +128,10 @@ class TimelineExtractor:
                 player_country_name = dump_name(
                     self._gamestate_dict["country"][player_country_id]["name"]
                 )
-            else:
+            elif len(self._other_players) == 0:
                 player_country_name = "Observer Mode"
+            else:
+                player_country_name = "Player Not Found"
             galaxy_info = self._gamestate_dict["galaxy"]
             game = datamodel.Game(
                 game_name=game_id,
@@ -163,10 +165,6 @@ class TimelineExtractor:
                 return players[0]["country"]
             else:
                 playercountry = None
-                if not config.CONFIG.mp_username:
-                    raise ValueError(
-                        "Please configure your Multiplayer username in the Dashboard settings for multiplayer games."
-                    )
                 for player in players:
                     if player["name"] == config.CONFIG.mp_username:
                         playercountry = player["country"]
@@ -174,7 +172,7 @@ class TimelineExtractor:
                         self._other_players.add(player["country"])
                 if playercountry is None:
                     logger.warn(
-                        f"Could not find player matching Multiplayer username {config.CONFIG.mp_username}"
+                        f"Could not find player matching Multiplayer username \"{config.CONFIG.mp_username}\""
                     )
                 return playercountry
         # observer mode
@@ -983,8 +981,6 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 "engineering_research"
             )
 
-            if country.country_id_in_game in self._basic_info.other_players:
-                continue
             if country.is_player or config.CONFIG.read_all_countries:
                 self._session.add(
                     datamodel.BudgetItem(
@@ -3641,8 +3637,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
         for country_id_in_game, country_model in countries_dict.items():
             if not config.CONFIG.read_all_countries and not country_model.is_player:
-                continue
-            if country_id_in_game in self._basic_info.other_players:
                 continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}

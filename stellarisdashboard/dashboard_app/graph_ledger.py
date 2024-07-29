@@ -152,8 +152,7 @@ def update_country_select_options(search):
         for c in session.query(datamodel.Country):
             if (
                 c.is_real_country()
-                and (c.has_met_player() or config.CONFIG.show_everything)
-                and not c.is_other_player
+                and not c.is_hidden_country()
             ):
                 options.append(
                     {"label": c.rendered_name, "value": c.country_id_in_game}
