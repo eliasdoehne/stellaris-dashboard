@@ -191,8 +191,8 @@ class TimelineExtractor:
         yield GalacticMarketProcessor()
         yield InternalMarketProcessor()
         yield SpeciesProcessor()
-        yield LeaderProcessor()
         yield PlanetProcessor()
+        yield LeaderProcessor()
         yield SectorColonyEventProcessor()
         yield PlanetUpdateProcessor()
         yield RulerEventProcessor()
@@ -208,6 +208,11 @@ class TimelineExtractor:
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
+
+
+# LeaderProcessor needs to refer to this before PlanetProcessor has been declared
+# For consistency, maybe we should move all IDs up above here
+PLANET_PROCESSOR_ID = "planet_models"
 
 
 class AbstractGamestateDataProcessor(abc.ABC):
@@ -1070,7 +1075,7 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
 
 class LeaderProcessor(AbstractGamestateDataProcessor):
     ID = "leader"
-    DEPENDENCIES = [CountryProcessor.ID, SpeciesProcessor.ID]
+    DEPENDENCIES = [CountryProcessor.ID, SpeciesProcessor.ID, PLANET_PROCESSOR_ID]
 
     def __init__(self):
         super().__init__()
@@ -1088,6 +1093,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         countries = dependencies[CountryProcessor.ID]
         self._species_dict, _ = dependencies[SpeciesProcessor.ID]
+        self._planets_by_ingame_id = dependencies.get(PlanetProcessor.ID)
+        self._countries_by_ingame_id = dependencies.get(CountryProcessor.ID)
 
         db_active_leaders = {}
         db_inactive_leaders = {}
@@ -1110,7 +1117,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 leader.last_date = self._basic_info.date_in_days
             else:
                 leader_dict = gs_active_leaders[ingame_id]
-                self._update_leader_attributes(leader=leader, leader_dict=leader_dict)
+                country = self._countries_by_ingame_id.get(leader_dict.get("country"))
+                self._update_leader_attributes(country=country, leader=leader, leader_dict=leader_dict)
             if not leader.is_active:
                 country_data = leader.country.get_most_recent_data()
                 self._session.add(
@@ -1170,6 +1178,12 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             + self._random_instance.randint(-15, 15)
         )
         subclass, leader_traits = self._get_leader_traits(leader_dict)
+        ethic = leader_dict.get("ethic", "ethic_neutral")
+        job = leader_dict.get("job")
+        planet_id = leader_dict.get("planet")
+        planet = self._planets_by_ingame_id.get(planet_id)
+        creator_id = leader_dict.get("creator")
+        creator = self._countries_by_ingame_id.get(creator_id)
         leader = datamodel.Leader(
             country=country_model,
             leader_id_in_game=leader_id,
@@ -1180,9 +1194,13 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             is_active=True,
             subclass=subclass,
             leader_traits=leader_traits,
+            ethic=ethic,
+            job=job,
+            planet=planet,
+            creator=creator,
         )
         self._update_leader_attributes(
-            leader=leader, leader_dict=leader_dict
+            country=country_model, leader=leader, leader_dict=leader_dict
         )  # sets additional attributes
         country_data = country_model.get_most_recent_data()
         event = datamodel.HistoricalEvent(
@@ -1191,8 +1209,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader=leader,
             start_date_days=date_hired,
             end_date_days=self._basic_info.date_in_days,
-            event_is_known_to_player=country_data is not None
-            and country_data.attitude_towards_player.reveals_economy_info(),
+            event_is_known_to_player=(country_model is not None and country_model.is_player)
+            or (country_data is not None and country_data.attitude_towards_player.reveals_economy_info()),
         )
         self._session.add(event)
         return leader
@@ -1206,17 +1224,15 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         last_name = dump_name(name_dict.get("second_name", ""))
         return first_name, last_name
 
-    def _update_leader_attributes(self, leader: datamodel.Leader, leader_dict):
-        if "pre_ruler_class" in leader_dict:
-            leader_class = leader_dict.get("pre_ruler_class", "unknown class")
-        else:
-            leader_class = leader_dict.get("class", "unknown class")
+    def _update_leader_attributes(self, country: datamodel.Country, leader: datamodel.Leader, leader_dict):
+        leader_class = leader_dict.get("class", "unknown class")
         leader_gender = leader_dict.get("gender", "other")
         first_name, second_name = self.get_leader_name(leader_dict)
         level = leader_dict.get("level", -1)
         species_id = leader_dict.get("species", -1)
         leader_species = self._species_dict.get(species_id)
         subclass, leader_traits = self._get_leader_traits(leader_dict)
+        ethic = leader_dict.get("ethic", "ethic_neutral")
         if leader_species is None:
             logger.warning(
                 f"{self._basic_info.logger_str} Invalid species ID {species_id} for leader {leader_dict}"
@@ -1229,12 +1245,13 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             or leader.gender != leader_gender
             or leader.species != leader_species
             or leader.leader_traits != leader_traits
+            or leader.country != country
+            or leader.ethic != ethic
         ):
             hist_event_kwargs = dict(
-                country=leader.country,
+                country=country,
                 start_date_days=self._basic_info.date_in_days,
                 leader=leader,
-                event_is_known_to_player=leader.country.is_player,
             )
             if leader.last_level != level:
                 self._session.add(
@@ -1242,6 +1259,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                         **hist_event_kwargs,
                         event_type=datamodel.HistoricalEventType.level_up,
                         db_description=self._get_or_add_shared_description(str(level)),
+                        event_is_known_to_player=country is not None and country.is_player,
                     )
                 )
             if leader.leader_traits != leader_traits:
@@ -1263,8 +1281,42 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                             **hist_event_kwargs,
                             event_type=event_type,
                             db_description=self._get_or_add_shared_description(trait),
+                            event_is_known_to_player=country is not None and country.is_player,
                         )
                     )
+            if leader.country != country:
+                if leader.country is not None:
+                    country_data = leader.country.get_most_recent_data()
+                    self._session.add(
+                        datamodel.HistoricalEvent(
+                            event_type=datamodel.HistoricalEventType.leader_left_country,
+                            country=leader.country,
+                            leader=leader,
+                            start_date_days=self._basic_info.date_in_days,
+                            event_is_known_to_player=(leader.country is not None and leader.country.is_player)
+                            or (country_data is not None and country_data.attitude_towards_player.reveals_economy_info()),
+                        )
+                    )
+                if country is not None:
+                    country_data = country.get_most_recent_data()
+                    self._session.add(
+                        datamodel.HistoricalEvent(
+                            **hist_event_kwargs,
+                            event_type=datamodel.HistoricalEventType.leader_recruited,
+                            end_date_days=self._basic_info.date_in_days,
+                            event_is_known_to_player=(country is not None and country.is_player)
+                            or (country_data is not None and country_data.attitude_towards_player.reveals_economy_info()),
+                        )
+                    )
+            if leader.ethic != ethic:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        **hist_event_kwargs,
+                        event_type=datamodel.HistoricalEventType.leader_changed_ethic,
+                        db_description=self._get_or_add_shared_description(ethic),
+                        event_is_known_to_player=country is not None and country.is_player,
+                    )
+                )
 
             leader.last_level = level
             leader.first_name = first_name
@@ -1274,6 +1326,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader.gender = leader_gender
             leader.species = leader_species
             leader.leader_traits = leader_traits
+            leader.country = country
+            leader.ethic = ethic
             self._session.add(leader)
 
     def _get_leader_traits(self, leader_dict) -> (str, str):
@@ -1312,7 +1366,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
 
 
 class PlanetProcessor(AbstractGamestateDataProcessor):
-    ID = "planet_models"
+    ID = PLANET_PROCESSOR_ID
     DEPENDENCIES = [SystemProcessor.ID]
 
     def __init__(self):
@@ -1571,36 +1625,31 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 sector_description = self._get_or_add_shared_description(
                     text=dump_name(sector_info.get("name", "Unnamed"))
                 )
-                governor_model = self._leaders_dict.get(sector_info.get("governor"))
+                sector_capital = self._planets_dict.get(
+                    sector_info.get("local_capital")
+                )
+                sector_capital_planet_dict = self._gamestate_dict["planets"]["planet"].get(sector_info.get("local_capital"))
+                governor_model = self._leaders_dict.get(sector_capital_planet_dict.get("governor")) if sector_capital_planet_dict is not None else None
 
                 for system_id in sector_info.get("systems", []):
                     self._history_add_planetary_events_within_sector(
-                        country_model, system_id, governor_model
+                        country_model, system_id, governor_model, sector_capital, sector_description
                     )
                     if system_id in unprocessed_systems:
                         unprocessed_systems.remove(system_id)
 
-                sector_capital = self._planets_dict.get(
-                    sector_info.get("local_capital")
-                )
-                if governor_model is not None and sector_capital is not None:
-                    self._history_add_or_update_governor_sector_events(
-                        country_model,
-                        sector_capital,
-                        governor_model,
-                        sector_description,
-                    )
-
             for system_id in unprocessed_systems:
                 self._history_add_planetary_events_within_sector(
-                    country_model, system_id, None
+                    country_model, system_id, None, None, None
                 )
 
     def _history_add_planetary_events_within_sector(
         self,
         country_model: datamodel.Country,
         system_id: int,
-        governor: Optional[datamodel.Leader],
+        sector_governor: Optional[datamodel.Leader],
+        sector_capital: Optional[datamodel.Planet],
+        sector_description: Optional[datamodel.SharedDescription],
     ):
         system_model = self._systems_dict.get(system_id)
         if system_model is None:
@@ -1633,6 +1682,8 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
             planet_model = self._planets_dict.get(planet_id)
             if planet_model is None:
                 continue
+            planet_governor = self._leaders_dict.get(planet_dict.get("governor"))
+            governor = planet_governor if planet_governor is not None else sector_governor
             if is_colonizable:
                 self._history_add_or_update_colonization_events(
                     country_model, system_model, planet_model, planet_dict, governor
@@ -1651,6 +1702,14 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                         system=system_model,
                         event_is_known_to_player=country_model.has_met_player(),
                     )
+                )
+            if planet_governor is not None :
+                self._history_add_or_update_governor_events(
+                    country_model,
+                    planet_model,
+                    sector_capital,
+                    planet_governor,
+                    sector_description,
                 )
 
     def _history_add_or_update_colonization_events(
@@ -1762,18 +1821,20 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
             matching_event.end_date_days = self._basic_info.date_in_days - 1
         self._session.add(matching_event)
 
-    def _history_add_or_update_governor_sector_events(
+    def _history_add_or_update_governor_events(
         self,
-        country_model,
-        sector_capital: datamodel.Planet,
+        country_model: datamodel.Country,
+        planet: datamodel.Planet,
+        sector_capital: Optional[datamodel.Planet],
         governor: datamodel.Leader,
-        sector_description: datamodel.SharedDescription,
+        sector_description: Optional[datamodel.SharedDescription],
     ):
-        # check if governor was ruling same sector before => update date and return
+        event_type = datamodel.HistoricalEventType.governed_sector if sector_capital == planet else datamodel.HistoricalEventType.governed_planet
+        # check if governor was ruling same planet/sector before => update date and return
         event = (
             self._session.query(datamodel.HistoricalEvent)
             .filter_by(
-                event_type=datamodel.HistoricalEventType.governed_sector,
+                event_type=event_type,
                 db_description=sector_description,
             )
             .order_by(datamodel.HistoricalEvent.end_date_days.desc())
@@ -1783,12 +1844,12 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
             event is not None
             and event.leader == governor
             and event.end_date_days > self._basic_info.date_in_days - 5 * 360
-        ):  # if the governor ruled this sector less than 5 years ago, re-use the event...
+        ):  # if the governor ruled this planet/sector less than 5 years ago, re-use the event...
             event.end_date_days = self._basic_info.date_in_days - 1
         else:
             country_data = country_model.get_most_recent_data()
             event = datamodel.HistoricalEvent(
-                event_type=datamodel.HistoricalEventType.governed_sector,
+                event_type=event_type,
                 leader=governor,
                 country=country_model,
                 db_description=sector_description,
@@ -1798,9 +1859,9 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 and country_data.attitude_towards_player.reveals_economy_info(),
             )
 
-        if event.planet is None and sector_capital is not None:
-            event.planet = sector_capital
-            event.system = sector_capital.system
+        if event.planet is None and planet is not None:
+            event.planet = planet
+            event.system = planet.system
         self._session.add(event)
 
 
@@ -3032,7 +3093,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
         ):
             if not isinstance(raw_leader_dict, dict):
                 continue
-            if raw_leader_dict.get("class") != "envoy":
+            if raw_leader_dict.get("class") not in {"envoy", "official"}:
                 continue
             if envoy_id_ingame not in leaders:
                 continue
@@ -3099,6 +3160,12 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
     def _previous_assignment(
         self, envoy: datamodel.Leader
     ) -> Optional[datamodel.HistoricalEvent]:
+        # officials now do some assignments (galcom, federation) that envoys did previously
+        # however, the previous assignment logic breaks when officials then do other things
+        # for now, disabling this logic for non-envoys
+        # long term, all the leader processing should be refactored to address tech debt for special ruler/envoy logic
+        if envoy.leader_class != "envoy":
+            return None
         return (
             self._session.query(datamodel.HistoricalEvent)
             .filter(datamodel.HistoricalEvent.end_date_days.is_(None))
