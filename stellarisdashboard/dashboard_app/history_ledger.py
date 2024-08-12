@@ -298,6 +298,12 @@ class EventTemplateDictBuilder:
             if event.end_date_days is not None:
                 end_date = datamodel.days_to_date(event.end_date_days)
                 is_active = event.end_date_days >= self._most_recent_date
+            description = event.description
+            if type(description) is str:
+                if description.startswith("{"):
+                    description = game_info.render_name(description)
+                else:
+                    description = game_info.lookup_key(description)
             event_dict = dict(
                 country=event.country,
                 start_date=start,
@@ -310,7 +316,7 @@ class EventTemplateDictBuilder:
                 planet=event.planet,
                 faction=event.faction,
                 target_country=event.target_country,
-                description=event.description,
+                description=description,
                 fleet=event.fleet,
             )
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
@@ -468,11 +474,16 @@ class EventTemplateDictBuilder:
         country_url = self._get_url_for(leader_model.country)
         details = {
             "Leader Name": leader_model.rendered_name,
-            "Gender": game_info.convert_id_to_name(leader_model.gender),
-            "Species": leader_model.species.rendered_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
             "Subclass": f"{game_info.lookup_key(leader_model.subclass)}" or "None",
             "Traits": ", ".join(leader_model.rendered_traits),
+            "Species": leader_model.species.rendered_name,
+            "Gender": game_info.convert_id_to_name(leader_model.gender),
+            "Ethic": game_info.lookup_key(leader_model.ethic),
+            "Previous Position": game_info.lookup_key(f"job_{leader_model.job}")
+            if leader_model.job is not None else "None",
+            "Home Planet": self._get_url_for(leader_model.planet),
+            "Country of Origin": self._get_url_for(leader_model.creator),
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),
             "Last active": datamodel.days_to_date(
@@ -564,7 +575,7 @@ class EventTemplateDictBuilder:
             buildings[building.name] += building.count
         if buildings:
             details["Buildings"] = ", ".join(
-                f"{k}: {v}" for k, v in sorted(buildings.items())
+                f"{k}: {v}" for k, v in sorted(buildings.items()) if v > 0
             )
 
         return details

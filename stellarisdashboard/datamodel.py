@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker, relationship, scoped_session
 from alembic.autogenerate import produce_migrations
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from alembic.operations.ops import ModifyTableOps
+from alembic.operations.ops import ModifyTableOps, CreateForeignKeyOp
 
 from stellarisdashboard import config, game_info
 
@@ -45,11 +45,15 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
             stack = [migrations.upgrade_ops]
             while stack:
                 elem = stack.pop(0)
+                print(elem)
                 if use_batch and isinstance(elem, ModifyTableOps):
                     with operations.batch_alter_table(
                         elem.table_name, schema=elem.schema
                     ) as batch_ops:
                         for table_elem in elem.ops:
+                            if isinstance(table_elem, CreateForeignKeyOp):
+                                # see alembic bug about constraint names: https://github.com/sqlalchemy/alembic/issues/1195
+                                table_elem.constraint_name = table_elem.local_cols[0]
                             batch_ops.invoke(table_elem)
                 elif hasattr(elem, "ops"):
                     stack.extend(elem.ops)
@@ -173,6 +177,10 @@ class HistoricalEventType(enum.Enum):
     fleet_command = enum.auto()
     gained_trait = enum.auto()
     lost_trait = enum.auto()
+    # more further down (to preserve auto enum):
+    # - leader_changed_ethic
+    # - leader_left_country
+    # - governed_planet
 
     # empire progress:
     researched_technology = enum.auto()
@@ -238,6 +246,11 @@ class HistoricalEventType(enum.Enum):
     conquered_system = enum.auto()
     lost_system = enum.auto()
 
+    # more leader events
+    leader_changed_ethic = enum.auto()
+    leader_left_country = enum.auto()
+    governed_planet = enum.auto()
+
     def __str__(self):
         return self.name
 
@@ -285,9 +298,11 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.sector_creation,
             HistoricalEventType.planetary_unrest,
             HistoricalEventType.governed_sector,
+            HistoricalEventType.governed_planet,
             HistoricalEventType.councilor,
             HistoricalEventType.faction_leader,
             HistoricalEventType.leader_recruited,
+            HistoricalEventType.leader_left_country,
             HistoricalEventType.leader_died,
             HistoricalEventType.researched_technology,
             HistoricalEventType.tradition,
@@ -299,6 +314,7 @@ class HistoricalEventType(enum.Enum):
             return HistoricalEventScope.country
         elif self in {
             HistoricalEventType.level_up,
+            HistoricalEventType.leader_changed_ethic,
         }:
             return HistoricalEventScope.leader
         elif self in {
@@ -1452,6 +1468,12 @@ class Leader(Base):
     first_name = Column(String(80))
     second_name = Column(String(80))
 
+    # background info
+    creator_id = Column(ForeignKey(Country.country_id))
+    planet_id = Column(ForeignKey("planet.planet_id"))
+    ethic = Column(String(80))
+    job = Column(String(80))
+
     species_id = Column(ForeignKey(Species.species_id))
     leader_class = Column(String(80))
     gender = Column(String(20))
@@ -1470,6 +1492,8 @@ class Leader(Base):
     country = relationship(
         "Country", back_populates="leaders", foreign_keys=[country_id], post_update=True
     )
+    creator = relationship("Country", foreign_keys=[creator_id], post_update=True)
+    planet = relationship("Planet", foreign_keys=[planet_id], post_update=True)
     species = relationship("Species")
     fleet_command = relationship("Fleet", back_populates="commander")
     historical_events = relationship(
