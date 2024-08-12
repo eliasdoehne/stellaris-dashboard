@@ -476,7 +476,7 @@ guiTypes = {
 				pdx_tooltip = "STELLARIS_DASHBOARD_TOOLTIP"
 				pdx_tooltip_anchor_offset = { x= 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = lower_left
-				web_link="http://127.0.0.1:28053/checkversion/v6.2"
+				web_link="http://127.0.0.1:28053/checkversion/v6.3"
 			}
 
 			iconType = {
