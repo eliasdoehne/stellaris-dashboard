@@ -29,5 +29,5 @@ six==1.16.0
 SQLAlchemy==1.4.46
 tenacity==8.1.0
 tqdm==4.66.3
-waitress==2.1.2
+waitress==3.0.1
 Werkzeug==2.2.3
