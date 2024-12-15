@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 def dump_name(name: dict):
     return json.dumps(name, sort_keys=True)
 
+# this is a naive cache for shared_descriptions, which helps to cut down on DB queries while processing
+# it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
+# the built-in @cache decorator was leaking memory, hanging on to references of processor instances
 _shared_description_cache: dict[str, datamodel.SharedDescription] = {}
 
 @dataclasses.dataclass
@@ -72,6 +75,8 @@ class TimelineExtractor:
                 )
                 if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
+                
+            # needs to be cleared between processing saves, see more notes at declaration
             _shared_description_cache.clear()
 
     def _check_if_gamestate_exists(self, db_game):
