@@ -2,7 +2,6 @@ import abc
 import collections
 import dataclasses
 import datetime
-from functools import cache
 import itertools
 import json
 import logging
@@ -21,17 +20,7 @@ logger = logging.getLogger(__name__)
 def dump_name(name: dict):
     return json.dumps(name, sort_keys=True)
 
-@cache
-def _get_or_add_shared_description(session, text: str) -> datamodel.SharedDescription:
-    matching_description = (
-        session.query(datamodel.SharedDescription)
-        .filter_by(text=text)
-        .one_or_none()
-    )
-    if matching_description is None:
-        matching_description = datamodel.SharedDescription(text=text)
-        session.add(matching_description)
-    return matching_description
+_shared_description_cache: dict[str, datamodel.SharedDescription] = {}
 
 @dataclasses.dataclass
 class BasicGameInfo:
@@ -83,7 +72,7 @@ class TimelineExtractor:
                 )
                 if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
-            _get_or_add_shared_description.cache_clear()
+            _shared_description_cache.clear()
 
     def _check_if_gamestate_exists(self, db_game):
         existing_dates = {gs.date for gs in db_game.game_states}
@@ -264,7 +253,18 @@ class AbstractGamestateDataProcessor(abc.ABC):
         pass
 
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
-        _get_or_add_shared_description(self._session, text)
+        if text in _shared_description_cache:
+            return _shared_description_cache[text]
+        matching_description = (
+            self._session.query(datamodel.SharedDescription)
+            .filter_by(text=text)
+            .one_or_none()
+        )
+        if matching_description is None:
+            matching_description = datamodel.SharedDescription(text=text)
+            self._session.add(matching_description)
+        _shared_description_cache[text] = matching_description
+        return matching_description
 
 
 class SystemProcessor(AbstractGamestateDataProcessor):
