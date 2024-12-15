@@ -7,6 +7,14 @@
 {% endif %}
 {% endblock %}
 
+{% macro render_leader(event, fallback="an unknown leader") -%}
+    {% if "leader" in event %}
+        {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }}
+    {% else %}
+        {{ fallback }}
+    {% endif %}
+{%- endmacro %}
+
 {% block body %}
 {% if not is_filtered_page %}
 <div class="ledgerbox">
@@ -69,7 +77,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} ruled the {{ links[event["country"]] | safe}}
+                    {{ render_leader(event, "An unknown leader") }} ruled the {{ links[event["country"]] | safe}}
                     {% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system {% endif %}.
                 </span>
             </div>
@@ -79,7 +87,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} relocated their capital to the {{ event["planet"].planetclass }} {{ links[event["planet"]] | safe }}
@@ -94,7 +102,7 @@
                 <span class="eventtext">
                     The {{ links[event["country"]] | safe }} colonized the {{ event["planet"].planetclass }}
                     {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
-                    {% if "leader" in event%} under the governorship of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}{% endif %}.
+                    {% if "leader" in event%} under the governorship of {{ render_leader(event) }}{% endif %}.
                  </span>
             </div>
         </li>
@@ -160,7 +168,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                     {{event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} was promoted to rank {{event["description"]}}.
+                    {{ render_leader(event, "An unknown leader") }}
+                    was promoted to rank {{event["description"]}}.
                  </span>
             </div>
         </li>
@@ -169,7 +178,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ links[event["leader"]] | safe }} served as {{event["description"]}} on the council of the {{ links[event["country"]] | safe}}.
+                    {{ render_leader(event, "An unknown leader") }}
+                    served as {{event["description"]}} on the council of the {{ links[event["country"]] | safe}}.
                  </span>
             </div>
         </li>
@@ -178,7 +188,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}
                     {{ links[event["country"]] | safe}} prepared a new agenda "{{event["description"]}}".
                  </span>
             </div>
@@ -188,7 +198,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}
                     {{ links[event["country"]] | safe}} launched the agenda "{{event["description"]}}".
                  </span>
             </div>
@@ -207,7 +217,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }}
+                    {{ render_leader(event, "An unknown leader") }}
                     governed the {{event["description"]}} sector
                     from the planet {{ links[event["planet"]] | safe }}
                     in the {{ links[event["system"]] | safe }} system.
@@ -219,7 +229,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }}
+                    {{ render_leader(event, "An unknown leader") }}
                     governed the planet {{ links[event["planet"]] | safe }}
                     in the {{ links[event["system"]] | safe }} system.
                  </span>
@@ -230,7 +240,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}{{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}{% else %}The {{ links[event["country"]] | safe}}{% endif %}
+                    {% if "leader" in event %}{{ render_leader(event) }}{% else %}The {{ links[event["country"]] | safe}}{% endif %}
                     enacted the "{{event["description"]}}" edict.
                  </span>
             </div>
@@ -240,7 +250,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}
                     {{ links[event["country"]] | safe}} enacted a new policy on {{event["description"]}}.
                  </span>
             </div>
@@ -250,7 +260,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %}Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the {% else %}The {% endif %}
+                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}
                     {{ links[event["country"]] | safe}} changed their policy on {{event["description"]}}.
                  </span>
             </div>
@@ -261,7 +271,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %}
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} ascended the {{ links[event["country"]] | safe }} with "{{event["description"]}}".
+                    {{ render_leader(event) }} ascended the {{ links[event["country"]] | safe }} with "{{event["description"]}}".
                     {% else %}
                     The  {{ links[event["country"]] | safe }} ascended with "{{event["description"]}}".
                     {% endif %}
@@ -274,7 +284,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     {% if "leader" in event %}
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} reformed the {{ links[event["country"]] | safe }} government:
+                    {{ render_leader(event) }} reformed the {{ links[event["country"]] | safe }} government:
                     {% else %}
                     Government reforms in the {{ links[event["country"]] | safe}}:
                     {% endif %}
@@ -287,7 +297,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} adopted the "{{ event["description"]}}" tradition.
@@ -299,7 +309,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} was leader of the "{{ event["faction"].rendered_name}}" faction.
+                    {{ render_leader(event, "An unknown leader") }}
+                    was leader of the "{{ event["faction"].rendered_name}}" faction.
                  </span>
             </div>
         </li>
@@ -308,7 +319,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} gained the "{{ event["description"] }}" trait.
+                    {{ render_leader(event, "An unknown leader") }}
+                    gained the "{{ event["description"] }}" trait.
                  </span>
             </div>
         </li>
@@ -317,7 +329,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} lost the "{{ event["description"] }}" trait.
+                    {{ render_leader(event, "An unknown leader") }}
+                    lost the "{{ event["description"] }}" trait.
                  </span>
             </div>
         </li>
@@ -326,7 +339,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} established first contact with the {{ links[event["target_country"]] | safe }}.
@@ -338,7 +351,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} declared rivalry against the {{ links[event["target_country"]] | safe }}.
@@ -351,7 +364,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} received a rivalry declaration from the {{ links[event["target_country"]] | safe }}.
@@ -364,7 +377,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} revoked border access to the {{ links[event["target_country"]] | safe }}.
@@ -395,7 +408,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} entered a defensive pact with the {{ links[event["target_country"]] | safe }}.
@@ -408,7 +421,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} entered a research agreement with the {{ links[event["target_country"]] | safe }}.
@@ -421,7 +434,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} entered a commercial pact with the {{ links[event["target_country"]] | safe }}.
@@ -434,7 +447,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} entered a migration treaty with the {{ links[event["target_country"]] | safe }}.
@@ -447,7 +460,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} entered a non-aggression pact with the {{ links[event["target_country"]] | safe }}.
@@ -459,7 +472,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} and {{ links[event["target_country"]] | safe }} are now allied in the  "{{ event["description"] }}" federation.
@@ -471,7 +484,9 @@
             <div class="eventdescription">
                 <span class="dateblock"><!-- TODO fix is_active post-leader-rework {% if event["is_active"] %}(A){% endif %} -->{{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    The {{ links[event["country"]] | safe }} sent {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} to increase their diplomatic weight in the galactic community.
+                    The {{ links[event["country"]] | safe }} sent
+                    {{ render_leader(event) }}
+                    to increase their diplomatic weight in the galactic community.
                  </span>
             </div>
         </li>
@@ -480,7 +495,9 @@
             <div class="eventdescription">
                 <span class="dateblock"><!-- TODO fix is_active post-leader-rework {% if event["is_active"] %}(A){% endif %} -->{{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    The {{ links[event["country"]] | safe }} sent {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} to improve the cohesion of the {{ event["description"] }}.
+                    The {{ links[event["country"]] | safe }} sent
+                    {{ render_leader(event) }}
+                    to improve the cohesion of the {{ event["description"] }}.
                  </span>
             </div>
         </li>
@@ -489,7 +506,9 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    The {{ links[event["country"]] | safe }} sent {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} to improve relations with the {{ links[event["target_country"]] | safe }}.
+                    The {{ links[event["country"]] | safe }} sent
+                    {{ render_leader(event) }}
+                    to improve relations with the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -498,7 +517,9 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    The {{ links[event["country"]] | safe }} sent {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} to harm relations with the {{ links[event["target_country"]] | safe }}.
+                    The {{ links[event["country"]] | safe }} sent
+                    {{ render_leader(event) }}
+                    to harm relations with the {{ links[event["target_country"]] | safe }}.
                  </span>
             </div>
         </li>
@@ -507,7 +528,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} joined the Galactic Community.
@@ -519,7 +540,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} joined the Galactic Council.
@@ -531,7 +552,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} left the Galactic Community.
@@ -543,7 +564,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} left the Galactic Council.
@@ -555,8 +576,10 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    Finished construction of {{ event["description"] }} in the {{ links[event["system"]] | safe }} system{% if "leader" in event %},
-                    under the governorship of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}{% endif %}.
+                    Finished construction of {{ event["description"] }} in the {{ links[event["system"]] | safe }} system
+                    {% if "leader" in event %},
+                        under the governorship of {{ render_leader(event) }}
+                    {% endif %}.
                  </span>
             </div>
         </li>
@@ -565,7 +588,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The {{ links[event["country"]] | safe }} hired {{ event["leader"].leader_class }} {{ links[event["leader"]] | safe}}.
+                    The {{ links[event["country"]] | safe }} hired
+                    {{ render_leader(event) }}.
                  </span>
             </div>
         </li>
@@ -574,7 +598,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}
+                    {{ render_leader(event, "An unknown leader") }}
                     left the service of the {{ links[event["country"]] | safe }}.
                  </span>
             </div>
@@ -584,7 +608,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}
+                    {{ render_leader(event, "An unknown leader") }}
                     changed their ethic to {{ event["description"] }}.
                  </span>
             </div>
@@ -595,7 +619,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} created the {{ event["description"] }} sector{% if "planet" in event %}
@@ -619,7 +643,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }} war{{ event["description"] }}{% if event["target_country"] %} {{ links[event["target_country"]] | safe}}{% endif %}.
@@ -632,7 +656,7 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
 
-                    {% if "leader" in event %} Under the rule of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the
+                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} made peace in the {{ links[event["war"]] | safe }} conflict.
@@ -653,7 +677,7 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {% if "leader" in event %} under the governorship of {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe}}, the {% endif %}{{ links[event["country"]] | safe }}
+                    {% if "leader" in event %} under the governorship of {{ render_leader(event) }}, the {% endif %}{{ links[event["country"]] | safe }}
                     terraformed the planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
                     {{ event["description"] }}.
                 </span>
@@ -674,7 +698,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} died or retired.
+                    {{ render_leader(event, "An unknown leader") }}
+                    died or retired.
                 </span>
             </div>
         </li>
@@ -683,7 +708,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }} commanded the
+                    {{ render_leader(event, "An unknown leader") }}
+                    {% if event["fleat"].is_civilian_fleet %} commanded {% else %} led {% endif %} the
                     {% if event["fleet"].is_civilian_fleet %} science ship {% else %} fleet {% endif %}
                     "{{ event["fleet"].rendered_name }}".
                 </span>

@@ -7,7 +7,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while, take_while1};
 use nom::bytes::streaming::escaped;
 use nom::character::complete::{char, multispace0, multispace1, none_of, one_of};
-use nom::combinator::{map, map_res, recognize};
+use nom::combinator::{map, map_res, not, recognize};
 use nom::error::context;
 use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
@@ -237,7 +237,10 @@ fn parse_int(input: &str) -> IResult<&str, i64> {
 fn parse_float(input: &str) -> IResult<&str, f64> {
     preceded(
         multispace0,
-        map_res(recognize(double), |s: &str| s.parse::<f64>()),
+        preceded(
+            not(tag("nan")),
+            map_res(recognize(double), |s: &str| s.parse::<f64>()),
+        ),
     )(input)
 }
 
@@ -571,6 +574,15 @@ mod tests {
         );
         // println!("{}", test_input);
         parse_file(test_input.as_str()).expect("Should parse");
+    }
+
+    #[test]
+    fn test_nan_in_value() {
+        // from a bug report for a save that failed to parse
+        // narrowed down to this input
+        // `parse_float` was grabbing the initial "nan"
+        let test_input = "1=nano_shipyard";
+        parse_file(test_input).expect("Should parse");
     }
 
     #[test]

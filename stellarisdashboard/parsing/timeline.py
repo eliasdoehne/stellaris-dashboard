@@ -2,7 +2,6 @@ import abc
 import collections
 import dataclasses
 import datetime
-from functools import cache
 import itertools
 import json
 import logging
@@ -21,6 +20,10 @@ logger = logging.getLogger(__name__)
 def dump_name(name: dict):
     return json.dumps(name, sort_keys=True)
 
+# this is a naive cache for shared_descriptions, which helps to cut down on DB queries while processing
+# it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
+# the built-in @cache decorator was leaking memory, hanging on to references of processor instances
+_shared_description_cache: dict[str, datamodel.SharedDescription] = {}
 
 @dataclasses.dataclass
 class BasicGameInfo:
@@ -72,6 +75,9 @@ class TimelineExtractor:
                 )
                 if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                     raise e
+                
+            # needs to be cleared between processing saves, see more notes at declaration
+            _shared_description_cache.clear()
 
     def _check_if_gamestate_exists(self, db_game):
         existing_dates = {gs.date for gs in db_game.game_states}
@@ -251,8 +257,9 @@ class AbstractGamestateDataProcessor(abc.ABC):
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         pass
 
-    @cache
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
+        if text in _shared_description_cache:
+            return _shared_description_cache[text]
         matching_description = (
             self._session.query(datamodel.SharedDescription)
             .filter_by(text=text)
@@ -261,6 +268,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
         if matching_description is None:
             matching_description = datamodel.SharedDescription(text=text)
             self._session.add(matching_description)
+        _shared_description_cache[text] = matching_description
         return matching_description
 
 
