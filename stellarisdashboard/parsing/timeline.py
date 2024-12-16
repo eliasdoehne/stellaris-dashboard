@@ -1334,8 +1334,15 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
             leader.gender = leader_gender
             leader.species = leader_species
             leader.leader_traits = leader_traits
-            leader.country = country
             leader.ethic = ethic
+
+            # apparently, setting leader.country = None deletes the entire leader from the DB
+            # but setting leader.country_id = None is fine
+            if country is None:
+                leader.country_id = None
+            else:
+                leader.country = country
+
             self._session.add(leader)
 
     def _get_leader_traits(self, leader_dict) -> (str, str):
