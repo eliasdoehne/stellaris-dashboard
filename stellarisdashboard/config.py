@@ -466,6 +466,26 @@ class Config:
             f"Loaded {len(files)} localization files from {self.game_data_dirs}"
         )
         return files
+    
+    
+    @property
+    def save_file_path_is_valid(self):
+        return self.save_file_path is not None\
+            and self.save_file_path.is_dir()\
+            and next(self.save_file_path.glob("*/*.sav"), None) is not None
+    
+    @property
+    def stellaris_install_path_is_valid(self):
+        return self.stellaris_install_path is not None\
+            and self.stellaris_install_path.is_dir()\
+            and (self.stellaris_install_path / "localisation").is_dir()\
+            and (self.stellaris_install_path / "flags/colors.txt").is_file()
+    
+    @property
+    def stellaris_user_data_path_is_valid(self):
+        return self.stellaris_user_data_path is not None\
+            and self.stellaris_user_data_path.is_dir()\
+            and (self.stellaris_user_data_path / "dlc_load.json").is_file()
 
 
 def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):

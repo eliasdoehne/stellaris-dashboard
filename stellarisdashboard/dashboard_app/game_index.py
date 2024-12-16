@@ -30,4 +30,7 @@ def index_page(version=None):
         show_old_version_notice=show_old_version_notice,
         version=utils.VERSION,
         update_version_id=version,
+        save_file_path_is_valid=config.CONFIG.save_file_path_is_valid,
+        stellaris_install_path_is_valid=config.CONFIG.stellaris_install_path_is_valid,
+        stellaris_user_data_path_is_valid=config.CONFIG.stellaris_user_data_path_is_valid,
     )
