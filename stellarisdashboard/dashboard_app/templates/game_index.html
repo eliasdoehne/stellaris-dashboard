@@ -1,5 +1,40 @@
 {% extends "layout.html" %}
 {% block body %}
+
+<ul class="notifications">
+    {% if not save_file_path_is_valid %}
+        <li class="warning">
+            <h2>⚠️ Save files folder is invalid</h2>
+            <p>This folder should contain folders for each game, which each contain <code>.sav</code> files.</p>
+            <p><small>(Usually, this means you use cloud saves, which you need to configure manually. If the folder is correct, but you simply do not have any saved games, you can ignore this warning.)</small></p>
+            <p><a href="/settings">Go to Settings to change it, then restart the dashboard.</a></p>
+        </li>
+    {% endif %}
+    {% if not stellaris_install_path_is_valid %}
+        <li class="warning">
+            <h2>⚠️ Stellaris install folder is invalid</h2>
+            <p>This folder should contain the Stellaris install data, such as the <code>localisation</code> and <code>flags</code> folders.</p>
+            <p><small>(Usually this means your game is not installed in the default Steam location of your main drive.)</small></p>
+            <p><a href="/settings">Go to Settings to change it, then restart the dashboard.</a></p>
+        </li>
+    {% endif %}
+    {% if not stellaris_user_data_path_is_valid %}
+        <li class="warning">
+            <h2>⚠️ Stellaris user data folder is invalid</h2>
+            <p>This folder should contain the <code>dlc_load.json</code> file.</p>
+            <p><a href="/settings">Go to Settings to change it, then restart the dashboard.</a></p>
+        </li>
+    {% endif %}
+    {% if games|length == 0 %}
+        <li class="info">
+            <h2>ℹ️ No games available</h2>
+            <p>Don’t panic! Looks like this is your first time opening the dashboard.</p>
+            <p>To get started, create a new save now then refresh this page, or simply play until the next autosave then refresh.</p>
+        </li>
+    {% endif %}
+</ul>
+
+{% if games|length %}
 <div class="gamelist">
     <ul class=entries>
         <h1>Available Games</h1>
@@ -17,5 +52,7 @@
         {% endfor %}
     </ul>
 </div>
+{% endif %}
+
 {% endblock %}
 
