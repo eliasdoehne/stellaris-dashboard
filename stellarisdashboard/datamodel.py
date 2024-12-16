@@ -1462,7 +1462,7 @@ class Leader(Base):
 
     leader_id = Column(Integer, primary_key=True)
     game_id = Column(ForeignKey(Game.game_id))
-    country_id = Column(ForeignKey(Country.country_id))
+    country_id = Column(ForeignKey(Country.country_id), nullable=True)
     leader_id_in_game = Column(Integer, index=True)
 
     first_name = Column(String(80))
