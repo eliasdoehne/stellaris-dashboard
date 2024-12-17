@@ -586,6 +586,14 @@ mod tests {
     }
 
     #[test]
+    fn test_escaped_backslash() {
+        // from a bug report for a save that failed to parse
+        // narrowed down to mishandled escaped backslash at end of string
+        let test_input = "prefix=\"GATE \\\\\"";
+        parse_file(test_input).expect("Should parse");
+    }
+
+    #[test]
     fn test_skipped_key_in_mapping() {
         assert_eq!(
             parse_map_key_value_pair("key=other_key=value_1").expect("asdf"),
