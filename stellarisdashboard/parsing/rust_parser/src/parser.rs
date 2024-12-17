@@ -247,7 +247,7 @@ fn parse_float(input: &str) -> IResult<&str, f64> {
 fn parse_str(input: &str) -> IResult<&str, &str> {
     preceded(
         multispace0,
-        delimited(tag("\""), escaped(none_of("\"\\"), '\\', one_of("\"")), tag("\"")),
+        delimited(tag("\""), escaped(none_of("\"\\"), '\\', one_of("\"\\")), tag("\"")),
     )(input)
 }
 
@@ -582,6 +582,14 @@ mod tests {
         // narrowed down to this input
         // `parse_float` was grabbing the initial "nan"
         let test_input = "1=nano_shipyard";
+        parse_file(test_input).expect("Should parse");
+    }
+
+    #[test]
+    fn test_escaped_backslash() {
+        // from a bug report for a save that failed to parse
+        // narrowed down to mishandled escaped backslash at end of string
+        let test_input = "prefix=\"GATE \\\\\"";
         parse_file(test_input).expect("Should parse");
     }
 
