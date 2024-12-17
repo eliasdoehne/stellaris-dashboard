@@ -1,5 +1,5 @@
 name="Stellaris Dashboard"
-version="v6.3"
+version="v6.4"
 tags={
 	"Utilities"
 	"Gameplay"
