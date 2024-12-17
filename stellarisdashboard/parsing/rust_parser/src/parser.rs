@@ -247,7 +247,7 @@ fn parse_float(input: &str) -> IResult<&str, f64> {
 fn parse_str(input: &str) -> IResult<&str, &str> {
     preceded(
         multispace0,
-        delimited(tag("\""), escaped(none_of("\"\\"), '\\', one_of("\"")), tag("\"")),
+        delimited(tag("\""), escaped(none_of("\"\\"), '\\', one_of("\"\\")), tag("\"")),
     )(input)
 }
 
