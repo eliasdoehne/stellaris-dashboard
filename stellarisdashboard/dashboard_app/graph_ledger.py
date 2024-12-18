@@ -165,13 +165,16 @@ def update_country_select_options(search):
 )
 def galaxy_map_system_info(clickData):
     if not clickData:
-        return ""
+        return SELECT_SYSTEM_DEFAULT
     points = clickData.get("points")
     if not points:
-        return ""
+        return SELECT_SYSTEM_DEFAULT
     p = points[0]
     custom_data = p.get("customdata", {})
     system_id = custom_data.get("system_id")
+    system_name = custom_data.get("system_name")
+    country_id = custom_data.get("country_id")
+    country_name = custom_data.get("country_name")
     game_id = custom_data.get("game_id")
     text = p.get("text")
     if not system_id or not game_id or not text:
@@ -180,12 +183,21 @@ def galaxy_map_system_info(clickData):
         children=[
             f"Selected system: ",
             html.A(
-                children=text,
+                children=system_name,
                 href=utils.flask.url_for(
                     "history_page", game_id=game_id, system=system_id
                 ),
                 className="textlink",
             ),
+            " (",
+            html.A(
+                children=country_name,
+                href=utils.flask.url_for(
+                    "history_page", game_id=game_id, country=country_id
+                ),
+                className="textlink",
+            ) if country_id is not None else country_name,
+            ")"
         ]
     )
 
@@ -628,6 +640,9 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         customdata = {
             "system_id": nx_graph.nodes[node]["system_id"],
             "game_id": game_id,
+            "system_name": nx_graph.nodes[node]["name"],
+            "country_name": country,
+            "country_id": nx_graph.nodes[node]["country_id"],
         }
         country_system_markers[country]["customdata"].append(customdata)
         if country != visualization_data.GalaxyMapData.UNCLAIMED:
@@ -932,7 +947,7 @@ def get_layout():
             html.Div(id="hidden-div", style={"display": "none"}),
         ],
         style={
-            "display": "block",
+            "display": "none",
             "width": "100%",
             "height": "100%",
             "margin-left": "auto",
