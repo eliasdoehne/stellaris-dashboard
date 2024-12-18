@@ -15,6 +15,22 @@
     {% endif %}
 {%- endmacro %}
 
+{% macro render_planet_and_class(event, fallback="an unknown planet") -%}
+    {% if event["planet"] is not none %}
+        {% if event["planet"].planet_class is not none %}
+            the {{ event["planet"].planetclass }} {{ links[event["planet"]] | safe }}
+        {% else %}
+            {{ links[event["planet"]] | safe }}
+        {% endif %}
+    {% else %}
+        {{ fallback }}
+    {% endif %}
+{%- endmacro %}
+
+{% macro render_a_an(text) -%}
+    {% if text.startswith(("a", "e", "i", "o", "u")) %} an {% else %} a {% endif %}
+{%- endmacro %}
+
 {% block body %}
 {% if not is_filtered_page %}
 <div class="ledgerbox">
@@ -90,7 +106,7 @@
                     {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the
                     {% else %} The
                     {% endif %}
-                    {{ links[event["country"]] | safe }} relocated their capital to the {{ event["planet"].planetclass }} {{ links[event["planet"]] | safe }}
+                    {{ links[event["country"]] | safe }} relocated their capital to {{ render_planet_and_class(event) }}
                     in the {{ links[event["system"]] | safe }} system.
                 </span>
             </div>
@@ -100,8 +116,8 @@
             <div class="eventdescription">
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
-                    The {{ links[event["country"]] | safe }} colonized the {{ event["planet"].planetclass }}
-                    {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
+                    The {{ links[event["country"]] | safe }} colonized {{ render_planet_and_class(event) }}
+                    in the {{ links[event["system"]] | safe }} system
                     {% if "leader" in event%} under the governorship of {{ render_leader(event) }}{% endif %}.
                  </span>
             </div>
@@ -623,7 +639,7 @@
                     {% else %} The
                     {% endif %}
                     {{ links[event["country"]] | safe }} created the {{ event["description"] }} sector{% if "planet" in event %}
-                    with capital on planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
+                    with capital on the planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system
                     {% endif %}.
                 </span>
             </div>
@@ -689,7 +705,12 @@
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
                     The planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system, owned by the
-                    {{ links[event["country"]] | safe }} was destroyed. It is now a {{ event["planet"].planetclass }}.
+                    {{ links[event["country"]] | safe }} was destroyed.
+                    {% if event["planet"].planet_class is not none %}
+                        It is now {{ render_a_an(event["planet"].planetclass) }} {{ event["planet"].planetclass }}.
+                    {% else %}
+                        No trace remains.
+                    {% endif %}
                  </span>
             </div>
         </li>
