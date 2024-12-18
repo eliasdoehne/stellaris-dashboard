@@ -1551,6 +1551,7 @@ class GalaxyMapData:
                     name=system.rendered_name,
                     country=GalaxyMapData.UNCLAIMED,
                     system_id=system.system_id,
+                    country_id=None,
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
             for hl in session.query(datamodel.HyperLane).all():
@@ -1573,10 +1574,14 @@ class GalaxyMapData:
         start_time = time.process_time()
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
-        for country, nodes in systems_by_owner.items():
+        owner_id_by_system = {}
+        for country_tuple, nodes in systems_by_owner.items():
+            country_id, country_name = country_tuple
             for node in nodes:
-                owner_by_system[node] = country
-                self.galaxy_graph.nodes[node]["country"] = country
+                owner_by_system[node] = country_name
+                owner_id_by_system[node] = country_id
+                self.galaxy_graph.nodes[node]["country"] = country_name
+                self.galaxy_graph.nodes[node]["country_id"] = country_id
 
         for edge in self.galaxy_graph.edges:
             i, j = edge
@@ -1608,20 +1613,20 @@ class GalaxyMapData:
                 for rv1, rv2 in intersecting_ridges:
                     yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
 
-    def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
+    def _get_system_ids_by_owner(self, time_days) -> Dict[Tuple[str, str], Set[int]]:
         owned_systems = set()
-        systems_by_owner = {GalaxyMapData.UNCLAIMED: set()}
+        systems_by_owner = {(None, GalaxyMapData.UNCLAIMED): set()}
 
         with datamodel.get_db_session(self.game_id) as session:
             for system in session.query(datamodel.System):
                 country = system.get_owner_country_at(time_days)
-                country = self._country_display_name(country)
+                country_tuple = self._country_display_tuple(country)
                 owned_systems.add(system.system_id_in_game)
-                if country not in systems_by_owner:
-                    systems_by_owner[country] = set()
-                systems_by_owner[country].add(system.system_id_in_game)
+                if country_tuple not in systems_by_owner:
+                    systems_by_owner[country_tuple] = set()
+                systems_by_owner[country_tuple].add(system.system_id_in_game)
 
-        systems_by_owner[GalaxyMapData.UNCLAIMED] |= (
+        systems_by_owner[(None, GalaxyMapData.UNCLAIMED)] |= (
             set(self.galaxy_graph.nodes) - owned_systems
         )
         return systems_by_owner
@@ -1691,14 +1696,14 @@ class GalaxyMapData:
 
                 self.galaxy_graph.graph["system_borders"][rp].add(rv_tuple)
 
-    def _country_display_name(self, country: datamodel.Country) -> str:
+    def _country_display_tuple(self, country: datamodel.Country) -> Tuple[str, str]:
         if country is None:
-            return GalaxyMapData.UNCLAIMED
+            return (None, GalaxyMapData.UNCLAIMED)
         if config.CONFIG.show_everything:
-            return country.rendered_name
+            return (country.country_id, country.rendered_name)
         if not country.has_met_player():
-            return GalaxyMapData.UNCLAIMED
-        return country.rendered_name
+            return (None, GalaxyMapData.UNCLAIMED)
+        return (country.country_id, country.rendered_name)
 
 
 _MIN_V = 0.4
