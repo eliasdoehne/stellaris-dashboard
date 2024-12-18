@@ -1894,8 +1894,8 @@ class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
 
     def _update_planet_model(self, planet_dict: Dict, planet_model: datamodel.Planet):
         planet_class = planet_dict.get("planet_class")
-        planet_name = dump_name(planet_dict.get("name"))
-        if planet_model.planet_name != planet_name:
+        planet_name = dump_name(planet_dict.get("name")) if "name" in planet_dict else None
+        if planet_name is not None and planet_model.planet_name != planet_name:
             planet_model.planet_name = planet_name
             self._session.add(planet_model)
         if planet_model.planet_class != planet_class:
