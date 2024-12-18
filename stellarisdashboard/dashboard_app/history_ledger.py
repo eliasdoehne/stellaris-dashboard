@@ -531,7 +531,7 @@ class EventTemplateDictBuilder:
         details = {}
 
         if planet_model.planet_class is None:
-            details["Planet Class"] = "Unknown Planet Class"
+            details["Planet Class"] = "Destroyed (no trace remains)"
         else:
             details["Planet Class"] = game_info.convert_id_to_name(
                 planet_model.planet_class, remove_prefix="pc"
