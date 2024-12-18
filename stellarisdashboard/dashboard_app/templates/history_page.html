@@ -730,7 +730,7 @@
                 <span class="dateblock">{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:</span>
                 <span class="eventtext">
                     {{ render_leader(event, "An unknown leader") }}
-                    {% if event["fleat"].is_civilian_fleet %} commanded {% else %} led {% endif %} the
+                    {% if event["fleet"].is_civilian_fleet %} commanded {% else %} led {% endif %} the
                     {% if event["fleet"].is_civilian_fleet %} science ship {% else %} fleet {% endif %}
                     "{{ event["fleet"].rendered_name }}".
                 </span>
