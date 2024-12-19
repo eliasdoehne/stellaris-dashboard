@@ -1128,7 +1128,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 country = self._countries_by_ingame_id.get(leader_dict.get("country"))
                 self._update_leader_attributes(country=country, leader=leader, leader_dict=leader_dict)
             if not leader.is_active:
-                country_data = leader.country.get_most_recent_data()
+                country_data = leader.country.get_most_recent_data() if leader.country is not None else None
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.leader_died,
