@@ -182,7 +182,9 @@ class NameRenderer:
             if subst_key == "num":
                 try:
                     render_template = render_template.replace(
-                        f"$ORD$", self._fmt_ord_number(int(subst_value))
+                        "$ORD$", self._fmt_ord_number(int(subst_value))
+                    ).replace(
+                        "$R$", self._fmt_roman_number(int(subst_value))
                     )
                 except ValueError:
                     ...
@@ -218,7 +220,7 @@ class NameRenderer:
 
         # Find variables that were not resolved so far:
         for match in var_re.findall(render_template):
-            if match == "ORD":
+            if match == "ORD" or match == "R":
                 continue
             resolved = lookup_key(match)
             render_template = re.sub(rf"\${match}\$", resolved, render_template)
@@ -233,6 +235,19 @@ class NameRenderer:
         if num % 10 == 3:
             return f"{num}rd"
         return f"{num}th"
+
+    def _fmt_roman_number(self, num: int):
+        ONES_SYMBOL     = ("", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
+        TENS_SYMBOL     = ("", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC")
+        HUNDREDS_SYMBOL = ("", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM")
+        thousands = int(num / 1000)
+        num -= thousands * 1000
+        hundreds = int(num / 100)
+        num -= hundreds * 100
+        tens = int(num / 10)
+        num -= tens * 10
+        ones = num
+        return "M" * thousands + HUNDREDS_SYMBOL[hundreds] + TENS_SYMBOL[tens] + ONES_SYMBOL[ones]
 
     def _fmt_adjective(self, noun: str) -> str:
         # {'i': '*ian $1$', 'r': '*ran $1$', 'a': '*an $1$', 'e': '*an $1$', 'us': '*an $1$',
