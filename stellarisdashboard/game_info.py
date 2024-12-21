@@ -80,7 +80,7 @@ class NameRenderer:
             logger.warning(f"Failed name: {name_json!r}")
         return rendered
 
-    def render_from_dict(self, name_dict: dict) -> str:
+    def render_from_dict(self, name_dict: dict, tags: set[str] | None = None) -> str:
         if not isinstance(name_dict, dict):
             logger.warning(f"Expected name template dictionary, received {name_dict}")
             return str(name_dict)
@@ -92,23 +92,31 @@ class NameRenderer:
         render_template = self.name_mapping.get(key, key)
         render_template = self._preprocess_template(render_template, name_dict)
 
-        if "value" in name_dict:
-            return self.render_from_dict(name_dict["value"])
+        # this handles tags and variants as documented in the Stellaris file localisation/99_README_GRAMMAR.txt
+        # note: this does not fully implement tag forwarding (section 6) or tag-sensitive text (section 7)
+        # but this seems to be "good enough" for our purposes of rendering names
+        if tags is None:
+            tags = set()
+        render_template, added_tags = self._process_tags_and_variants(render_template, tags)
+        tags.update(added_tags)
 
-        substitution_values = self._collect_substitution_values(name_dict)
+        if "value" in name_dict:
+            return self.render_from_dict(name_dict["value"], tags)
+
+        substitution_values = self._collect_substitution_values(name_dict, tags)
         render_template = self._substitute_variables(
             render_template, substitution_values
         )
         render_template = self._handle_unresolved_variables(render_template)
         return render_template
 
-    def _collect_substitution_values(self, name_dict):
+    def _collect_substitution_values(self, name_dict, tags: set[str]):
         substitution_values = []
         for var in name_dict.get("variables", []):
             if "key" in var and "value" in var:
                 var_key = var.get("key")
                 substitution_values.append(
-                    (var_key, self.render_from_dict(var["value"]))
+                    (var_key, self.render_from_dict(var["value"], tags))
                 )
         return substitution_values
 
@@ -132,6 +140,28 @@ class NameRenderer:
             render_template = "$fmt$"
 
         return render_template
+    
+    def _process_tags_and_variants(self, render_template: str, tags: set[str]):
+        raw_variants = render_template.split("|||")
+        raw_variants.reverse() # variants are checked right-to-left
+        for variant in raw_variants:
+            # tags added 
+            if "&!" in variant:
+                added_tags = set(variant[variant.index("&!") + 2:].split(","))
+                variant = variant[0:variant.index("&!")]
+            else:
+                added_tags = set()
+
+            # variants (other than first) have a comma-separated list of required tags, followed by a colon
+            if ":" in variant and variant != raw_variants[-1]:
+                required_tags = set(variant[0:variant.index(":")].split(","))
+                variant = variant[variant.index(":") + 1:]
+            else:
+                required_tags = set()
+
+            # all required tags must be present to use a variant
+            if tags.issuperset(required_tags):
+                return variant, added_tags
 
     def _substitute_variables(self, render_template, substitution_values):
         if render_template == "%ACRONYM%":
