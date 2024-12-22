@@ -357,6 +357,28 @@ def test_name_rendering_with_game_files(test_case: NameTestcase):
             expected="Quetzan Consolidated Worlds",
             description="Nested %ADJECTIVE% and %ADJ% test",
         ),
+        NameTestcase(
+            dict(
+                key="%LEADER_2%",
+                variables=[
+                    {"key": "1", "value": {"key": "HUMAN3_CHR_Aula"}},
+                    {"key": "2", "value": {"key": "HUMAN3_CHR_Aufidius"}},
+                ]
+            ),
+            expected="Aula Aufidia",
+            description="Female tagged name"
+        ),
+        NameTestcase(
+            dict(
+                key="%LEADER_2%",
+                variables=[
+                    {"key": "1", "value": {"key": "HUMAN3_CHR_Aulus"}},
+                    {"key": "2", "value": {"key": "HUMAN3_CHR_Aufidius"}},
+                ]
+            ),
+            expected="Aulus Aufidius",
+            description="Male tagged name"
+        )
     ],
     ids=lambda tc: tc.description,
 )
