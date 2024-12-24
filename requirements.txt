@@ -12,7 +12,7 @@ Flask-Compress==1.13
 fonttools==4.43.0
 greenlet==3.0.3
 itsdangerous==2.1.2
-Jinja2==3.1.4
+Jinja2==3.1.5
 kiwisolver==1.4.4
 MarkupSafe==2.1.1
 matplotlib==3.9.0
