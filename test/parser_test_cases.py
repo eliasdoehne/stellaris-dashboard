@@ -52,7 +52,7 @@ PARSER_TEST_CASES = dict(
         }""",
         expected=dict(
             expired="yes",
-            event_id={"type": "none", "id": 0, "random": [0, 3991148998]},
+            scope={"type": "none", "id": 0, "random": [0, 3991148998]},
         ),
     ),
     update_espionage_manager=dict(
