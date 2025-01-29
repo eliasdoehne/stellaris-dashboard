@@ -7,12 +7,12 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while, take_while1};
 use nom::bytes::streaming::escaped;
 use nom::character::complete::{char, multispace0, multispace1, none_of, one_of};
-use nom::combinator::{map, map_res, not, recognize};
+use nom::combinator::{map, map_res, not, opt, peek, recognize};
 use nom::error::context;
 use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
-use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
+use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use pyo3::{PyObject, Python, ToPyObject};
 use pyo3::types::IntoPyDict;
 use serde::Serialize;
@@ -158,7 +158,8 @@ fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
     match parse_map_kv_list(input) {
         Ok((remainder, kv_list)) => {
             let mut hm = HashMap::new();
-            for (key, value) in kv_list {
+            for (key, value_option) in kv_list {
+                if let Some(value) = value_option {
                 let old_value = hm.remove(key);
                 match old_value {
                     None => {
@@ -183,13 +184,14 @@ fn parse_map_inner(input: &str) -> IResult<&str, HashMap<&str, Value>> {
                     }
                 }
             }
+            }
             Ok((remainder, hm))
         }
         Err(e) => Err(e),
     }
 }
 
-fn parse_map_kv_list(input: &str) -> IResult<&str, Vec<(&str, Value<>)>> {
+fn parse_map_kv_list(input: &str) -> IResult<&str, Vec<(&str, Option<Value<>>)>> {
     delimited(
         multispace0,
         separated_list1(
@@ -200,21 +202,23 @@ fn parse_map_kv_list(input: &str) -> IResult<&str, Vec<(&str, Value<>)>> {
     )(input)
 }
 
-fn parse_map_key_value_pair<'a>(input: &'a str) -> IResult<&str, (&str, Value<'a>)> {
+fn parse_map_key_value_pair<'a>(input: &'a str) -> IResult<&str, (&str, Option<Value<'a>>)> {
     separated_pair(
         alt((parse_str, parse_unquoted_str)),
         parse_map_key_value_separator,
-        alt((
-            // key can be missing in some cases, see test_skipped_key_in_mapping.
-            // in this case, discard the second key
-            preceded(pair(parse_unquoted_str, parse_map_key_value_separator), parse_value),
+        opt(delimited(
+            multispace0,
             parse_value,
+            // look ahead to make sure this next value isn't actually a key
+            // this handles rare scenarios where a key has no value, eg:
+            // { no_value_key= some_value_key=value }
+            not(peek(parse_map_key_value_separator))
         )),
     )(input)
 }
 
 fn parse_map_key_value_separator(input: &str) -> IResult<&str, &str> {
-    delimited(multispace0, tag("="), multispace0)(input)
+    preceded(multispace0, tag("="))(input)
 }
 
 fn parse_date_str(input: &str) -> IResult<&str, &str> {
@@ -594,23 +598,23 @@ mod tests {
     }
 
     #[test]
-    fn test_skipped_key_in_mapping() {
-        assert_eq!(
-            parse_map_key_value_pair("key=other_key=value_1").expect("asdf"),
-            ("", ("key", Value::Str("value_1")))
-        );
+    fn test_last_key_has_no_value() {
+        let test_input = "key=subject_holdings_limit value=";
+        let actual = parse_file(test_input);
+        let expected = Ok(Value::Map(HashMap::from([
+            ("key", Value::Str("subject_holdings_limit")),
+        ])));
+        assert_eq!(actual, expected);
+    }
 
-        assert_eq!(
-            parse_map_kv_list("key=other_key=value_2").expect("asdf"),
-            ("", vec![("key", Value::Str("value_2"))])
-        );
-
+    #[test]
+    fn test_first_or_middle_key_has_no_value() {
         // basic example:
         assert_eq!(
-            parse_file("key=other_key=value"),
+            parse_file("valueless_key= valued_key=value"),
             Ok(Value::Map(
                 HashMap::from([
-                    ("key", Value::Str("value")),
+                    ("valued_key", Value::Str("value")),
                 ])
             ))
         );
@@ -626,7 +630,7 @@ mod tests {
             Value::Map(
                 HashMap::from([
                     ("expired", Value::Str("yes")),
-                    ("event_id", Value::Map(
+                    ("scope", Value::Map(
                         HashMap::from([
                             ("type", Value::Str("none")),
                             ("id", Value::Int(0)),
