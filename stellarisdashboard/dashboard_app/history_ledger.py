@@ -590,10 +590,12 @@ class EventTemplateDictBuilder:
                 f"{self._get_url_for(wp.country)} ({wp.call_type})"
                 for wp in war.attackers
             ),
+            "Attacker War Goal": next(war.attackers).get_war_goal() if len(war.attackers) else "Unknown",
             "Defenders": ", ".join(
                 f"{self._get_url_for(wp.country)} ({wp.call_type})"
                 for wp in war.defenders
             ),
+            "Defender War Goal": next(war.defenders).get_war_goal() if len(war.defenders) else "Unknown",
             "Outcome": war.outcome,
         }
         if war.attacker_war_exhaustion or war.defender_war_exhaustion:

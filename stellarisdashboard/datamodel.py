@@ -1342,13 +1342,13 @@ class War(Base):
     @property
     def attackers(self) -> Iterable["WarParticipant"]:
         for p in self.participants:
-            if p.is_attacker and p.call_type == "primary":
+            if p.is_attacker:
                 yield p
 
     @property
     def defenders(self):
         for p in self.participants:
-            if not p.is_attacker and p.call_type == "primary":
+            if not p.is_attacker:
                 yield p
 
     @property
