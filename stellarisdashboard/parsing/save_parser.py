@@ -28,6 +28,9 @@ from stellarisdashboard import config
 
 logger = logging.getLogger(__name__)
 
+# the default recursion limit was not high enough for pickling some parsed saves (pickle used by futures)
+if sys.getrecursionlimit() < 2000:
+    sys.setrecursionlimit(2000)
 
 class StellarisFileFormatError(Exception):
     pass
