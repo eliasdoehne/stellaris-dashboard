@@ -368,6 +368,11 @@ class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_food
+        
+class EmpireSizeDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_economic_info():
+            return cd.empire_size
 
 
 class TechCountDataContainer(AbstractPerCountryDataContainer):
@@ -997,6 +1002,12 @@ NET_FOOD_INCOME_GRAPH = PlotSpecification(
     data_container_factory=TotalFoodIncomeDataContainer,
     style=PlotStyle.line,
 )
+EMPIRE_SIZE_GRAPH = PlotSpecification(
+    plot_id="empire-size",
+    title="Empire Size",
+    data_container_factory=EmpireSizeDataContainer,
+    style=PlotStyle.line,
+)
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id="tech-count",
     title="Researched Technologies",
@@ -1427,6 +1438,7 @@ PLOT_SPECIFICATIONS = {
     "total_alloys_expense_graph": TOTAL_ALLOYS_EXPENSE_GRAPH,
     "total_consumer_goods_expense_graph": TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH,
     "total_food_expense_graph": TOTAL_FOOD_EXPENSE_GRAPH,
+    "empire_size_graph": EMPIRE_SIZE_GRAPH,
     "energy_budget": ENERGY_BUDGET,
     "mineral_budget": MINERAL_BUDGET,
     "consumer_goods_budget": CONSUMER_GOODS_BUDGET,

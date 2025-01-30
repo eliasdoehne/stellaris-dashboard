@@ -96,6 +96,7 @@ DEFAULT_TAB_LAYOUT = {
         "net_alloys_income_graph",
         "net_consumer_goods_income_graph",
         "net_food_income_graph",
+        "empire_size_graph",
     ],
     "Demographics": [
         "species_distribution_graph",
