@@ -583,6 +583,8 @@ class EventTemplateDictBuilder:
     def war_details(self, war):
         start = datamodel.days_to_date(war.start_date_days)
 
+        attacker = next(war.attackers, None)
+        defender = next(war.defenders, None)
         details = {
             "Start date": start,
             "End date": "-",
@@ -590,12 +592,12 @@ class EventTemplateDictBuilder:
                 f"{self._get_url_for(wp.country)} ({wp.call_type})"
                 for wp in war.attackers
             ),
-            "Attacker War Goal": next(war.attackers).get_war_goal() if len(war.attackers) else "Unknown",
+            "Attacker War Goal": attacker.get_war_goal() if attacker is not None else "Unknown",
             "Defenders": ", ".join(
                 f"{self._get_url_for(wp.country)} ({wp.call_type})"
                 for wp in war.defenders
             ),
-            "Defender War Goal": next(war.defenders).get_war_goal() if len(war.defenders) else "Unknown",
+            "Defender War Goal": defender.get_war_goal() if defender is not None else "Unknown",
             "Outcome": war.outcome,
         }
         if war.attacker_war_exhaustion or war.defender_war_exhaustion:
