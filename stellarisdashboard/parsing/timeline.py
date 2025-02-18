@@ -2130,6 +2130,8 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
     def _update_council_positions(self, countries_by_id, leaders_by_id):
         if "council_positions" not in self._gamestate_dict:
           return
+        
+        active_council_positions = set() # used to check if any open HistoricalEvents need to be closed
         for cp_id, council_position in sorted(
             self._gamestate_dict["council_positions"]["council_positions"].items()
         ):
@@ -2142,6 +2144,7 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
                 logger.debug(f"No councilor assigned: %s", council_position)
                 continue
             desc = self._get_or_add_shared_description(councilor_type)
+            active_council_positions.add(f"{country_model.country_id}-{leader_model.leader_id}-{councilor_type}")
 
             previous_event = (
                 self._session.query(datamodel.HistoricalEvent)
@@ -2149,6 +2152,7 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
                     event_type=datamodel.HistoricalEventType.councilor,
                     country=country_model,
                     db_description=desc,
+                    end_date_days=None,
                 )
                 .order_by(datamodel.HistoricalEvent.start_date_days.desc())
                 .first()
@@ -2173,6 +2177,18 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=country_model.has_met_player(),
                     )
                 )
+
+        # check if there are any open events that need to be closed (eg the position doesn't exist anymore)
+        open_councilor_events = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter_by(event_type=datamodel.HistoricalEventType.councilor, end_date_days=None)
+        )
+        for event in open_councilor_events:
+            key = f"{event.coutry_id}-{event.leader_id}-{event.db_description.text}"
+            if key not in active_council_positions:
+                event.end_date_days = self._basic_info.date_in_days - 1
+                self._session.add(event)
+
 
     def _update_council_agenda(self, countries_by_id, rulers_by_id):
         for country_id, country_model in countries_by_id.items():
