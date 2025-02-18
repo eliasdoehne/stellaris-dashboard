@@ -512,9 +512,22 @@ class EventTemplateDictBuilder:
                     "Civics": ", ".join(
                         [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
-                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN")
+                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN"),
+                    "Ruler": self._get_url_for(country_model.ruler),
                 }
             )
+        active_councilor_events = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter_by(country=country_model, event_type=datamodel.HistoricalEventType.councilor, end_date_days=None)
+        )
+        details["Council"] = ", ".join(
+            # if leader name is the same as council position, only show the link
+            # this is the case in hive minds, which have eg leader "Growth Node" serving as council position "Growth Node"
+            self._get_url_for(event.leader)
+            if event.description == event.leader.rendered_name
+            else f"{event.description} {self._get_url_for(event.leader)}"
+            for event in active_councilor_events
+        )
         for key, countries in country_model.diplo_relation_details().items():
             relation_type = game_info.convert_id_to_name(key)
             relations_to_display = [
