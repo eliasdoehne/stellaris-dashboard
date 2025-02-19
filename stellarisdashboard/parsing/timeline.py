@@ -2184,7 +2184,7 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
             .filter_by(event_type=datamodel.HistoricalEventType.councilor, end_date_days=None)
         )
         for event in open_councilor_events:
-            key = f"{event.coutry_id}-{event.leader_id}-{event.db_description.text}"
+            key = f"{event.country_id}-{event.leader_id}-{event.db_description.text}"
             if key not in active_council_positions:
                 event.end_date_days = self._basic_info.date_in_days - 1
                 self._session.add(event)
