@@ -74,7 +74,7 @@ jobs:
           zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
           popd
       - name: Publish
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: stellarisdashboard-${{ matrix.os }}.zip
           path: stellarisdashboard-${{ matrix.os }}.zip
