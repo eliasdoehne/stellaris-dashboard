@@ -324,7 +324,7 @@ class EventTemplateDictBuilder:
             if "planet" in event_dict and event_dict["system"] is None:
                 event_dict["system"] = event_dict["planet"].system
             if "faction" in event_dict:
-                event_dict["faction_type"] = event.faction.type
+                event_dict["faction_type"] = event.faction.rendered_type
             if event.combat:
                 event_dict.update(self._combat_dict(event.combat))
 
@@ -512,9 +512,22 @@ class EventTemplateDictBuilder:
                     "Civics": ", ".join(
                         [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
-                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN")
+                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN"),
+                    "Ruler": self._get_url_for(country_model.ruler),
                 }
             )
+        active_councilor_events = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter_by(country=country_model, event_type=datamodel.HistoricalEventType.councilor, end_date_days=None)
+        )
+        details["Council"] = ", ".join(
+            # if leader name is the same as council position, only show the link
+            # this is the case in hive minds, which have eg leader "Growth Node" serving as council position "Growth Node"
+            self._get_url_for(event.leader)
+            if event.description == event.leader.rendered_name
+            else f"{event.description} {self._get_url_for(event.leader)}"
+            for event in active_councilor_events
+        )
         for key, countries in country_model.diplo_relation_details().items():
             relation_type = game_info.convert_id_to_name(key)
             relations_to_display = [
@@ -583,6 +596,8 @@ class EventTemplateDictBuilder:
     def war_details(self, war):
         start = datamodel.days_to_date(war.start_date_days)
 
+        attacker = next(war.attackers, None)
+        defender = next(war.defenders, None)
         details = {
             "Start date": start,
             "End date": "-",
@@ -590,12 +605,12 @@ class EventTemplateDictBuilder:
                 f"{self._get_url_for(wp.country)} ({wp.call_type})"
                 for wp in war.attackers
             ),
-            "Attacker War Goal": next(war.attackers).get_war_goal() if len(war.attackers) else "Unknown",
+            "Attacker War Goal": attacker.get_war_goal() if attacker is not None else "Unknown",
             "Defenders": ", ".join(
                 f"{self._get_url_for(wp.country)} ({wp.call_type})"
                 for wp in war.defenders
             ),
-            "Defender War Goal": next(war.defenders).get_war_goal() if len(war.defenders) else "Unknown",
+            "Defender War Goal": defender.get_war_goal() if defender is not None else "Unknown",
             "Outcome": war.outcome,
         }
         if war.attacker_war_exhaustion or war.defender_war_exhaustion:

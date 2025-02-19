@@ -649,7 +649,12 @@
             <div class="eventdescription">
                 <span class="dateblock">{{event["start_date"]}}:</span>
                 <span class="eventtext">
-                    The {{ event["faction"].type }} "{{ event["faction"].rendered_name }}" faction emerged in the {{ links[event["country"]] | safe}}.
+                    {% if event["faction_type"] == event["faction"].rendered_name %}
+                        {% if not event["faction_type"].startswith("The ") %}The{%endif %} "{{ event["faction_type"] }}" faction
+                    {% else %}
+                        The {{ event["faction_type"] }} "{{ event["faction"].rendered_name }}"
+                    {%endif %}
+                    emerged in the {{ links[event["country"]] | safe}}.
                 </span>
             </div>
         </li>
