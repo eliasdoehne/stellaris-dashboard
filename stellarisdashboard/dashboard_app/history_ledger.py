@@ -324,7 +324,7 @@ class EventTemplateDictBuilder:
             if "planet" in event_dict and event_dict["system"] is None:
                 event_dict["system"] = event_dict["planet"].system
             if "faction" in event_dict:
-                event_dict["faction_type"] = event.faction.type
+                event_dict["faction_type"] = event.faction.rendered_type
             if event.combat:
                 event_dict.update(self._combat_dict(event.combat))
 
