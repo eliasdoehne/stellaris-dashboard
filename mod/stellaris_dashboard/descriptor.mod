@@ -1,9 +1,9 @@
 name="Stellaris Dashboard"
-version="v6.7.0"
+version="v7.0.0"
 tags={
 	"Utilities"
 	"Gameplay"
 }
 picture="thumbnail.png"
-supported_version="v3.14.*"
+supported_version="v4.0.*"
 remote_file_id="1466534202"
