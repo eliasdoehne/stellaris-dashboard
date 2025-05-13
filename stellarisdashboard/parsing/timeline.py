@@ -3733,6 +3733,20 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         species_dict, robot_species = dependencies[SpeciesProcessor.ID]
         faction_by_ingame_id = dependencies[FactionProcessor.ID]
 
+        # create a mapping from pop_groups to job assignments, to be used later for stats_by_job
+        pop_group_to_jobs = dict()
+        for pop_job in self._gamestate_dict.get("pop_jobs").values():
+            if not isinstance(pop_job, dict):
+                continue
+            pop_groups = pop_job.get("pop_groups", [])
+            if isinstance(pop_groups, dict):
+                pop_groups = [pop_groups]
+            for pop_group in pop_groups:
+                pop_group_to_jobs.setdefault(pop_group["pop_group"], []).append({
+                    "job": pop_job["type"],
+                    "amount": pop_group["amount"],
+                })
+
         for country_id_in_game, country_model in countries_dict.items():
             if not config.CONFIG.read_all_countries and not country_model.is_player:
                 continue
@@ -3744,18 +3758,21 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
             stats_by_ethos = {}
             stats_by_planet = {}
 
-            for pop_dict in self._gamestate_dict["pop"].values():
-                if not isinstance(pop_dict, dict):
+            for pop_group_id, pop_group_dict in self._gamestate_dict["pop_groups"].items():
+                if not isinstance(pop_group_dict, dict):
                     continue
-                planet_id = pop_dict.get("planet")
+                planet_id = pop_group_dict.get("planet")
                 planet_country_id_in_game = self.country_by_planet_id.get(planet_id)
                 if planet_country_id_in_game != country_id_in_game:
                     continue
 
-                species_id = pop_dict.get("species")
-                job = pop_dict.get("job", "unemployed")
-                stratum = pop_dict.get("category", "unknown stratum")
-                faction_id = pop_dict.get("pop_faction")
+                size = pop_group_dict.get("size")
+                if size == 0:
+                    continue
+
+                species_id = pop_group_dict.get("key").get("species")
+                stratum = pop_group_dict.get("key").get("category", "unknown stratum")
+                faction_id = pop_group_dict.get("key").get("pop_faction")
 
                 if faction_id is None:
                     if stratum == "slave":
@@ -3767,20 +3784,19 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                     else:
                         faction_id = FactionProcessor.NO_FACTION_ID
 
-                ethos = pop_dict.get("ethos", {}).get("ethic")
+                ethos = pop_group_dict.get("key").get("ethos", {}).get("ethic")
                 if not isinstance(ethos, str):
                     ethos = "ethic_no_ethos"
 
-                crime = pop_dict.get("crime", 0.0)
-                happiness = pop_dict.get("happiness", 0.0)
-                power = pop_dict.get("power", 0.0)
+                # crime and power are already totals, but happiness is average, so multiply by size
+                crime = pop_group_dict.get("crime", 0.0)
+                happiness = pop_group_dict.get("happiness", 0.0) * size
+                power = pop_group_dict.get("power", 0.0)
 
                 if species_id not in stats_by_species:
                     stats_by_species[species_id] = init_dict()
                 if faction_id not in stats_by_faction:
                     stats_by_faction[faction_id] = init_dict()
-                if job not in stats_by_job:
-                    stats_by_job[job] = init_dict()
                 if stratum not in stats_by_stratum:
                     stats_by_stratum[stratum] = init_dict()
                 if ethos not in stats_by_ethos:
@@ -3788,33 +3804,51 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 if planet_id not in stats_by_planet:
                     stats_by_planet[planet_id] = init_dict()
 
-                stats_by_species[species_id]["pop_count"] += 1
-                stats_by_faction[faction_id]["pop_count"] += 1
-                stats_by_job[job]["pop_count"] += 1
-                stats_by_stratum[stratum]["pop_count"] += 1
-                stats_by_ethos[ethos]["pop_count"] += 1
-                stats_by_planet[planet_id]["pop_count"] += 1
+                stats_by_species[species_id]["pop_count"] += size
+                stats_by_faction[faction_id]["pop_count"] += size
+                stats_by_stratum[stratum]["pop_count"] += size
+                stats_by_ethos[ethos]["pop_count"] += size
+                stats_by_planet[planet_id]["pop_count"] += size
 
                 stats_by_species[species_id]["crime"] += crime
                 stats_by_faction[faction_id]["crime"] += crime
-                stats_by_job[job]["crime"] += crime
                 stats_by_stratum[stratum]["crime"] += crime
                 stats_by_ethos[ethos]["crime"] += crime
                 stats_by_planet[planet_id]["crime"] += crime
 
                 stats_by_species[species_id]["happiness"] += happiness
                 stats_by_faction[faction_id]["happiness"] += happiness
-                stats_by_job[job]["happiness"] += happiness
                 stats_by_stratum[stratum]["happiness"] += happiness
                 stats_by_ethos[ethos]["happiness"] += happiness
                 stats_by_planet[planet_id]["happiness"] += happiness
 
                 stats_by_species[species_id]["power"] += power
                 stats_by_faction[faction_id]["power"] += power
-                stats_by_job[job]["power"] += power
                 stats_by_stratum[stratum]["power"] += power
                 stats_by_ethos[ethos]["power"] += power
                 stats_by_planet[planet_id]["power"] += power
+
+                # each pop_group can have multiple jobs; collect stats based on fraction assigned to each job
+                unemployed_fraction = 1 # civilians are tracked as a job, so I don't think there will ever be unemployed pops, but let's be safe
+                for pop_job in pop_group_to_jobs.get(pop_group_id, []):
+                    job = pop_job["job"]
+                    if job not in stats_by_job:
+                        stats_by_job[job] = init_dict()
+                    fraction = pop_job["amount"] / size
+                    unemployed_fraction -= fraction
+                    stats_by_job[job]["pop_count"] += pop_job["amount"]
+                    stats_by_job[job]["crime"] += crime * fraction
+                    stats_by_job[job]["happiness"] += happiness * fraction
+                    stats_by_job[job]["power"] += power * fraction
+                unemployed_amount = int(size * unemployed_fraction) # prevent floating point math issues
+                if unemployed_amount >= 1:
+                    job = "unemployed"
+                    if job not in stats_by_job:
+                        stats_by_job[job] = init_dict()
+                    stats_by_job[job]["pop_count"] += unemployed_amount
+                    stats_by_job[job]["crime"] += crime * unemployed_fraction
+                    stats_by_job[job]["happiness"] += happiness * unemployed_fraction
+                    stats_by_job[job]["power"] += power * unemployed_fraction
 
             for species_id, stats in stats_by_species.items():
                 if stats["pop_count"] == 0:
