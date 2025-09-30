@@ -954,6 +954,8 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             .get("current_month", {})
             .get("balance", {})
         )
+        if not isinstance(budget_dict, dict):
+            return
 
         country = country_data.country
         for item_name, values in budget_dict.items():
