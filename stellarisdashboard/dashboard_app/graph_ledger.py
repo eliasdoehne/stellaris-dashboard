@@ -289,6 +289,7 @@ def trigger_timeline_export(
             end_date = datamodel.days_to_date(utils.get_most_recent_date(session))
     step_days = step_days or TIMELAPSE_DEFAULT_STEP
     frame_time_ms = frame_time_ms or TIMELAPSE_DEFAULT_FRAME_TIME
+    dpi = dpi or TIMELAPSE_DEFAULT_DPI
 
     export_gif = "export_gif" in export_mode
     export_webp = "export_webp" in export_mode
