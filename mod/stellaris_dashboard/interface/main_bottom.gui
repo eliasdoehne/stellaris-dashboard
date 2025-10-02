@@ -162,6 +162,12 @@ guiTypes = {
 				position = { x = 240 y = 43 }
 			}
 
+			iconType = {
+				name = "psionic_aura_icon"
+				spriteType = "GFX_system_psionic_aura_icon"
+				position = { x = 204 y = 43 }
+			}
+
 			buttonType = {
 				name = "claim_system_button"
 				quadTextureSprite = "GFX_claim_system_icon"
@@ -402,7 +408,7 @@ guiTypes = {
 				pdx_tooltip = "STELLARIS_DASHBOARD_TOOLTIP"
 				pdx_tooltip_anchor_offset = { x= 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = lower_left
-				web_link="http://127.0.0.1:28053/checkversion/v7.0.0"
+				web_link="http://127.0.0.1:28053/checkversion/v7.1.0"
 			}
 
 			iconType = {
