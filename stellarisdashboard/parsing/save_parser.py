@@ -1,7 +1,6 @@
 import abc
 import collections
 import concurrent.futures
-import enum
 import itertools
 import logging
 import multiprocessing as mp
@@ -10,10 +9,6 @@ import pathlib
 import signal
 import sys
 import time
-import traceback
-import typing
-import zipfile
-from collections import namedtuple
 from typing import (
     Any,
     Dict,
@@ -21,39 +16,27 @@ from typing import (
     Set,
     Iterable,
     List,
-    TypeVar,
     Iterator,
     Deque,
     Optional,
+    TypeVar,
 )
 
+import rust_parser
+
 from stellarisdashboard import config
-from stellarisdashboard.parsing.tokenizer_re import INT, FLOAT
 
 logger = logging.getLogger(__name__)
-try:
-    # try to load the cython-compiled C-extension
-    from stellarisdashboard.parsing.cython_ext import tokenizer
 
-except ImportError as import_error:
-    logger.warning(
-        f'Cython extensions not available, using slow parser. Error message: "{import_error}"'
-    )
-    from stellarisdashboard.parsing import tokenizer_re as tokenizer
-
-FilePosition = namedtuple("FilePosition", "line col")
-
+# the default recursion limit was not high enough for pickling some parsed saves (pickle used by futures)
+if sys.getrecursionlimit() < 2000:
+    sys.setrecursionlimit(2000)
 
 class StellarisFileFormatError(Exception):
     pass
 
 
 T = TypeVar("T")
-
-
-def m_or_c_time(f: pathlib.Path):
-    stat = f.stat()
-    return max(stat.st_mtime, stat.st_ctime)
 
 
 class SavePathMonitor(abc.ABC):
@@ -138,10 +121,17 @@ class SavePathMonitor(abc.ABC):
             and str(save_file.parent.stem).startswith(self.game_name_prefix)
         )
         modified_files = sorted(
-            f for f in prefiltered_files if m_or_c_time(f) > self._last_checked_time
+            f
+            for f in prefiltered_files
+            if self.m_or_c_time(f) > self._last_checked_time
         )
         self._last_checked_time = time.time()
         return modified_files
+
+    @staticmethod
+    def m_or_c_time(f: pathlib.Path):
+        stat = f.stat()
+        return max(stat.st_mtime, stat.st_ctime)
 
 
 def _pool_worker_init():
@@ -166,24 +156,17 @@ class ContinuousSavePathMonitor(SavePathMonitor):
             Tuple[pathlib.PurePath, mp.pool.AsyncResult, float]
         ] = collections.deque()
 
-    def get_gamestates_and_check_for_new_files(
-        self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(self):
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
                 fname, result, submit_time = self._pending_results.popleft()
-                logger.info(
-                    f"Parsed save file {fname} in {time.time() - submit_time} seconds."
-                )
-                logger.info(f"Retrieving gamestate for {fname}")
                 try:
                     yield fname.parent.stem, result.get()
                 except KeyboardInterrupt:
                     raise
                 except Exception:
-                    logger.error(f"Error while reading save file {fname}:")
-                    logger.error(traceback.format_exc())
+                    logger.exception(f"Error while reading save file {fname}:")
             else:
                 break
 
@@ -209,9 +192,7 @@ class BatchSavePathMonitor(SavePathMonitor):
     the CLI command `stellarisdashboardcli --parse-saves`.
     """
 
-    def get_gamestates_and_check_for_new_files(
-        self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    def get_gamestates_and_check_for_new_files(self):
         """
         Check the save directory for new files. If any are found, parse them and
         return the results as gamestate dictionaries as they come in.
@@ -261,301 +242,12 @@ def parse_save(filename) -> Dict[str, Any]:
     :param filename: Path to a .sav file
     :return: The gamestate dictionary
     """
-    gamestate = None
-    parser = SaveFileParser()
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            gamestate = parser.parse_save(filename)
-            break
-        except KeyboardInterrupt:
-            raise
-        except zipfile.BadZipFile as e:
-            remaining = max_attempts - attempt - 1
-            if not remaining:
-                raise
-            delay_seconds = 0.5
-            logger.info(
-                f"Encountered BadZipFile error {e}. Next attempt in {delay_seconds} seconds, {remaining} attempts remaining."
-            )
-            time.sleep(delay_seconds)
-    return gamestate
 
-
-class TokenType(enum.Enum):
-    BRACE_OPEN = enum.auto()
-    BRACE_CLOSE = enum.auto()
-    EQUAL = enum.auto()
-    INTEGER = enum.auto()
-    FLOAT = enum.auto()
-    STRING = enum.auto()
-    EOF = enum.auto()
-
-    def is_literal(self):
-        return (
-            self == TokenType.STRING
-            or self == TokenType.INTEGER
-            or self == TokenType.FLOAT
-        )
-
-
-Token = namedtuple("Token", ["token_type", "value", "pos"])
-
-
-def token_stream(gamestate, tokenizer=tokenizer.tokenizer):
-    """
-    Take each value obtained from the tokenizer and wrap it in an appropriate
-    Token object.
-
-    :param gamestate: Gamestate dictionary
-    :param tokenizer: tokenizer function. Passed as an argument to allow either the cython one or the regex tokenizer
-    :return:
-    """
-    for token_info in tokenizer(gamestate, debug=config.CONFIG.debug_mode):
-        value, line_number = token_info
-        if value == "=":
-            yield Token(TokenType.EQUAL, "=", line_number)
-        elif value == "}":
-            yield Token(TokenType.BRACE_CLOSE, "}", line_number)
-        elif value == "{":
-            yield Token(TokenType.BRACE_OPEN, "{", line_number)
-        else:
-            token_type = None
-            if INT.fullmatch(value):
-                value = int(value)
-                token_type = TokenType.INTEGER
-            elif FLOAT.fullmatch(value):
-                value = float(value)
-                token_type = TokenType.FLOAT
-
-            if token_type is None:
-                value = value.strip('"')
-                token_type = TokenType.STRING
-            yield Token(token_type, value, line_number)
-    yield Token(TokenType.EOF, None, -1)
-
-
-def _track_nesting_depth(f) -> typing.Callable:
-    """Decorator for tracking the nesting/recursion depth in the parser."""
-
-    def inner(*args, **kwargs):
-        self = args[0]
-        self._current_nesting_depth += 1
-        result = f(*args, **kwargs)
-        self._current_nesting_depth -= 1
-        return result
-
-    return inner
-
-
-class SaveFileParser:
-    def __init__(self, max_nesting_depth=100):
-        self.gamestate_dict = None
-        self.save_filename = None
-        self._token_stream = None
-        self._lookahead_token = None
-        self._current_nesting_depth = 0
-        self.max_nesting_depth = max_nesting_depth
-
-    def parse_save(self, filename):
-        """
-        Parse a single save file to a gamestate dictionary.
-
-        Gamestate dictionaries are generally organized as follows:
-        On the top level, there are some categories ("species", "leader", "war", "country" etc),
-        which usually map either to lists of objects or a "dictionary". Each object may be a constant
-        string or numeric value, or a composite object which can be represented as a dictionary.
-
-        Sometimes in the game files, lists of objects are represented by duplicate keys in the dictionary,
-        e.g.
-        outer_key = {
-            ...
-            duplicate_key = 1,
-            duplicate_key = 2,
-            ...
-        }
-        In this case, the parser returns the object as the python dict
-        {"outer_key": {"duplicate_key": [1, 2]}},
-        collecting the values of the duplicate keys into a single list.
-
-        :return: A dictionary representing the gamestate of the savefile.
-        """
-        self.save_filename = filename
-        logger.info(f"Parsing Save File {self.save_filename}...")
-        with zipfile.ZipFile(self.save_filename) as save_zip:
-            gamestate = save_zip.read("gamestate")
-            try:
-                # default encoding guess based on EU4 wiki https://eu4.paradoxwikis.com/Save-game_editing#File_locations
-                gamestate = gamestate.decode("cp1252")
-            except UnicodeError:
-                # attempt UTF-8, ignoring any further errors
-                gamestate = gamestate.decode("utf-8", errors="ignore")
-        self.parse_from_string(gamestate)
-        return self.gamestate_dict
-
-    def parse_from_string(self, s: str):
-        if self._current_nesting_depth != 0:
-            logger.warning("Found current_nesting_depth != 0, resetting it.")
-        self._current_nesting_depth = 0
-        self._token_stream = token_stream(s)
-        self.gamestate_dict = self._parse_key_value_pair_list(self._next_token())
-        return self.gamestate_dict
-
-    def _parse_key_value_pair(self):
-        key_token = self._lookahead()
-        if key_token.token_type not in [
-            TokenType.STRING,
-            TokenType.INTEGER,
-            TokenType.EQUAL,
-        ]:
-            raise StellarisFileFormatError(
-                f"Line {key_token.pos}: Expected a string or Integer as key, found {key_token}"
-            )
-        if key_token.token_type == TokenType.EQUAL:
-            # Workaround to handle this edge case/bug: "event_id=scope={" which happens for some ancient relics
-            # Change it effectively to this: "event_id="scope" unknown_key={"
-            key = "unknown_key"
-        else:
-            key = self._parse_literal()
-        eq_token = self._next_token()
-        if eq_token.token_type == TokenType.EQUAL:
-            value = self._parse_value()
-            return key, value
-        else:
-            raise StellarisFileFormatError(
-                f"Line {eq_token.pos}: Expected = token, found {eq_token} (key was {key_token})"
-            )
-
-    def _parse_value(self):
-        next_token = self._lookahead()
-        if next_token.token_type.is_literal():
-            value = self._parse_literal()
-        elif next_token.token_type == TokenType.BRACE_OPEN:
-            value = self._parse_composite_game_object_or_list()
-        else:
-            raise StellarisFileFormatError(
-                f"Line {next_token.pos}: Expected literal or {{ token for composite object or list, found {next_token}"
-            )
-        return value
-
-    @_track_nesting_depth
-    def _parse_composite_game_object_or_list(self):
-        brace = self._next_token()
-        if brace.token_type != TokenType.BRACE_OPEN:
-            raise StellarisFileFormatError(
-                f"Line {brace.pos}: Expected {{ token, found {brace}"
-            )
-        if self._current_nesting_depth > self.max_nesting_depth:
-            return self._skip_nested_object()
-
-        tt = self._lookahead().token_type
-        if (
-            tt == TokenType.BRACE_OPEN
-        ):  # indicates that this is a list since composite objects and lists cannot be keys
-            result = self._parse_list()
-        elif tt == TokenType.BRACE_CLOSE:  # immediate closing brace => empty list
-            self._next_token()
-            result = []
-        else:
-            token = self._next_token()
-            next_token = self._lookahead()
-            if next_token.token_type == TokenType.EQUAL:
-                result = self._parse_key_value_pair_list(token)
-            elif (
-                next_token.token_type.is_literal()
-                or next_token.token_type == TokenType.BRACE_CLOSE
-                or next_token.token_type == TokenType.BRACE_OPEN
-            ):
-                result = self._parse_list(token.value)
-            else:
-                raise StellarisFileFormatError(f"Unexpected token: {next_token}")
-        return result
-
-    def _parse_key_value_pair_list(self, first_key_token):
-        eq_token = self._next_token()
-        if eq_token.token_type != TokenType.EQUAL:
-            raise StellarisFileFormatError(
-                f"Line {eq_token.pos}: Expected =, found {eq_token}"
-            )
-
-        next_token = self._lookahead()
-        if next_token.token_type.is_literal():
-            first_value = self._parse_literal()
-        elif next_token.token_type == TokenType.BRACE_OPEN:
-            first_value = self._parse_composite_game_object_or_list()
-        else:
-            raise StellarisFileFormatError(
-                f"Line {next_token.pos}: Expected literal or {{, found {eq_token}"
-            )
-        result = {first_key_token.value: first_value}
-        next_token = self._lookahead()
-        handled_duplicate_keys = set()
-        while (
-            next_token.token_type != TokenType.BRACE_CLOSE
-            and next_token.token_type != TokenType.EOF
-        ):
-            key, value = self._parse_key_value_pair()
-            convert_to_list = key in result and key not in handled_duplicate_keys
-            self._add_key_value_pair_or_convert_to_list(
-                result, key, value, convert_to_list=convert_to_list
-            )
-            if convert_to_list:
-                handled_duplicate_keys.add(key)
-            next_token = self._lookahead()
-        self._next_token()
-        return result
-
-    def _parse_list(self, first_value=None):
-        result = []
-        if first_value is not None:
-            result.append(first_value)
-        while self._lookahead().token_type != TokenType.BRACE_CLOSE:
-            val = self._parse_value()
-            result.append(val)
-        self._next_token()  # consume the final }
-        return result
-
-    def _parse_literal(self):
-        token = self._next_token()
-        if not token.token_type.is_literal():
-            raise StellarisFileFormatError(
-                f"Line {token.pos}: Expected literal, found {token}"
-            )
-        return token.value
-
-    @staticmethod
-    def _add_key_value_pair_or_convert_to_list(obj, key, value, convert_to_list=False):
-        if key in obj:
-            if convert_to_list:
-                obj[key] = [obj[key]]
-            obj[key].append(value)
-        else:
-            assert not convert_to_list
-            obj[key] = value
-
-    def _lookahead(self) -> Token:
-        if self._lookahead_token is None:
-            self._lookahead_token = self._next_token()
-        return self._lookahead_token
-
-    def _next_token(self) -> Token:
-        if self._lookahead_token is None:
-            token = next(self._token_stream)
-        else:
-            token = self._lookahead_token
-            self._lookahead_token = None
-        return token
-
-    def _skip_nested_object(self):
-        logger.info(
-            "Skipping deeply nested object, probably caused by another mod. Everything should still work."
-        )
-        brace_count = 1  # "{" token is parsed outside the function
-        while brace_count > 0:
-            t = self._next_token()
-            if t.token_type == TokenType.BRACE_OPEN:
-                brace_count += 1
-            if t.token_type == TokenType.BRACE_CLOSE:
-                brace_count -= 1
-
-        return []
+    logger.info(f"Reading save file {filename}.")
+    start = time.time()
+    parsed = rust_parser.parse_save_file(str(filename.absolute()))
+    if not isinstance(parsed, dict):
+        raise ValueError(f"Could not parse {filename}")
+    dt = time.time() - start
+    logger.info(f"Parsed save file {filename} in {dt:.3f} seconds.")
+    return parsed

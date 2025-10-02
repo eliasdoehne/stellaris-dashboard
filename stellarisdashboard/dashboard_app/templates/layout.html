@@ -6,6 +6,8 @@
         <a name="index"></a>
         <a class="button" href="/">Game Selection</a>
         <a class="button" href="/settings/">Settings</a>
+        {% block nav %}{% endblock %}
+        <a class="button wiki-link" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki">Stellaris Wiki 🔗</a>
         {%if show_old_version_notice%}
         <p>
             You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.

@@ -17,7 +17,6 @@ from stellarisdashboard import config
 from stellarisdashboard.dashboard_app import visualization_data
 from stellarisdashboard.parsing import save_parser, timeline
 
-
 logger = logging.getLogger(__name__)
 
 # These messages are shown by the CLI
@@ -69,7 +68,6 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
     polling_interval = config.CONFIG.polling_interval
     save_reader = save_parser.ContinuousSavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
-    tle = timeline.TimelineExtractor()
 
     show_wait_message = True
     while not stop_event.is_set():
@@ -85,6 +83,7 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
                 continue
             show_wait_message = True
             nothing_new = False
+            tle = timeline.TimelineExtractor()
             tle.process_gamestate(game_name, gamestate_dict)
             visualization_data.get_current_execution_plot_data(game_name)
             del gamestate_dict
@@ -120,13 +119,13 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
         save_path,
         game_name_prefix=game_name_prefix,
     )
-    tle = timeline.TimelineExtractor()
     for (
         game_name,
         gamestate_dict,
     ) in save_reader.get_gamestates_and_check_for_new_files():
         if gamestate_dict is None:
             continue
+        tle = timeline.TimelineExtractor()
         tle.process_gamestate(game_name, gamestate_dict)
         del gamestate_dict
 

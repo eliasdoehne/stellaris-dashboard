@@ -1,3 +1,6 @@
+from stellarisdashboard import _force_imports
+
+_force_imports.force_imports()
 import logging
 import multiprocessing as mp
 

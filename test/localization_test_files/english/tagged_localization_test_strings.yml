@@ -1,0 +1,5 @@
+l_english:
+ HUMAN3_CHR_Aulus:1 "Aulus&!masc"
+ HUMAN3_CHR_Aula:0 "Aula&!fem"
+ HUMAN3_CHR_Aufidius:1 "$1$ Aufidia|||masc:$1$ Aufidius"
+

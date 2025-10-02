@@ -2,7 +2,7 @@
 
 Disabling some graphs means that the dashboard has to do less work, making it faster to browse. Also, you can remove any graphs that you don't care about and arrange them into tabs in whatever way you prefer.
 
-The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Galaxy Map", which is reserved.
+The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Galaxy Map" and "Markets", which are reserved for special tabs and will be ignored.
 
 For example this would be a valid configuration you can add to the config.yml:
 ```yaml
@@ -17,14 +17,31 @@ This will make the graph dashboard appear like this:
 
 ![Custom Tab Layout](img/custom_tab_layout.png)
 
-I recommend to make a backup copy of the config.yml after customizing it, since the dashboard may overwrite changes. Also, you can copy over the adjusted config.yml when you download an updated release of the Stellaris Dashboard
+I recommend to make a backup copy of the config.yml after customizing it, since the dashboard may overwrite changes.
 
-To reset the default layout, simply delete the `tab_layout` section from your config.yml or move the entire file to reset all default settings.
+To reset the default layout, simply delete the `tab_layout` section from your config.yml or delete the entire file to reset all default settings.
 
 Changes to the tab layout will only apply after restarting the dashboard.
 
 ## Graph IDs
 
+Some special graphs are created in the code and cannot be configured manually:
+- Market prices
+- Galaxy map
+
+Graphs that are disabled by default, you can enable them by adding them to your configuration file:
+- `total_energy_income_graph`
+- `total_mineral_income_graph`
+- `total_alloys_income_graph`
+- `total_consumer_goods_income_graph`
+- `total_food_income_graph`
+- `total_energy_expense_graph`
+- `total_mineral_expense_graph`
+- `total_alloys_expense_graph`
+- `total_consumer_goods_expense_graph`
+- `total_food_expense_graph`
+
+Graphs that are enabled by default:
 - `planet_count_graph`
 - `system_count_graph`
 - `net_mineral_income_graph`

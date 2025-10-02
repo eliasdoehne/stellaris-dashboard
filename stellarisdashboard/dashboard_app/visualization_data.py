@@ -2,16 +2,22 @@ import abc
 import colorsys
 import dataclasses
 import enum
+import functools
+import itertools
 import logging
+import pathlib
 import random
+import re
 import time
-from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional
+from collections import defaultdict
+from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
 
 import networkx as nx
 import numpy as np
 from scipy.spatial import Voronoi
 
-from stellarisdashboard import datamodel, config
+from stellarisdashboard import datamodel, config, game_info
+from stellarisdashboard.parsing.save_parser import rust_parser
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +44,15 @@ class PlotSpecification:
 
     # This function specifies which data container class should be used for the plot.
     # The int argument is the country ID for which budgets and pop stats are shown.
-    data_container_factory: Callable[[Optional[int]], "AbstractPlotDataContainer"]
+    data_container_factory: Callable[[Optional[int], Any], "AbstractPlotDataContainer"]
+
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
     x_axis_label: str = "Time (years after 2200.01.01)"
     y_axis_label: str = ""
+
+    data_container_factory_kwargs: Dict = dataclasses.field(default_factory=dict)
 
 
 def get_plot_specifications_for_tab_layout():
@@ -77,6 +86,7 @@ def get_current_execution_plot_data(
             for pslist in get_plot_specifications_for_tab_layout().values()
             for ps in pslist
         ]
+        plot_specifications += get_market_graphs(config.CONFIG.market_resources)
         _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(
             game_name, plot_specifications
         )
@@ -86,8 +96,15 @@ def get_current_execution_plot_data(
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
+_GAME_COUNTRY_COLORS = {}
+
+
+def clear_cached_country_colors():
+    _GAME_COUNTRY_COLORS.clear()
+
+
 def get_color_vals(
-    key_str: str, range_min: float = 0.1, range_max: float = 1.0
+    game_id: str, key_str: str, range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
     """Generate RGB values for the given identifier. Some special values (tech categories)
     have hardcoded colors to roughly match the game's look and feel.
@@ -95,6 +112,13 @@ def get_color_vals(
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
     the random number generator. This makes colors consistent across figures and executions.
     """
+    if game_id not in _GAME_COUNTRY_COLORS:
+        country_colors = CountryColors()
+        country_colors.load(game_id)
+        _GAME_COUNTRY_COLORS[game_id] = country_colors
+    else:
+        country_colors = _GAME_COUNTRY_COLORS[game_id]
+
     if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
     elif key_str.lower() == "society":
@@ -103,6 +127,12 @@ def get_color_vals(
         r, g, b = COLOR_ENGINEERING
     elif key_str == GalaxyMapData.UNCLAIMED:  # for unclaimed system in the galaxy map
         r, g, b = 255, 255, 255
+    elif key_str.endswith("galactic_market"):
+        r, g, b = 255, 0, 0
+    elif key_str.endswith("internal_market"):
+        r, g, b = 0, 0, 255
+    elif country_colors.has_color_for_name(key_str):
+        r, g, b = country_colors.get_color_by_name(key_str)
     else:
         random.seed(key_str)
         h = random.uniform(0, 1)
@@ -151,7 +181,9 @@ class PlotDataManager:
         for plot_spec in self.plot_specifications:
             self.data_containers_by_plot_id[
                 plot_spec.plot_id
-            ] = plot_spec.data_container_factory(self.country_perspective)
+            ] = plot_spec.data_container_factory(
+                self.country_perspective, **plot_spec.data_container_factory_kwargs
+            )
 
     @property
     def country_perspective(self) -> Optional[int]:
@@ -229,7 +261,7 @@ class PlotDataManager:
 class AbstractPlotDataContainer(abc.ABC):
     DEFAULT_VAL = float("nan")
 
-    def __init__(self, country_perspective: Optional[int]):
+    def __init__(self, country_perspective: Optional[int], **kwargs):
         self.dates: List[float] = []
         self.data_dict: Dict[str, List[float]] = {}
         self._country_perspective = country_perspective
@@ -266,9 +298,10 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         added_new_val = False
         self.dates.append(gs.date / 360.0)
         for cd in gs.country_data:
+            country_name = cd.country.rendered_name
             try:
                 if (
-                    config.CONFIG.show_all_country_types
+                    not config.CONFIG.show_all_country_types
                     and cd.country.country_type != "default"
                 ):
                     continue
@@ -276,10 +309,10 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
                 if new_val is not None:
                     added_new_val = True
                     self._add_new_value_to_data_dict(
-                        cd.country.country_name, new_val, default_val=self.DEFAULT_VAL
+                        country_name, new_val, default_val=self.DEFAULT_VAL
                     )
             except Exception as e:
-                logger.exception(cd.country.country_name)
+                logger.exception(country_name)
         if not added_new_val:
             self.dates.pop()  # if nothing was added, we don't need to remember the date.
         self._pad_data_dict(default_val=self.DEFAULT_VAL)
@@ -292,7 +325,7 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
 
 
 def _override_visibility(cd: datamodel.CountryData):
-    return not cd.country.is_other_player and config.CONFIG.show_everything
+    return not cd.country.is_hidden_country() and config.CONFIG.show_everything
 
 
 class PlanetCountDataContainer(AbstractPerCountryDataContainer):
@@ -331,10 +364,28 @@ class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
             return cd.net_consumer_goods
 
 
+class TotalTradeIncomeDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_economic_info():
+            return cd.net_trade
+
+
 class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_food
+
+
+class TotalBiomassIncomeDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_economic_info():
+            return cd.net_biomass
+
+
+class EmpireSizeDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_economic_info():
+            return cd.empire_size
 
 
 class TechCountDataContainer(AbstractPerCountryDataContainer):
@@ -404,13 +455,13 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
                         key, new_val, default_val=self.DEFAULT_VAL
                     )
         except Exception as e:
-            logger.exception(player_cd.country.country_name)
+            logger.exception(player_cd.country.rendered_country_name)
         self._pad_data_dict(self.DEFAULT_VAL)
 
     def _get_player_countrydata(self, gs: datamodel.GameState) -> datamodel.CountryData:
         player_cd = None
         for cd in gs.country_data:
-            if cd.country.is_other_player:
+            if cd.country.is_hidden_country():
                 continue
             if (
                 self._country_perspective is None and cd.country.is_player
@@ -454,7 +505,96 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
         yield "colossi", cd.ship_count_colossus * 32
 
 
-class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
+class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
+    DEFAULT_VAL = float("nan")
+    galactic_market_indicator_key = "traded_on_galactic_market"
+    internal_market_indicator_key = "traded_on_internal_market"
+
+    def __init__(self, country_perspective, resource_name, base_price, resource_index):
+        super().__init__(country_perspective=country_perspective)
+        self.resource_name = resource_name
+        self.base_price = base_price
+        self.resource_index = resource_index
+
+    def _iterate_budgetitems(
+        self, cd: datamodel.CountryData
+    ) -> Iterable[Tuple[str, float]]:
+        gs = cd.game_state
+        if cd.has_galactic_market_access:
+            yield from self._iter_galactic_market_price(gs, cd)
+        else:
+            yield from self._iter_internal_market_price(gs, cd)
+
+    def _iter_galactic_market_price(
+        self, gs: datamodel.GameState, cd: datamodel.CountryData
+    ) -> Iterable[Tuple[str, float]]:
+        market_fee = self.get_market_fee(gs)
+        market_resources: List[datamodel.GalacticMarketResource] = sorted(
+            gs.galactic_market_resources, key=lambda r: r.resource_index
+        )
+        for res, res_data in zip(market_resources, config.CONFIG.market_resources):
+            if res_data["name"] == self.resource_name and res.availability != 0:
+                yield from self._get_resource_prices(
+                    market_fee, res_data["base_price"], res.fluctuation
+                )
+                yield self.galactic_market_indicator_key, -0.001
+                yield self.internal_market_indicator_key, self.DEFAULT_VAL
+                break
+
+    def _iter_internal_market_price(
+        self, gs: datamodel.GameState, cd: datamodel.CountryData
+    ):
+        market_fee = self.get_market_fee(gs)
+        res_data = None
+        for r in config.CONFIG.market_resources:
+            if r["name"] == self.resource_name:
+                res_data = r
+                break
+        if res_data is None:
+            logger.info(f"Could not find configuration for resource {self.resource_name}")
+            return
+        if res_data["base_price"] is None:
+            return
+
+        always_tradeable = ["energy", "minerals", "food", "consumer_goods", "alloys"]
+        fluctuation = 0.0 if self.resource_name in always_tradeable else None
+        for resource in cd.internal_market_resources:
+            if resource.resource_name.text == self.resource_name:
+                fluctuation = resource.fluctuation
+                break
+        if fluctuation is None:
+            return
+
+        yield from self._get_resource_prices(
+            market_fee, res_data["base_price"], fluctuation
+        )
+        yield self.galactic_market_indicator_key, self.DEFAULT_VAL
+        yield self.internal_market_indicator_key, -0.001
+
+    def _get_resource_prices(
+        self, market_fee: float, base_price: float, fluctuation: float
+    ) -> Tuple[float, float, float]:
+        no_fee_price = base_price * (1 + fluctuation / 100)
+        buy_price = base_price * (1 + fluctuation / 100) * (1 + market_fee)
+        sell_price = base_price * (1 + fluctuation / 100) * (1 - market_fee)
+
+        yield f"{self.resource_name}_base_price", no_fee_price
+        if buy_price != sell_price:
+            yield f"{self.resource_name}_buy_price", buy_price
+            yield f"{self.resource_name}_sell_price", sell_price
+
+    def get_market_fee(self, gs):
+        market_fees = config.CONFIG.market_fee
+        current_fee = {"date": 0, "fee": 0.3}  # default
+        for fee in sorted(market_fees, key=lambda f: f["date"]):
+            if datamodel.date_to_days(fee["date"]) > gs.date:
+                break
+            current_fee = fee
+        market_fee = current_fee["fee"]
+        return market_fee
+
+
+class AbstractPlayerBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.ABC):
     DEFAULT_VAL = 0.0
 
     def _iterate_budgetitems(
@@ -464,7 +604,7 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
             val = self._get_value_from_budgetitem(budget_item)
             if val == 0.0:
                 val = None
-            yield (budget_item.name, val)
+            yield budget_item.name, val
 
     @abc.abstractmethod
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem) -> float:
@@ -474,74 +614,113 @@ class AbstractEconomyBudgetDataContainer(AbstractPlayerInfoDataContainer, abc.AB
         return len(player_cd.budget) != 0
 
 
-class EnergyBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class EnergyBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_energy
 
 
-class MineralsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class MineralsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_minerals
 
 
-class AlloysBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class AlloysBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_alloys
 
 
-class ConsumerGoodsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class ConsumerGoodsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_consumer_goods
 
 
-class FoodBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class TradeBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_trade
+
+
+class FoodBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_food
 
 
-class VolatileMotesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class VolatileMotesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_volatile_motes
 
 
-class ExoticGasesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class ExoticGasesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_exotic_gases
 
 
-class RareCrystalsBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class RareCrystalsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_rare_crystals
 
 
-class LivingMetalBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class LivingMetalBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_living_metal
 
 
-class ZroBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class ZroBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_zro
 
 
-class DarkMatterBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class DarkMatterBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_dark_matter
 
 
-class NanitesBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class NanitesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_nanites
 
 
-class UnityBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class MinorArtifactsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_minor_artifacts
+
+
+class AstralThreadsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_astral_threads
+
+
+class BiomassBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_biomass
+
+
+class UnityBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_unity
 
 
-class InfluenceBudgetDataContainer(AbstractEconomyBudgetDataContainer):
+class InfluenceBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_influence
+
+
+class BudgetSumDataContainer(AbstractPerCountryDataContainer, abc.ABC):
+    DEFAULT_VAL = float("nan")
+
+    def __init__(
+        self,
+        function_from_budgetitem: Callable[[datamodel.BudgetItem], float],
+        country_perspective: Optional[int],
+        **kwargs,
+    ):
+        super().__init__(country_perspective, **kwargs)
+        self.function_from_budgetitem = function_from_budgetitem
+
+    def _get_value_from_countrydata(
+        self, cd: datamodel.CountryData
+    ) -> Union[None, float]:
+        if cd.show_economic_info():
+            return sum(self.function_from_budgetitem(bi) for bi in cd.budget)
 
 
 PopStatsType = Union[
@@ -590,7 +769,7 @@ class AbstractPopStatsBySpeciesDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsBySpecies)
-        return f"{ps.species.species_name} (ID {ps.species.species_id_in_game})"
+        return f"{ps.species.rendered_name} ({ps.species.species_id_in_game})"
 
 
 class SpeciesDistributionDataContainer(AbstractPopStatsBySpeciesDataContainer):
@@ -623,7 +802,7 @@ class AbstractPopStatsByFactionDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByFaction)
-        return ps.faction.faction_name
+        return ps.faction.rendered_name
 
 
 class FactionDistributionDataContainer(AbstractPopStatsByFactionDataContainer):
@@ -701,7 +880,7 @@ class AbstractPopStatsByPlanetDataContainer(AbstractPopStatsDataContainer, abc.A
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PlanetStats)
-        return f"{ps.planet.name} (ID {ps.planet.planet_id_in_game})"
+        return f"{ps.planet.rendered_name} ({ps.planet.planet_id_in_game})"
 
 
 class PlanetDistributionDataContainer(AbstractPopStatsByPlanetDataContainer):
@@ -844,6 +1023,12 @@ NET_ALLOYS_INCOME_GRAPH = PlotSpecification(
     data_container_factory=TotalAlloysIncomeDataContainer,
     style=PlotStyle.line,
 )
+NET_TRADE_INCOME_GRAPH = PlotSpecification(
+    plot_id="net-trade-income",
+    title="Net Trade Income",
+    data_container_factory=TotalTradeIncomeDataContainer,
+    style=PlotStyle.line,
+)
 NET_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
     plot_id="net-consumer-goods-income",
     title="Net Consumer Goods Income",
@@ -854,6 +1039,18 @@ NET_FOOD_INCOME_GRAPH = PlotSpecification(
     plot_id="net-food-income",
     title="Net Food Income",
     data_container_factory=TotalFoodIncomeDataContainer,
+    style=PlotStyle.line,
+)
+NET_BIOMASS_INCOME_GRAPH = PlotSpecification(
+    plot_id="net-biomass-income",
+    title="Net Biomass Income",
+    data_container_factory=TotalBiomassIncomeDataContainer,
+    style=PlotStyle.line,
+)
+EMPIRE_SIZE_GRAPH = PlotSpecification(
+    plot_id="empire-size",
+    title="Empire Size",
+    data_container_factory=EmpireSizeDataContainer,
     style=PlotStyle.line,
 )
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
@@ -1100,6 +1297,12 @@ CONSUMER_GOODS_BUDGET = PlotSpecification(
     data_container_factory=ConsumerGoodsBudgetDataContainer,
     style=PlotStyle.budget,
 )
+TRADE_BUDGET = PlotSpecification(
+    plot_id="empire-trade-budget",
+    title="Trade Budget",
+    data_container_factory=TradeBudgetDataContainer,
+    style=PlotStyle.budget,
+)
 ALLOYS_BUDGET = PlotSpecification(
     plot_id="empire-alloys-budget",
     title="Alloys Budget",
@@ -1154,6 +1357,24 @@ NANITES_BUDGET = PlotSpecification(
     data_container_factory=NanitesBudgetDataContainer,
     style=PlotStyle.budget,
 )
+MINOR_ARTIFACTS_BUDGET = PlotSpecification(
+    plot_id="empire-minor-artifacts-budget",
+    title="Minor Artifacts Budget",
+    data_container_factory=MinorArtifactsBudgetDataContainer,
+    style=PlotStyle.budget,
+)
+ASTRAL_THREADS_BUDGET = PlotSpecification(
+    plot_id="empire-astral-threads-budget",
+    title="Astral Threads Budget",
+    data_container_factory=AstralThreadsBudgetDataContainer,
+    style=PlotStyle.budget,
+)
+BIOMASS_BUDGET = PlotSpecification(
+    plot_id="empire-biomass-budget",
+    title="Biomass Budget",
+    data_container_factory=BiomassBudgetDataContainer,
+    style=PlotStyle.budget,
+)
 INFLUENCE_BUDGET = PlotSpecification(
     plot_id="empire-influence-budget",
     title="Influence",
@@ -1164,7 +1385,7 @@ UNITY_BUDGET = PlotSpecification(
     plot_id="empire-unity-budget",
     title="Unity",
     data_container_factory=UnityBudgetDataContainer,
-    style=PlotStyle.stacked,
+    style=PlotStyle.budget,
 )
 VICTORY_RANK_GRAPH = PlotSpecification(
     plot_id="victory-rank",
@@ -1185,9 +1406,89 @@ VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
     style=PlotStyle.line,
 )
 
+# Below are not shown by default, but can be enabled in configuration
+TOTAL_MINERAL_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-mineral-income",
+    title="Total Mineral Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_minerals)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ENERGY_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-energy-income",
+    title="Total Energy Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_energy)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ALLOYS_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-alloys-income",
+    title="Total Alloys Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_alloys)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-consumer-goods-income",
+    title="Total Consumer Goods Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_consumer_goods)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_FOOD_INCOME_GRAPH = PlotSpecification(
+    plot_id="total-food-income",
+    title="Total Food Income",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: max(0.0, bi.net_food)
+    ),
+    style=PlotStyle.line,
+)
+# Below are not shown by default, but can be enabled in configuration
+TOTAL_MINERAL_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-mineral-expense",
+    title="Total Mineral Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_minerals)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ENERGY_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-energy-expense",
+    title="Total Energy Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_energy)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_ALLOYS_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-alloys-expense",
+    title="Total Alloys Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_alloys)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-consumer-goods-expense",
+    title="Total Consumer Goods Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_consumer_goods)
+    ),
+    style=PlotStyle.line,
+)
+TOTAL_FOOD_EXPENSE_GRAPH = PlotSpecification(
+    plot_id="total-food-expense",
+    title="Total Food Expenses",
+    data_container_factory=functools.partial(
+        BudgetSumDataContainer, lambda bi: min(0.0, bi.net_food)
+    ),
+    style=PlotStyle.line,
+)
 
-# This dictionary defines how the plots are laid out in tabs by the plotly frontend
-# and how they should be split to different image files by matplotlib
 PLOT_SPECIFICATIONS = {
     "planet_count_graph": PLANET_COUNT_GRAPH,
     "system_count_graph": SYSTEM_COUNT_GRAPH,
@@ -1195,11 +1496,25 @@ PLOT_SPECIFICATIONS = {
     "net_mineral_income_graph": NET_MINERAL_INCOME_GRAPH,
     "net_alloys_income_graph": NET_ALLOYS_INCOME_GRAPH,
     "net_consumer_goods_income_graph": NET_CONSUMER_GOODS_INCOME_GRAPH,
+    "net_trade_income_graph": NET_TRADE_INCOME_GRAPH,
     "net_food_income_graph": NET_FOOD_INCOME_GRAPH,
+    "net_biomass_income_graph": NET_BIOMASS_INCOME_GRAPH,
+    "total_energy_income_graph": TOTAL_ENERGY_INCOME_GRAPH,
+    "total_mineral_income_graph": TOTAL_MINERAL_INCOME_GRAPH,
+    "total_alloys_income_graph": TOTAL_ALLOYS_INCOME_GRAPH,
+    "total_consumer_goods_income_graph": TOTAL_CONSUMER_GOODS_INCOME_GRAPH,
+    "total_food_income_graph": TOTAL_FOOD_INCOME_GRAPH,
+    "total_energy_expense_graph": TOTAL_ENERGY_EXPENSE_GRAPH,
+    "total_mineral_expense_graph": TOTAL_MINERAL_EXPENSE_GRAPH,
+    "total_alloys_expense_graph": TOTAL_ALLOYS_EXPENSE_GRAPH,
+    "total_consumer_goods_expense_graph": TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH,
+    "total_food_expense_graph": TOTAL_FOOD_EXPENSE_GRAPH,
+    "empire_size_graph": EMPIRE_SIZE_GRAPH,
     "energy_budget": ENERGY_BUDGET,
     "mineral_budget": MINERAL_BUDGET,
     "consumer_goods_budget": CONSUMER_GOODS_BUDGET,
     "alloys_budget": ALLOYS_BUDGET,
+    "trade_budget": TRADE_BUDGET,
     "food_budget": FOOD_BUDGET,
     "influence_budget": INFLUENCE_BUDGET,
     "unity_budget": UNITY_BUDGET,
@@ -1210,6 +1525,9 @@ PLOT_SPECIFICATIONS = {
     "zro_budget": ZRO_BUDGET,
     "dark_matter_budget": DARK_MATTER_BUDGET,
     "nanites_budget": NANITES_BUDGET,
+    "minor_artifacts_budget": MINOR_ARTIFACTS_BUDGET,
+    "astral_threads_budget": ASTRAL_THREADS_BUDGET,
+    "biomass_budget": BIOMASS_BUDGET,
     "species_distribution_graph": SPECIES_DISTRIBUTION_GRAPH,
     "species_happiness_graph": SPECIES_HAPPINESS_GRAPH,
     "species_crime_graph": SPECIES_CRIME_GRAPH,
@@ -1255,6 +1573,37 @@ PLOT_SPECIFICATIONS = {
 _GALAXY_DATA: Dict[str, "GalaxyMapData"] = {}
 
 
+def market_graph_id(resource_config) -> str:
+    return f"trade-price-{resource_config['name']}"
+
+
+def market_graph_title(resource_config) -> str:
+    resource_name = game_info.convert_id_to_name(
+        resource_config["name"], remove_prefix="sr"
+    )
+    return f"{resource_name} market price"
+
+
+def get_market_graphs(resource_config) -> List[PlotSpecification]:
+    res = []
+    for idx, rc in enumerate(resource_config):
+        if rc["base_price"] is not None:
+            res.append(
+                PlotSpecification(
+                    plot_id=market_graph_id(rc),
+                    title=market_graph_title(rc),
+                    data_container_factory=MarketPriceDataContainer,
+                    data_container_factory_kwargs=dict(
+                        resource_name=rc["name"],
+                        base_price=rc["base_price"],
+                        resource_index=idx,
+                    ),
+                    style=PlotStyle.line,
+                )
+            )
+    return res
+
+
 def get_galaxy_data(game_name: str) -> "GalaxyMapData":
     """Similar to get_current_execution_plot_data, the GalaxyMapData for
     each game is cached in the _GALAXY_DATA dictionary.
@@ -1265,10 +1614,14 @@ def get_galaxy_data(game_name: str) -> "GalaxyMapData":
     return _GALAXY_DATA[game_name]
 
 
+GalaxyMapCoordinate = Tuple[float, float]
+
+
 class GalaxyMapData:
     """Maintains the data for the historical galaxy map."""
 
     UNCLAIMED = "Unclaimed"
+    ARTIFICIAL_NODE = "artificial-node"
 
     def __init__(self, game_id: str):
         self.game_id = game_id
@@ -1282,9 +1635,10 @@ class GalaxyMapData:
                 assert isinstance(system, datamodel.System)
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
-                    name=system.get_name(),
+                    name=system.rendered_name,
                     country=GalaxyMapData.UNCLAIMED,
                     system_id=system.system_id,
+                    country_id=None,
                     pos=[-system.coordinate_x, -system.coordinate_y],
                 )
             for hl in session.query(datamodel.HyperLane).all():
@@ -1296,18 +1650,25 @@ class GalaxyMapData:
 
         self._prepare_system_shapes()
 
-        logger.info(
+        logger.debug(
             f"Initialized galaxy graph in {time.process_time() - start_time} seconds."
         )
 
-    def get_graph_for_date(self, time_days: int) -> nx.Graph:
+    def update_graph_for_date(self, time_days: int):
+        """
+        Update all time-variable properties of the galaxy in the networkx graph (primarily system ownership).
+        """
         start_time = time.process_time()
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
-        for country, nodes in systems_by_owner.items():
+        owner_id_by_system = {}
+        for country_tuple, nodes in systems_by_owner.items():
+            country_id, country_name = country_tuple
             for node in nodes:
-                owner_by_system[node] = country
-                self.galaxy_graph.nodes[node]["country"] = country
+                owner_by_system[node] = country_name
+                owner_id_by_system[node] = country_id
+                self.galaxy_graph.nodes[node]["country"] = country_name
+                self.galaxy_graph.nodes[node]["country_id"] = country_id
 
         for edge in self.galaxy_graph.edges:
             i, j = edge
@@ -1318,38 +1679,55 @@ class GalaxyMapData:
             else:
                 self.galaxy_graph.edges[edge]["country"] = self.UNCLAIMED
 
-        logger.info(
-            f"Updated networkx graph in {time.process_time() - start_time:5.3f} seconds."
+        logger.debug(
+            f"Updated galaxy graph in {time.process_time() - start_time:5.3f} seconds."
         )
-        return self.galaxy_graph
 
-    def _get_system_ids_by_owner(self, time_days) -> Dict[str, Set[int]]:
+    def get_country_border_ridges(
+        self,
+        country_ridges: Dict[str, Set[Tuple[GalaxyMapCoordinate, GalaxyMapCoordinate]]],
+    ) -> Iterable[Tuple[List[float], List[float]]]:
+        """
+        :param country_ridges: Dict mapping country name to ridges (defined by pairs of vertices)
+        :return: Iterate over those ridges which lie at the border of a country (to another country,
+            to unclaimed space, or to the edge of the galaxy)
+        """
+        for c1, r1 in country_ridges.items():
+            for c2, r2 in country_ridges.items():
+                if c2 <= c1:
+                    continue
+                intersecting_ridges = r1 & r2
+                for rv1, rv2 in intersecting_ridges:
+                    yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
+
+    def _get_system_ids_by_owner(self, time_days) -> Dict[Tuple[str, str], Set[int]]:
         owned_systems = set()
-        systems_by_owner = {GalaxyMapData.UNCLAIMED: set()}
+        systems_by_owner = {(None, GalaxyMapData.UNCLAIMED): set()}
 
         with datamodel.get_db_session(self.game_id) as session:
             for system in session.query(datamodel.System):
                 country = system.get_owner_country_at(time_days)
-                country = self._country_display_name(country)
+                country_tuple = self._country_display_tuple(country)
                 owned_systems.add(system.system_id_in_game)
-                if country not in systems_by_owner:
-                    systems_by_owner[country] = set()
-                systems_by_owner[country].add(system.system_id_in_game)
+                if country_tuple not in systems_by_owner:
+                    systems_by_owner[country_tuple] = set()
+                systems_by_owner[country_tuple].add(system.system_id_in_game)
 
-        systems_by_owner[GalaxyMapData.UNCLAIMED] |= (
+        systems_by_owner[(None, GalaxyMapData.UNCLAIMED)] |= (
             set(self.galaxy_graph.nodes) - owned_systems
         )
         return systems_by_owner
 
     def _prepare_system_shapes(self):
         points = [
-            self.galaxy_graph.nodes[node]["pos"] for node in self.galaxy_graph.nodes
+            self.galaxy_graph.nodes[node]["pos"]
+            for node in sorted(self.galaxy_graph.nodes)
         ]
 
         min_radius = float("inf")
         max_radius = float("-inf")
         for x, y in points:
-            radius = np.sqrt(x ** 2 + y ** 2)
+            radius = np.sqrt(x**2 + y**2)
             min_radius = min(min_radius, radius)
             max_radius = max(max_radius, radius)
 
@@ -1357,13 +1735,13 @@ class GalaxyMapData:
         angles = np.linspace(0, 2 * np.pi, 32)
         _sin = np.sin(angles)
         _cos = np.cos(angles)
-        outer = 1.2 * max_radius
+        outer = 1.1 * max_radius
         points += [[outer * _c, outer * _s] for _c, _s in zip(_sin, _cos)]
         inner = 0.8 * min_radius
         points += [[inner * _c, inner * _s] for _c, _s in zip(_sin, _cos)]
 
         voronoi = Voronoi(np.array(points))
-        for i, node in enumerate(self.galaxy_graph.nodes):
+        for i, node in enumerate(sorted(self.galaxy_graph.nodes)):
             region = voronoi.regions[voronoi.point_region[i]]
 
             vertices = [voronoi.vertices[v] for v in region if v != -1]
@@ -1378,11 +1756,129 @@ class GalaxyMapData:
             )
             self.galaxy_graph.nodes[node]["shape"] = shape_x, shape_y
 
-    def _country_display_name(self, country: datamodel.Country) -> str:
+        self._extract_voronoi_ridges(voronoi)
+
+    def _extract_voronoi_ridges(self, voronoi: Voronoi):
+        """
+        Adjacent systems in the Voronoi diagram are separated by ridges, which can be described in two ways:
+        - ridge points: Index to the pair of input points separated by the ridge
+        - ridge vertices: Index to the pair of "output" points connected by the ridge
+
+        For each node, we collect all ridges for which it is a ridge point, transform the ridge vertices
+        into map coordinates, and store these in the graph metadata. Ridge vertices for artificial nodes are stored
+        as well (so the borders can also be drawn around the edge of the galaxy).
+        """
+        self.galaxy_graph.graph["system_borders"] = defaultdict(set)
+
+        for ridge_points, ridge_vertices in zip(
+            voronoi.ridge_points, voronoi.ridge_vertices
+        ):
+            for rp in ridge_points:
+                if rp not in self.galaxy_graph:
+                    # substitute placeholder for artificial nodes
+                    rp = GalaxyMapData.ARTIFICIAL_NODE
+
+                rv1, rv2 = ridge_vertices
+                rv_tuple = (tuple(voronoi.vertices[rv1]), tuple(voronoi.vertices[rv2]))
+
+                self.galaxy_graph.graph["system_borders"][rp].add(rv_tuple)
+
+    def _country_display_tuple(self, country: datamodel.Country) -> Tuple[str, str]:
         if country is None:
-            return GalaxyMapData.UNCLAIMED
+            return (None, GalaxyMapData.UNCLAIMED)
         if config.CONFIG.show_everything:
-            return country.country_name
+            return (country.country_id, country.rendered_name)
         if not country.has_met_player():
-            return GalaxyMapData.UNCLAIMED
-        return country.country_name
+            return (None, GalaxyMapData.UNCLAIMED)
+        return (country.country_id, country.rendered_name)
+
+
+_MIN_V = 0.4
+_MAX_V = 1.0
+_V_SHIFTS = [
+    0.2,
+    0.4,
+    0.6,
+]
+_GRAYSCALE_S = 0.2
+
+
+class CountryColors:
+    def __init__(self):
+        self.map_colors: Dict[str, tuple] = {}
+        self.country_name_to_primary_color: Dict[str, tuple] = {}
+        self._used_hsv = set()
+
+    def load(self, game_id: str):
+        for game_data_dir in reversed(config.CONFIG.game_data_dirs):
+            colors_path = game_data_dir / "flags/colors.txt"
+            if colors_path.exists():
+                self.map_colors = self._parse_map_colors(colors_path)
+                break
+
+        with datamodel.get_db_session(game_id) as session:
+            for c in session.query(datamodel.Country).order_by("country_id_in_game"):
+                name = c.rendered_name
+                # avoid grayscale colors if possible; they can be hard to distinguish
+                color = (
+                    c.secondary_color
+                    if self._is_grayscale_color(c.primary_color)
+                    and not self._is_grayscale_color(c.secondary_color)
+                    else c.primary_color
+                )
+                # try to avoid duplicate colors
+                # don't bother for non-default-or-fallen-empire countries, so that the "real" countries are more likely to get their color
+                rgb = self._get_rgb(color, avoid_used=c.is_real_country())
+                self.country_name_to_primary_color[name] = rgb
+
+    def _get_rgb(self, key: str, avoid_used: bool):
+        r, g, b = self.map_colors.get(key, (0, 0, 0))
+        h, s, v = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        v = min(v, _MAX_V)
+        v = max(v, _MIN_V)
+        if avoid_used:
+            for shift in itertools.chain([0.0], *((v, -v) for v in _V_SHIFTS)):
+                v_shifted = s + shift
+                if (
+                    v_shifted >= _MIN_V
+                    and v_shifted <= _MAX_V
+                    and self._round_hsv(h, s, v_shifted) not in self._used_hsv
+                ):
+                    v = v_shifted
+                    break
+            self._used_hsv.add(self._round_hsv(h, s, v))
+        return tuple(int(v * 255) for v in colorsys.hsv_to_rgb(h, s, v))
+    
+    @staticmethod
+    def _round_hsv(h: float, s: float, v: float):
+        return round(h, 1), round(s, 1), round(v, 1)
+
+    def _is_grayscale_color(self, key: str):
+        r, g, b = self.map_colors.get(key, (0, 0, 0))
+        _, s, _ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        return s < _GRAYSCALE_S
+
+    def has_color_for_name(self, country_name: str):
+        return country_name in self.country_name_to_primary_color
+
+    def get_color_by_name(self, country_name: str):
+        return self.country_name_to_primary_color[country_name]
+
+    @staticmethod
+    def _parse_map_colors(path: pathlib.Path):
+        with open(path, "r") as f:
+            prepared_str = re.sub(r"#[^\n]*", "", f.read())  # strip out comments
+            data = rust_parser.parse_save_from_string(prepared_str)
+
+            colors = data.get("colors", {})
+            map_colors = {}
+            for key in colors:
+                space, v1, v2, v3 = colors[key]["map"]
+                if space == "rgb":
+                    map_colors[key] = (int(v1), int(v2), int(v3))
+                elif space == "hsv":
+                    rgb = tuple(int(v * 255) for v in colorsys.hsv_to_rgb(v1, v2, v3))
+                    map_colors[key] = rgb
+                else:
+                    raise RuntimeError(f"Unexpected color space: {space}")
+            return map_colors

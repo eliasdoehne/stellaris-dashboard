@@ -1,0 +1,17 @@
+[package]
+name = "rust_parser"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "rust_parser"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.17.3", features = ["extension-module"] }
+nom = "7.1.1"
+zip = "0.6.2"
+serde_json = "1.0"
+chrono = "0.4"
+serde = { version = "1.0.143", features = ["derive"] }

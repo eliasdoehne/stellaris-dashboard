@@ -20,7 +20,7 @@ from stellarisdashboard.dashboard_app import (
 
 
 def start_server():
-    graph_ledger.start_dash_app(port=config.CONFIG.port)
+    graph_ledger.start_dash_app(host=config.CONFIG.host,port=config.CONFIG.port)
 
 
 if __name__ == "__main__":

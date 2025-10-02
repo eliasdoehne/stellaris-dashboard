@@ -1,261 +1,296 @@
-PHYSICS_TECHS = {
-    "tech_databank_uplinks",
-    "tech_basic_science_lab_1",
-    "tech_curator_lab",
-    "tech_archeology_lab",
-    "tech_physics_lab_1",
-    "tech_physics_lab_2",
-    "tech_physics_lab_3",
-    "tech_global_research_initiative",
-    "tech_administrative_ai",
-    "tech_cryostasis_1",
-    "tech_cryostasis_2",
-    "tech_self_aware_logic",
-    "tech_automated_exploration",
-    "tech_sapient_ai",
-    "tech_positronic_implants",
-    "tech_combat_computers_1",
-    "tech_combat_computers_2",
-    "tech_combat_computers_3",
-    "tech_combat_computers_autonomous",
-    "tech_auxiliary_fire_control",
-    "tech_synchronized_defences",
-    "tech_fission_power",
-    "tech_fusion_power",
-    "tech_cold_fusion_power",
-    "tech_antimatter_power",
-    "tech_zero_point_power",
-    "tech_reactor_boosters_1",
-    "tech_reactor_boosters_2",
-    "tech_reactor_boosters_3",
-    "tech_shields_1",
-    "tech_shields_2",
-    "tech_shields_3",
-    "tech_shields_4",
-    "tech_shields_5",
-    "tech_shield_rechargers_1",
-    "tech_planetary_shield_generator",
-    "tech_sensors_2",
-    "tech_sensors_3",
-    "tech_sensors_4",
-    "tech_power_plant_1",
-    "tech_power_plant_2",
-    "tech_power_plant_3",
-    "tech_power_plant_4",
-    "tech_power_hub_1",
-    "tech_power_hub_2",
-    "tech_hyper_drive_1",
-    "tech_hyper_drive_2",
-    "tech_hyper_drive_3",
-    "tech_wormhole_stabilization",
-    "tech_gateway_activation",
-    "tech_gateway_construction",
-    "tech_jump_drive_1",
-    "tech_ftl_inhibitor",
-    "tech_matter_generator",
-}
+import json
+import logging
+import re
+from typing import Iterable
 
-SOCIETY_TECHS = {
-    "tech_planetary_defenses",
-    "tech_eco_simulation",
-    "tech_hydroponics",
-    "tech_gene_crops",
-    "tech_nano_vitality_crops",
-    "tech_nutrient_replication",
-    "tech_biolab_1",
-    "tech_biolab_2",
-    "tech_biolab_3",
-    "tech_alien_life_studies",
-    "tech_colonization_1",
-    "tech_colonization_2",
-    "tech_colonization_3",
-    "tech_colonization_4",
-    "tech_colonization_5",
-    "tech_tomb_world_adaption",
-    "tech_space_trading",
-    "tech_frontier_health",
-    "tech_frontier_hospital",
-    "tech_tb_mountain_range",
-    "tech_tb_volcano",
-    "tech_tb_dangerous_wildlife",
-    "tech_tb_dense_jungle",
-    "tech_tb_quicksand_basin",
-    "tech_tb_noxious_swamp",
-    "tech_tb_massive_glacier",
-    "tech_tb_toxic_kelp",
-    "tech_tb_deep_sinkhole",
-    "tech_terrestrial_sculpting",
-    "tech_ecological_adaptation",
-    "tech_climate_restoration",
-    "tech_genome_mapping",
-    "tech_vitality_boosters",
-    "tech_epigenetic_triggers",
-    "tech_cloning",
-    "tech_gene_banks",
-    "tech_gene_seed_purification",
-    "tech_morphogenetic_field_mastery",
-    "tech_gene_tailoring",
-    "tech_glandular_acclimation",
-    "tech_genetic_resequencing",
-    "tech_gene_expressions",
-    "tech_selected_lineages",
-    "tech_capacity_boosters",
-    "tech_regenerative_hull_tissue",
-    "tech_doctrine_fleet_size_1",
-    "tech_doctrine_fleet_size_2",
-    "tech_doctrine_fleet_size_3",
-    "tech_doctrine_fleet_size_4",
-    "tech_doctrine_fleet_size_5",
-    "tech_interstellar_fleet_traditions",
-    "tech_refit_standards",
-    "tech_command_matrix",
-    "tech_doctrine_navy_size_1",
-    "tech_doctrine_navy_size_2",
-    "tech_doctrine_navy_size_3",
-    "tech_doctrine_navy_size_4",
-    "tech_centralized_command",
-    "tech_combat_training",
-    "tech_ground_defense_planning",
-    "tech_global_defense_grid",
-    "tech_psionic_theory",
-    "tech_telepathy",
-    "tech_precognition_interface",
-    "tech_psi_jump_drive_1",
-    "tech_galactic_ambitions",
-    "tech_manifest_destiny",
-    "tech_interstellar_campaigns",
-    "tech_galactic_campaigns",
-    "tech_planetary_government",
-    "tech_planetary_unification",
-    "tech_colonial_centralization",
-    "tech_galactic_administration",
-    "tech_galactic_markets",
-    "tech_subdermal_stimulation",
-    "tech_galactic_benevolence",
-    "tech_adaptive_bureaucracy",
-    "tech_colonial_bureaucracy",
-    "tech_galactic_bureaucracy",
-    "tech_living_state",
-    "tech_collective_self",
-    "tech_autonomous_agents",
-    "tech_embodied_dynamism",
-    "tech_neural_implants",
-    "tech_artificial_moral_codes",
-    "tech_synthetic_thought_patterns",
-    "tech_collective_production_methods",
-    "tech_resource_processing_algorithms",
-    "tech_cultural_heritage",
-    "tech_heritage_site",
-    "tech_hypercomms_forum",
-    "tech_autocurating_vault",
-    "tech_holographic_rituals",
-    "tech_consecration_fields",
-    "tech_transcendent_faith",
-    "tech_ascension_theory",
-    "tech_ascension_theory_apoc",
-    "tech_psionic_shield",
-}
+logger = logging.getLogger(__name__)
+# Regex explanation: https://regex101.com/r/qc0QhS/1
+loc_re = re.compile(r'\s*(?P<key>\S+?):\d*\s*"(?P<value>.*)"\s*(#.*)?')
+var_re = re.compile(r"\$(?P<key>\S+)\$")
 
-ENGINEERING_TECHS = {
-    "tech_space_exploration",
-    "tech_corvettes",
-    "tech_destroyers",
-    "tech_cruisers",
-    "tech_battleships",
-    "tech_titans",
-    "tech_corvette_build_speed",
-    "tech_corvette_hull_1",
-    "tech_corvette_hull_2",
-    "tech_destroyer_build_speed",
-    "tech_destroyer_hull_1",
-    "tech_destroyer_hull_2",
-    "tech_cruiser_build_speed",
-    "tech_cruiser_hull_1",
-    "tech_cruiser_hull_2",
-    "tech_battleship_build_speed",
-    "tech_battleship_hull_1",
-    "tech_battleship_hull_2",
-    "tech_titan_hull_1",
-    "tech_titan_hull_2",
-    "tech_starbase_1",
-    "tech_starbase_2",
-    "tech_starbase_3",
-    "tech_starbase_4",
-    "tech_starbase_5",
-    "tech_modular_engineering",
-    "tech_space_defense_station_improvement",
-    "tech_strike_craft_1",
-    "tech_strike_craft_2",
-    "tech_strike_craft_3",
-    "tech_assault_armies",
-    "tech_ship_armor_1",
-    "tech_ship_armor_2",
-    "tech_ship_armor_3",
-    "tech_ship_armor_4",
-    "tech_ship_armor_5",
-    "tech_crystal_armor_1",
-    "tech_crystal_armor_2",
-    "tech_thrusters_1",
-    "tech_thrusters_2",
-    "tech_thrusters_3",
-    "tech_thrusters_4",
-    "tech_space_defense_station_1",
-    "tech_defense_platform_hull_1",
-    "tech_basic_industry",
-    "tech_powered_exoskeletons",
-    "tech_mining_network_2",
-    "tech_mining_network_3",
-    "tech_mining_network_4",
-    "tech_mineral_processing_1",
-    "tech_mineral_processing_2",
-    "tech_engineering_lab_1",
-    "tech_engineering_lab_2",
-    "tech_engineering_lab_3",
-    "tech_robotic_workers",
-    "tech_droid_workers",
-    "tech_synthetic_workers",
-    "tech_synthetic_leaders",
-    "tech_space_construction",
-    "tech_afterburners_1",
-    "tech_afterburners_2",
-    "tech_assembly_pattern",
-    "tech_construction_templates",
-    "tech_mega_engineering",
-}
 
-ALL_KNOWN_TECHS = set.union(PHYSICS_TECHS, ENGINEERING_TECHS, SOCIETY_TECHS)
+class NameRenderer:
+    default_name = "Unknown name"
 
-ASCENSION_PERKS = {
-    "ap_enigmatic_engineering",  #: "Enigmatic Engineering",
-    "ap_nihilistic_acquisition",  #: "Nihilistic Acquisition",
-    "ap_colossus",  #: "Colossus",
-    "ap_engineered_evolution",  #: "Engineered Evolution",
-    "ap_evolutionary_mastery",  #: "Evolutionary Mastery",
-    "ap_the_flesh_is_weak",  #: "The Flesh is Weak",
-    "ap_synthetic_evolution",  #: "Synthetic Evolution",
-    "ap_mind_over_matter",  #: "Mind over Matter",
-    "ap_transcendence",  #: "Transcendence",
-    "ap_world_shaper",  #: "World Shaper",
-    "ap_galactic_force_projection",  #: "Galactic Force Projection",
-    "ap_defender_of_the_galaxy",  #: "Defender of the Galaxy",
-    "ap_interstellar_dominion",  #: "Interstellar Dominion",
-    "ap_grasp_the_void",  #: "Grasp the Void",
-    "ap_eternal_vigilance",  #: "Eternal Vigilance",
-    "ap_galactic_contender",  #: "Galactic Contender",
-    "ap_technological_ascendancy",  #: "Technological Ascendancy",
-    "ap_one_vision",  #: "One Vision",
-    "ap_consecrated_worlds",  #: "Consecrate Worlds",
-    "ap_mastery_of_nature",  #: "Mastery of Nature",
-    "ap_imperial_prerogative",  #: "Imperial Prerogative",
-    "ap_executive_vigor",  #: "Executive Vigor",
-    "ap_transcendent_learning",  #: "Transcendent Learning",
-    "ap_shared_destiny",  #: "Shared Destiny",
-    "ap_voidborn",  #: "Voidborn",
-    "ap_master_builders",  #: "Master Builders",
-    "ap_galactic_wonders",  #: "Galactic Wonders",
-    "ap_synthetic_age",  #: "Synthetic Age",
-    "ap_machine_worlds",  #: "Machine Worlds",
-}
+    def __init__(self, localization_files):
+        self.localization_files = localization_files
+        self.name_mapping: dict[str, str] = {}
+        self.adjective_templates: dict[
+            str, str
+        ] = {}  # map noun suffixes to adjective suffix
+
+    def load_name_mapping(self):
+        """
+        Load a mapping of all name keys to their corresponding templates / localized values.
+
+        Localization files can be passed in, by default the dashboard tries to locate them from
+        """
+        self.name_mapping = {"global_event_country": "Global event country"}
+        self.adjective_templates = {}
+        # manually parse the yaml files, yaml.safe_load doesn't seem to work
+        ignored_prefixes = ("#", "\ufeffl_english:", "l_english:")
+        for line in self._iter_localization_lines():
+            try:
+                re_match = loc_re.match(line)
+                if re_match:
+                    key = re_match.group("key")
+                    value = re_match.group("value")
+                    if key.startswith("adj_NN"):
+                        key = key.removeprefix("adj_NN")
+                        value = value.split("|")[0]
+                        key = key.lstrip("*")
+                        self.adjective_templates[key] = value
+                    else:
+                        self.name_mapping[key] = value
+                else:
+                    if not line.startswith(ignored_prefixes):
+                        # This error prints the offending line as numbers because not only did we encounter whitespace,
+                        # we encountered the Zero Width No-Break Space (BOM)
+                        logger.debug(
+                            f"Unexpected unmatched localisation line found: {line=!r}"
+                        )
+            except Exception as e:
+                logger.warning(f"Caught exception reading localisation files: {e}")
+        # Add missing format that is similar to but not the same as adj_format in practice
+        if "%ADJECTIVE%" not in self.name_mapping:
+            # Try to get it from game's localization config:
+            adj_format = self.name_mapping.get("adj_format", "adj $1$")
+            self.name_mapping["%ADJECTIVE%"] = adj_format.replace("adj", "%adjective%")
+        # Alternate format with no template (meant to be concatenated?). Incomplete solution.
+        #        if "%ADJ%" not in self.name_mapping:
+        #          self.name_mapping["%ADJ%"] = "$1$"
+        if "%LEADER_1%" not in self.name_mapping:
+            self.name_mapping["%LEADER_1%"] = "$1$ $2$"
+        if "%LEADER_2%" not in self.name_mapping:
+            self.name_mapping["%LEADER_2%"] = "$1$ $2$"
+
+        logger.debug(f"Found adjective templates: {self.adjective_templates}")
+
+    def render_from_json(self, name_json: str):
+        try:
+            json_dict = json.loads(name_json)
+        except (json.JSONDecodeError, TypeError):
+            return str(name_json)
+        rendered = self.render_from_dict(json_dict)
+        if rendered == self.default_name:
+            logger.warning(
+                "Failed to resolve a name, please check if you configured localization files."
+            )
+            logger.warning(f"Instructions can be found in README.md")
+            logger.warning(f"Failed name: {name_json!r}")
+        return rendered
+
+    def render_from_dict(self, name_dict: dict, tags: set[str] | None = None) -> str:
+        if not isinstance(name_dict, dict):
+            logger.warning(f"Expected name template dictionary, received {name_dict}")
+            return str(name_dict)
+
+        key = name_dict.get("key", self.default_name)
+        if name_dict.get("literal") == "yes":
+            return key
+
+        render_template = self.name_mapping.get(key, key)
+        render_template = self._preprocess_template(render_template, name_dict)
+
+        # this handles tags and variants as documented in the Stellaris file localisation/99_README_GRAMMAR.txt
+        # note: this does not fully implement tag forwarding (section 6) or tag-sensitive text (section 7)
+        # but this seems to be "good enough" for our purposes of rendering names
+        if tags is None:
+            tags = set()
+        render_template, added_tags = self._process_tags_and_variants(render_template, tags)
+        tags.update(added_tags)
+
+        if "value" in name_dict:
+            return self.render_from_dict(name_dict["value"], tags)
+
+        substitution_values = self._collect_substitution_values(name_dict, tags)
+        render_template = self._substitute_variables(
+            render_template, substitution_values
+        )
+        render_template = self._handle_unresolved_variables(render_template)
+        return render_template
+
+    def _collect_substitution_values(self, name_dict, tags: set[str]):
+        substitution_values = []
+        for var in name_dict.get("variables", []):
+            if "key" in var and "value" in var:
+                var_key = var.get("key")
+                substitution_values.append(
+                    (var_key, self.render_from_dict(var["value"], tags))
+                )
+        return substitution_values
+
+    def _preprocess_template(self, render_template, name_dict):
+        """
+        Handle some special keys.
+        """
+        if render_template == "%ADJ%":
+            render_template = "$1$"
+            if (
+                "variables" in name_dict
+                and "value" in name_dict["variables"][0]
+                and "key" in name_dict["variables"][0]["value"]
+            ):
+                # substitute predefined constants
+                tmp = name_dict["variables"][0]["value"]["key"]
+                if tmp in self.name_mapping:
+                    name_dict["variables"][0]["value"]["key"] = self.name_mapping[tmp]
+                name_dict["variables"][0]["value"]["key"] += " $1$"
+        elif render_template == "%SEQ%":
+            render_template = "$fmt$"
+
+        return render_template
+    
+    def _process_tags_and_variants(self, render_template: str, tags: set[str]):
+        raw_variants = render_template.split("|||")
+        raw_variants.reverse() # variants are checked right-to-left
+        for variant in raw_variants:
+            # tags added 
+            if "&!" in variant:
+                added_tags = set(variant[variant.index("&!") + 2:].split(","))
+                variant = variant[0:variant.index("&!")]
+            else:
+                added_tags = set()
+
+            # variants (other than first) have a comma-separated list of required tags, followed by a colon
+            if ":" in variant and variant != raw_variants[-1]:
+                required_tags = set(variant[0:variant.index(":")].split(","))
+                variant = variant[variant.index(":") + 1:]
+            else:
+                required_tags = set()
+
+            # all required tags must be present to use a variant
+            if tags.issuperset(required_tags):
+                return variant, added_tags
+
+    def _substitute_variables(self, render_template, substitution_values):
+        if render_template == "%ACRONYM%":
+            for key, acronym_base in substitution_values:
+                if key == "base":
+                    render_template = "".join(
+                        s[0].upper() for s in acronym_base.split()
+                    )
+                    render_template += acronym_base[-1].upper()
+        # try all combinations of escaping identifiers
+        parentheses = [
+            ("<", ">"),
+            ("[", "]"),
+            ("$", "$"),
+            ("%", "%"),
+        ]
+        for subst_key, subst_value in substitution_values:
+            if subst_key == "num":
+                try:
+                    render_template = render_template.replace(
+                        "$ORD$", self._fmt_ord_number(int(subst_value))
+                    ).replace(
+                        "$R$", self._fmt_roman_number(int(subst_value))
+                    )
+                except ValueError:
+                    ...
+            if subst_key == "adjective":
+                subst_value = self._fmt_adjective(subst_value)
+            for l, r in parentheses:
+                render_template = render_template.replace(
+                    f"{l}{subst_key}{r}", subst_value, 1
+                )
+        return render_template
+
+    def _handle_unresolved_variables(self, render_template):
+        # remove any identifiers remaining after substitution:
+        for pattern in [
+            r"\[[0-9]*\]",
+            r"\$[0-9]*\$",
+            r"%[0-9]*%",
+            r"<[0-9]*>",
+        ]:
+            # in some cases, the template can be left with some unresolved fields. Example from a game:
+            # LEADER_2 -> "$1$ $2$", then $2$ = MAM4_CHR_daughterofNagg -> "$1$, daughter of Nagg"
+            # This last template contains another $1$ which is never resolved.
+            render_template = re.sub(pattern, "", render_template)
+        # post-processing: The above issue can cause
+        render_template = ", ".join(s.strip() for s in render_template.split(","))
+        render_template = ". ".join(s.strip() for s in render_template.split("."))
+
+        # Special case: tradition and technology have same name...
+        match_indirect_reference = re.match(r"\$([a-z0-9_]*)\$", render_template)
+        if match_indirect_reference:
+            second_lookup = match_indirect_reference.group(1)
+            render_template = lookup_key(second_lookup)
+
+        # Find variables that were not resolved so far:
+        for match in var_re.findall(render_template):
+            if match == "ORD" or match == "R":
+                continue
+            resolved = lookup_key(match)
+            render_template = re.sub(rf"\${match}\$", resolved, render_template)
+
+        return render_template
+
+    def _fmt_ord_number(self, num: int):
+        if num % 10 == 1:
+            return f"{num}st"
+        if num % 10 == 2:
+            return f"{num}nd"
+        if num % 10 == 3:
+            return f"{num}rd"
+        return f"{num}th"
+
+    def _fmt_roman_number(self, num: int):
+        ONES_SYMBOL     = ("", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
+        TENS_SYMBOL     = ("", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC")
+        HUNDREDS_SYMBOL = ("", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM")
+        thousands = int(num / 1000)
+        num -= thousands * 1000
+        hundreds = int(num / 100)
+        num -= hundreds * 100
+        tens = int(num / 10)
+        num -= tens * 10
+        ones = num
+        return "M" * thousands + HUNDREDS_SYMBOL[hundreds] + TENS_SYMBOL[tens] + ONES_SYMBOL[ones]
+
+    def _fmt_adjective(self, noun: str) -> str:
+        # {'i': '*ian $1$', 'r': '*ran $1$', 'a': '*an $1$', 'e': '*an $1$', 'us': '*an $1$',
+        # 'is': '*an $1$', 'es': '*an $1$', 'ss': '*an $1$', 'id': '*an $1$', 'ed': '*an $1$',
+        # 'ad': '*an $1$', 'od': '*an $1$', 'ud': '*an $1$', 'yd': '*an $1$'}
+        noun_suffix = ""
+        adj_template = "*"
+        for suffix in sorted(self.adjective_templates, key=len, reverse=True):
+            if noun.endswith(suffix):
+                noun_suffix = suffix
+                adj_template = self.adjective_templates[suffix]
+                break
+        return adj_template.replace("*", noun.removesuffix(noun_suffix))
+
+    def _iter_localization_lines(self) -> Iterable[str]:
+        for p in self.localization_files:
+            with open(p, "rt", encoding="utf-8") as f:
+                for line in f:
+                    line = line.lstrip()
+                    if line:
+                        yield line
+
+
+global_renderer: NameRenderer = None
+
+
+def render_name(json_str: str):
+    return get_global_renderer().render_from_json(json_str)
+
+
+def lookup_key(key: str) -> str:
+    return get_global_renderer().render_from_dict({"key": key})
+
+
+def get_global_renderer() -> NameRenderer:
+    global global_renderer
+    if global_renderer is None:
+        from stellarisdashboard import config
+
+        global_renderer = NameRenderer(config.CONFIG.localization_files)
+        global_renderer.load_name_mapping()
+    return global_renderer
+
 
 COLONIZABLE_PLANET_CLASSES_PLANETS = {
     "pc_desert",

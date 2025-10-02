@@ -7,7 +7,7 @@ from stellarisdashboard import datamodel
 
 logger = logging.getLogger(__name__)
 
-VERSION = "v2.1"
+VERSION = "v7.0.0"
 
 
 def parse_version(version: str):
@@ -40,9 +40,7 @@ def is_old_version(requested_version: str, actual_version=VERSION) -> bool:
 
 def get_most_recent_date(session):
     most_recent_gs = (
-        session.query(datamodel.GameState)
-        .order_by(datamodel.GameState.date.desc())
-        .first()
+        session.query(datamodel.GameState).order_by(datamodel.GameState.date.desc()).first()
     )
     if most_recent_gs is None:
         most_recent_date = 0

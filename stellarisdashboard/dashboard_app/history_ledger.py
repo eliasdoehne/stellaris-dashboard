@@ -105,21 +105,21 @@ class EventFilter:
                 datamodel.Leader,
                 "leader",
                 dict(leader_id=self.leader_filter),
-                datamodel.Leader.leader_id.asc(),
+                datamodel.Leader.leader_id_in_game.asc(),
             )
         elif self.system_filter is not None:
             return (
                 datamodel.System,
                 "system",
                 dict(system_id=self.system_filter),
-                datamodel.System.system_id.asc(),
+                datamodel.System.system_id_in_game.asc(),
             )
         elif self.planet_filter is not None:
             return (
                 datamodel.Planet,
                 "planet",
                 dict(planet_id=self.planet_filter),
-                datamodel.Planet.planet_id.asc(),
+                datamodel.Planet.planet_id_in_game.asc(),
             )
         elif self.war_filter is not None:
             return (
@@ -131,12 +131,12 @@ class EventFilter:
         else:
             filter_dict = {}
             if self.country_filter is not None:
-                filter_dict = dict(country_id=(self.country_filter))
+                filter_dict = dict(country_id=self.country_filter)
             return (
                 datamodel.Country,
                 "country",
                 filter_dict,
-                datamodel.Country.country_id.asc(),
+                datamodel.Country.country_id_in_game.asc(),
             )
 
     @property
@@ -273,7 +273,7 @@ class EventTemplateDictBuilder:
                 continue
             if (
                 event.country
-                and any(c.is_other_player for c in event.involved_countries())
+                and any(c.is_hidden_country() for c in event.involved_countries())
                 and not event.event_is_known_to_player
             ):
                 continue
@@ -298,6 +298,12 @@ class EventTemplateDictBuilder:
             if event.end_date_days is not None:
                 end_date = datamodel.days_to_date(event.end_date_days)
                 is_active = event.end_date_days >= self._most_recent_date
+            description = event.description
+            if type(description) is str:
+                if description.startswith("{"):
+                    description = game_info.render_name(description)
+                else:
+                    description = game_info.lookup_key(description)
             event_dict = dict(
                 country=event.country,
                 start_date=start,
@@ -310,7 +316,7 @@ class EventTemplateDictBuilder:
                 planet=event.planet,
                 faction=event.faction,
                 target_country=event.target_country,
-                description=event.description,
+                description=description,
                 fleet=event.fleet,
             )
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
@@ -318,7 +324,7 @@ class EventTemplateDictBuilder:
             if "planet" in event_dict and event_dict["system"] is None:
                 event_dict["system"] = event_dict["planet"].system
             if "faction" in event_dict:
-                event_dict["faction_type"] = event.faction.type
+                event_dict["faction_type"] = event.faction.rendered_type
             if event.combat:
                 event_dict.update(self._combat_dict(event.combat))
 
@@ -330,7 +336,10 @@ class EventTemplateDictBuilder:
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
             return []
-        return [key for key in self._formatted_urls if isinstance(key, datamodel.War)]
+        return sorted(
+            [key for key in self._formatted_urls if isinstance(key, datamodel.War)],
+            key=lambda w: w.start_date_days,
+        )
 
     def _get_details(self, key) -> Dict[str, str]:
         if isinstance(key, datamodel.Country):
@@ -362,45 +371,51 @@ class EventTemplateDictBuilder:
         if isinstance(key, datamodel.Country):
             return self._get_url_for(key, a_class="titlelink")
         elif isinstance(key, datamodel.System):
-            return f"{key.get_name()} System"
+            return f"{key.rendered_name} System"
         elif isinstance(key, datamodel.Leader):
-            return key.get_name()
+            return key.rendered_name
         elif isinstance(key, datamodel.War):
-            return key.name
+            return key.rendered_name
         elif isinstance(key, datamodel.Planet):
-            return f"Planet {key.name}"
+            return f"Planet {key.rendered_name}"
         else:
             return ""
 
     def _get_url_for(self, key, a_class="textlink"):
         if isinstance(key, datamodel.Country):
             return utils.preformat_history_url(
-                key.country_name,
+                key.rendered_name,
                 country=key.country_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.System):
             return utils.preformat_history_url(
-                game_info.convert_id_to_name(key.name, remove_prefix="NAME"),
+                key.rendered_name,
                 system=key.system_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Leader):
             return utils.preformat_history_url(
-                key.leader_name,
+                key.rendered_name,
                 leader=key.leader_id,
                 a_class=a_class,
                 game_id=self.game_id,
             )
         elif isinstance(key, datamodel.Planet):
             return utils.preformat_history_url(
-                key.name, planet=key.planet_id, a_class=a_class, game_id=self.game_id
+                key.rendered_name,
+                planet=key.planet_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         elif isinstance(key, datamodel.War):
             return utils.preformat_history_url(
-                key.name, war=key.war_id, a_class=a_class, game_id=self.game_id
+                key.rendered_name,
+                war=key.war_id,
+                a_class=a_class,
+                game_id=self.game_id,
             )
         else:
             return str(key)
@@ -413,7 +428,7 @@ class EventTemplateDictBuilder:
             "Star Class": star_class,
         }
         hyperlane_targets = sorted(
-            system_model.neighbors, key=datamodel.System.get_name
+            system_model.neighbors, key=lambda s: s.rendered_name
         )
         details["Hyperlanes"] = ", ".join(
             self._get_url_for(s) for s in hyperlane_targets
@@ -437,13 +452,7 @@ class EventTemplateDictBuilder:
         if bypasses:
             details["Unknown Bypasses"] = ", ".join(bypasses)
 
-        if system_model.country is not None and (
-            system_model.country.has_met_player()
-            or (
-                config.CONFIG.show_everything
-                and not system_model.country.is_other_player
-            )
-        ):
+        if system_model.country is not None and not system_model.country.is_hidden_country():
             details["Owner"] = self._get_url_for(system_model.country)
 
         details["Planets"] = ", ".join(
@@ -464,10 +473,17 @@ class EventTemplateDictBuilder:
     def leader_details(self, leader_model: datamodel.Leader) -> Dict[str, str]:
         country_url = self._get_url_for(leader_model.country)
         details = {
-            "Leader Name": leader_model.leader_name,
-            "Gender": game_info.convert_id_to_name(leader_model.gender),
-            "Species": leader_model.species.species_name,
+            "Leader Name": leader_model.rendered_name,
             "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
+            "Subclass": f"{game_info.lookup_key(leader_model.subclass)}" or "None",
+            "Traits": ", ".join(leader_model.rendered_traits),
+            "Species": leader_model.species.rendered_name,
+            "Gender": game_info.convert_id_to_name(leader_model.gender),
+            "Ethic": game_info.lookup_key(leader_model.ethic),
+            "Previous Position": game_info.lookup_key(f"job_{leader_model.job}")
+            if leader_model.job is not None else "None",
+            "Home Planet": self._get_url_for(leader_model.planet),
+            "Country of Origin": self._get_url_for(leader_model.creator),
             "Born": datamodel.days_to_date(leader_model.date_born),
             "Hired": datamodel.days_to_date(leader_model.date_hired),
             "Last active": datamodel.days_to_date(
@@ -475,7 +491,7 @@ class EventTemplateDictBuilder:
                 if leader_model.is_active
                 else leader_model.last_date
             ),
-            "Status": "Active" if leader_model.is_active else "Dead or Dismissed",
+            "Status": "Active" if leader_model.is_active else "Dead or retired",
         }
         return details
 
@@ -488,33 +504,36 @@ class EventTemplateDictBuilder:
             details.update(
                 {
                     "Personality": game_info.convert_id_to_name(gov.personality),
-                    "Government Type": game_info.convert_id_to_name(
-                        gov.gov_type, remove_prefix="gov"
-                    ),
-                    "Authority": game_info.convert_id_to_name(
-                        gov.authority, remove_prefix="auth"
-                    ),
+                    "Government Type": game_info.lookup_key(gov.gov_type),
+                    "Authority": game_info.lookup_key(gov.authority),
                     "Ethics": ", ".join(
-                        [
-                            game_info.convert_id_to_name(e, remove_prefix="ethic")
-                            for e in sorted(gov.ethics)
-                        ]
+                        [game_info.lookup_key(e) for e in sorted(gov.ethics)]
                     ),
                     "Civics": ", ".join(
-                        [
-                            game_info.convert_id_to_name(c, remove_prefix="civic")
-                            for c in sorted(gov.civics)
-                        ]
+                        [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
+                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN"),
+                    "Ruler": self._get_url_for(country_model.ruler),
                 }
             )
+        active_councilor_events = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter_by(country=country_model, event_type=datamodel.HistoricalEventType.councilor, end_date_days=None)
+        )
+        details["Council"] = ", ".join(
+            # if leader name is the same as council position, only show the link
+            # this is the case in hive minds, which have eg leader "Growth Node" serving as council position "Growth Node"
+            self._get_url_for(event.leader)
+            if event.description == event.leader.rendered_name
+            else f"{event.description} {self._get_url_for(event.leader)}"
+            for event in active_councilor_events
+        )
         for key, countries in country_model.diplo_relation_details().items():
             relation_type = game_info.convert_id_to_name(key)
             relations_to_display = [
                 self._get_url_for(c)
                 for c in sorted(countries, key=lambda c: c.country_name)
-                if c.has_met_player()
-                or (config.CONFIG.show_everything and not c.is_other_player)
+                if not c.is_hidden_country()
             ]
             if relations_to_display:
                 details[relation_type] = ", ".join(relations_to_display)
@@ -525,7 +544,7 @@ class EventTemplateDictBuilder:
         details = {}
 
         if planet_model.planet_class is None:
-            details["Planet Class"] = "Unknown Planet Class"
+            details["Planet Class"] = "Destroyed (no trace remains)"
         else:
             details["Planet Class"] = game_info.convert_id_to_name(
                 planet_model.planet_class, remove_prefix="pc"
@@ -569,7 +588,7 @@ class EventTemplateDictBuilder:
             buildings[building.name] += building.count
         if buildings:
             details["Buildings"] = ", ".join(
-                f"{k}: {v}" for k, v in sorted(buildings.items())
+                f"{k}: {v}" for k, v in sorted(buildings.items()) if v > 0
             )
 
         return details
@@ -577,19 +596,21 @@ class EventTemplateDictBuilder:
     def war_details(self, war):
         start = datamodel.days_to_date(war.start_date_days)
 
+        attacker = next(war.attackers, None)
+        defender = next(war.defenders, None)
         details = {
             "Start date": start,
             "End date": "-",
             "Attackers": ", ".join(
-                self._get_url_for(wp.country)
-                for wp in war.participants
-                if wp.is_attacker
+                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                for wp in war.attackers
             ),
+            "Attacker War Goal": attacker.get_war_goal() if attacker is not None else "Unknown",
             "Defenders": ", ".join(
-                self._get_url_for(wp.country)
-                for wp in war.participants
-                if not wp.is_attacker
+                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                for wp in war.defenders
             ),
+            "Defender War Goal": defender.get_war_goal() if defender is not None else "Unknown",
             "Outcome": war.outcome,
         }
         if war.attacker_war_exhaustion or war.defender_war_exhaustion:

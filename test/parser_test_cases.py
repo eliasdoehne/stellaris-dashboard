@@ -17,7 +17,7 @@ PARSER_TEST_CASES = dict(
                 key_object={ innerkey=layout_dict } 
                 key_object={ {} {1 2 3} }""",
         expected=dict(
-            key_object=["value", [], dict(innerkey="layout_dict"), [[], [1, 2, 3]]]
+            key_object=[["value", [], dict(innerkey="layout_dict")], [[], [1, 2, 3]]]
         ),
     ),
     multiple_mixed_values_list_first=dict(
@@ -27,7 +27,7 @@ PARSER_TEST_CASES = dict(
                 key_object={ innerkey=layout_dict } 
                 key_object={ {} {1 2 3} }""",
         expected=dict(
-            key_object=[[], "value", dict(innerkey="layout_dict"), [[], [1, 2, 3]]]
+            key_object=[['value', dict(innerkey='layout_dict')], [[], [1, 2, 3]]]
         ),
     ),
     multiple_list_values_for_same_key=dict(
@@ -52,8 +52,7 @@ PARSER_TEST_CASES = dict(
         }""",
         expected=dict(
             expired="yes",
-            event_id="scope",
-            unknown_key={"type": "none", "id": 0, "random": [0, 3991148998]},
+            scope={"type": "none", "id": 0, "random": [0, 3991148998]},
         ),
     ),
     update_espionage_manager=dict(

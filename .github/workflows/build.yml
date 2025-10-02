@@ -13,15 +13,17 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - 3.8
+          - '3.10'
         os:
           - ubuntu-latest
           - windows-latest
           - macOS-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'true'
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -29,40 +31,50 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -r dev-requirements.txt
-      - name: Build
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Run cargo test
         run: |
-          python setup.py build_ext --inplace
-      - name: Linters
+          cargo test
+        working-directory: "stellarisdashboard/parsing/rust_parser"
+      - name: Build rust-parser
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release -o target
+          working-directory: "stellarisdashboard/parsing/rust_parser"
+      - name: Install rust parser
         run: |
-          black --check .
+          pip install --find-links=stellarisdashboard/parsing/rust_parser/target rust-parser
       - name: Tests
         run: |
-          python -m pytest
+          python -m pytest -m "not skip_github_actions" --verbose
       - name: pyInstaller build
         run: |
           pyinstaller pyinstaller-package.spec
       - name: pyInstaller run
         run: |
           dist/stellarisdashboard-build/parse_saves
-      # Zip the file, this will lead to a double-zipped artifact but otherwise there are problems with the download
-      # (probably too many individual files?)
+      # Zip the file, makes a zip containing a zip but fixes download problems due to too many small files
       - name: package files (win)
-        if: matrix.os == 'windows-latest' && github.event_name != 'pull_request'
+        if: matrix.os == 'windows-latest'
         run: |
           cd dist
-          powershell Compress-Archive stellarisdashboard-build/* ../stellarisdashboard-${{ matrix.os }}.zip
+          [IO.Compression.ZipFile]::CreateFromDirectory( (Join-Path -Path (Get-Location) -ChildPath "stellarisdashboard-build"), (Join-Path -Path (Get-Location) -ChildPath "../stellarisdashboard-${{ matrix.os }}.zip"), 'Optimal', $false )
           cd ..
-          ls
       - name: package files
-        if: matrix.os != 'windows-latest' && github.event_name != 'pull_request'
+        if: matrix.os != 'windows-latest'
         run: |
           base_dir=`pwd`
           pushd dist/stellarisdashboard-build/
           zip -r $base_dir/stellarisdashboard-${{ matrix.os }}.zip *
           popd
       - name: Publish
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: stellarisdashboard-${{ matrix.os }}.zip
           path: stellarisdashboard-${{ matrix.os }}.zip
