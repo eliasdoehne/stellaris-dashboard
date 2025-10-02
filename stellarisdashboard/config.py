@@ -77,9 +77,10 @@ DEFAULT_TAB_LAYOUT = {
     "Budget": [
         "energy_budget",
         "mineral_budget",
+        "food_budget",
         "consumer_goods_budget",
         "alloys_budget",
-        "food_budget",
+        "trade_budget",
         "influence_budget",
         "unity_budget",
         "volatile_motes_budget",
@@ -89,13 +90,18 @@ DEFAULT_TAB_LAYOUT = {
         "zro_budget",
         "dark_matter_budget",
         "nanites_budget",
+        "minor_artifacts_budget",
+        "astral_threads_budget",
+        "biomass_budget",
     ],
     "Economy": [
         "net_energy_income_graph",
         "net_mineral_income_graph",
-        "net_alloys_income_graph",
-        "net_consumer_goods_income_graph",
         "net_food_income_graph",
+        "net_consumer_goods_income_graph",
+        "net_alloys_income_graph",
+        "net_trade_income_graph",
+        "net_biomass_income_graph",
         "empire_size_graph",
     ],
     "Demographics": [
@@ -153,8 +159,7 @@ DEFAULT_MARKET_RESOURCES = [
     # all available resources, in the order in which they are defined in the game files
     # common/strategic_resources/00_strategic_resources.txt
     # Put None as price of non-tradeable resources (These must still be added because ordering matters)
-    {"name": "time", "base_price": None},
-    {"name": "energy", "base_price": None},
+    {"name": "energy", "base_price": 1},
     {"name": "minerals", "base_price": 1},
     {"name": "food", "base_price": 1},
     {"name": "physics_research", "base_price": None},
@@ -162,6 +167,7 @@ DEFAULT_MARKET_RESOURCES = [
     {"name": "engineering_research", "base_price": None},
     {"name": "influence", "base_price": None},
     {"name": "unity", "base_price": None},
+    {"name": "trade", "base_price": None},
     {"name": "consumer_goods", "base_price": 2},
     {"name": "alloys", "base_price": 4},
     {"name": "volatile_motes", "base_price": 10},
@@ -172,7 +178,11 @@ DEFAULT_MARKET_RESOURCES = [
     {"name": "sr_dark_matter", "base_price": 20},
     {"name": "nanites", "base_price": None},
     {"name": "minor_artifacts", "base_price": None},
+    {"name": "astral_threads", "base_price": None},
+    {"name": "biomass", "base_price": None},
     {"name": "menace", "base_price": None},
+    {"name": "advanced_logic", "base_price": None},
+    {"name": "feral_insight", "base_price": None},
 ]
 DEFAULT_MARKET_FEE = [{"date": "2200.01.01", "fee": 0.3}]
 
