@@ -877,12 +877,14 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 net_minerals=0.0,
                 net_alloys=0.0,
                 net_consumer_goods=0.0,
+                net_trade=0.0,
                 net_food=0.0,
                 net_unity=0.0,
                 net_influence=0.0,
                 net_physics_research=0.0,
                 net_society_research=0.0,
                 net_engineering_research=0.0,
+                net_biomass=0.0,
                 **diplomacy_data,
             )
             self._extract_country_economy(country_data, country_data_dict)
@@ -970,11 +972,13 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 "alloys",
                 "consumer_goods",
                 "food",
+                "trade",
                 "unity",
                 "influence",
                 "physics_research",
                 "society_research",
                 "engineering_research",
+                "biomass",
             ]:
                 if resource in values:
                     resources[resource] = self._check_returned_number(
@@ -987,6 +991,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_minerals += resources.get("minerals")
             country_data.net_alloys += resources.get("alloys")
             country_data.net_consumer_goods += resources.get("consumer_goods")
+            country_data.net_trade += resources.get("trade", 0.0)
             country_data.net_food += resources.get("food")
             country_data.net_unity += resources.get("unity")
             country_data.net_influence += resources.get("influence")
@@ -995,6 +1000,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             country_data.net_engineering_research += resources.get(
                 "engineering_research"
             )
+            country_data.net_biomass += resources.get("biomass", 0.0)
 
             if country.is_player or config.CONFIG.read_all_countries:
                 self._session.add(
@@ -1008,6 +1014,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                         net_food=resources.get("food"),
                         net_alloys=resources.get("alloys"),
                         net_consumer_goods=resources.get("consumer_goods"),
+                        net_trade=resources.get("trade", 0.0),
                         net_unity=resources.get("unity"),
                         net_influence=resources.get("influence"),
                         net_volatile_motes=values.get("volatile_motes", 0.0),
@@ -1017,6 +1024,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                         net_zro=values.get("zro", 0.0),
                         net_dark_matter=values.get("dark_matter", 0.0),
                         net_nanites=values.get("nanites", 0.0),
+                        net_minor_artifacts=values.get("minor_artifacts", 0.0),
+                        net_astral_threads=values.get("astral_threads", 0.0),
+                        net_biomass=values.get("biomass", 0.0),
                         net_physics_research=resources.get("physics_research"),
                         net_society_research=resources.get("society_research"),
                         net_engineering_research=resources.get("engineering_research"),

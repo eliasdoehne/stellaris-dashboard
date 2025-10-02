@@ -364,11 +364,24 @@ class TotalConsumerGoodsIncomeDataContainer(AbstractPerCountryDataContainer):
             return cd.net_consumer_goods
 
 
+class TotalTradeIncomeDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_economic_info():
+            return cd.net_trade
+
+
 class TotalFoodIncomeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if _override_visibility(cd) or cd.show_economic_info():
             return cd.net_food
-        
+
+
+class TotalBiomassIncomeDataContainer(AbstractPerCountryDataContainer):
+    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
+        if _override_visibility(cd) or cd.show_economic_info():
+            return cd.net_biomass
+
+
 class EmpireSizeDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if _override_visibility(cd) or cd.show_economic_info():
@@ -538,12 +551,12 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
                 res_data = r
                 break
         if res_data is None:
-            logger.info("Could not find configuration for resource {self.resour")
+            logger.info(f"Could not find configuration for resource {self.resource_name}")
             return
         if res_data["base_price"] is None:
             return
 
-        always_tradeable = ["minerals", "food", "consumer_goods", "alloys"]
+        always_tradeable = ["energy", "minerals", "food", "consumer_goods", "alloys"]
         fluctuation = 0.0 if self.resource_name in always_tradeable else None
         for resource in cd.internal_market_resources:
             if resource.resource_name.text == self.resource_name:
@@ -621,6 +634,11 @@ class ConsumerGoodsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
         return bi.net_consumer_goods
 
 
+class TradeBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_trade
+
+
 class FoodBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_food
@@ -659,6 +677,21 @@ class DarkMatterBudgetDataContainer(AbstractPlayerBudgetDataContainer):
 class NanitesBudgetDataContainer(AbstractPlayerBudgetDataContainer):
     def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
         return bi.net_nanites
+
+
+class MinorArtifactsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_minor_artifacts
+
+
+class AstralThreadsBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_astral_threads
+
+
+class BiomassBudgetDataContainer(AbstractPlayerBudgetDataContainer):
+    def _get_value_from_budgetitem(self, bi: datamodel.BudgetItem):
+        return bi.net_biomass
 
 
 class UnityBudgetDataContainer(AbstractPlayerBudgetDataContainer):
@@ -990,6 +1023,12 @@ NET_ALLOYS_INCOME_GRAPH = PlotSpecification(
     data_container_factory=TotalAlloysIncomeDataContainer,
     style=PlotStyle.line,
 )
+NET_TRADE_INCOME_GRAPH = PlotSpecification(
+    plot_id="net-trade-income",
+    title="Net Trade Income",
+    data_container_factory=TotalTradeIncomeDataContainer,
+    style=PlotStyle.line,
+)
 NET_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
     plot_id="net-consumer-goods-income",
     title="Net Consumer Goods Income",
@@ -1000,6 +1039,12 @@ NET_FOOD_INCOME_GRAPH = PlotSpecification(
     plot_id="net-food-income",
     title="Net Food Income",
     data_container_factory=TotalFoodIncomeDataContainer,
+    style=PlotStyle.line,
+)
+NET_BIOMASS_INCOME_GRAPH = PlotSpecification(
+    plot_id="net-biomass-income",
+    title="Net Biomass Income",
+    data_container_factory=TotalBiomassIncomeDataContainer,
     style=PlotStyle.line,
 )
 EMPIRE_SIZE_GRAPH = PlotSpecification(
@@ -1252,6 +1297,12 @@ CONSUMER_GOODS_BUDGET = PlotSpecification(
     data_container_factory=ConsumerGoodsBudgetDataContainer,
     style=PlotStyle.budget,
 )
+TRADE_BUDGET = PlotSpecification(
+    plot_id="empire-trade-budget",
+    title="Trade Budget",
+    data_container_factory=TradeBudgetDataContainer,
+    style=PlotStyle.budget,
+)
 ALLOYS_BUDGET = PlotSpecification(
     plot_id="empire-alloys-budget",
     title="Alloys Budget",
@@ -1306,6 +1357,24 @@ NANITES_BUDGET = PlotSpecification(
     data_container_factory=NanitesBudgetDataContainer,
     style=PlotStyle.budget,
 )
+MINOR_ARTIFACTS_BUDGET = PlotSpecification(
+    plot_id="empire-minor-artifacts-budget",
+    title="Minor Artifacts Budget",
+    data_container_factory=MinorArtifactsBudgetDataContainer,
+    style=PlotStyle.budget,
+)
+ASTRAL_THREADS_BUDGET = PlotSpecification(
+    plot_id="empire-astral-threads-budget",
+    title="Astral Threads Budget",
+    data_container_factory=AstralThreadsBudgetDataContainer,
+    style=PlotStyle.budget,
+)
+BIOMASS_BUDGET = PlotSpecification(
+    plot_id="empire-biomass-budget",
+    title="Biomass Budget",
+    data_container_factory=BiomassBudgetDataContainer,
+    style=PlotStyle.budget,
+)
 INFLUENCE_BUDGET = PlotSpecification(
     plot_id="empire-influence-budget",
     title="Influence",
@@ -1316,7 +1385,7 @@ UNITY_BUDGET = PlotSpecification(
     plot_id="empire-unity-budget",
     title="Unity",
     data_container_factory=UnityBudgetDataContainer,
-    style=PlotStyle.stacked,
+    style=PlotStyle.budget,
 )
 VICTORY_RANK_GRAPH = PlotSpecification(
     plot_id="victory-rank",
@@ -1427,7 +1496,9 @@ PLOT_SPECIFICATIONS = {
     "net_mineral_income_graph": NET_MINERAL_INCOME_GRAPH,
     "net_alloys_income_graph": NET_ALLOYS_INCOME_GRAPH,
     "net_consumer_goods_income_graph": NET_CONSUMER_GOODS_INCOME_GRAPH,
+    "net_trade_income_graph": NET_TRADE_INCOME_GRAPH,
     "net_food_income_graph": NET_FOOD_INCOME_GRAPH,
+    "net_biomass_income_graph": NET_BIOMASS_INCOME_GRAPH,
     "total_energy_income_graph": TOTAL_ENERGY_INCOME_GRAPH,
     "total_mineral_income_graph": TOTAL_MINERAL_INCOME_GRAPH,
     "total_alloys_income_graph": TOTAL_ALLOYS_INCOME_GRAPH,
@@ -1443,6 +1514,7 @@ PLOT_SPECIFICATIONS = {
     "mineral_budget": MINERAL_BUDGET,
     "consumer_goods_budget": CONSUMER_GOODS_BUDGET,
     "alloys_budget": ALLOYS_BUDGET,
+    "trade_budget": TRADE_BUDGET,
     "food_budget": FOOD_BUDGET,
     "influence_budget": INFLUENCE_BUDGET,
     "unity_budget": UNITY_BUDGET,
@@ -1453,6 +1525,9 @@ PLOT_SPECIFICATIONS = {
     "zro_budget": ZRO_BUDGET,
     "dark_matter_budget": DARK_MATTER_BUDGET,
     "nanites_budget": NANITES_BUDGET,
+    "minor_artifacts_budget": MINOR_ARTIFACTS_BUDGET,
+    "astral_threads_budget": ASTRAL_THREADS_BUDGET,
+    "biomass_budget": BIOMASS_BUDGET,
     "species_distribution_graph": SPECIES_DISTRIBUTION_GRAPH,
     "species_happiness_graph": SPECIES_HAPPINESS_GRAPH,
     "species_crime_graph": SPECIES_CRIME_GRAPH,
