@@ -11,9 +11,17 @@ guiTypes = {
 		## Control Groups
 		overlappingElementsBoxType = {
 			name = "control_groups"
-			position = { x = 4 y = -46 }
-			size = { x = 700 y = 13 }
-			spacing = 2
+			position = { x = 2 y = -34 }
+			size = { x = 395 y = 32 }
+			if_scaled_resolution = {
+				min_width = 1650
+				size = { x = 445 y = 32 }
+			}
+			if_scaled_resolution = {
+				min_width = 1920
+				size = { x = 606 y = 32 }
+			}
+			spacing = 4
 			orientation = lower_left
 			format = left
 		}
@@ -70,16 +78,6 @@ guiTypes = {
 				centerPosition = yes
 				alwaysTransparent = yes
 			}
-			instantTextBoxType = {
-				name = "paused"
-				font = "large_title_font"
-				text = "" # "GAME_SPEED_0"
-				position = { x = 0 y = 0 }
-				maxWidth = 1
-				maxHeight = 1
-				fixedSize = yes
-				alwaysTransparent = yes
-			}
 			iconType = {
 				name = "system_unclaimed_icon"
 				spriteType = "GFX_ui_system_unclaimed"
@@ -91,8 +89,8 @@ guiTypes = {
 				name = "flag_button"
 				quadTextureSprite = "GFX_empire_flag_64"
 				position = { x = -10 y = 0 }
-				clicksound = interface
-				oversound = no_sound
+				clicksound = "interface"
+				oversound = "no_sound"
 			}
 			buttonType = {
 				name = "button"
@@ -101,8 +99,21 @@ guiTypes = {
 				position = { x = 184 y = 6 }
 				pdx_tooltip_anchor_offset = { x = 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = upper_right
-				clicksound = ui_galaxy_map_open
-				oversound = mouse_over
+				clicksound = "ui_galaxy_map_open"
+				oversound = "mouse_over"
+			}
+			instantTextBoxType = {
+				name = "paused"
+				font = "font_text_14"
+				text = "GAME_SPEED_0"
+				position = { x = 57 y = 36 }
+				maxWidth = 80
+				maxHeight = 20
+				fixedSize = yes
+				format = left
+				vertical_alignment = center
+				text_color_code = "3"
+				alwaysTransparent = yes
 			}
 			instantTextBoxType = {
 				name = "system_name"
@@ -138,12 +149,18 @@ guiTypes = {
 				orientation = center_up
 				size = { x = 330 y = 45 }
 				pdx_tooltip = "RENAME_SYSTEM_TOOLTIP"
-				oversound = no_sound
+				oversound = "no_sound"
 			}
 			iconType = {
 				name = "environmental_effects_icon"
 				spriteType = "GFX_system_hazards_icon"
 				position = { x = 406 y = 35 }
+				centerPosition = yes
+			}
+			iconType = {
+				name = "psionic_aura_icon"
+				spriteType = "GFX_system_psionic_aura_icon"
+				position = { x = 370 y = 35 }
 				centerPosition = yes
 			}
 			buttonType = {
@@ -191,17 +208,20 @@ guiTypes = {
 				name = "flag_button_galaxy_view"
 				quadTextureSprite = "GFX_empire_flag_64"
 				position = { x = -10 y = 0 }
-				clicksound = interface
-				oversound = no_sound
+				clicksound = "interface"
+				oversound = "no_sound"
 			}
 			instantTextBoxType = {
 				name = "paused"
-				font = "large_title_font"
-				text = "" # "GAME_SPEED_0"
-				position = { x = 0 y = 0 }
-				maxWidth = 1
-				maxHeight = 1
+				font = "font_text_14"
+				text = "GAME_SPEED_0"
+				position = { x = 57 y = 36 }
+				maxWidth = 80
+				maxHeight = 20
 				fixedSize = yes
+				format = left
+				vertical_alignment = center
+				text_color_code = "3"
 				alwaysTransparent = yes
 			}
 			instantTextBoxType = {
@@ -236,8 +256,8 @@ guiTypes = {
 				position = { x = 184 y = 6 }
 				pdx_tooltip_anchor_offset = { x = 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = lower_left
-				clicksound = ui_galaxy_map_close
-				oversound = mouse_over
+				clicksound = "ui_galaxy_map_close"
+				oversound = "mouse_over"
 			}
 		}
 		## Claims Management
@@ -335,7 +355,7 @@ guiTypes = {
 			origo = lower_right
 			if_scaled_resolution = {
 				min_width = 1650
-				size = { width = 255 height = 68 }
+				size = { width = 270 height = 68 }
 			}
 			if_scaled_resolution = {
 				min_width = 1920
@@ -370,7 +390,7 @@ guiTypes = {
 				orientation = upper_right
 				if_scaled_resolution = {
 					min_width = 1650
-					position = { x = -261 y = 0 }
+					position = { x = -271 y = 0 }
 					max_slots_horizontal = 8
 				}
 				if_scaled_resolution = {
@@ -440,7 +460,7 @@ guiTypes = {
 				pdx_tooltip = "TOPBAR_MENU"
 				pdx_tooltip_anchor_offset = { x = 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = lower_left
-				clicksound = confirm_click
+				clicksound = "confirm_click"
 			}
 			iconType = {
 				name = "main_menu_icon"
@@ -469,7 +489,7 @@ guiTypes = {
 				pdx_tooltip = "STELLARIS_DASHBOARD_TOOLTIP"
 				pdx_tooltip_anchor_offset = { x= 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = lower_left
-				web_link="http://127.0.0.1:28053/checkversion/v7.0.0"
+				web_link="http://127.0.0.1:28053/checkversion/v7.1.0"
 			}
 			iconType = {
 				name = "dashboard_icon"
@@ -505,7 +525,7 @@ guiTypes = {
 				pdx_tooltip = "GOTOBOX_HEADER"
 				pdx_tooltip_anchor_offset = { x = 0 y = @tt_offset_y }
 				pdx_tooltip_anchor_orientation = lower_left
-				clicksound = confirm_click
+				clicksound = "confirm_click"
 			}
 			iconType = {
 				name = "toggle_gotobox_icon"
@@ -593,54 +613,67 @@ guiTypes = {
 				text = "ERROR"
 				buttonFont = "font_text_14"
 				orientation = lower_right
-				oversound = no_sound
+				oversound = "no_sound"
 			}
 		}
 	}
 	containerWindowType = {
 		name = "control_group_window"
-		size = { width = 62 height = 47 }
+		size = { width = 57 height = 32 }
+		clipping = no
+		background = {
+			name = "background"
+			spriteType = "GFX_invisible"
+		}
 		buttonType = {
 			name = "background"
 			quadTextureSprite = "GFX_control_group_window_bg"
-			position = { x = 0 y = 10 }
-			clicksound = interface
+			position = { x = 0 y = 0 }
+			clicksound = "interface"
 		}
 		iconType = {
 			name = "progress"
 			spriteType = "GFX_control_group_progress"
-			position = { x = 0 y = 1 }
+			position = { x = 0 y = -2 }
+			orientation = center_down
+			centerPosition = yes
 			alwaysTransparent = yes
 		}
 		iconType = {
 			name = "in_combat_flash"
 			spriteType = "GFX_control_group_in_combat_flash"
-			position = { x = -4 y = 3 }
+			position = { x = 0 y = 0 }
+			orientation = center
+			centerPosition = yes
 			alwaysTransparent = yes
 		}
 		iconType = {
 			name = "icon"
 			spriteType = "GFX_control_group_strip"
-			position = { x = 22 y = 15 }
+			position = { x = 0 y = 0 }
+			orientation = center
+			centerPosition = yes
+			scale = 0.83
 			alwaysTransparent = yes
 		}
 		instantTextBoxType = {
 			name = "info"
 			font = "font_text_14"
-			position = { x = 43 y = 25 }
-			maxWidth = 31
+			position = { x = 2 y = -16 }
+			orientation = lower_left
+			maxWidth = 53
 			maxHeight = 16
+			format = right
 			alwaysTransparent = yes
-			format = left
 		}
 		instantTextBoxType = {
 			name = "number"
 			font = "font_text_14"
-			position = { x = 02 y = 18 }
+			position = { x = 2 y = 2 }
 			maxWidth = 19
 			maxHeight = 16
+			format = left
 			alwaysTransparent = yes
-			format = center
 		}
 	}
 	#map mode neighbours
