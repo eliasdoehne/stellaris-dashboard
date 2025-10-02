@@ -40,12 +40,16 @@ threads_help_string = (
 
 @click.group()
 def cli():
-    ...
+    """Use COMMAND --help for more info on each command."""
+    pass
 
 
 @cli.command()
 @click.option("--save-path", type=click.Path(exists=True, file_okay=False))
 def monitor_saves(save_path):
+    """
+    Watch for new or modified files and import them into DB.
+    """
     f_monitor_saves(save_path=save_path)
 
 
@@ -99,6 +103,9 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
 )
 @click.option("--game-name", type=click.STRING, help=game_name_help_string, default="")
 def parse_saves(threads, save_path, game_name):
+    """
+    Batch parser to import all saved game files to DB.
+    """
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
 

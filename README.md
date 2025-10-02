@@ -38,7 +38,8 @@ You can also access the dashboard by opening [http://localhost:28053](http://loc
 - (Recommended) create & activate a virtual environment 
 - `pip install .` (If you get a ModuleNotFoundError for importing stellarisdashboard, try instead `pip install -e .`)
 - `pip install maturin` and `maturin develop -r` in `stellarisdashboard/parsing/rust_parser`
-- `stellarisdashboard`
+- `python -m stellarisdashboard.cli parse-saves`
+- `python -m stellarisdashboard`
 
 # Other information
 
