@@ -1053,6 +1053,8 @@ class CountryData(Base):
     net_physics_research = Column(Float, nullable=False, default=0.0)
     net_society_research = Column(Float, nullable=False, default=0.0)
     net_engineering_research = Column(Float, nullable=False, default=0.0)
+    net_trade = Column(Float, nullable=False, default=0.0, server_default="0.0") # server_default is needed for alembic automigration
+    net_biomass = Column(Float, nullable=False, default=0.0, server_default="0.0") # server_default is needed for alembic automigration
 
     ship_count_corvette = Column(Integer, default=0)
     ship_count_destroyer = Column(Integer, default=0)
@@ -1211,6 +1213,7 @@ class BudgetItem(Base):
 
     net_alloys = Column(Float, default=0.0)
     net_consumer_goods = Column(Float, default=0.0)
+    net_trade = Column(Float, default=0.0)
 
     net_volatile_motes = Column(Float, default=0.0)
     net_exotic_gases = Column(Float, default=0.0)
@@ -1219,6 +1222,9 @@ class BudgetItem(Base):
     net_zro = Column(Float, default=0.0)
     net_dark_matter = Column(Float, default=0.0)
     net_nanites = Column(Float, default=0.0)
+    net_minor_artifacts = Column(Float, default=0.0)
+    net_astral_threads = Column(Float, default=0.0)
+    net_biomass = Column(Float, default=0.0)
 
     net_physics_research = Column(Float, default=0.0)
     net_society_research = Column(Float, default=0.0)
