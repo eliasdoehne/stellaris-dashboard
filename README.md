@@ -12,7 +12,7 @@ The dashboard works with Ironman and the mod for in-game access is (currently) *
 
 # Installation
 
-If you experience any problems, please start [a new discussion topic in the steam workshop](https://steamcommunity.com/sharedfiles/filedetails/discussions/1466534202) or open a issue on github.
+If you experience any problems, please open a new issue on github.
 
 ## Mod for in-game access
 
@@ -34,12 +34,11 @@ You can also access the dashboard by opening [http://localhost:28053](http://loc
 4. Run the `stellarisdashboard` application. (recommended to run from a terminal in Linux and macOs to see the dashboard output)
 
 ### Build it yourself
-- Get Python 3.10 (it may work on other versions too)
-- (Recommended) create & activate a virtual environment 
-- `pip install .` (If you get a ModuleNotFoundError for importing stellarisdashboard, try instead `pip install -e .`)
-- `pip install maturin` and `maturin develop -r` in `stellarisdashboard/parsing/rust_parser`
-- `python -m stellarisdashboard.cli parse-saves`
-- `python -m stellarisdashboard`
+- Get Python 3.10 and install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Run `uv sync` to create a virtual environment and install dependencies
+- Run `uv run maturin develop -m stellarisdashboard/parsing/rust_parser/Cargo.toml -r` to build the Rust parser
+- Run `uv run stellarisdashboardcli parse-saves` to read your saves
+- Run `uv run stellarisdashboard` to start the dashboard
 
 # Other information
 
