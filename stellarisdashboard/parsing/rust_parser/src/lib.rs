@@ -2,9 +2,10 @@
 // #![allow(unused_imports)]
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyModule};
 
 use crate::file_io::{load_save_content};
-use crate::parser::{parse_file, parse_save};
+use crate::parser::{parse_file, parse_save, value_to_pyobject};
 
 mod parser;
 mod file_io;
@@ -12,12 +13,9 @@ mod file_io;
 
 /// Reads the save file at the provided location and returns a dictionary of the parsed contents.
 #[pyfunction]
-fn parse_save_from_string(py: Python, gamestate: String) -> PyResult<PyObject> {
+fn parse_save_from_string(py: Python, gamestate: String) -> PyResult<Py<PyAny>> {
     match parse_file(gamestate.as_str()) {
-        Ok(parsed_save) => {
-            let pyobject = parsed_save.to_object(py);
-            Ok(pyobject)
-        }
+        Ok(parsed_save) => Ok(value_to_pyobject(py, &parsed_save)?.unbind()),
         Err(msg) => {
             return Err(
                 PyValueError::new_err(format!("Failed to parse string: {}", msg))
@@ -27,7 +25,7 @@ fn parse_save_from_string(py: Python, gamestate: String) -> PyResult<PyObject> {
 }
 
 #[pyfunction]
-fn parse_save_file(py: Python, save_path: String) -> PyResult<PyObject> {
+fn parse_save_file(py: Python, save_path: String) -> PyResult<Py<PyAny>> {
     let save_file = match load_save_content(save_path.as_str()) {
         Ok(sf) => sf,
         Err(msg) => {
@@ -35,10 +33,7 @@ fn parse_save_file(py: Python, save_path: String) -> PyResult<PyObject> {
         }
     };
     match parse_save(&save_file) {
-        Ok(parsed_save) => {
-            let pyobject = parsed_save.gamestate.to_object(py);
-            Ok(pyobject)
-        }
+        Ok(parsed_save) => Ok(value_to_pyobject(py, &parsed_save.gamestate)?.unbind()),
         Err(msg) => {
             return Err(
                 PyValueError::new_err(format!("Failed to parse {}: {}", save_file.filename, msg))
@@ -49,7 +44,7 @@ fn parse_save_file(py: Python, save_path: String) -> PyResult<PyObject> {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn rust_parser(_py: Python, m: &PyModule) -> PyResult<()> {
+fn rust_parser(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_save_from_string, m)?)?;
     m.add_function(wrap_pyfunction!(parse_save_file, m)?)?;
     Ok(())

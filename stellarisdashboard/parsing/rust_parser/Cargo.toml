@@ -9,7 +9,10 @@ name = "rust_parser"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.17.3", features = ["extension-module"] }
+pyo3 = { version = "0.28", features = ["extension-module"] }
+# nom and zip are intentionally held at their current majors: they are
+# internal to the parser and unrelated to the Python 3.14 / pyo3 modernization.
+# Bumping them (nom 8, zip 9) is a separate large rewrite of parser.rs/file_io.rs.
 nom = "7.1.1"
 zip = "0.6.2"
 serde_json = "1.0"

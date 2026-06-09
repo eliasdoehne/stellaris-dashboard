@@ -13,8 +13,8 @@ use nom::IResult;
 use nom::multi::{separated_list0, separated_list1};
 use nom::number::complete::double;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
-use pyo3::{PyObject, Python, ToPyObject};
-use pyo3::types::IntoPyDict;
+use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyDict, PyList};
 use serde::Serialize;
 
 use crate::file_io::SaveFile;
@@ -30,29 +30,39 @@ pub enum Value<'a> {
     Color((&'a str, f64, f64, f64)),
 }
 
-impl ToPyObject for Value<'_> {
-    fn to_object(&self, py: Python<'_>) -> PyObject {
-        match self {
-            Value::Str(s) => s.to_object(py),
-            Value::Int(n) => n.to_object(py),
-            Value::Float(x) => x.to_object(py),
-            Value::List(vec) => vec.to_object(py),
-            Value::Map(hm) => {
-                // For consistency with the old parser behaviour, attempt to convert each hashmap key
-                // into an integer when building the python dict.
-                let mut key_vals = Vec::new();
-                for (key, val) in hm.into_iter() {
-                    let fixed_key = match key.parse::<i64>() {
-                        Ok(i) => i.to_object(py),
-                        Err(_) => key.to_object(py),
-                    };
-                    key_vals.push((fixed_key, val));
-                }
-                key_vals.into_py_dict(py).to_object(py)
+/// Convert a parsed `Value` into a Python object.
+///
+/// pyo3 0.23+ removed the `ToPyObject`/`to_object` trait in favour of the
+/// fallible `IntoPyObject` API, so this is a free recursive helper returning a
+/// `Bound<PyAny>` (callers `.unbind()` it into a `Py<PyAny>` where needed).
+pub fn value_to_pyobject<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, PyAny>> {
+    let obj = match value {
+        Value::Str(s) => (*s).into_pyobject(py)?.into_any(),
+        Value::Int(n) => (*n).into_pyobject(py)?.into_any(),
+        Value::Float(x) => (*x).into_pyobject(py)?.into_any(),
+        Value::List(vec) => {
+            let list = PyList::empty(py);
+            for v in vec {
+                list.append(value_to_pyobject(py, v)?)?;
             }
-            Value::Color(color_tuple) => color_tuple.to_object(py),
+            list.into_any()
         }
-    }
+        Value::Map(hm) => {
+            // For consistency with the old parser behaviour, attempt to convert each hashmap key
+            // into an integer when building the python dict.
+            let dict = PyDict::new(py);
+            for (key, val) in hm.iter() {
+                let py_val = value_to_pyobject(py, val)?;
+                match key.parse::<i64>() {
+                    Ok(i) => dict.set_item(i, py_val)?,
+                    Err(_) => dict.set_item(*key, py_val)?,
+                }
+            }
+            dict.into_any()
+        }
+        Value::Color(color_tuple) => (*color_tuple).into_pyobject(py)?.into_any(),
+    };
+    Ok(obj)
 }
 
 impl Display for Value<'_> {

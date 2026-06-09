@@ -752,7 +752,7 @@ def start_dash_app(host, port):
 
         serve(timeline_app.server, host=host, port=port)
     else:
-        timeline_app.run_server(host=host, port=port)
+        timeline_app.run(host=host, port=port)
 
 
 def get_layout():
