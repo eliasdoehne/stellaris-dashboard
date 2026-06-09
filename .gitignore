@@ -2,6 +2,7 @@
 output
 saves
 data
+scratch/
 *.db
 **/*.c
 **/config.ini
