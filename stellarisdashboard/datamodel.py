@@ -9,7 +9,7 @@ from typing import Dict, List, Union, Optional, Iterable, Collection
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, scoped_session
+from sqlalchemy.orm import sessionmaker, relationship, scoped_session, selectinload
 
 from alembic.autogenerate import produce_migrations
 from alembic.migration import MigrationContext
@@ -400,6 +400,10 @@ def get_gamestates_since(game_name: str, date: float):
             session.query(GameState)
             .filter(GameState.game == game, GameState.date > date)
             .order_by(GameState.date)
+            # eager-load to avoid an N+1 lazy SELECT per country per gamestate
+            .options(
+                selectinload(GameState.country_data).selectinload(CountryData.country)
+            )
             .all()
         ):
             yield gs

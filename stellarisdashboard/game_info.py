@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 import re
@@ -274,6 +275,9 @@ class NameRenderer:
 global_renderer: NameRenderer = None
 
 
+# Pure function of json_str for the singleton renderer; hot on the read path.
+# Cache is cleared in get_global_renderer() when the renderer is rebuilt.
+@functools.lru_cache(maxsize=2**14)
 def render_name(json_str: str):
     return get_global_renderer().render_from_json(json_str)
 
@@ -289,6 +293,7 @@ def get_global_renderer() -> NameRenderer:
 
         global_renderer = NameRenderer(config.CONFIG.localization_files)
         global_renderer.load_name_mapping()
+        render_name.cache_clear()  # drop names cached against the old renderer
     return global_renderer
 
 
