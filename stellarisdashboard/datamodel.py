@@ -24,26 +24,14 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 _ENGINES = {}
 _SESSIONMAKERS = {}
-# Per-game lock serializing *writers* only. With WAL (see _set_sqlite_pragmas)
-# SQLite gives readers a consistent snapshot concurrent with a single writer, so
-# readers no longer take this lock and the dashboard stays responsive during ingest.
-_DB_LOCKS = {}
-# Guards the lazy engine/sessionmaker setup below, which is no longer serialized
-# by the per-game lock now that readers skip it.
-_ENGINE_SETUP_LOCK = threading.Lock()
-
-# Busy timeout (ms) a connection waits for SQLite's write lock before erroring.
+_DB_LOCKS = {}  # per-game lock; under WAL only writers take it (see get_db_session)
+_ENGINE_SETUP_LOCK = threading.Lock()  # guards lazy engine setup below
 _SQLITE_BUSY_TIMEOUT_MS = 30_000
 
 
 def _set_sqlite_pragmas(dbapi_connection, connection_record):
-    """Apply per-connection SQLite tuning. Runs on every new pooled connection.
-
-    - WAL: readers (dashboard) don't block on the writer (parser) and vice versa.
-    - synchronous=NORMAL: far fewer fsyncs during ingest; safe under WAL for this
-      app (the DB is derived data, fully re-derivable by re-parsing saves).
-    - busy_timeout: wait rather than immediately raising "database is locked".
-    """
+    # WAL lets readers and the single writer run concurrently; synchronous=NORMAL
+    # cuts fsyncs (safe: the DB is re-derivable by re-parsing saves).
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA synchronous=NORMAL")
@@ -54,7 +42,7 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
 def _get_or_create_sessionmaker(game_id):
     if game_id not in _SESSIONMAKERS:
         with _ENGINE_SETUP_LOCK:
-            if game_id not in _SESSIONMAKERS:  # double-checked under the lock
+            if game_id not in _SESSIONMAKERS:  # double-checked
                 _setup_engine(game_id)
     return _SESSIONMAKERS[game_id]
 
@@ -101,12 +89,8 @@ def _setup_engine(game_id):
 
 @contextlib.contextmanager
 def get_db_session(game_id, write: bool = False) -> sqlalchemy.orm.Session:
-    """Yield a session for the given game.
-
-    :param write: writers pass ``write=True`` to serialize on the per-game lock.
-        Readers leave it ``False`` and rely on WAL for snapshot isolation, so the
-        dashboard does not block while the parser ingests a new save.
-    """
+    # write=True serializes on the per-game lock; readers rely on WAL snapshots
+    # so they don't block while the parser ingests.
     session_factory = _get_or_create_sessionmaker(game_id)
     lock = _DB_LOCKS[game_id] if write else contextlib.nullcontext()
     with lock:
