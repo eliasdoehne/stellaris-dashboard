@@ -1706,8 +1706,7 @@ class GalaxyMapData:
         systems_by_owner = {(None, GalaxyMapData.UNCLAIMED): set()}
 
         with datamodel.get_db_session(self.game_id) as session:
-            # eager-load to avoid an N+1 lazy SELECT per system for its ownership
-            # history (and each ownership's country) in get_owner_country_at
+            # eager-load to avoid an N+1 lazy SELECT per system in get_owner_country_at
             systems = session.query(datamodel.System).options(
                 selectinload(datamodel.System.ownership_history).selectinload(
                     datamodel.SystemOwnership.country
