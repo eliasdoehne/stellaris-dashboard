@@ -2,6 +2,7 @@
 output
 saves
 data
+scratch/
 *.db
 **/*.c
 **/config.ini
@@ -17,6 +18,7 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
 
 # Distribution / packaging
 .Python

@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stellarisdashboard"
+version = "7.1.0"
+description = "Reads Stellaris save files while you play and shows detailed statistics and an event ledger for your playthrough."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+authors = [{ name = "Elias Doehne" }]
+
+# NOTE (toolchain-modernization experiment): versions are intentionally
+# unpinned here to let uv resolve the latest compatible set on Python 3.14.
+# uv.lock captures the exact resolved versions. Once the bumped stack is
+# verified (or partially rolled back), pin sensible lower bounds here.
+dependencies = [
+    "dash",
+    "Flask",
+    "Flask-Compress",
+    "Brotli",
+    "waitress",
+    "plotly",
+    "matplotlib",
+    "networkx",
+    "numpy",
+    "scipy",
+    "Pillow",
+    "PyYAML",
+    "click",
+    "tqdm",
+    "SQLAlchemy",
+    "alembic",
+    "rust_parser",
+]
+
+[project.scripts]
+stellarisdashboard = "stellarisdashboard.__main__:main"
+stellarisdashboardcli = "stellarisdashboard.cli:cli"
+
+[dependency-groups]
+dev = ["pytest", "pyinstaller", "black", "maturin"]
+
+[tool.uv.workspace]
+members = ["stellarisdashboard/parsing/rust_parser"]
+
+[tool.uv.sources]
+rust_parser = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["stellarisdashboard"]
+# The Rust crate is a separate workspace member built by maturin; keep its
+# source (and build artifacts) out of the pure-Python wheel.
+exclude = ["stellarisdashboard/parsing/rust_parser"]

@@ -33,13 +33,20 @@ You can also access the dashboard by opening [http://localhost:28053](http://loc
 3. Run the `parse_saves` application to read any existing save files. This will attempt to load any existing save files into the dashboard's database.
 4. Run the `stellarisdashboard` application. (recommended to run from a terminal in Linux and macOs to see the dashboard output)
 
-### Build it yourself
-- Get Python 3.10 (it may work on other versions too)
-- (Recommended) create & activate a virtual environment 
-- `pip install .` (If you get a ModuleNotFoundError for importing stellarisdashboard, try instead `pip install -e .`)
-- `pip install maturin` and `maturin develop -r` in `stellarisdashboard/parsing/rust_parser`
-- `python -m stellarisdashboard.cli parse-saves`
-- `python -m stellarisdashboard`
+### Building from source (developer setup)
+
+Most users should just download a prebuilt release from the [releases page](https://github.com/eliasdoehne/stellaris-dashboard/releases) — those are produced automatically by the GitHub Actions pipeline (`.github/workflows/build.yml`). The steps below are only for developing or building the dashboard yourself.
+
+**Prerequisites** (blank machine → working checkout):
+- [git](https://git-scm.com/) — the test save files live in a submodule, so clone with `git clone --recurse-submodules <url>` (or run `git submodule update --init` in an existing checkout).
+- [uv](https://docs.astral.sh/uv/) — manages the virtual environment and dependencies, and fetches the right Python version automatically (you do not need to install Python separately).
+- A [Rust toolchain](https://rustup.rs/) — needed to compile the `rust_parser` save-file parser.
+
+**Setup:**
+- `uv sync` — creates the virtual environment, installs all dependencies, and builds the Rust parser (via maturin).
+- `uv run stellarisdashboardcli parse-saves` — read any existing save files into the database.
+- `uv run stellarisdashboard` — start the dashboard.
+- `uv run pytest` — run the test suite.
 
 # Other information
 

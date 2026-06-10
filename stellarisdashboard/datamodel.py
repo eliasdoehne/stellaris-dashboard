@@ -45,7 +45,6 @@ def get_db_session(game_id) -> sqlalchemy.orm.Session:
             stack = [migrations.upgrade_ops]
             while stack:
                 elem = stack.pop(0)
-                print(elem)
                 if use_batch and isinstance(elem, ModifyTableOps):
                     with operations.batch_alter_table(
                         elem.table_name, schema=elem.schema
