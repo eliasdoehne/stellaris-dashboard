@@ -400,8 +400,7 @@ def get_gamestates_since(game_name: str, date: float):
             session.query(GameState)
             .filter(GameState.game == game, GameState.date > date)
             .order_by(GameState.date)
-            # Eager-load the per-country data touched by every plot container,
-            # avoiding an N+1 lazy SELECT per country per gamestate on the read path.
+            # eager-load to avoid an N+1 lazy SELECT per country per gamestate
             .options(
                 selectinload(GameState.country_data).selectinload(CountryData.country)
             )

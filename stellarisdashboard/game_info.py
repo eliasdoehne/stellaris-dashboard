@@ -275,11 +275,8 @@ class NameRenderer:
 global_renderer: NameRenderer = None
 
 
-# Rendering a name is a pure function of its JSON string for a given renderer
-# (the renderer/localization is a process-wide singleton). It is called per
-# country, per gamestate, per plot container on the read path, so memoizing it
-# removes a large amount of redundant JSON parsing + template rendering.
-# The cache is cleared in get_global_renderer() whenever the renderer is rebuilt.
+# Pure function of json_str for the singleton renderer; hot on the read path.
+# Cache is cleared in get_global_renderer() when the renderer is rebuilt.
 @functools.lru_cache(maxsize=2**14)
 def render_name(json_str: str):
     return get_global_renderer().render_from_json(json_str)
@@ -296,9 +293,7 @@ def get_global_renderer() -> NameRenderer:
 
         global_renderer = NameRenderer(config.CONFIG.localization_files)
         global_renderer.load_name_mapping()
-        # New renderer (e.g. after a localization/language change) -> any names
-        # cached against the previous renderer are now stale.
-        render_name.cache_clear()
+        render_name.cache_clear()  # drop names cached against the old renderer
     return global_renderer
 
 
