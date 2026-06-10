@@ -51,7 +51,7 @@ class TimelineExtractor:
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.process_time()
-        with datamodel.get_db_session(game_id=game_id) as self._session:
+        with datamodel.get_db_session(game_id=game_id, write=True) as self._session:
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
                 if self._check_if_gamestate_exists(db_game):
