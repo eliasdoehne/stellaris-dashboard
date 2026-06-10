@@ -24,47 +24,76 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 _ENGINES = {}
 _SESSIONMAKERS = {}
-_DB_LOCKS = {}
+_DB_LOCKS = {}  # per-game lock; under WAL only writers take it (see get_db_session)
+_ENGINE_SETUP_LOCK = threading.Lock()  # guards lazy engine setup below
+_SQLITE_BUSY_TIMEOUT_MS = 30_000
+
+
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    # WAL lets readers and the single writer run concurrently; synchronous=NORMAL
+    # cuts fsyncs (safe: the DB is re-derivable by re-parsing saves).
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+    cursor.close()
+
+
+def _get_or_create_sessionmaker(game_id):
+    if game_id not in _SESSIONMAKERS:
+        with _ENGINE_SETUP_LOCK:
+            if game_id not in _SESSIONMAKERS:  # double-checked
+                _setup_engine(game_id)
+    return _SESSIONMAKERS[game_id]
+
+
+def _setup_engine(game_id):
+    db_file = config.CONFIG.db_path / f"{game_id}.db"
+    if not db_file.exists():
+        logger.info(f"Creating database for game {game_id} in file {db_file}.")
+    engine = sqlalchemy.create_engine(
+        f"sqlite:///{db_file}",
+        echo=False,
+        connect_args={"timeout": _SQLITE_BUSY_TIMEOUT_MS / 1000},
+    )
+    sqlalchemy.event.listen(engine, "connect", _set_sqlite_pragmas)
+
+    # auto-migrate the DB
+    # based on https://alembic.sqlalchemy.org/en/latest/cookbook.html#run-alembic-operation-objects-directly-as-in-from-autogenerate
+    with engine.connect() as connection:
+        mc = MigrationContext.configure(connection)
+        migrations = produce_migrations(mc, Base.metadata)
+        operations = Operations(mc)
+        use_batch = engine.name == "sqlite"
+        stack = [migrations.upgrade_ops]
+        while stack:
+            elem = stack.pop(0)
+            if use_batch and isinstance(elem, ModifyTableOps):
+                with operations.batch_alter_table(
+                    elem.table_name, schema=elem.schema
+                ) as batch_ops:
+                    for table_elem in elem.ops:
+                        if isinstance(table_elem, CreateForeignKeyOp):
+                            # see alembic bug about constraint names: https://github.com/sqlalchemy/alembic/issues/1195
+                            table_elem.constraint_name = table_elem.local_cols[0]
+                        batch_ops.invoke(table_elem)
+            elif hasattr(elem, "ops"):
+                stack.extend(elem.ops)
+            else:
+                operations.invoke(elem)
+
+    _ENGINES[game_id] = engine
+    _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
+    _DB_LOCKS[game_id] = threading.Lock()
 
 
 @contextlib.contextmanager
-def get_db_session(game_id) -> sqlalchemy.orm.Session:
-    if game_id not in _SESSIONMAKERS:
-        db_file = config.CONFIG.db_path / f"{game_id}.db"
-        if not db_file.exists():
-            logger.info(f"Creating database for game {game_id} in file {db_file}.")
-        engine = sqlalchemy.create_engine(f"sqlite:///{db_file}", echo=False)
-
-        # auto-migrate the DB
-        # based on https://alembic.sqlalchemy.org/en/latest/cookbook.html#run-alembic-operation-objects-directly-as-in-from-autogenerate
-        with engine.connect() as connection:
-            mc = MigrationContext.configure(connection)
-            migrations = produce_migrations(mc, Base.metadata)
-            operations = Operations(mc)
-            use_batch = engine.name == "sqlite"
-            stack = [migrations.upgrade_ops]
-            while stack:
-                elem = stack.pop(0)
-                if use_batch and isinstance(elem, ModifyTableOps):
-                    with operations.batch_alter_table(
-                        elem.table_name, schema=elem.schema
-                    ) as batch_ops:
-                        for table_elem in elem.ops:
-                            if isinstance(table_elem, CreateForeignKeyOp):
-                                # see alembic bug about constraint names: https://github.com/sqlalchemy/alembic/issues/1195
-                                table_elem.constraint_name = table_elem.local_cols[0]
-                            batch_ops.invoke(table_elem)
-                elif hasattr(elem, "ops"):
-                    stack.extend(elem.ops)
-                else:
-                    operations.invoke(elem)
-
-        _ENGINES[game_id] = engine
-        _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
-        _DB_LOCKS[game_id] = threading.Lock()
-
-    with _DB_LOCKS[game_id]:
-        session_factory = _SESSIONMAKERS[game_id]
+def get_db_session(game_id, write: bool = False) -> sqlalchemy.orm.Session:
+    # write=True serializes on the per-game lock; readers rely on WAL snapshots
+    # so they don't block while the parser ingests.
+    session_factory = _get_or_create_sessionmaker(game_id)
+    lock = _DB_LOCKS[game_id] if write else contextlib.nullcontext()
+    with lock:
         s = session_factory()
         try:
             yield s
