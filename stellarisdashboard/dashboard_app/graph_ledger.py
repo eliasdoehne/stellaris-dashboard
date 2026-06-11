@@ -827,8 +827,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
             bgcolor="rgba(0,0,0,0)",
             font={"color": TEXT_DIM, "size": 11},
         ),
-        height=config.CONFIG.plot_height,
-        autosize=True,
+        autosize=True,  # fill the container (height comes from CSS), aspect kept by scaleanchor
         hovermode="closest",
         clickmode="event",
         plot_bgcolor=GALAXY_PLOT_BG,
@@ -851,10 +850,10 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         figure=fig,
         animate=True,
         animation_options=dict(showAxisDragHandles=True),
-        className="tl-graph",
+        className="tl-graph tl-graph--galaxy",
         responsive=True,
         config=GRAPH_CONFIG,
-        style={"width": "100%"},
+        style={"width": "100%", "height": "100%"},
     )
 
 

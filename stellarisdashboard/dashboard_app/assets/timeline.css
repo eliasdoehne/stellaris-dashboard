@@ -228,12 +228,20 @@ html, body {
     box-shadow: var(--tl-shadow-sm);
 }
 
+/* The galaxy map fills the available space; Plotly keeps its aspect ratio
+   (scaleanchor) so it letterboxes instead of skewing. */
 .tl-card--galaxy {
     padding: 0.25rem;
     background: var(--tl-surface-1);
-    max-width: var(--tl-content-max);
-    margin-left: auto;
-    margin-right: auto;
+    max-width: none;
+    height: calc(100vh - 7rem);
+    display: flex;
+}
+
+.tl-graph--galaxy {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
 }
 
 .tl-graph {
@@ -519,4 +527,6 @@ html, body {
         border-right: none;
         border-bottom: 1px solid var(--tl-border-soft);
     }
+    /* Sidebar no longer takes a column, so the viewport math above doesn't hold. */
+    .tl-card--galaxy { height: 75vh; }
 }
