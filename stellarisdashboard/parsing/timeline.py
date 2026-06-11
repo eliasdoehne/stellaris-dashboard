@@ -52,6 +52,11 @@ class TimelineExtractor:
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.process_time()
         with datamodel.get_db_session(game_id=game_id, write=True) as self._session:
+            # Autoflush would flush the whole pending session before every
+            # get-or-create query (~5900x/gamestate). Disable it; _process_gamestate
+            # flushes once per processor instead, and processors that query a
+            # freshly-created row by PK flush explicitly.
+            self._session.autoflush = False
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
                 if self._check_if_gamestate_exists(db_game):
@@ -268,6 +273,9 @@ class AbstractGamestateDataProcessor(abc.ABC):
         if matching_description is None:
             matching_description = datamodel.SharedDescription(text=text)
             self._session.add(matching_description)
+            # Autoflush is off; flush so the new row gets its PK, which the many
+            # query(...).filter_by(db_description=...) lookups bind against.
+            self._session.flush()
         _shared_description_cache[text] = matching_description
         return matching_description
 
@@ -345,11 +353,10 @@ class SystemProcessor(AbstractGamestateDataProcessor):
             neighbor_id = hl_data.get("to")
             if neighbor_id == system_id:
                 continue  # This can happen in Stellaris 2.1
-            neighbor_model = (
-                self._session.query(datamodel.System)
-                .filter_by(system_id_in_game=neighbor_id)
-                .one_or_none()
-            )
+            # Look up in the in-memory map (preloaded with all DB systems, updated
+            # as new ones are added) rather than querying -- with autoflush off a
+            # query wouldn't see systems added earlier in this same loop.
+            neighbor_model = self.systems_by_ingame_id.get(neighbor_id)
             if neighbor_model is None:
                 continue  # assume that the hyperlane will be created when adding the neighbor system to DB later
 
@@ -1566,6 +1573,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             modifier_text = db_modifier.db_description.text
             if modifier_text not in current_modifiers:
                 self._session.delete(db_modifier)
+                self._session.flush()  # refresh must see the delete (autoflush is off)
                 self._session.refresh(planet_model)
             else:
                 if expiration != current_modifiers[modifier_text]:
@@ -3414,6 +3422,8 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 continue
             self.active_wars[war_id] = war_model
             self.update_war_participants(war_dict, war_model)
+            # PK needed: _extract_combat_victories queries these participants back
+            self._session.flush()
             self._extract_combat_victories(war_dict, war_model)
 
     def _update_war(self, war_id: int, war_dict):
@@ -3441,6 +3451,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
         war_model.defender_war_exhaustion = war_dict.get("defender_war_exhaustion", 0.0)
         war_model.end_date_days = self._basic_info.date_in_days - 1
         self._session.add(war_model)
+        self._session.flush()  # PK needed: participants/combat query filter_by(war=war_model)
         return war_model
 
     def update_war_participants(self, war_dict, war_model):
@@ -3572,6 +3583,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 attacker_victory=attacker_victory,
             )
             self._session.add(combat)
+            self._session.flush()  # so the dedup query above sees combats added earlier this gamestate
 
             is_known_to_player = False
             for country_id in itertools.chain(battle_attackers, battle_defenders):
