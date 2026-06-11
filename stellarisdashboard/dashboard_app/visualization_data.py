@@ -15,6 +15,7 @@ from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, 
 import networkx as nx
 import numpy as np
 from scipy.spatial import Voronoi
+from sqlalchemy.orm import selectinload
 
 from stellarisdashboard import datamodel, config, game_info
 from stellarisdashboard.parsing.save_parser import rust_parser
@@ -1705,7 +1706,14 @@ class GalaxyMapData:
         systems_by_owner = {(None, GalaxyMapData.UNCLAIMED): set()}
 
         with datamodel.get_db_session(self.game_id) as session:
-            for system in session.query(datamodel.System):
+            # eager-load to avoid an N+1 lazy SELECT per system in get_owner_country_at
+            systems = session.query(datamodel.System).options(
+                selectinload(datamodel.System.ownership_history).selectinload(
+                    datamodel.SystemOwnership.country
+                ),
+                selectinload(datamodel.System.country),
+            )
+            for system in systems:
                 country = system.get_owner_country_at(time_days)
                 country_tuple = self._country_display_tuple(country)
                 owned_systems.add(system.system_id_in_game)
