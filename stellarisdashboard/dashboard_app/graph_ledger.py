@@ -60,6 +60,8 @@ GRAPH_CONFIG_COMPACT = {
     "staticPlot": False,
     "responsive": True,
 }
+# Galaxy map: wheel-zoom + drag-pan for a more maps-like feel.
+GRAPH_CONFIG_GALAXY = {**GRAPH_CONFIG, "scrollZoom": True}
 COMPACT_PLOT_HEIGHT = 240
 
 SELECT_SYSTEM_DEFAULT = html.P(
@@ -843,6 +845,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         autosize=True,  # fill the container (height comes from CSS), aspect kept by scaleanchor
         hovermode="closest",
         clickmode="event",
+        dragmode="pan",  # drag to pan (maps-like); wheel zoom via GRAPH_CONFIG_GALAXY
         plot_bgcolor=GALAXY_PLOT_BG,
         paper_bgcolor=GALAXY_PAPER,
         font={"color": TEXT_COLOR, "family": FONT_FAMILY},
@@ -865,7 +868,7 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         animation_options=dict(showAxisDragHandles=True),
         className="tl-graph tl-graph--galaxy",
         responsive=True,
-        config=GRAPH_CONFIG,
+        config=GRAPH_CONFIG_GALAXY,
         style={"width": "100%", "height": "100%"},
     )
 
