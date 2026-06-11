@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from collections import defaultdict
@@ -6,7 +7,7 @@ from urllib import parse
 
 import dash.exceptions
 import plotly.graph_objs as go
-from dash import Dash, callback_context, dcc, html, Input, Output
+from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
 from flask import render_template
 from PIL import features
 
@@ -50,6 +51,13 @@ GRAPH_CONFIG = {
     "modeBarButtonsToRemove": ["select2d", "lasso2d"],
     "responsive": True,
 }
+# Compact thumbnails in the grid: no modebar, static, minimal chrome.
+GRAPH_CONFIG_COMPACT = {
+    "displayModeBar": False,
+    "staticPlot": False,
+    "responsive": True,
+}
+COMPACT_PLOT_HEIGHT = 240
 
 SELECT_SYSTEM_DEFAULT = html.P(
     children=["Click the map to select a system"],
@@ -83,6 +91,50 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     else:
         layout["hovermode"] = "x"
     return go.Layout(**layout)
+
+
+def get_compact_figure_layout(plot_spec: visualization_data.PlotSpecification):
+    """Minimal layout for the grid thumbnails: no title/legend/axis labels,
+    tight margins. The full detail is shown in the modal instead."""
+    layout = dict(DEFAULT_PLOT_LAYOUT)
+    layout["xaxis"] = dict(layout["xaxis"], title=None)
+    layout["yaxis"] = dict(layout["yaxis"], title=None)
+    layout["height"] = COMPACT_PLOT_HEIGHT
+    layout["showlegend"] = False
+    layout["margin"] = dict(t=10, b=28, l=44, r=14)
+    if plot_spec.style == visualization_data.PlotStyle.line:
+        layout["hovermode"] = "closest"
+    else:
+        layout["hovermode"] = "x"
+    return go.Layout(**layout)
+
+
+def _plot_grid_card(plot_spec, compact_figure):
+    """A compact plot thumbnail. Its header is clickable and opens the modal
+    (the pattern-matching id is keyed on the plot id)."""
+    return html.Div(
+        className="tl-card tl-plot-card",
+        children=[
+            html.Div(
+                className="tl-plot-card__header",
+                id={"type": "expand-plot", "index": plot_spec.plot_id},
+                n_clicks=0,
+                title="Click to enlarge",
+                children=[
+                    html.Span(plot_spec.title, className="tl-plot-card__title"),
+                    html.Span("⤢", className="tl-expand-icon"),
+                ],
+            ),
+            dcc.Graph(
+                id=plot_spec.plot_id,
+                figure=compact_figure,
+                className="tl-graph tl-graph--compact",
+                responsive=True,
+                config=GRAPH_CONFIG_COMPACT,
+                style={"width": "100%"},
+            ),
+        ],
+    )
 
 
 @timeline_app.callback(Output("game-name-header", "children"), [Input("url", "search")])
@@ -338,6 +390,10 @@ def update_content(
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )
+        # Each plot becomes a compact card in a responsive grid. The full-detail
+        # figure is stashed in a Store and rendered in the modal on demand.
+        grid_children = []
+        full_figures = {}
         for plot_spec in plots:
             if not plot_spec:
                 continue  # just in case it's possible to sneak in an invalid ID
@@ -349,30 +405,25 @@ def update_content(
             )
             if not figure_data:
                 continue
-            figure_layout = get_figure_layout(plot_spec)
-            figure_layout["title"] = dict(
+
+            full_layout = get_figure_layout(plot_spec)
+            full_layout["title"] = dict(
                 text=plot_spec.title,
                 font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
                 x=0.5,
                 xanchor="center",
             )
-            figure = go.Figure(data=figure_data, layout=figure_layout)
+            full_figures[plot_spec.plot_id] = go.Figure(
+                data=figure_data, layout=full_layout
+            ).to_plotly_json()
 
-            children.append(
-                html.Div(
-                    className="tl-card",
-                    children=[
-                        dcc.Graph(
-                            id=plot_spec.plot_id,
-                            figure=figure,
-                            className="tl-graph",
-                            responsive=True,
-                            config=GRAPH_CONFIG,
-                            style={"width": "100%"},
-                        )
-                    ],
-                )
+            compact_figure = go.Figure(
+                data=figure_data, layout=get_compact_figure_layout(plot_spec)
             )
+            grid_children.append(_plot_grid_card(plot_spec, compact_figure))
+
+        children.append(html.Div(grid_children, className="tl-grid"))
+        children.append(dcc.Store(id="full-figures-store", data=full_figures))
     else:
         slider_date = 0.01 * date_fraction * current_date
 
@@ -383,6 +434,52 @@ def update_content(
             )
         )
     return children
+
+
+@timeline_app.callback(
+    [
+        Output("plot-modal", "className"),
+        Output("modal-graph", "figure"),
+        Output("modal-title", "children"),
+    ],
+    [
+        Input({"type": "expand-plot", "index": ALL}, "n_clicks"),
+        Input("modal-close", "n_clicks"),
+        Input("modal-backdrop", "n_clicks"),
+    ],
+    [State("full-figures-store", "data")],
+    prevent_initial_call=True,
+)
+def toggle_plot_modal(expand_clicks, close_clicks, backdrop_clicks, store):
+    """Open the modal with a plot's full-detail figure, or close it."""
+    triggered = callback_context.triggered
+    if not triggered:
+        raise dash.exceptions.PreventUpdate
+    prop_id = triggered[0]["prop_id"]
+
+    # Close button / backdrop click -> hide.
+    if prop_id.startswith("modal-close") or prop_id.startswith("modal-backdrop"):
+        return "tl-modal tl-modal--hidden", dash.no_update, dash.no_update
+
+    # Ignore the spurious fire when the grid (and its buttons) is first created.
+    if not any(expand_clicks or []):
+        raise dash.exceptions.PreventUpdate
+
+    try:
+        plot_id = json.loads(prop_id.rsplit(".", 1)[0])["index"]
+    except (ValueError, KeyError):
+        raise dash.exceptions.PreventUpdate
+
+    figure = (store or {}).get(plot_id)
+    if figure is None:
+        raise dash.exceptions.PreventUpdate
+
+    title = (
+        figure.get("layout", {}).get("title", {}).get("text", "")
+        if isinstance(figure, dict)
+        else ""
+    )
+    return "tl-modal", figure, title
 
 
 def _get_url_params(url: str) -> Dict[str, List[str]]:
@@ -938,11 +1035,50 @@ def get_layout():
         ],
     )
 
+    modal = html.Div(
+        id="plot-modal",
+        className="tl-modal tl-modal--hidden",
+        children=[
+            html.Div(id="modal-backdrop", className="tl-modal__backdrop", n_clicks=0),
+            html.Div(
+                className="tl-modal__dialog",
+                children=[
+                    html.Div(
+                        className="tl-modal__header",
+                        children=[
+                            html.Span("", id="modal-title", className="tl-modal__title"),
+                            html.Button(
+                                "✕",
+                                id="modal-close",
+                                className="tl-modal__close",
+                                title="Close",
+                                n_clicks=0,
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="tl-modal__body",
+                        children=[
+                            dcc.Graph(
+                                id="modal-graph",
+                                className="tl-graph",
+                                responsive=True,
+                                config=GRAPH_CONFIG,
+                                style={"width": "100%", "height": "100%"},
+                            )
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+
     return html.Div(
         className="tl-app",
         children=[
             dcc.Location(id="url", refresh=False),
             sidebar,
             main,
+            modal,
         ],
     )

@@ -75,8 +75,7 @@ html, body {
 }
 
 .tl-content {
-    max-width: var(--tl-content-max);
-    margin: 0 auto;
+    width: 100%;
 }
 
 /* ------------------------------- Brand --------------------------------- */
@@ -232,11 +231,150 @@ html, body {
 .tl-card--galaxy {
     padding: 0.25rem;
     background: var(--tl-surface-1);
+    max-width: var(--tl-content-max);
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .tl-graph {
     width: 100%;
 }
+
+/* ---------------------------- Plot grid -------------------------------- */
+.tl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.tl-plot-card {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.tl-plot-card:hover {
+    border-color: var(--tl-border);
+    box-shadow: var(--tl-shadow);
+}
+
+.tl-plot-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--tl-border-soft);
+    user-select: none;
+}
+
+.tl-plot-card__header:hover { background: var(--tl-surface-2); }
+
+.tl-plot-card__title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--tl-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tl-expand-icon {
+    flex: 0 0 auto;
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--tl-text-faint);
+    transition: color 0.15s ease;
+}
+
+.tl-plot-card__header:hover .tl-expand-icon { color: var(--tl-accent); }
+
+.tl-graph--compact { padding: 0.35rem 0.35rem 0.1rem; }
+
+/* ------------------------------ Modal ---------------------------------- */
+.tl-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(1rem, 4vw, 3rem);
+}
+
+.tl-modal--hidden { display: none; }
+
+.tl-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: hsl(200 30% 3% / 0.7);
+    backdrop-filter: blur(3px);
+    cursor: zoom-out;
+}
+
+.tl-modal__dialog {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    width: min(1100px, 92vw);
+    height: min(760px, 88vh);
+    background: var(--tl-surface-1);
+    border: 1px solid var(--tl-border);
+    border-radius: var(--tl-radius-lg);
+    box-shadow: var(--tl-shadow);
+    overflow: hidden;
+}
+
+.tl-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--tl-border-soft);
+}
+
+.tl-modal__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--tl-text);
+}
+
+.tl-modal__close {
+    appearance: none;
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    display: grid;
+    place-items: center;
+    background: var(--tl-surface-2);
+    color: var(--tl-text-dim);
+    border: 1px solid var(--tl-border);
+    border-radius: var(--tl-radius-sm);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tl-modal__close:hover {
+    background: var(--tl-surface-3);
+    color: var(--tl-text);
+}
+
+.tl-modal__body {
+    flex: 1;
+    min-height: 0;
+    padding: 0.5rem;
+}
+
+.tl-modal__body .tl-graph,
+.tl-modal__body .js-plotly-plot { height: 100%; }
 
 /* ---------------------------- Galaxy panel ----------------------------- */
 .tl-galaxy-panel {
