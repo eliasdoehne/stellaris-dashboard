@@ -109,6 +109,49 @@ def get_compact_figure_layout(plot_spec: visualization_data.PlotSpecification):
     return go.Layout(**layout)
 
 
+COMPACT_SUBDUED_ALPHA = 0.28
+COMPACT_PLAYER_WIDTH = 2.6
+
+
+def _with_color_alpha(color, alpha):
+    """Return an rgba() string with its alpha replaced; pass anything else through."""
+    if not isinstance(color, str) or not color.startswith("rgba"):
+        return color
+    inner = color[color.index("(") + 1 : color.index(")")]
+    r, g, b = (c.strip() for c in inner.split(",")[:3])
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _emphasize_player_in_compact_data(figure_data, player_label):
+    """For country-comparison plots, draw the player's series in full color on
+    top and subdue every other country, so relative standing reads at a glance.
+    Plots that don't contain the player's series (budget/demographics breakdowns)
+    are returned unchanged."""
+    if not player_label or not any(
+        trace.get("name") == player_label for trace in figure_data
+    ):
+        return figure_data
+
+    emphasized = []
+    for trace in figure_data:
+        trace = dict(trace)
+        line = dict(trace.get("line") or {})
+        if trace.get("name") == player_label:
+            line["color"] = _with_color_alpha(line.get("color"), 1.0)
+            line["width"] = COMPACT_PLAYER_WIDTH
+        else:
+            line["color"] = _with_color_alpha(line.get("color"), COMPACT_SUBDUED_ALPHA)
+            line["width"] = min(line.get("width", 1.0), 1.0)
+            trace["showlegend"] = False
+            if "fillcolor" in trace:
+                trace["fillcolor"] = _with_color_alpha(trace["fillcolor"], 0.12)
+        trace["line"] = line
+        emphasized.append(trace)
+    # Draw the player's line last so it sits on top of the subdued ones.
+    emphasized.sort(key=lambda t: t.get("name") == player_label)
+    return emphasized
+
+
 def _plot_grid_card(plot_spec, compact_figure):
     """A compact plot thumbnail. Its header is clickable and opens the modal
     (the pattern-matching id is keyed on the plot id)."""
@@ -390,6 +433,14 @@ def update_content(
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )
+        # Legend label of the player's own country, used to highlight it in the
+        # compact thumbnails (see _emphasize_player_in_compact_data).
+        player_country_name = games_dict[game_id].get("country_name")
+        player_label = (
+            dict_key_to_legend_label(player_country_name)
+            if player_country_name
+            else None
+        )
         # Each plot becomes a compact card in a responsive grid. The full-detail
         # figure is stashed in a Store and rendered in the modal on demand.
         grid_children = []
@@ -417,8 +468,9 @@ def update_content(
                 data=figure_data, layout=full_layout
             ).to_plotly_json()
 
+            compact_data = _emphasize_player_in_compact_data(figure_data, player_label)
             compact_figure = go.Figure(
-                data=figure_data, layout=get_compact_figure_layout(plot_spec)
+                data=compact_data, layout=get_compact_figure_layout(plot_spec)
             )
             grid_children.append(_plot_grid_card(plot_spec, compact_figure))
 
