@@ -505,9 +505,17 @@ html, body {
 }
 .tl-galaxy-panel .rc-slider-handle:hover,
 .tl-galaxy-panel .rc-slider-handle:focus { border-color: var(--tl-accent); box-shadow: 0 0 0 4px var(--tl-accent-soft); }
-.tl-galaxy-panel .rc-slider-mark-text { color: var(--tl-text-faint); font-size: 0.68rem; }
-.tl-galaxy-panel .rc-slider-mark-text-active { color: var(--tl-text-dim); }
-.tl-galaxy-panel .rc-slider-dot { border-color: var(--tl-border); background: var(--tl-surface-2); }
+.tl-galaxy-panel .rc-slider-mark-text { color: var(--tl-text); font-size: 0.68rem; white-space: nowrap; }
+.tl-galaxy-panel .rc-slider-mark-text-active { color: var(--tl-accent); }
+.tl-galaxy-panel .rc-slider-dot {
+    border-color: var(--tl-text-dim);
+    background: var(--tl-surface-2);
+    height: 9px;
+    width: 2px;
+    border-radius: 0;
+    margin-left: -1px;
+    bottom: -2px;
+}
 
 /* --------------------------- Scrollbars -------------------------------- */
 .tl-sidebar::-webkit-scrollbar { width: 8px; }

@@ -291,13 +291,28 @@ def adjust_slider_values(tab_value, search):
         _, matches = _get_game_ids_matching_url(search)
         with datamodel.get_db_session(matches[0]) as session:
             max_date = utils.get_most_recent_date(session)
-        marks = {0: "2200.01.01", 100: datamodel.days_to_date(max_date)}
-        for x in range(20, 100, 20):
-            marks[x] = datamodel.days_to_date(x / 100 * max_date)
-        logger.info(f"Setting slider marks to {marks}")
-        return marks
+        return _galaxy_slider_marks(max_date)
     else:
         raise dash.exceptions.PreventUpdate()
+
+
+def _galaxy_slider_marks(max_date):
+    """Slider marks for the (narrow, sidebar) galaxy date slider.
+
+    A notch at every in-game decade; only a decimated subset is labelled with the
+    bare year so labels never overlap regardless of game length or sidebar width.
+    """
+    if not max_date or max_date <= 0:
+        return {0: "2200"}
+    last_decade = int(max_date // 360 // 10) * 10  # last full in-game decade, in years
+    decades = list(range(0, last_decade + 1, 10))  # year offsets: 0, 10, 20, ...
+    # Label at most ~5 marks; the rest render as a bare notch (empty label).
+    label_every = -(-len(decades) // 5) or 1  # ceil division, floored at 1
+    marks = {}
+    for i, year_offset in enumerate(decades):
+        value = year_offset * 360 / max_date * 100
+        marks[value] = str(2200 + year_offset) if i % label_every == 0 else ""
+    return marks
 
 
 @timeline_app.callback(
