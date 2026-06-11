@@ -50,7 +50,7 @@ class PlotSpecification:
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
-    x_axis_label: str = "Time (years after 2200.01.01)"
+    x_axis_label: str = "Year"
     y_axis_label: str = ""
 
     data_container_factory_kwargs: Dict = dataclasses.field(default_factory=dict)

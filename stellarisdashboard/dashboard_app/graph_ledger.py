@@ -33,8 +33,11 @@ TEXT_DIM = "rgba(150,160,170,1)"
 ACCENT_COLOR = "rgba(232,168,72,1)"
 FONT_FAMILY = "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
+# Stellaris games start on 2200.01.01; plot x-values count years from there.
+GAME_START_YEAR = 2200
+
 DEFAULT_PLOT_LAYOUT = dict(
-    xaxis=dict(showgrid=False, zeroline=False, linecolor=GRID_COLOR),
+    xaxis=dict(showgrid=False, zeroline=False, linecolor=GRID_COLOR, tickformat="d"),
     yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, type="linear"),
     plot_bgcolor=PLOT_BG,
     paper_bgcolor=PLOT_PAPER,
@@ -561,15 +564,25 @@ def get_raw_plot_data_dicts(
     :return:
     """
     if plot_spec.style == visualization_data.PlotStyle.line:
-        return _get_raw_data_for_line_plot(game_id, plot_data, plot_spec)
+        data = _get_raw_data_for_line_plot(game_id, plot_data, plot_spec)
     elif plot_spec.style in [
         visualization_data.PlotStyle.stacked,
         visualization_data.PlotStyle.budget,
     ]:
-        return _get_raw_data_for_stacked_and_budget_plots(game_id, plot_data, plot_spec)
+        data = _get_raw_data_for_stacked_and_budget_plots(game_id, plot_data, plot_spec)
     else:
         logger.warning(f"Unknown Plot type {plot_spec}")
         return []
+    # The data x-values count years since game start; shift them to the in-game
+    # year for display. Hover labels are already-formatted strings, so this only
+    # affects the axis. (Done here so every plot style is covered in one place.)
+    for trace in data:
+        x_values = trace.get("x")
+        if x_values:
+            trace["x"] = [
+                GAME_START_YEAR + v if v is not None else None for v in x_values
+            ]
+    return data
 
 
 def _get_raw_data_for_line_plot(
