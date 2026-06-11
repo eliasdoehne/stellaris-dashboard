@@ -706,116 +706,126 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     :return:
     """
     # adapted from https://plot.ly/python/network-graphs/
+    # Performance: everything is merged into as few traces as possible (Plotly
+    # renders one SVG group / GL batch per trace, and pan/zoom repaints them all),
+    # and markers/lines use WebGL (Scattergl) for GPU-accelerated pan/zoom.
     galaxy_map_data = visualization_data.get_galaxy_data(game_id)
     galaxy_map_data.update_graph_for_date(int(slider_date))
     nx_graph = galaxy_map_data.galaxy_graph
+    system_borders = nx_graph.graph["system_borders"]
+    UNCLAIMED = visualization_data.GalaxyMapData.UNCLAIMED
 
-    edge_traces_data = {}
+    # --- Hyperlanes: one trace per country, None-separated segments ---
+    edge_xy = {}
     for edge in nx_graph.edges:
         country = nx_graph.edges[edge]["country"]
-        if country not in edge_traces_data:
-            edge_traces_data[country] = dict(
-                x=[],
-                y=[],
-                text=[],
-                line=go.scatter.Line(width=0.5, color=get_country_color(game_id, country)),
-                hoverinfo="text",
-                mode="lines",
-                showlegend=False,
-            )
+        xy = edge_xy.get(country)
+        if xy is None:
+            xy = edge_xy[country] = ([], [])
         x0, y0 = nx_graph.nodes[edge[0]]["pos"]
         x1, y1 = nx_graph.nodes[edge[1]]["pos"]
-        # insert None to prevent dash from joining the lines
-        edge_traces_data[country]["x"] += [x0, x1, None]
-        edge_traces_data[country]["y"] += [y0, y1, None]
-        edge_traces_data[country]["text"] += [country]
+        xy[0].extend((x0, x1, None))
+        xy[1].extend((y0, y1, None))
     edge_traces = [
-        go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
+        go.Scattergl(
+            x=x,
+            y=y,
+            line=dict(width=0.5, color=get_country_color(game_id, country)),
+            hoverinfo="skip",
+            mode="lines",
+            showlegend=False,
+        )
+        for country, (x, y) in edge_xy.items()
     ]
 
-    system_shapes = []
+    # --- System markers (per country) + territory fills (merged per country) ---
     country_system_markers = {}
+    country_fill_xy = {}
     country_border_ridges = defaultdict(set)
-
-    country_border_ridges[
-        galaxy_map_data.UNCLAIMED
-    ] |= galaxy_map_data.galaxy_graph.graph["system_borders"].get(
+    country_border_ridges[UNCLAIMED] |= system_borders.get(
         galaxy_map_data.ARTIFICIAL_NODE, set()
     )
-    for i, node in enumerate(nx_graph.nodes):
-        country = nx_graph.nodes[node]["country"]
-        if country not in country_system_markers:
-            country_system_markers[country] = dict(
-                x=[],
-                y=[],
-                text=[],
-                customdata=[],
-                mode="markers",
-                hoverinfo="text",
-                marker=dict(color=[], size=4),
-                name=country,
+    for node in nx_graph.nodes:
+        ndata = nx_graph.nodes[node]
+        country = ndata["country"]
+        marker = country_system_markers.get(country)
+        if marker is None:
+            marker = country_system_markers[country] = dict(
+                x=[], y=[], text=[], customdata=[], color=[]
             )
-        color = get_country_color(game_id, country)
-        country_system_markers[country]["marker"]["color"].append(color)
-        x, y = nx_graph.nodes[node]["pos"]
-        country_system_markers[country]["x"].append(x)
-        country_system_markers[country]["y"].append(y)
-        text = f'{nx_graph.nodes[node]["name"]} ({country})'
-        country_system_markers[country]["text"].append(text)
-        customdata = {
-            "system_id": nx_graph.nodes[node]["system_id"],
-            "game_id": game_id,
-            "system_name": nx_graph.nodes[node]["name"],
-            "country_name": country,
-            "country_id": nx_graph.nodes[node]["country_id"],
-        }
-        country_system_markers[country]["customdata"].append(customdata)
-        if country != visualization_data.GalaxyMapData.UNCLAIMED:
-            shape_x, shape_y = nx_graph.nodes[node].get("shape", ([], []))
-            system_shapes.append(
-                go.Scatter(
-                    x=shape_x,
-                    y=shape_y,
-                    text=[text],
-                    customdata=[customdata],
-                    fill="toself",
-                    fillcolor=color,
-                    hoverinfo="none",
-                    line=dict(width=0),
-                    mode="none",
-                    opacity=0.2,
-                    showlegend=False,
-                )
-            )
-        country_border_ridges[country] |= galaxy_map_data.galaxy_graph.graph[
-            "system_borders"
-        ].get(node, set())
+        x, y = ndata["pos"]
+        marker["x"].append(x)
+        marker["y"].append(y)
+        marker["color"].append(get_country_color(game_id, country))
+        marker["text"].append(f'{ndata["name"]} ({country})')
+        marker["customdata"].append(
+            {
+                "system_id": ndata["system_id"],
+                "game_id": game_id,
+                "system_name": ndata["name"],
+                "country_name": country,
+                "country_id": ndata["country_id"],
+            }
+        )
+        if country != UNCLAIMED:
+            shape_x, shape_y = ndata.get("shape", ([], []))
+            if len(shape_x):
+                fill = country_fill_xy.get(country)
+                if fill is None:
+                    fill = country_fill_xy[country] = ([], [])
+                fill[0].extend(shape_x)
+                fill[0].append(None)  # separate this system's polygon from the next
+                fill[1].extend(shape_y)
+                fill[1].append(None)
+        country_border_ridges[country] |= system_borders.get(node, set())
 
-    country_borders = []
+    # Filled territory: one SVG trace per country (gl "toself" fills are unreliable).
+    system_shapes = [
+        go.Scatter(
+            x=x,
+            y=y,
+            fill="toself",
+            fillcolor=get_country_color(game_id, country),
+            line=dict(width=0),
+            mode="none",
+            hoverinfo="skip",
+            opacity=0.2,
+            showlegend=False,
+            name=country,
+        )
+        for country, (x, y) in country_fill_xy.items()
+    ]
+
+    system_markers = [
+        go.Scattergl(
+            x=m["x"],
+            y=m["y"],
+            text=m["text"],
+            customdata=m["customdata"],
+            mode="markers",
+            hoverinfo="text",
+            marker=dict(color=m["color"], size=4),
+            name=country,
+        )
+        for country, m in country_system_markers.items()
+    ]
+
+    # --- Country borders: a single merged trace, None-separated segments ---
+    border_x, border_y = [], []
     for x_values, y_values in galaxy_map_data.get_country_border_ridges(
         country_border_ridges
     ):
-        country_borders.append(
-            go.Scatter(
-                dict(
-                    x=x_values,
-                    y=y_values,
-                    text=[],
-                    line=go.scatter.Line(width=0.75, color="rgba(255,255,255,1)"),
-                    hoverinfo="text",
-                    mode="lines",
-                    showlegend=False,
-                )
-            )
+        border_x.extend((x_values[0], x_values[1], None))
+        border_y.extend((y_values[0], y_values[1], None))
+    country_borders = [
+        go.Scattergl(
+            x=border_x,
+            y=border_y,
+            line=dict(width=0.75, color="rgba(255,255,255,1)"),
+            hoverinfo="skip",
+            mode="lines",
+            showlegend=False,
         )
-
-    for country in country_system_markers:
-        country_system_markers[country]["marker"] = go.scatter.Marker(
-            **country_system_markers[country]["marker"]
-        )
-    system_markers = [
-        go.Scatter(**scatter_data)
-        for country, scatter_data in country_system_markers.items()
     ]
 
     layout = go.Layout(
@@ -846,6 +856,8 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         hovermode="closest",
         clickmode="event",
         dragmode="pan",  # drag to pan (maps-like); wheel zoom via GRAPH_CONFIG_GALAXY
+        # Keep the user's current zoom/pan when the date slider rebuilds the figure.
+        uirevision=game_id,
         plot_bgcolor=GALAXY_PLOT_BG,
         paper_bgcolor=GALAXY_PAPER,
         font={"color": TEXT_COLOR, "family": FONT_FAMILY},
@@ -857,15 +869,14 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         ),
     )
 
+    # Fills (SVG) at the bottom, then hyperlanes, borders, and markers (GL) on top.
     fig = go.Figure(
-        data=system_shapes + system_markers + edge_traces + country_borders,
+        data=system_shapes + edge_traces + country_borders + system_markers,
         layout=layout,
     )
     return dcc.Graph(
         id="galaxy-map",
         figure=fig,
-        animate=True,
-        animation_options=dict(showAxisDragHandles=True),
         className="tl-graph tl-graph--galaxy",
         responsive=True,
         config=GRAPH_CONFIG_GALAXY,
