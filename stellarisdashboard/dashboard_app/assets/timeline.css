@@ -494,22 +494,23 @@ html, body {
 .tl-dropdown .Select-option.is-selected { color: var(--tl-accent); }
 .tl-dropdown .Select-arrow { border-top-color: var(--tl-text-dim); }
 
-/* Slider (dcc.Slider -> rc-slider) */
+/* Slider (dcc.Slider -> rc-slider).
+   rc-slider ships inline default colors, so theme overrides need !important. */
 .tl-slider { margin: 0.5rem 0 1.5rem; }
-.tl-galaxy-panel .rc-slider-rail { background: var(--tl-surface-3); }
-.tl-galaxy-panel .rc-slider-track { background: var(--tl-accent-dim); }
+.tl-galaxy-panel .rc-slider-rail { background: var(--tl-surface-3) !important; }
+.tl-galaxy-panel .rc-slider-track { background: var(--tl-accent-dim) !important; }
 .tl-galaxy-panel .rc-slider-handle {
-    border-color: var(--tl-accent);
-    background: var(--tl-accent);
+    border-color: var(--tl-accent) !important;
+    background: var(--tl-accent) !important;
     opacity: 1;
 }
 .tl-galaxy-panel .rc-slider-handle:hover,
-.tl-galaxy-panel .rc-slider-handle:focus { border-color: var(--tl-accent); box-shadow: 0 0 0 4px var(--tl-accent-soft); }
-.tl-galaxy-panel .rc-slider-mark-text { color: var(--tl-text); font-size: 0.68rem; white-space: nowrap; }
-.tl-galaxy-panel .rc-slider-mark-text-active { color: var(--tl-accent); }
+.tl-galaxy-panel .rc-slider-handle:focus { border-color: var(--tl-accent) !important; box-shadow: 0 0 0 4px var(--tl-accent-soft) !important; }
+.tl-galaxy-panel .rc-slider-mark-text { color: var(--tl-text) !important; font-size: 0.68rem; white-space: nowrap; }
+.tl-galaxy-panel .rc-slider-mark-text-active { color: var(--tl-accent) !important; }
 .tl-galaxy-panel .rc-slider-dot {
-    border-color: var(--tl-text-dim);
-    background: var(--tl-surface-2);
+    border-color: var(--tl-text-dim) !important;
+    background: var(--tl-surface-2) !important;
     height: 9px;
     width: 2px;
     border-radius: 0;
