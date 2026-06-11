@@ -20,73 +20,41 @@ from stellarisdashboard.dashboard_app import (
 
 logger = logging.getLogger(__name__)
 
-BACKGROUND = "rgba(33,43,39,1)"
-GALAXY_BACKGROUND = "rgba(0,0,0,1)"
-BACKGROUND_DARK = "rgba(20,25,25,1)"
-BACKGROUND_LIGHT = "rgba(43, 59, 52, 1)"
-TEXT_COLOR = "rgba(217,217,217,1)"
-TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
+# Modernized sci-fi palette — kept in sync with assets/timeline.css.
+# Plot backgrounds are transparent so the card surface shows through.
+PLOT_PAPER = "rgba(0,0,0,0)"
+PLOT_BG = "rgba(0,0,0,0)"
+GALAXY_PLOT_BG = "rgba(6,9,14,1)"  # near-black "space"
+GALAXY_PAPER = "rgba(0,0,0,0)"
+GRID_COLOR = "rgba(255,255,255,0.06)"
+TEXT_COLOR = "rgba(220,225,232,1)"
+TEXT_DIM = "rgba(150,160,170,1)"
+ACCENT_COLOR = "rgba(232,168,72,1)"
+FONT_FAMILY = "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
 DEFAULT_PLOT_LAYOUT = dict(
-    xaxis=dict(showgrid=False),
-    yaxis=dict(showgrid=False, type="linear"),
-    plot_bgcolor=BACKGROUND_DARK,
-    paper_bgcolor=BACKGROUND,
-    font={"color": TEXT_COLOR},
+    xaxis=dict(showgrid=False, zeroline=False, linecolor=GRID_COLOR),
+    yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, type="linear"),
+    plot_bgcolor=PLOT_BG,
+    paper_bgcolor=PLOT_PAPER,
+    font={"color": TEXT_COLOR, "family": FONT_FAMILY, "size": 13},
     showlegend=True,
+    legend=dict(bgcolor="rgba(0,0,0,0)", font={"color": TEXT_DIM, "size": 11}),
+    margin=dict(t=56, b=48, l=56, r=24),
+    autosize=True,
 )
-BUTTON_STYLE = {
-    "color": TEXT_HIGHLIGHT_COLOR,
-    "font-family": "verdana",
-    "font-size": "16px",
-    "-webkit-appearance": "button",
-    "-moz-appearance": "button",
-    "appearance": "button",
-    "background-color": BACKGROUND_LIGHT,
-    "display": "inline-block",
-    "text-decoration": "none",
-    "padding": "0.2cm",
-    "border": f"1px solid {TEXT_HIGHLIGHT_COLOR}"
+
+# Cleaner plotly modebar (no logo, fewer buttons).
+GRAPH_CONFIG = {
+    "displaylogo": False,
+    "modeBarButtonsToRemove": ["select2d", "lasso2d"],
+    "responsive": True,
 }
-EXTERNAL_LINK_STYLE = dict(BUTTON_STYLE)
-EXTERNAL_LINK_STYLE["border"] = "1px solid transparent"
-EXTERNAL_LINK_STYLE["background"] = "transparent"
-EXTERNAL_LINK_STYLE["float"] = "right"
-HEADER_STYLE = {
-    "font-family": "verdana",
-    "color": TEXT_COLOR,
-    "margin-top": "20px",
-    "margin-bottom": "10px",
-    "text-align": "center",
-}
-TEXT_STYLE = {
-    "font-family": "verdana",
-    "color": "rgba(217, 217, 217, 1)",
-}
-SELECTED_TAB_STYLE = {
-    "width": "inherit",
-    "boxShadow": "none",
-    "borderLeft": "thin lightgrey solid",
-    "borderRight": "thin lightgrey solid",
-    "borderTop": "2px #0074D9 solid",
-    "background": BACKGROUND,
-    "color": TEXT_HIGHLIGHT_COLOR,
-}
-TAB_CONTAINER_STYLE = {
-    "width": "inherit",
-    "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": BACKGROUND,
-}
-TAB_STYLE = {
-    "width": "inherit",
-    "border": "none",
-    "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": BACKGROUND_DARK,
-    "color": TEXT_COLOR,
-}
+
 SELECT_SYSTEM_DEFAULT = html.P(
-    children=[f"Click the map to select a system"],
+    children=["Click the map to select a system"],
     id="click-data",
-    style=dict(width=f"{config.CONFIG.plot_width}px"),
+    className="tl-hint",
 )
 
 TIMELAPSE_DEFAULT_START = "2200.01.01"
@@ -105,9 +73,10 @@ timeline_app = Dash(
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
-    layout["xaxis"]["title"] = plot_spec.x_axis_label
-    layout["yaxis"]["title"] = plot_spec.y_axis_label
-    layout["width"] = config.CONFIG.plot_width
+    # Fresh axis dicts so we don't mutate the shared DEFAULT_PLOT_LAYOUT.
+    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.x_axis_label)
+    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.y_axis_label)
+    # Width is fluid (autosize); the card/container controls it. Height stays configurable.
     layout["height"] = config.CONFIG.plot_height
     if plot_spec.style == visualization_data.PlotStyle.line:
         layout["hovermode"] = "closest"
@@ -207,18 +176,10 @@ def galaxy_map_system_info(clickData):
     [Input("tabs-container", "value")],
 )
 def show_hide_galaxy_tab_ui(tab_value):
-    style_dict = {
-        "display": "none",
-        "width": f"{config.CONFIG.plot_width}px",
-        "margin": "auto",
-        "text-align": "center",
-        "padding-left": "1%",
-        "padding-right": "1%",
-        "background-color": BACKGROUND_DARK,
-    }
+    # The galaxy controls live in the sidebar and are only relevant on the map tab.
     if tab_value == config.GALAXY_MAP_TAB:
-        style_dict["display"] = "block"
-    return style_dict
+        return {"display": "flex"}
+    return {"display": "none"}
 
 
 @timeline_app.callback(
@@ -389,23 +350,27 @@ def update_content(
             if not figure_data:
                 continue
             figure_layout = get_figure_layout(plot_spec)
-            figure_layout["title"] = plot_spec.title
+            figure_layout["title"] = dict(
+                text=plot_spec.title,
+                font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
+                x=0.5,
+                xanchor="center",
+            )
             figure = go.Figure(data=figure_data, layout=figure_layout)
 
             children.append(
                 html.Div(
-                    [
+                    className="tl-card",
+                    children=[
                         dcc.Graph(
                             id=plot_spec.plot_id,
                             figure=figure,
-                            style=dict(textAlign="center"),
+                            className="tl-graph",
+                            responsive=True,
+                            config=GRAPH_CONFIG,
+                            style={"width": "100%"},
                         )
                     ],
-                    style=dict(
-                        margin="auto",
-                        width=f"{config.CONFIG.plot_width}px",
-                        height=f"{config.CONFIG.plot_height}px",
-                    ),
                 )
             )
     else:
@@ -414,12 +379,7 @@ def update_content(
         children.append(
             html.Div(
                 [get_galaxy(game_id, slider_date)],
-                style=dict(
-                    margin="auto",
-                    width=f"{config.CONFIG.plot_width}px",
-                    height=f"{config.CONFIG.plot_height}px",
-                    backgroundColor=BACKGROUND_DARK,
-                ),
+                className="tl-card tl-card--galaxy",
             )
         )
     return children
@@ -711,15 +671,26 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
             range=[-500, 500],
         ),
         margin=dict(t=50, b=0, l=0, r=0),
-        legend=dict(orientation="v", x=1.0, y=1.0),
-        width=config.CONFIG.plot_width,
+        legend=dict(
+            orientation="v",
+            x=1.0,
+            y=1.0,
+            bgcolor="rgba(0,0,0,0)",
+            font={"color": TEXT_DIM, "size": 11},
+        ),
         height=config.CONFIG.plot_height,
+        autosize=True,
         hovermode="closest",
         clickmode="event",
-        plot_bgcolor=GALAXY_BACKGROUND,
-        paper_bgcolor=BACKGROUND_DARK,
-        font={"color": TEXT_COLOR},
-        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
+        plot_bgcolor=GALAXY_PLOT_BG,
+        paper_bgcolor=GALAXY_PAPER,
+        font={"color": TEXT_COLOR, "family": FONT_FAMILY},
+        title=dict(
+            text=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
+            font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
+            x=0.5,
+            xanchor="center",
+        ),
     )
 
     fig = go.Figure(
@@ -731,7 +702,10 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
         figure=fig,
         animate=True,
         animation_options=dict(showAxisDragHandles=True),
-        style=dict(textAlign="center"),
+        className="tl-graph",
+        responsive=True,
+        config=GRAPH_CONFIG,
+        style={"width": "100%"},
     )
 
 
@@ -755,61 +729,59 @@ def start_dash_app(host, port):
         timeline_app.run(host=host, port=port)
 
 
+def _timelapse_field(label, input_component):
+    """A labeled input row for the timelapse export controls."""
+    return html.Div(
+        className="tl-field",
+        children=[html.Label(label, className="tl-control-label"), input_component],
+    )
+
+
 def get_layout():
     tab_names = list(config.CONFIG.tab_layout)
     tab_names.append(config.GALAXY_MAP_TAB)
-    top_navigation = html.Div(
-        [
+
+    brand = html.Div(
+        className="tl-brand",
+        children=[
+            html.Span("STELLARIS", className="tl-brand-title"),
+            html.Span("DASHBOARD", className="tl-brand-sub"),
+        ],
+    )
+
+    nav = html.Nav(
+        className="tl-nav",
+        children=[
+            html.A("◂  Game Selection", className="tl-nav-link", id="index-link", href="/"),
+            html.A("Settings", className="tl-nav-link", id="settings-link", href="/settings/"),
+            html.A("Event Ledger", className="tl-nav-link", id="ledger-link", href="/history"),
             html.A(
-                "Game Selection",
-                style=BUTTON_STYLE,
-                id="index-link",
-                href="/",
-            ),
-            " ",
-            html.A(
-                "Settings",
-                style=BUTTON_STYLE,
-                id="settings-link",
-                href="/settings/",
-            ),
-            " ",
-            html.A(
-                "Event Ledger",
-                style=BUTTON_STYLE,
-                id="ledger-link",
-                href="/history",
-            ),
-            " ",
-            html.A(
-                "Stellaris Wiki 🔗",
-                style=EXTERNAL_LINK_STYLE,
+                "Stellaris Wiki  ↗",
+                className="tl-nav-link tl-nav-link--ext",
                 id="wiki-link",
                 href="https://stellaris.paradoxwikis.com/Stellaris_Wiki",
             ),
-        ]
+        ],
     )
+
     global_graph_controls = html.Div(
-        [
+        className="tl-control-group",
+        children=[
+            html.Label(
+                "Country perspective",
+                className="tl-control-label",
+                htmlFor="country-perspective-dropdown",
+            ),
             dcc.Dropdown(
                 id="country-perspective-dropdown",
+                className="tl-dropdown",
                 options=[],
-                placeholder="Select a country",
+                placeholder="Galaxy default",
                 value=None,
-                style={
-                    "width": "100%",
-                    "verticalAlign": "middle",
-                    "font-family": "verdana",
-                    "color": TEXT_HIGHLIGHT_COLOR,
-                    # "margin-top": "10px",
-                    # "margin-bottom": "10px",
-                    "text-align": "center",
-                    "text-color": TEXT_HIGHLIGHT_COLOR,
-                    "background": BACKGROUND_DARK,
-                },
             ),
             dcc.Checklist(
                 id="dash-plot-checklist",
+                className="tl-checklist",
                 options=[
                     {
                         "label": "Normalize stacked plots",
@@ -817,200 +789,160 @@ def get_layout():
                     },
                 ],
                 value=[],
-                labelStyle=dict(color=TEXT_COLOR),
-                style={
-                    "verticalAlign": "center",
-                    "width": "50%",
-                },
             ),
         ],
-        style={"display": "flex", "width": "100%"},
     )
+
     galaxy_tab_ui = html.Div(
-        [
-            html.H3("Galaxy Map Controls"),
+        id="galaxy-tab-ui",
+        className="tl-galaxy-panel",
+        style={"display": "none"},
+        children=[
+            html.H3("Galaxy Map", className="tl-section-title"),
             SELECT_SYSTEM_DEFAULT,
+            html.Label("Date", className="tl-control-label"),
             dcc.Slider(
                 id="dateslider",
+                className="tl-slider",
                 min=0,
                 max=100,
                 step=0.01,
                 value=100,
                 marks={},
             ),
-            html.H3("Timelapse Export"),
-            html.Div(
-                [
-                    html.P(f"Start date"),
-                    dcc.Input(
-                        id="timelapse-start-input",
-                        type="text",
-                        placeholder=TIMELAPSE_DEFAULT_START,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            html.H3("Timelapse Export", className="tl-section-title"),
+            _timelapse_field(
+                "Start date",
+                dcc.Input(
+                    id="timelapse-start-input",
+                    type="text",
+                    placeholder=TIMELAPSE_DEFAULT_START,
+                ),
             ),
-            html.Div(
-                [
-                    html.P("End date"),
-                    dcc.Input(
-                        id="timelapse-end-input",
-                        type="text",
-                        placeholder="2210.01.01",
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "End date",
+                dcc.Input(
+                    id="timelapse-end-input",
+                    type="text",
+                    placeholder="2210.01.01",
+                ),
             ),
-            html.Div(
-                [
-                    html.P(f"Step size (days)"),
-                    dcc.Input(
-                        id="timelapse-step-input",
-                        type="number",
-                        placeholder=TIMELAPSE_DEFAULT_STEP,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "Step size (days)",
+                dcc.Input(
+                    id="timelapse-step-input",
+                    type="number",
+                    placeholder=TIMELAPSE_DEFAULT_STEP,
+                ),
             ),
-            html.Div(
-                [
-                    html.P(f"Frame time (ms)"),
-                    dcc.Input(
-                        id="timelapse-duration-input",
-                        type="number",
-                        placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "Frame time (ms)",
+                dcc.Input(
+                    id="timelapse-duration-input",
+                    type="number",
+                    placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
+                ),
             ),
-            html.Div(
-                [
-                    html.P(f"DPI"),
-                    dcc.Input(
-                        id="timelapse-dpi-input",
-                        type="number",
-                        placeholder=TIMELAPSE_DEFAULT_DPI,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "DPI",
+                dcc.Input(
+                    id="timelapse-dpi-input",
+                    type="number",
+                    placeholder=TIMELAPSE_DEFAULT_DPI,
+                ),
             ),
-            html.Div(
-                [
-                    dcc.Checklist(
-                        id="timelapse-export-mode",
-                        options=[
-                            {
-                                "label": "Export gif (large file)",
-                                "title": (
-                                    "Export the timelapse as a single (large) gif file. "
-                                    "This requires a lot of memory"
-                                ),
-                                "value": "export_gif",
-                            },
-                            {
-                                "label": "Export webp (smaller than gif, slow)",
-                                "title": (
-                                    "Export the timelapse as a single (large) webp file. "
-                                    "Should end up smaller than the equivalent gif. "
-                                    "Requires the system WebP library to support animated WebP."
-                                ),
-                                "value": "export_webp",
-                                "disabled": not features.check("webp_anim"),
-                            },
-                            {
-                                "label": "Export frames",
-                                "title": (
-                                    "Export the individual frames of the timelapse in png format. "
-                                    "You can use a tool (e.g. ffmpeg) to stitch them to a video timelapse."
-                                ),
-                                "value": "export_frames",
-                            },
-                            {
-                                "label": "1:1 aspect ratio",
-                                "title": (
-                                    "Use a 1:1 instead of 16:9 aspect ratio for the galaxy if checked."
-                                ),
-                                "value": "square_aspect_ratio",
-                            },
-                        ],
-                        value=["export_gif"],
-                        labelStyle=dict(color=TEXT_COLOR),
-                        style={"text-align": "center"},
-                    ),
+            dcc.Checklist(
+                id="timelapse-export-mode",
+                className="tl-checklist",
+                options=[
+                    {
+                        "label": "Export gif (large file)",
+                        "title": (
+                            "Export the timelapse as a single (large) gif file. "
+                            "This requires a lot of memory"
+                        ),
+                        "value": "export_gif",
+                    },
+                    {
+                        "label": "Export webp (smaller than gif, slow)",
+                        "title": (
+                            "Export the timelapse as a single (large) webp file. "
+                            "Should end up smaller than the equivalent gif. "
+                            "Requires the system WebP library to support animated WebP."
+                        ),
+                        "value": "export_webp",
+                        "disabled": not features.check("webp_anim"),
+                    },
+                    {
+                        "label": "Export frames",
+                        "title": (
+                            "Export the individual frames of the timelapse in png format. "
+                            "You can use a tool (e.g. ffmpeg) to stitch them to a video timelapse."
+                        ),
+                        "value": "export_frames",
+                    },
+                    {
+                        "label": "1:1 aspect ratio",
+                        "title": (
+                            "Use a 1:1 instead of 16:9 aspect ratio for the galaxy if checked."
+                        ),
+                        "value": "square_aspect_ratio",
+                    },
                 ],
-                style={"display": "inline-block"},
+                value=["export_gif"],
             ),
             html.Button(
-                f"Export Timelapse",
+                "Export Timelapse",
                 id="galaxy-export-button",
-                style=BUTTON_STYLE,
+                className="tl-button",
             ),
             html.Div(id="hidden-div", style={"display": "none"}),
         ],
-        style={
-            "display": "none",
-            "width": "100%",
-            "height": "100%",
-            "margin-left": "auto",
-            "margin-right": "auto",
-        },
-        id="galaxy-tab-ui",
     )
 
     tabs = dcc.Tabs(
         id="tabs-container",
-        style=TAB_CONTAINER_STYLE,
-        parent_style=TAB_CONTAINER_STYLE,
+        className="tl-tabs",
+        parent_className="tl-tabs-parent",
         children=[
             dcc.Tab(
                 id=tab_label,
                 label=tab_label,
                 value=tab_label,
-                style=TAB_STYLE,
-                selected_style=SELECTED_TAB_STYLE,
+                className="tl-tab",
+                selected_className="tl-tab--selected",
             )
             for tab_label in tab_names
         ],
         value=tab_names[0],
     )
-    return html.Div(
-        [
-            dcc.Location(id="url", refresh=False),
-            html.Div(
-                [
-                    top_navigation,
-                    html.H1(
-                        children="Unknown Game",
-                        id="game-name-header",
-                        style=HEADER_STYLE,
-                    ),
-                    global_graph_controls,
-                    tabs,
-                    html.Div(
-                        id="tab-content",
-                        style={
-                            "width": "100%",
-                            "height": "100%",
-                            "margin-left": "auto",
-                            "margin-right": "auto",
-                        },
-                    ),
-                    galaxy_tab_ui,
-                ],
-                style={
-                    "width": "100%",
-                    "height": "100%",
-                    "fontFamily": "Sans-Serif",
-                    "margin-left": "auto",
-                    "margin-right": "auto",
-                },
-            ),
+
+    sidebar = html.Aside(
+        className="tl-sidebar",
+        children=[
+            brand,
+            html.H1("Unknown Game", id="game-name-header", className="tl-game-name"),
+            nav,
+            global_graph_controls,
+            galaxy_tab_ui,
         ],
-        style={
-            "width": "100%",
-            "height": "100%",
-            "padding": 0,
-            "margin": 0,
-            "background-color": BACKGROUND,
-        },
+    )
+
+    main = html.Main(
+        className="tl-main",
+        # plot_width is a user setting; honor it as the fluid content's max width.
+        style={"--tl-content-max": f"{config.CONFIG.plot_width}px"},
+        children=[
+            tabs,
+            html.Div(id="tab-content", className="tl-content"),
+        ],
+    )
+
+    return html.Div(
+        className="tl-app",
+        children=[
+            dcc.Location(id="url", refresh=False),
+            sidebar,
+            main,
+        ],
     )
