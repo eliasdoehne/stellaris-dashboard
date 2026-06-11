@@ -494,29 +494,26 @@ html, body {
 .tl-dropdown .Select-option.is-selected { color: var(--tl-accent); }
 .tl-dropdown .Select-arrow { border-top-color: var(--tl-text-dim); }
 
-/* Slider (dcc.Slider -> rc-slider).
-   rc-slider ships inline default colors, so theme overrides need !important. */
+/* Slider (dcc.Slider). Dash 4.x uses a Radix-based slider with `dash-slider-*`
+   classes, styled via an injected stylesheet that uses Dash design tokens
+   (--Dash-Fill-*, --Dash-Text-*). Scope under .tl-galaxy-panel and use
+   !important to retheme over those rules. */
 .tl-slider { margin: 0.5rem 0 1.5rem; }
-.tl-galaxy-panel .rc-slider-rail { background: var(--tl-surface-3) !important; }
-.tl-galaxy-panel .rc-slider-track { background: var(--tl-accent-dim) !important; }
-.tl-galaxy-panel .rc-slider-handle {
-    border-color: var(--tl-accent) !important;
-    background: var(--tl-accent) !important;
-    opacity: 1;
+.tl-galaxy-panel .dash-slider-track { background-color: var(--tl-surface-3) !important; }
+.tl-galaxy-panel .dash-slider-range { background-color: var(--tl-accent-dim) !important; }
+.tl-galaxy-panel .dash-slider-thumb {
+    background-color: var(--tl-accent) !important;
+    border-color: var(--tl-bg) !important;
 }
-.tl-galaxy-panel .rc-slider-handle:hover,
-.tl-galaxy-panel .rc-slider-handle:focus { border-color: var(--tl-accent) !important; box-shadow: 0 0 0 4px var(--tl-accent-soft) !important; }
-.tl-galaxy-panel .rc-slider-mark-text { color: var(--tl-text) !important; font-size: 0.68rem; white-space: nowrap; }
-.tl-galaxy-panel .rc-slider-mark-text-active { color: var(--tl-accent) !important; }
-.tl-galaxy-panel .rc-slider-dot {
-    border-color: var(--tl-text-dim) !important;
-    background: var(--tl-surface-2) !important;
-    height: 9px;
-    width: 2px;
-    border-radius: 0;
-    margin-left: -1px;
-    bottom: -2px;
-}
+.tl-galaxy-panel .dash-slider-thumb:focus { outline-color: var(--tl-accent) !important; }
+/* Year labels: readable in the dark sidebar. The base rule also overrides the
+   faint `mark-outside-selection` (marks past the handle) via higher specificity. */
+.tl-galaxy-panel .dash-slider-mark { color: var(--tl-text) !important; font-size: 0.68rem; }
+.tl-galaxy-panel .dash-slider-mark-outside-selection { color: var(--tl-text) !important; }
+/* Decade notch ticks (separate `dot` elements, or the `mark::before` tick). */
+.tl-galaxy-panel .dash-slider-dot { background-color: var(--tl-text-dim) !important; }
+.tl-galaxy-panel .dash-slider-dot-outside-selection { background-color: var(--tl-text-faint) !important; }
+.tl-galaxy-panel .dash-slider-mark::before { background-color: var(--tl-text-dim) !important; }
 
 /* --------------------------- Scrollbars -------------------------------- */
 .tl-sidebar::-webkit-scrollbar { width: 8px; }
