@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from collections import defaultdict
@@ -6,7 +7,7 @@ from urllib import parse
 
 import dash.exceptions
 import plotly.graph_objs as go
-from dash import Dash, callback_context, dcc, html, Input, Output
+from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
 from flask import render_template
 from PIL import features
 
@@ -20,73 +21,53 @@ from stellarisdashboard.dashboard_app import (
 
 logger = logging.getLogger(__name__)
 
-BACKGROUND = "rgba(33,43,39,1)"
-GALAXY_BACKGROUND = "rgba(0,0,0,1)"
-BACKGROUND_DARK = "rgba(20,25,25,1)"
-BACKGROUND_LIGHT = "rgba(43, 59, 52, 1)"
-TEXT_COLOR = "rgba(217,217,217,1)"
-TEXT_HIGHLIGHT_COLOR = "rgba(195, 133, 33, 1)"
+# Modernized sci-fi palette — kept in sync with assets/timeline.css.
+# Plot backgrounds are transparent so the card surface shows through.
+PLOT_PAPER = "rgba(0,0,0,0)"
+PLOT_BG = "rgba(0,0,0,0)"
+GALAXY_PLOT_BG = "rgba(6,9,14,1)"  # near-black "space"
+GALAXY_PAPER = "rgba(0,0,0,0)"
+GRID_COLOR = "rgba(255,255,255,0.06)"
+TEXT_COLOR = "rgba(220,225,232,1)"
+TEXT_DIM = "rgba(150,160,170,1)"
+ACCENT_COLOR = "rgba(232,168,72,1)"
+FONT_FAMILY = "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
+# Stellaris games start on 2200.01.01; plot x-values count years from there.
+GAME_START_YEAR = 2200
+
 DEFAULT_PLOT_LAYOUT = dict(
-    xaxis=dict(showgrid=False),
-    yaxis=dict(showgrid=False, type="linear"),
-    plot_bgcolor=BACKGROUND_DARK,
-    paper_bgcolor=BACKGROUND,
-    font={"color": TEXT_COLOR},
+    xaxis=dict(showgrid=False, zeroline=False, linecolor=GRID_COLOR, tickformat="d"),
+    yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, type="linear"),
+    plot_bgcolor=PLOT_BG,
+    paper_bgcolor=PLOT_PAPER,
+    font={"color": TEXT_COLOR, "family": FONT_FAMILY, "size": 13},
     showlegend=True,
+    legend=dict(bgcolor="rgba(0,0,0,0)", font={"color": TEXT_DIM, "size": 11}),
+    margin=dict(t=56, b=48, l=56, r=24),
+    autosize=True,
 )
-BUTTON_STYLE = {
-    "color": TEXT_HIGHLIGHT_COLOR,
-    "font-family": "verdana",
-    "font-size": "16px",
-    "-webkit-appearance": "button",
-    "-moz-appearance": "button",
-    "appearance": "button",
-    "background-color": BACKGROUND_LIGHT,
-    "display": "inline-block",
-    "text-decoration": "none",
-    "padding": "0.2cm",
-    "border": f"1px solid {TEXT_HIGHLIGHT_COLOR}"
+
+# Cleaner plotly modebar (no logo, fewer buttons).
+GRAPH_CONFIG = {
+    "displaylogo": False,
+    "modeBarButtonsToRemove": ["select2d", "lasso2d"],
+    "responsive": True,
 }
-EXTERNAL_LINK_STYLE = dict(BUTTON_STYLE)
-EXTERNAL_LINK_STYLE["border"] = "1px solid transparent"
-EXTERNAL_LINK_STYLE["background"] = "transparent"
-EXTERNAL_LINK_STYLE["float"] = "right"
-HEADER_STYLE = {
-    "font-family": "verdana",
-    "color": TEXT_COLOR,
-    "margin-top": "20px",
-    "margin-bottom": "10px",
-    "text-align": "center",
+# Compact thumbnails in the grid: no modebar, static, minimal chrome.
+GRAPH_CONFIG_COMPACT = {
+    "displayModeBar": False,
+    "staticPlot": False,
+    "responsive": True,
 }
-TEXT_STYLE = {
-    "font-family": "verdana",
-    "color": "rgba(217, 217, 217, 1)",
-}
-SELECTED_TAB_STYLE = {
-    "width": "inherit",
-    "boxShadow": "none",
-    "borderLeft": "thin lightgrey solid",
-    "borderRight": "thin lightgrey solid",
-    "borderTop": "2px #0074D9 solid",
-    "background": BACKGROUND,
-    "color": TEXT_HIGHLIGHT_COLOR,
-}
-TAB_CONTAINER_STYLE = {
-    "width": "inherit",
-    "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": BACKGROUND,
-}
-TAB_STYLE = {
-    "width": "inherit",
-    "border": "none",
-    "boxShadow": "inset 0px -1px 0px 0px lightgrey",
-    "background": BACKGROUND_DARK,
-    "color": TEXT_COLOR,
-}
+# Galaxy map: wheel-zoom + drag-pan for a more maps-like feel.
+GRAPH_CONFIG_GALAXY = {**GRAPH_CONFIG, "scrollZoom": True}
+COMPACT_PLOT_HEIGHT = 240
+
 SELECT_SYSTEM_DEFAULT = html.P(
-    children=[f"Click the map to select a system"],
+    children=["Click the map to select a system"],
     id="click-data",
-    style=dict(width=f"{config.CONFIG.plot_width}px"),
+    className="tl-hint",
 )
 
 TIMELAPSE_DEFAULT_START = "2200.01.01"
@@ -105,15 +86,103 @@ timeline_app = Dash(
 
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
-    layout["xaxis"]["title"] = plot_spec.x_axis_label
-    layout["yaxis"]["title"] = plot_spec.y_axis_label
-    layout["width"] = config.CONFIG.plot_width
+    # Fresh axis dicts so we don't mutate the shared DEFAULT_PLOT_LAYOUT.
+    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.x_axis_label)
+    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.y_axis_label)
+    # Width is fluid (autosize); the card/container controls it. Height stays configurable.
     layout["height"] = config.CONFIG.plot_height
     if plot_spec.style == visualization_data.PlotStyle.line:
         layout["hovermode"] = "closest"
     else:
         layout["hovermode"] = "x"
     return go.Layout(**layout)
+
+
+def get_compact_figure_layout(plot_spec: visualization_data.PlotSpecification):
+    """Minimal layout for the grid thumbnails: no title/legend/axis labels,
+    tight margins. The full detail is shown in the modal instead."""
+    layout = dict(DEFAULT_PLOT_LAYOUT)
+    layout["xaxis"] = dict(layout["xaxis"], title=None)
+    layout["yaxis"] = dict(layout["yaxis"], title=None)
+    layout["height"] = COMPACT_PLOT_HEIGHT
+    layout["showlegend"] = False
+    layout["margin"] = dict(t=10, b=28, l=44, r=14)
+    if plot_spec.style == visualization_data.PlotStyle.line:
+        layout["hovermode"] = "closest"
+    else:
+        layout["hovermode"] = "x"
+    return go.Layout(**layout)
+
+
+COMPACT_SUBDUED_ALPHA = 0.28
+COMPACT_PLAYER_WIDTH = 2.6
+
+
+def _with_color_alpha(color, alpha):
+    """Return an rgba() string with its alpha replaced; pass anything else through."""
+    if not isinstance(color, str) or not color.startswith("rgba"):
+        return color
+    inner = color[color.index("(") + 1 : color.index(")")]
+    r, g, b = (c.strip() for c in inner.split(",")[:3])
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _emphasize_player_in_compact_data(figure_data, player_label):
+    """For country-comparison plots, draw the player's series in full color on
+    top and subdue every other country, so relative standing reads at a glance.
+    Plots that don't contain the player's series (budget/demographics breakdowns)
+    are returned unchanged."""
+    if not player_label or not any(
+        trace.get("name") == player_label for trace in figure_data
+    ):
+        return figure_data
+
+    emphasized = []
+    for trace in figure_data:
+        trace = dict(trace)
+        line = dict(trace.get("line") or {})
+        if trace.get("name") == player_label:
+            line["color"] = _with_color_alpha(line.get("color"), 1.0)
+            line["width"] = COMPACT_PLAYER_WIDTH
+        else:
+            line["color"] = _with_color_alpha(line.get("color"), COMPACT_SUBDUED_ALPHA)
+            line["width"] = min(line.get("width", 1.0), 1.0)
+            trace["showlegend"] = False
+            if "fillcolor" in trace:
+                trace["fillcolor"] = _with_color_alpha(trace["fillcolor"], 0.12)
+        trace["line"] = line
+        emphasized.append(trace)
+    # Draw the player's line last so it sits on top of the subdued ones.
+    emphasized.sort(key=lambda t: t.get("name") == player_label)
+    return emphasized
+
+
+def _plot_grid_card(plot_spec, compact_figure):
+    """A compact plot thumbnail. Its header is clickable and opens the modal
+    (the pattern-matching id is keyed on the plot id)."""
+    return html.Div(
+        className="tl-card tl-plot-card",
+        children=[
+            html.Div(
+                className="tl-plot-card__header",
+                id={"type": "expand-plot", "index": plot_spec.plot_id},
+                n_clicks=0,
+                title="Click to enlarge",
+                children=[
+                    html.Span(plot_spec.title, className="tl-plot-card__title"),
+                    html.Span("⤢", className="tl-expand-icon"),
+                ],
+            ),
+            dcc.Graph(
+                id=plot_spec.plot_id,
+                figure=compact_figure,
+                className="tl-graph tl-graph--compact",
+                responsive=True,
+                config=GRAPH_CONFIG_COMPACT,
+                style={"width": "100%"},
+            ),
+        ],
+    )
 
 
 @timeline_app.callback(Output("game-name-header", "children"), [Input("url", "search")])
@@ -207,18 +276,10 @@ def galaxy_map_system_info(clickData):
     [Input("tabs-container", "value")],
 )
 def show_hide_galaxy_tab_ui(tab_value):
-    style_dict = {
-        "display": "none",
-        "width": f"{config.CONFIG.plot_width}px",
-        "margin": "auto",
-        "text-align": "center",
-        "padding-left": "1%",
-        "padding-right": "1%",
-        "background-color": BACKGROUND_DARK,
-    }
+    # The galaxy controls live in the sidebar and are only relevant on the map tab.
     if tab_value == config.GALAXY_MAP_TAB:
-        style_dict["display"] = "block"
-    return style_dict
+        return {"display": "flex"}
+    return {"display": "none"}
 
 
 @timeline_app.callback(
@@ -230,13 +291,28 @@ def adjust_slider_values(tab_value, search):
         _, matches = _get_game_ids_matching_url(search)
         with datamodel.get_db_session(matches[0]) as session:
             max_date = utils.get_most_recent_date(session)
-        marks = {0: "2200.01.01", 100: datamodel.days_to_date(max_date)}
-        for x in range(20, 100, 20):
-            marks[x] = datamodel.days_to_date(x / 100 * max_date)
-        logger.info(f"Setting slider marks to {marks}")
-        return marks
+        return _galaxy_slider_marks(max_date)
     else:
         raise dash.exceptions.PreventUpdate()
+
+
+def _galaxy_slider_marks(max_date):
+    """Slider marks for the (narrow, sidebar) galaxy date slider.
+
+    A notch at every in-game decade; only a decimated subset is labelled with the
+    bare year so labels never overlap regardless of game length or sidebar width.
+    """
+    if not max_date or max_date <= 0:
+        return {0: "2200"}
+    last_decade = int(max_date // 360 // 10) * 10  # last full in-game decade, in years
+    decades = list(range(0, last_decade + 1, 10))  # year offsets: 0, 10, 20, ...
+    # Label at most ~5 marks; the rest render as a bare notch (empty label).
+    label_every = -(-len(decades) // 5) or 1  # ceil division, floored at 1
+    marks = {}
+    for i, year_offset in enumerate(decades):
+        value = year_offset * 360 / max_date * 100
+        marks[value] = str(2200 + year_offset) if i % label_every == 0 else ""
+    return marks
 
 
 @timeline_app.callback(
@@ -377,6 +453,18 @@ def update_content(
         plot_data = visualization_data.get_current_execution_plot_data(
             game_id, country_perspective
         )
+        # Legend label of the player's own country, used to highlight it in the
+        # compact thumbnails (see _emphasize_player_in_compact_data).
+        player_country_name = games_dict[game_id].get("country_name")
+        player_label = (
+            dict_key_to_legend_label(player_country_name)
+            if player_country_name
+            else None
+        )
+        # Each plot becomes a compact card in a responsive grid. The full-detail
+        # figure is stashed in a Store and rendered in the modal on demand.
+        grid_children = []
+        full_figures = {}
         for plot_spec in plots:
             if not plot_spec:
                 continue  # just in case it's possible to sneak in an invalid ID
@@ -388,41 +476,82 @@ def update_content(
             )
             if not figure_data:
                 continue
-            figure_layout = get_figure_layout(plot_spec)
-            figure_layout["title"] = plot_spec.title
-            figure = go.Figure(data=figure_data, layout=figure_layout)
 
-            children.append(
-                html.Div(
-                    [
-                        dcc.Graph(
-                            id=plot_spec.plot_id,
-                            figure=figure,
-                            style=dict(textAlign="center"),
-                        )
-                    ],
-                    style=dict(
-                        margin="auto",
-                        width=f"{config.CONFIG.plot_width}px",
-                        height=f"{config.CONFIG.plot_height}px",
-                    ),
-                )
+            full_layout = get_figure_layout(plot_spec)
+            full_layout["title"] = dict(
+                text=plot_spec.title,
+                font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
+                x=0.5,
+                xanchor="center",
             )
+            full_figures[plot_spec.plot_id] = go.Figure(
+                data=figure_data, layout=full_layout
+            ).to_plotly_json()
+
+            compact_data = _emphasize_player_in_compact_data(figure_data, player_label)
+            compact_figure = go.Figure(
+                data=compact_data, layout=get_compact_figure_layout(plot_spec)
+            )
+            grid_children.append(_plot_grid_card(plot_spec, compact_figure))
+
+        children.append(html.Div(grid_children, className="tl-grid"))
+        children.append(dcc.Store(id="full-figures-store", data=full_figures))
     else:
         slider_date = 0.01 * date_fraction * current_date
 
         children.append(
             html.Div(
                 [get_galaxy(game_id, slider_date)],
-                style=dict(
-                    margin="auto",
-                    width=f"{config.CONFIG.plot_width}px",
-                    height=f"{config.CONFIG.plot_height}px",
-                    backgroundColor=BACKGROUND_DARK,
-                ),
+                className="tl-card tl-card--galaxy",
             )
         )
     return children
+
+
+@timeline_app.callback(
+    [
+        Output("plot-modal", "className"),
+        Output("modal-graph", "figure"),
+        Output("modal-title", "children"),
+    ],
+    [
+        Input({"type": "expand-plot", "index": ALL}, "n_clicks"),
+        Input("modal-close", "n_clicks"),
+        Input("modal-backdrop", "n_clicks"),
+    ],
+    [State("full-figures-store", "data")],
+    prevent_initial_call=True,
+)
+def toggle_plot_modal(expand_clicks, close_clicks, backdrop_clicks, store):
+    """Open the modal with a plot's full-detail figure, or close it."""
+    triggered = callback_context.triggered
+    if not triggered:
+        raise dash.exceptions.PreventUpdate
+    prop_id = triggered[0]["prop_id"]
+
+    # Close button / backdrop click -> hide.
+    if prop_id.startswith("modal-close") or prop_id.startswith("modal-backdrop"):
+        return "tl-modal tl-modal--hidden", dash.no_update, dash.no_update
+
+    # Ignore the spurious fire when the grid (and its buttons) is first created.
+    if not any(expand_clicks or []):
+        raise dash.exceptions.PreventUpdate
+
+    try:
+        plot_id = json.loads(prop_id.rsplit(".", 1)[0])["index"]
+    except (ValueError, KeyError):
+        raise dash.exceptions.PreventUpdate
+
+    figure = (store or {}).get(plot_id)
+    if figure is None:
+        raise dash.exceptions.PreventUpdate
+
+    title = (
+        figure.get("layout", {}).get("title", {}).get("text", "")
+        if isinstance(figure, dict)
+        else ""
+    )
+    return "tl-modal", figure, title
 
 
 def _get_url_params(url: str) -> Dict[str, List[str]]:
@@ -452,15 +581,25 @@ def get_raw_plot_data_dicts(
     :return:
     """
     if plot_spec.style == visualization_data.PlotStyle.line:
-        return _get_raw_data_for_line_plot(game_id, plot_data, plot_spec)
+        data = _get_raw_data_for_line_plot(game_id, plot_data, plot_spec)
     elif plot_spec.style in [
         visualization_data.PlotStyle.stacked,
         visualization_data.PlotStyle.budget,
     ]:
-        return _get_raw_data_for_stacked_and_budget_plots(game_id, plot_data, plot_spec)
+        data = _get_raw_data_for_stacked_and_budget_plots(game_id, plot_data, plot_spec)
     else:
         logger.warning(f"Unknown Plot type {plot_spec}")
         return []
+    # The data x-values count years since game start; shift them to the in-game
+    # year for display. Hover labels are already-formatted strings, so this only
+    # affects the axis. (Done here so every plot style is covered in one place.)
+    for trace in data:
+        x_values = trace.get("x")
+        if x_values:
+            trace["x"] = [
+                GAME_START_YEAR + v if v is not None else None for v in x_values
+            ]
+    return data
 
 
 def _get_raw_data_for_line_plot(
@@ -582,116 +721,126 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
     :return:
     """
     # adapted from https://plot.ly/python/network-graphs/
+    # Performance: everything is merged into as few traces as possible (Plotly
+    # renders one SVG group / GL batch per trace, and pan/zoom repaints them all),
+    # and markers/lines use WebGL (Scattergl) for GPU-accelerated pan/zoom.
     galaxy_map_data = visualization_data.get_galaxy_data(game_id)
     galaxy_map_data.update_graph_for_date(int(slider_date))
     nx_graph = galaxy_map_data.galaxy_graph
+    system_borders = nx_graph.graph["system_borders"]
+    UNCLAIMED = visualization_data.GalaxyMapData.UNCLAIMED
 
-    edge_traces_data = {}
+    # --- Hyperlanes: one trace per country, None-separated segments ---
+    edge_xy = {}
     for edge in nx_graph.edges:
         country = nx_graph.edges[edge]["country"]
-        if country not in edge_traces_data:
-            edge_traces_data[country] = dict(
-                x=[],
-                y=[],
-                text=[],
-                line=go.scatter.Line(width=0.5, color=get_country_color(game_id, country)),
-                hoverinfo="text",
-                mode="lines",
-                showlegend=False,
-            )
+        xy = edge_xy.get(country)
+        if xy is None:
+            xy = edge_xy[country] = ([], [])
         x0, y0 = nx_graph.nodes[edge[0]]["pos"]
         x1, y1 = nx_graph.nodes[edge[1]]["pos"]
-        # insert None to prevent dash from joining the lines
-        edge_traces_data[country]["x"] += [x0, x1, None]
-        edge_traces_data[country]["y"] += [y0, y1, None]
-        edge_traces_data[country]["text"] += [country]
+        xy[0].extend((x0, x1, None))
+        xy[1].extend((y0, y1, None))
     edge_traces = [
-        go.Scatter(**edge_traces_data[country]) for country in edge_traces_data
+        go.Scattergl(
+            x=x,
+            y=y,
+            line=dict(width=0.5, color=get_country_color(game_id, country)),
+            hoverinfo="skip",
+            mode="lines",
+            showlegend=False,
+        )
+        for country, (x, y) in edge_xy.items()
     ]
 
-    system_shapes = []
+    # --- System markers (per country) + territory fills (merged per country) ---
     country_system_markers = {}
+    country_fill_xy = {}
     country_border_ridges = defaultdict(set)
-
-    country_border_ridges[
-        galaxy_map_data.UNCLAIMED
-    ] |= galaxy_map_data.galaxy_graph.graph["system_borders"].get(
+    country_border_ridges[UNCLAIMED] |= system_borders.get(
         galaxy_map_data.ARTIFICIAL_NODE, set()
     )
-    for i, node in enumerate(nx_graph.nodes):
-        country = nx_graph.nodes[node]["country"]
-        if country not in country_system_markers:
-            country_system_markers[country] = dict(
-                x=[],
-                y=[],
-                text=[],
-                customdata=[],
-                mode="markers",
-                hoverinfo="text",
-                marker=dict(color=[], size=4),
-                name=country,
+    for node in nx_graph.nodes:
+        ndata = nx_graph.nodes[node]
+        country = ndata["country"]
+        marker = country_system_markers.get(country)
+        if marker is None:
+            marker = country_system_markers[country] = dict(
+                x=[], y=[], text=[], customdata=[], color=[]
             )
-        color = get_country_color(game_id, country)
-        country_system_markers[country]["marker"]["color"].append(color)
-        x, y = nx_graph.nodes[node]["pos"]
-        country_system_markers[country]["x"].append(x)
-        country_system_markers[country]["y"].append(y)
-        text = f'{nx_graph.nodes[node]["name"]} ({country})'
-        country_system_markers[country]["text"].append(text)
-        customdata = {
-            "system_id": nx_graph.nodes[node]["system_id"],
-            "game_id": game_id,
-            "system_name": nx_graph.nodes[node]["name"],
-            "country_name": country,
-            "country_id": nx_graph.nodes[node]["country_id"],
-        }
-        country_system_markers[country]["customdata"].append(customdata)
-        if country != visualization_data.GalaxyMapData.UNCLAIMED:
-            shape_x, shape_y = nx_graph.nodes[node].get("shape", ([], []))
-            system_shapes.append(
-                go.Scatter(
-                    x=shape_x,
-                    y=shape_y,
-                    text=[text],
-                    customdata=[customdata],
-                    fill="toself",
-                    fillcolor=color,
-                    hoverinfo="none",
-                    line=dict(width=0),
-                    mode="none",
-                    opacity=0.2,
-                    showlegend=False,
-                )
-            )
-        country_border_ridges[country] |= galaxy_map_data.galaxy_graph.graph[
-            "system_borders"
-        ].get(node, set())
+        x, y = ndata["pos"]
+        marker["x"].append(x)
+        marker["y"].append(y)
+        marker["color"].append(get_country_color(game_id, country))
+        marker["text"].append(f'{ndata["name"]} ({country})')
+        marker["customdata"].append(
+            {
+                "system_id": ndata["system_id"],
+                "game_id": game_id,
+                "system_name": ndata["name"],
+                "country_name": country,
+                "country_id": ndata["country_id"],
+            }
+        )
+        if country != UNCLAIMED:
+            shape_x, shape_y = ndata.get("shape", ([], []))
+            if len(shape_x):
+                fill = country_fill_xy.get(country)
+                if fill is None:
+                    fill = country_fill_xy[country] = ([], [])
+                fill[0].extend(shape_x)
+                fill[0].append(None)  # separate this system's polygon from the next
+                fill[1].extend(shape_y)
+                fill[1].append(None)
+        country_border_ridges[country] |= system_borders.get(node, set())
 
-    country_borders = []
+    # Filled territory: one SVG trace per country (gl "toself" fills are unreliable).
+    system_shapes = [
+        go.Scatter(
+            x=x,
+            y=y,
+            fill="toself",
+            fillcolor=get_country_color(game_id, country),
+            line=dict(width=0),
+            mode="none",
+            hoverinfo="skip",
+            opacity=0.2,
+            showlegend=False,
+            name=country,
+        )
+        for country, (x, y) in country_fill_xy.items()
+    ]
+
+    system_markers = [
+        go.Scattergl(
+            x=m["x"],
+            y=m["y"],
+            text=m["text"],
+            customdata=m["customdata"],
+            mode="markers",
+            hoverinfo="text",
+            marker=dict(color=m["color"], size=4),
+            name=country,
+        )
+        for country, m in country_system_markers.items()
+    ]
+
+    # --- Country borders: a single merged trace, None-separated segments ---
+    border_x, border_y = [], []
     for x_values, y_values in galaxy_map_data.get_country_border_ridges(
         country_border_ridges
     ):
-        country_borders.append(
-            go.Scatter(
-                dict(
-                    x=x_values,
-                    y=y_values,
-                    text=[],
-                    line=go.scatter.Line(width=0.75, color="rgba(255,255,255,1)"),
-                    hoverinfo="text",
-                    mode="lines",
-                    showlegend=False,
-                )
-            )
+        border_x.extend((x_values[0], x_values[1], None))
+        border_y.extend((y_values[0], y_values[1], None))
+    country_borders = [
+        go.Scattergl(
+            x=border_x,
+            y=border_y,
+            line=dict(width=0.75, color="rgba(255,255,255,1)"),
+            hoverinfo="skip",
+            mode="lines",
+            showlegend=False,
         )
-
-    for country in country_system_markers:
-        country_system_markers[country]["marker"] = go.scatter.Marker(
-            **country_system_markers[country]["marker"]
-        )
-    system_markers = [
-        go.Scatter(**scatter_data)
-        for country, scatter_data in country_system_markers.items()
     ]
 
     layout = go.Layout(
@@ -711,27 +860,42 @@ def get_galaxy(game_id: str, slider_date: float) -> dcc.Graph:
             range=[-500, 500],
         ),
         margin=dict(t=50, b=0, l=0, r=0),
-        legend=dict(orientation="v", x=1.0, y=1.0),
-        width=config.CONFIG.plot_width,
-        height=config.CONFIG.plot_height,
+        legend=dict(
+            orientation="v",
+            x=1.0,
+            y=1.0,
+            bgcolor="rgba(0,0,0,0)",
+            font={"color": TEXT_DIM, "size": 11},
+        ),
+        autosize=True,  # fill the container (height comes from CSS), aspect kept by scaleanchor
         hovermode="closest",
         clickmode="event",
-        plot_bgcolor=GALAXY_BACKGROUND,
-        paper_bgcolor=BACKGROUND_DARK,
-        font={"color": TEXT_COLOR},
-        title=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
+        dragmode="pan",  # drag to pan (maps-like); wheel zoom via GRAPH_CONFIG_GALAXY
+        # Keep the user's current zoom/pan when the date slider rebuilds the figure.
+        uirevision=game_id,
+        plot_bgcolor=GALAXY_PLOT_BG,
+        paper_bgcolor=GALAXY_PAPER,
+        font={"color": TEXT_COLOR, "family": FONT_FAMILY},
+        title=dict(
+            text=f"Galaxy Map at {datamodel.days_to_date(slider_date)}",
+            font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
+            x=0.5,
+            xanchor="center",
+        ),
     )
 
+    # Fills (SVG) at the bottom, then hyperlanes, borders, and markers (GL) on top.
     fig = go.Figure(
-        data=system_shapes + system_markers + edge_traces + country_borders,
+        data=system_shapes + edge_traces + country_borders + system_markers,
         layout=layout,
     )
     return dcc.Graph(
         id="galaxy-map",
         figure=fig,
-        animate=True,
-        animation_options=dict(showAxisDragHandles=True),
-        style=dict(textAlign="center"),
+        className="tl-graph tl-graph--galaxy",
+        responsive=True,
+        config=GRAPH_CONFIG_GALAXY,
+        style={"width": "100%", "height": "100%"},
     )
 
 
@@ -755,61 +919,59 @@ def start_dash_app(host, port):
         timeline_app.run(host=host, port=port)
 
 
+def _timelapse_field(label, input_component):
+    """A labeled input row for the timelapse export controls."""
+    return html.Div(
+        className="tl-field",
+        children=[html.Label(label, className="tl-control-label"), input_component],
+    )
+
+
 def get_layout():
     tab_names = list(config.CONFIG.tab_layout)
     tab_names.append(config.GALAXY_MAP_TAB)
-    top_navigation = html.Div(
-        [
+
+    brand = html.Div(
+        className="tl-brand",
+        children=[
+            html.Span("STELLARIS", className="tl-brand-title"),
+            html.Span("DASHBOARD", className="tl-brand-sub"),
+        ],
+    )
+
+    nav = html.Nav(
+        className="tl-nav",
+        children=[
+            html.A("◂  Game Selection", className="tl-nav-link", id="index-link", href="/"),
+            html.A("Settings", className="tl-nav-link", id="settings-link", href="/settings/"),
+            html.A("Event Ledger", className="tl-nav-link", id="ledger-link", href="/history"),
             html.A(
-                "Game Selection",
-                style=BUTTON_STYLE,
-                id="index-link",
-                href="/",
-            ),
-            " ",
-            html.A(
-                "Settings",
-                style=BUTTON_STYLE,
-                id="settings-link",
-                href="/settings/",
-            ),
-            " ",
-            html.A(
-                "Event Ledger",
-                style=BUTTON_STYLE,
-                id="ledger-link",
-                href="/history",
-            ),
-            " ",
-            html.A(
-                "Stellaris Wiki 🔗",
-                style=EXTERNAL_LINK_STYLE,
+                "Stellaris Wiki  ↗",
+                className="tl-nav-link tl-nav-link--ext",
                 id="wiki-link",
                 href="https://stellaris.paradoxwikis.com/Stellaris_Wiki",
             ),
-        ]
+        ],
     )
+
     global_graph_controls = html.Div(
-        [
+        className="tl-control-group",
+        children=[
+            html.Label(
+                "Country perspective",
+                className="tl-control-label",
+                htmlFor="country-perspective-dropdown",
+            ),
             dcc.Dropdown(
                 id="country-perspective-dropdown",
+                className="tl-dropdown",
                 options=[],
-                placeholder="Select a country",
+                placeholder="Galaxy default",
                 value=None,
-                style={
-                    "width": "100%",
-                    "verticalAlign": "middle",
-                    "font-family": "verdana",
-                    "color": TEXT_HIGHLIGHT_COLOR,
-                    # "margin-top": "10px",
-                    # "margin-bottom": "10px",
-                    "text-align": "center",
-                    "text-color": TEXT_HIGHLIGHT_COLOR,
-                    "background": BACKGROUND_DARK,
-                },
             ),
             dcc.Checklist(
                 id="dash-plot-checklist",
+                className="tl-checklist",
                 options=[
                     {
                         "label": "Normalize stacked plots",
@@ -817,200 +979,199 @@ def get_layout():
                     },
                 ],
                 value=[],
-                labelStyle=dict(color=TEXT_COLOR),
-                style={
-                    "verticalAlign": "center",
-                    "width": "50%",
-                },
             ),
         ],
-        style={"display": "flex", "width": "100%"},
     )
+
     galaxy_tab_ui = html.Div(
-        [
-            html.H3("Galaxy Map Controls"),
+        id="galaxy-tab-ui",
+        className="tl-galaxy-panel",
+        style={"display": "none"},
+        children=[
+            html.H3("Galaxy Map", className="tl-section-title"),
             SELECT_SYSTEM_DEFAULT,
+            html.Label("Date", className="tl-control-label"),
             dcc.Slider(
                 id="dateslider",
+                className="tl-slider",
                 min=0,
                 max=100,
                 step=0.01,
                 value=100,
                 marks={},
             ),
-            html.H3("Timelapse Export"),
-            html.Div(
-                [
-                    html.P(f"Start date"),
-                    dcc.Input(
-                        id="timelapse-start-input",
-                        type="text",
-                        placeholder=TIMELAPSE_DEFAULT_START,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            html.H3("Timelapse Export", className="tl-section-title"),
+            _timelapse_field(
+                "Start date",
+                dcc.Input(
+                    id="timelapse-start-input",
+                    type="text",
+                    placeholder=TIMELAPSE_DEFAULT_START,
+                ),
             ),
-            html.Div(
-                [
-                    html.P("End date"),
-                    dcc.Input(
-                        id="timelapse-end-input",
-                        type="text",
-                        placeholder="2210.01.01",
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "End date",
+                dcc.Input(
+                    id="timelapse-end-input",
+                    type="text",
+                    placeholder="2210.01.01",
+                ),
             ),
-            html.Div(
-                [
-                    html.P(f"Step size (days)"),
-                    dcc.Input(
-                        id="timelapse-step-input",
-                        type="number",
-                        placeholder=TIMELAPSE_DEFAULT_STEP,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "Step size (days)",
+                dcc.Input(
+                    id="timelapse-step-input",
+                    type="number",
+                    placeholder=TIMELAPSE_DEFAULT_STEP,
+                ),
             ),
-            html.Div(
-                [
-                    html.P(f"Frame time (ms)"),
-                    dcc.Input(
-                        id="timelapse-duration-input",
-                        type="number",
-                        placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "Frame time (ms)",
+                dcc.Input(
+                    id="timelapse-duration-input",
+                    type="number",
+                    placeholder=TIMELAPSE_DEFAULT_FRAME_TIME,
+                ),
             ),
-            html.Div(
-                [
-                    html.P(f"DPI"),
-                    dcc.Input(
-                        id="timelapse-dpi-input",
-                        type="number",
-                        placeholder=TIMELAPSE_DEFAULT_DPI,
-                    ),
-                ],
-                style={"display": "inline-block"},
+            _timelapse_field(
+                "DPI",
+                dcc.Input(
+                    id="timelapse-dpi-input",
+                    type="number",
+                    placeholder=TIMELAPSE_DEFAULT_DPI,
+                ),
             ),
-            html.Div(
-                [
-                    dcc.Checklist(
-                        id="timelapse-export-mode",
-                        options=[
-                            {
-                                "label": "Export gif (large file)",
-                                "title": (
-                                    "Export the timelapse as a single (large) gif file. "
-                                    "This requires a lot of memory"
-                                ),
-                                "value": "export_gif",
-                            },
-                            {
-                                "label": "Export webp (smaller than gif, slow)",
-                                "title": (
-                                    "Export the timelapse as a single (large) webp file. "
-                                    "Should end up smaller than the equivalent gif. "
-                                    "Requires the system WebP library to support animated WebP."
-                                ),
-                                "value": "export_webp",
-                                "disabled": not features.check("webp_anim"),
-                            },
-                            {
-                                "label": "Export frames",
-                                "title": (
-                                    "Export the individual frames of the timelapse in png format. "
-                                    "You can use a tool (e.g. ffmpeg) to stitch them to a video timelapse."
-                                ),
-                                "value": "export_frames",
-                            },
-                            {
-                                "label": "1:1 aspect ratio",
-                                "title": (
-                                    "Use a 1:1 instead of 16:9 aspect ratio for the galaxy if checked."
-                                ),
-                                "value": "square_aspect_ratio",
-                            },
-                        ],
-                        value=["export_gif"],
-                        labelStyle=dict(color=TEXT_COLOR),
-                        style={"text-align": "center"},
-                    ),
+            dcc.Checklist(
+                id="timelapse-export-mode",
+                className="tl-checklist",
+                options=[
+                    {
+                        "label": "Export gif (large file)",
+                        "title": (
+                            "Export the timelapse as a single (large) gif file. "
+                            "This requires a lot of memory"
+                        ),
+                        "value": "export_gif",
+                    },
+                    {
+                        "label": "Export webp (smaller than gif, slow)",
+                        "title": (
+                            "Export the timelapse as a single (large) webp file. "
+                            "Should end up smaller than the equivalent gif. "
+                            "Requires the system WebP library to support animated WebP."
+                        ),
+                        "value": "export_webp",
+                        "disabled": not features.check("webp_anim"),
+                    },
+                    {
+                        "label": "Export frames",
+                        "title": (
+                            "Export the individual frames of the timelapse in png format. "
+                            "You can use a tool (e.g. ffmpeg) to stitch them to a video timelapse."
+                        ),
+                        "value": "export_frames",
+                    },
+                    {
+                        "label": "1:1 aspect ratio",
+                        "title": (
+                            "Use a 1:1 instead of 16:9 aspect ratio for the galaxy if checked."
+                        ),
+                        "value": "square_aspect_ratio",
+                    },
                 ],
-                style={"display": "inline-block"},
+                value=["export_gif"],
             ),
             html.Button(
-                f"Export Timelapse",
+                "Export Timelapse",
                 id="galaxy-export-button",
-                style=BUTTON_STYLE,
+                className="tl-button",
             ),
             html.Div(id="hidden-div", style={"display": "none"}),
         ],
-        style={
-            "display": "none",
-            "width": "100%",
-            "height": "100%",
-            "margin-left": "auto",
-            "margin-right": "auto",
-        },
-        id="galaxy-tab-ui",
     )
 
     tabs = dcc.Tabs(
         id="tabs-container",
-        style=TAB_CONTAINER_STYLE,
-        parent_style=TAB_CONTAINER_STYLE,
+        className="tl-tabs",
+        parent_className="tl-tabs-parent",
         children=[
             dcc.Tab(
                 id=tab_label,
                 label=tab_label,
                 value=tab_label,
-                style=TAB_STYLE,
-                selected_style=SELECTED_TAB_STYLE,
+                className="tl-tab",
+                selected_className="tl-tab--selected",
             )
             for tab_label in tab_names
         ],
         value=tab_names[0],
     )
-    return html.Div(
-        [
-            dcc.Location(id="url", refresh=False),
+
+    sidebar = html.Aside(
+        className="tl-sidebar",
+        children=[
+            brand,
+            html.H1("Unknown Game", id="game-name-header", className="tl-game-name"),
+            nav,
+            global_graph_controls,
+            galaxy_tab_ui,
+        ],
+    )
+
+    main = html.Main(
+        className="tl-main",
+        # plot_width is a user setting; honor it as the fluid content's max width.
+        style={"--tl-content-max": f"{config.CONFIG.plot_width}px"},
+        children=[
+            tabs,
+            html.Div(id="tab-content", className="tl-content"),
+        ],
+    )
+
+    modal = html.Div(
+        id="plot-modal",
+        className="tl-modal tl-modal--hidden",
+        children=[
+            html.Div(id="modal-backdrop", className="tl-modal__backdrop", n_clicks=0),
             html.Div(
-                [
-                    top_navigation,
-                    html.H1(
-                        children="Unknown Game",
-                        id="game-name-header",
-                        style=HEADER_STYLE,
-                    ),
-                    global_graph_controls,
-                    tabs,
+                className="tl-modal__dialog",
+                children=[
                     html.Div(
-                        id="tab-content",
-                        style={
-                            "width": "100%",
-                            "height": "100%",
-                            "margin-left": "auto",
-                            "margin-right": "auto",
-                        },
+                        className="tl-modal__header",
+                        children=[
+                            html.Span("", id="modal-title", className="tl-modal__title"),
+                            html.Button(
+                                "✕",
+                                id="modal-close",
+                                className="tl-modal__close",
+                                title="Close",
+                                n_clicks=0,
+                            ),
+                        ],
                     ),
-                    galaxy_tab_ui,
+                    html.Div(
+                        className="tl-modal__body",
+                        children=[
+                            dcc.Graph(
+                                id="modal-graph",
+                                className="tl-graph",
+                                responsive=True,
+                                config=GRAPH_CONFIG,
+                                style={"width": "100%", "height": "100%"},
+                            )
+                        ],
+                    ),
                 ],
-                style={
-                    "width": "100%",
-                    "height": "100%",
-                    "fontFamily": "Sans-Serif",
-                    "margin-left": "auto",
-                    "margin-right": "auto",
-                },
             ),
         ],
-        style={
-            "width": "100%",
-            "height": "100%",
-            "padding": 0,
-            "margin": 0,
-            "background-color": BACKGROUND,
-        },
+    )
+
+    return html.Div(
+        className="tl-app",
+        children=[
+            dcc.Location(id="url", refresh=False),
+            sidebar,
+            main,
+            modal,
+        ],
     )
