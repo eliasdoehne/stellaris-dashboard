@@ -32,10 +32,13 @@ def history_page(game_id="", version=None):
         dict_builder = EventTemplateDictBuilder(session, game_id, event_filter)
         events, title, details, links = dict_builder.get_event_and_link_dicts()
         wars = dict_builder.get_war_list()
+        # In-game date of the most recent save, for the shell topbar stardate.
+        current_date = datamodel.days_to_date(utils.get_most_recent_date(session))
     return render_template(
         "history_page.html",
         game_name=game_id,
         country=country,
+        current_date=current_date,
         wars=wars,
         events=events,
         details=details,

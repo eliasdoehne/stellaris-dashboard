@@ -1,25 +1,70 @@
 <!doctype html>
-<title>Stellaris Dashboard</title>
-<link rel=stylesheet type=text/css href="{{ url_for('static', filename='theme.css') }}">
-<link rel=stylesheet type=text/css href="{{ url_for('static', filename='style.css') }}">
-<div class=page>
-    <div class=metanav>
-        <a name="index"></a>
-        <a class="button" href="/">Game Selection</a>
-        <a class="button" href="/settings/">Settings</a>
-        {% block nav %}{% endblock %}
-        <a class="button wiki-link" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki">Stellaris Wiki 🔗</a>
-        {%if show_old_version_notice%}
-        <p>
-            You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
-            You can get the current version <a href=https://github.com/eliasdoehne/stellaris-dashboard class="textlink">on Github.</a>
-        </p>
-        <p>
-            This update notice can be disabled in the <a href="/settings/" class="textlink">Settings</a>.
-        </p>
-        {%endif%}
-        {% block body %}{% endblock %}
-        <a class="button" href="/">Game Selection</a>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stellaris Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='theme.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="sidebar-brand" href="/">
+            <span class="brand-title">STELLARIS</span>
+            <span class="brand-sub">DASHBOARD</span>
+        </a>
+
+        <div class="sidebar-identity">
+            {% if country %}
+                <span class="identity-empire" title="{{ country }}">{{ country }}</span>
+                <span class="identity-status"><span class="status-dot"></span>synced</span>
+            {% else %}
+                <span class="identity-empire identity-empire--none">No game selected</span>
+            {% endif %}
+        </div>
+
+        <nav class="sidebar-nav">
+            <a class="nav-link{% if request.endpoint == 'index_page' %} is-active{% endif %}" href="/">Game Selection</a>
+            {% if game_name %}
+            <a class="nav-link" href="{{ url_for('/timeline/', game_name=game_name) }}">Graphs</a>
+            <a class="nav-link{% if request.endpoint == 'history_page' %} is-active{% endif %}" href="{{ url_for('history_page', game_id=game_name) }}">Event Ledger</a>
+            {% endif %}
+            <a class="nav-link{% if request.endpoint == 'settings_page' %} is-active{% endif %}" href="/settings/">Settings</a>
+            <a class="nav-link nav-link--ext" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki" target="_blank" rel="noopener">Stellaris Wiki ↗</a>
+        </nav>
+    </aside>
+
+    <div class="content-area">
+        <header class="topbar">
+            <div class="breadcrumb">
+                {% if request.endpoint == 'settings_page' %}
+                    <span class="crumb crumb--current">Settings</span>
+                {% elif country %}
+                    <span class="crumb">{{ country }}</span><span class="crumb-sep">›</span><span class="crumb crumb--current">Event Ledger</span>
+                {% elif request.endpoint == 'history_page' %}
+                    <span class="crumb crumb--current">Event Ledger</span>
+                {% else %}
+                    <span class="crumb crumb--current">Game Selection</span>
+                {% endif %}
+            </div>
+            <div class="topbar-meta">
+                {% if current_date %}<span class="stardate">STARDATE&nbsp;<strong>{{ current_date }}</strong></span>{% endif %}
+            </div>
+        </header>
+
+        <main class="main">
+            <a id="index"></a>
+            {% if show_old_version_notice %}
+            <div class="version-notice">
+                <p>You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
+                   You can get the current version <a href="https://github.com/eliasdoehne/stellaris-dashboard" class="textlink">on Github.</a></p>
+                <p>This update notice can be disabled in the <a href="/settings/" class="textlink">Settings</a>.</p>
+            </div>
+            {% endif %}
+            {% block body %}{% endblock %}
+        </main>
     </div>
 </div>
-
+</body>
+</html>
