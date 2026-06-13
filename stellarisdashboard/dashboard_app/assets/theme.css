@@ -1,0 +1,65 @@
+/* ============================================================================
+   theme.css — design tokens (ledger rework, Chunk A)
+
+   Loaded BEFORE style.css. Declares :root custom properties only — no element
+   styling (that lives in style.css). Existing pages must render unchanged
+   except for the themed colours/typography these tokens drive.
+
+   Palette + token reference: scratch/ledger-rework/04-design-draft-feedback.md
+   Typography uses system font stacks (no bundled font files).
+   ============================================================================ */
+
+:root {
+  /* Surfaces */
+  --bg: #212B27;
+  --panel: #2B3B34;
+  --panel-2: #314A40;
+  --inset: #141919;
+
+  /* Amber accent ramp */
+  --amber: #C38521;
+  --amber-bright: #E5A53D;
+  --amber-deep: #8A5C14;
+
+  /* Cool accents (category colour-coding lives here) */
+  --teal: #3FBFB0;
+  --teal-bright: #56E0CE;
+  --cyan: #37C6E0;
+  --cyan-soft: #7AD6E8;
+
+  /* Text */
+  --text: #D9D9D9;
+  --text-dim: #97A39C;
+  --text-faint: #61706A;
+
+  /* Lines / borders */
+  --line: #3A4F47;
+  --line-soft: #2F4139;
+
+  /* Semantic status */
+  --pos: #5FB87A;
+  --neg: #D9603B;
+  --warn: #E0B341;
+  --info: #6FA8DD;
+
+  /* Chart series (resource -> colour, consistent across charts; see Chunk C).
+     Empire count can exceed 6 — cycle/fallback strategy is decided in Chunk C. */
+  --series-1: #3FBFB0;
+  --series-2: #C38521;
+  --series-3: #37C6E0;
+  --series-4: #B98AD9;
+  --series-5: #5FB87A;
+  --series-6: #D9603B;
+
+  /* Typography — system font stacks (no bundled fonts). Revisit if a custom
+     face is wanted later (would need its own license/attribution). */
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* Headings use the body face for a calm, consistent look. */
+  --font-display: var(--font-body);
+
+  /* Geometry — notched, slightly-rounded panels (draft: radius 4–6px) */
+  --radius-sm: 4px;
+  --radius: 5px;
+  --radius-lg: 6px;
+}
