@@ -1,20 +1,48 @@
+/* ============================================================================
+   style.css — themed presentation for the Flask/Jinja pages (ledger rework
+   Chunk B). Consumes the design tokens declared in theme.css (loaded first).
+
+   Scope: pure restyle. Same DOM, same routes, same class names — only added
+   selectors, none renamed. Targets the existing markup: nav buttons, game
+   cards, the settings form, and the event ledger.
+   ============================================================================ */
+
+/* ---- Base ---------------------------------------------------------------- */
 body {
-    font-family: verdana, system-ui;
-    background-color: rgba(33, 43, 39, 1);
+    font-family: var(--font-body);
+    background-color: var(--bg);
+    color: var(--text);
     font-size: 16px;
     margin: 0;
 }
 
-div.Select-menu-outer {
-    /* Dropdown menu */
-    background-color: rgba(20, 25, 25, 1);
+.page {
+    min-height: 100vh;
+}
+
+div.metanav {
+    /* NB: layout.html renders the whole page body inside .metanav, so this is
+       the page container, not a top bar. The real shell arrives in Chunk D. */
+    padding: 0.85rem 1.25rem 2.5rem;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    color: rgba(217, 217, 217, 1);
+    font-family: var(--font-display);
+    color: var(--text);
     margin-top: 10px;
     margin-bottom: 10px;
     text-align: center;
+    letter-spacing: 0.01em;
+}
+
+h1 {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+h2 {
+    font-weight: 600;
+    color: var(--amber-bright);
 }
 
 h4, h5, h6 {
@@ -22,119 +50,259 @@ h4, h5, h6 {
 }
 
 p, span {
-    color: rgba(217, 217, 217, 1);
-    font-family: verdana, system-ui;
+    color: var(--text);
+    font-family: var(--font-body);
     font-size: 16px;
 }
 
 a {
-    color: rgba(195, 133, 33, 1);
-    font-family: verdana, system-ui;
-    font-size: 20px;
+    color: var(--amber);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    text-decoration: none;
 }
 
-input {
-    color: rgba(0, 0, 0, 1);
-    font-family: verdana, system-ui;
-    font-size: 20px;
+a:hover {
+    color: var(--amber-bright);
+    text-decoration: underline;
 }
 
+hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 1rem auto;
+    width: 92%;
+}
+
+div.Select-menu-outer {
+    /* Dropdown menu (Dash controls share this stylesheet) */
+    background-color: var(--inset);
+}
+
+/* ---- Form controls ------------------------------------------------------- */
+input, select, textarea {
+    font-family: var(--font-body);
+    color: var(--text);
+    background-color: var(--inset);
+    font-size: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.5rem;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--amber);
+    box-shadow: 0 0 0 2px rgba(195, 133, 33, 0.25);
+}
+
+input[type=checkbox] {
+    accent-color: var(--amber);
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
 a.button, input.button, button.button {
-    -webkit-appearance: button;
-    -moz-appearance: button;
-    appearance: button;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     cursor: pointer;
 
-    color: rgba(195, 133, 33, 1);
-    font-family: verdana, system-ui;
-    font-size: 16px;
+    color: var(--amber);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
 
-    background-color: rgba(43, 59, 52, 1);
+    background-color: var(--panel-2);
     display: inline-block;
     text-decoration: none;
-    padding: 0.2cm;
+    padding: 0.4rem 0.85rem;
 
-    border: 1px solid rgba(195, 133, 33, 1);
+    border: 1px solid var(--amber-deep);
+    border-radius: var(--radius-sm);
+    transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+a.button:hover, input.button:hover, button.button:hover {
+    background-color: var(--amber);
+    border-color: var(--amber-bright);
+    color: var(--inset);
+    text-decoration: none;
 }
 
 a.button.vis_toggle {
-    padding: 0.1cm;
-    font-size: 14px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+    color: var(--teal);
+    border-color: var(--line);
+    background-color: var(--panel);
+}
+
+a.button.vis_toggle:hover {
+    background-color: var(--teal);
+    border-color: var(--teal-bright);
+    color: var(--inset);
 }
 
 a.button.wiki-link {
     border: 1px solid transparent;
     background: transparent;
+    color: var(--text-dim);
     float: right;
 }
 
+a.button.wiki-link:hover {
+    background: transparent;
+    color: var(--amber-bright);
+}
+
+/* ---- Notched panel (shared chrome for hero cards + ledger boxes) ---------
+   Two stacked clips with no extra DOM: the element paints the border colour
+   and clips to the notch; ::before paints the panel fill 1px inset to reveal a
+   border on every edge, including the diagonals. Content is lifted above it. */
+li.game, div.ledgerbox {
+    --notch: 12px;
+    --panel-border: var(--line);
+    position: relative;
+    background: var(--panel-border);
+    clip-path: polygon(
+        var(--notch) 0, 100% 0,
+        100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%,
+        0 100%, 0 var(--notch)
+    );
+}
+
+li.game::before, div.ledgerbox::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    background: var(--panel);
+    clip-path: polygon(
+        var(--notch) 0, 100% 0,
+        100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%,
+        0 100%, 0 var(--notch)
+    );
+}
+
+li.game > *, div.ledgerbox > * {
+    position: relative;  /* paint content above the ::before fill */
+}
+
+/* ---- Game index ---------------------------------------------------------- */
+.gamelist {
+    max-width: 60rem;
+    margin: 0 auto;
+}
+
+ul.entries {
+    padding: 0;
+}
+
 li.game {
-    color: rgba(195, 133, 33, 1);
+    --notch: 14px;
+    --panel-border: var(--amber-deep);
     list-style-type: none;
-    width: 60%;
-    margin: 0.5cm auto;
-    padding: 0.25cm;
+    width: 100%;
+    max-width: 60rem;
+    margin: 0.6rem auto;
+    padding: 1rem 1.25rem;
     text-align: center;
-    border: 1px solid rgba(195, 133, 33, 1);
+    box-sizing: border-box;
+}
+
+li.game h3 {
+    color: var(--amber-bright);
+    font-size: 1.2rem;
+    margin-top: 0;
+}
+
+li.game p {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    margin: 0.25rem 0;
+}
+
+li.game .button {
+    margin: 0.6rem 0.25rem 0.2rem;
 }
 
 li.toc-item {
-    color: rgba(195, 133, 33, 1);
+    color: var(--amber);
     list-style-type: none;
+    line-height: 1.6;
 }
 
+/* ---- Settings ------------------------------------------------------------ */
 form.settingsform {
-    padding: 1rem
+    padding: 1rem;
 }
 
 div.settings {
     width: 80%;
     max-width: 64rem;
-    color: rgba(217, 217, 217, 1);
+    color: var(--text);
     margin: 1rem auto 0 auto;
+}
+
+div.settings h2 {
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.35rem;
+    margin-top: 1.5rem;
 }
 
 .settingsbuttons {
     margin-block-start: 1rem;
     margin-inline-start: -1rem;
+    padding: 0.6rem 1rem;
     position: sticky;
     bottom: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
 }
 
 .settings label,
 .settings dt {
-    color: rgba(195, 133, 33, 1);
+    color: var(--amber);
 }
 
 .settings dl {
     display: flex;
     gap: 0.25rem;
+    color: var(--text-dim);
 }
 
 .settinginfo {
     cursor: help;
+    color: var(--text-faint);
 }
 
-
 div.setting {
-    padding: 0.1cm;
-    margin: 0.1cm 0;
-
+    padding: 0.4rem 0.6rem;
+    margin: 0.15rem 0;
     align-self: flex-start;
-
-    background-color: rgba(43, 59, 52, 1);
-
+    background-color: var(--panel);
+    border-left: 2px solid transparent;
+    border-radius: var(--radius-sm);
     display: flex;
     flex-direction: row;
+    align-items: center;
+    transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+div.setting:hover {
+    background-color: var(--panel-2);
+    border-left-color: var(--amber);
 }
 
 span.settingname {
-    align-self: flex-start;
+    align-self: center;
     flex: 2 0 60%;
 }
 
 span.settinginput {
-    align-self: flex-end;
+    align-self: center;
     flex: 1 0 40%;
 }
 
@@ -143,6 +311,7 @@ span.settinginput input:not([type=checkbox]) {
     width: 100%;
 }
 
+/* ---- Ledger: object detail rows ------------------------------------------ */
 div.objectdetails {
     display: flex;
     flex-direction: row;
@@ -156,34 +325,46 @@ span.objectdetailskey {
     margin-right: 10px;
     flex: 0 1 auto;
     font-size: 14px;
+    color: var(--text-dim);
 }
 
 span.objectdetailsvalue {
     align-self: flex-end;
     flex: 0 1 auto;
     font-size: 14px;
+    color: var(--text);
 }
 
+/* ---- Ledger: boxes + event lists ----------------------------------------- */
 div.ledgerbox {
-    background-color: rgba(43, 59, 52, 1);
-    width: 90%;
-    margin: 0.1cm auto;
-    padding: 0.1cm;
+    width: 92%;
+    margin: 0.5rem auto;
+    padding: 0.85rem 1rem;
+    box-sizing: border-box;
+}
+
+h2.eventlist_header {
+    color: var(--amber-bright);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0.4rem;
 }
 
 ul.event_list {
     list-style: none;
+    padding-left: 0;
 }
 
 li.eventitem {
-    color: rgba(217, 217, 217, 1);
+    color: var(--text);
     margin: auto;
+    padding: 0.05rem 0;
 }
 
 div.eventdescription {
-    padding: 0.01cm;
+    padding: 0.1rem 0;
     display: flex;
     flex-direction: row;
+    gap: 0.5rem;
 }
 
 span.dateblock {
@@ -191,8 +372,9 @@ span.dateblock {
     text-align: right;
     margin-right: 10px;
     min-width: 240px;
-    font-family: monospace;
-    font-size: 14px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--cyan-soft);
     flex: 0 1 auto;
 }
 
@@ -202,35 +384,40 @@ span.dateblock.war {
 
 span.eventtext {
     align-self: flex-end;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     font-size: 14px;
+    line-height: 1.5;
 }
 
 a.textlink {
-    color: rgba(195, 133, 33, 1);
+    color: var(--amber);
     font-size: 14px;
 }
 
 a.titlelink {
-    color: rgba(195, 133, 33, 1);
+    color: var(--amber-bright);
+    font-size: 1.05rem;
 }
 
+/* ---- Notifications (game index warnings/info) ---------------------------- */
 .notifications {
     li {
         list-style: none;
         width: 60%;
         margin-inline: auto;
-        border: 1px solid ;
+        border: 1px solid var(--line);
         padding: 1rem;
         margin-bottom: 1rem;
         max-width: 50rem;
-        border-radius: 0.5rem;
+        border-radius: var(--radius);
+        background: var(--panel);
     }
-    
+
     code {
-        background: rgba(0, 0, 0, 0.4);
-        padding: 0.25rem;
-        border-radius: 0.25rem;
+        background: var(--inset);
+        font-family: var(--font-mono);
+        padding: 0.15rem 0.35rem;
+        border-radius: var(--radius-sm);
     }
 
     a {
@@ -238,15 +425,15 @@ a.titlelink {
     }
 
     .warning {
-        border-color: rgba(195, 133, 33, 1);
+        border-color: var(--amber);
         background: hsl(37, 25%, 10%);
         a {
-            color: hsl(37, 71%, 60%);
+            color: var(--amber-bright);
         }
     }
 
     .info {
-        border-color: hsl(219, 79%, 66%);
+        border-color: var(--info);
         background: hsl(219, 25%, 10%);
     }
 }
