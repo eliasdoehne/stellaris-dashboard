@@ -6,8 +6,10 @@
     <title>Stellaris Dashboard</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='theme.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
 </head>
 <body>
+<div id="toast-slot" aria-live="polite"></div>
 <div class="app-shell">
     <aside class="sidebar">
         <a class="sidebar-brand" href="/">
@@ -24,10 +26,14 @@
             {% endif %}
         </div>
 
-        <nav class="sidebar-nav">
+        <!-- hx-boost: same-app links swap the page without a full reload (and fall
+             back to normal navigation with JS off). The Graphs link points at the
+             separate Dash app, so it opts out; the Wiki link (target=_blank) is
+             skipped by hx-boost automatically. -->
+        <nav class="sidebar-nav" hx-boost="true">
             <a class="nav-link{% if request.endpoint == 'index_page' %} is-active{% endif %}" href="/">Game Selection</a>
             {% if game_name %}
-            <a class="nav-link" href="{{ url_for('/timeline/', game_name=game_name) }}">Graphs</a>
+            <a class="nav-link" hx-boost="false" href="{{ url_for('/timeline/', game_name=game_name) }}">Graphs</a>
             <a class="nav-link{% if request.endpoint == 'history_page' %} is-active{% endif %}" href="{{ url_for('history_page', game_id=game_name) }}">Event Ledger</a>
             {% endif %}
             <a class="nav-link{% if request.endpoint == 'settings_page' %} is-active{% endif %}" href="/settings/">Settings</a>

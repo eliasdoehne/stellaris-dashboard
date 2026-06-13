@@ -190,6 +190,33 @@ body {
     color: var(--text-dim);
 }
 
+/* Toast — transient confirmation (e.g. settings saved); auto-dismisses. */
+.toast {
+    position: fixed;
+    top: 4.5rem;
+    right: 1.5rem;
+    z-index: 100;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    animation: toast-in-out 3.6s ease forwards;
+}
+.toast--success { border-left: 3px solid var(--pos); }
+
+@keyframes toast-in-out {
+    0%   { opacity: 0; transform: translateY(-8px); }
+    8%   { opacity: 1; transform: translateY(0); }
+    82%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .toast { animation: none; opacity: 1; }
+}
+
 /* Stack the sidebar above the content on narrow screens. */
 @media (max-width: 860px) {
     .app-shell { grid-template-columns: 1fr; }
