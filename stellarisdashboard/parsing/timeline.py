@@ -3204,18 +3204,26 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
         self, envoy: datamodel.Leader
     ) -> Optional[datamodel.HistoricalEvent]:
         # officials now do some assignments (galcom, federation) that envoys did previously
-        # however, the previous assignment logic breaks when officials then do other things
-        # for now, disabling this logic for non-envoys
-        # long term, all the leader processing should be refactored to address tech debt for special ruler/envoy logic
-        if envoy.leader_class != "envoy":
-            return None
+        # however, the previous assignment logic breaks when officials then do other things (like being a councilor)
+        # to prevent this, we only consider actual envoy assignment events
         return (
             self._session.query(datamodel.HistoricalEvent)
             .filter(datamodel.HistoricalEvent.end_date_days.is_(None))
+            .filter(
+                datamodel.HistoricalEvent.event_type.in_(
+                    {
+                        datamodel.HistoricalEventType.envoy_community,
+                        datamodel.HistoricalEventType.envoy_federation,
+                        datamodel.HistoricalEventType.envoy_improving_relations,
+                        datamodel.HistoricalEventType.envoy_harming_relations,
+                    }
+                )
+            )
             .filter_by(leader=envoy)
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())
             .first()
         )
+
 
 
 class FleetInfoProcessor(AbstractGamestateDataProcessor):
