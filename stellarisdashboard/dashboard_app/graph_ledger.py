@@ -21,17 +21,18 @@ from stellarisdashboard.dashboard_app import (
 
 logger = logging.getLogger(__name__)
 
-# Modernized sci-fi palette — kept in sync with assets/timeline.css.
-# Plot backgrounds are transparent so the card surface shows through.
+# Chart palette — concrete values mirroring the design tokens in assets/theme.css
+# (Plotly figures need literal colours, not CSS vars). Plot backgrounds are
+# transparent so the themed card surface shows through.
 PLOT_PAPER = "rgba(0,0,0,0)"
 PLOT_BG = "rgba(0,0,0,0)"
-GALAXY_PLOT_BG = "rgba(6,9,14,1)"  # near-black "space"
+GALAXY_PLOT_BG = "rgba(20,25,25,1)"  # --inset: near-black "space"
 GALAXY_PAPER = "rgba(0,0,0,0)"
-GRID_COLOR = "rgba(255,255,255,0.06)"
-TEXT_COLOR = "rgba(220,225,232,1)"
-TEXT_DIM = "rgba(150,160,170,1)"
-ACCENT_COLOR = "rgba(232,168,72,1)"
-FONT_FAMILY = "system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+GRID_COLOR = "rgba(58,79,71,0.6)"  # --line
+TEXT_COLOR = "rgba(217,217,217,1)"  # --text
+TEXT_DIM = "rgba(151,163,156,1)"  # --text-dim
+ACCENT_COLOR = "rgba(229,165,61,1)"  # --amber-bright
+FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"  # --font-body
 
 # Stellaris games start on 2200.01.01; plot x-values count years from there.
 GAME_START_YEAR = 2200

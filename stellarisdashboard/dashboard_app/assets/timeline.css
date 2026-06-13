@@ -6,23 +6,25 @@
    ========================================================================= */
 
 :root {
-    /* Surfaces (deep, low-saturation blue-green-black) */
-    --tl-bg:         hsl(200 18% 7%);
-    --tl-surface-1:  hsl(200 16% 10%);
-    --tl-surface-2:  hsl(200 15% 13%);
-    --tl-surface-3:  hsl(200 14% 17%);
-    --tl-border:     hsl(200 12% 22%);
-    --tl-border-soft: hsl(200 12% 18%);
+    /* Palette derives from the shared design tokens in theme.css so the
+       timeline matches the Flask pages (single source of truth). Only the
+       --tl-* shape/motion tokens below are timeline-specific. */
+    --tl-bg:         var(--bg);
+    --tl-surface-1:  var(--panel);
+    --tl-surface-2:  var(--panel-2);
+    --tl-surface-3:  #38564b;  /* one step lighter than --panel-2, same ramp */
+    --tl-border:     var(--line);
+    --tl-border-soft: var(--line-soft);
 
-    /* Accent (Stellaris amber/gold, refined) */
-    --tl-accent:       hsl(38 85% 60%);
-    --tl-accent-dim:   hsl(38 55% 48%);
-    --tl-accent-soft:  hsl(38 85% 60% / 0.12);
+    /* Accent (amber) */
+    --tl-accent:       var(--amber-bright);
+    --tl-accent-dim:   var(--amber);
+    --tl-accent-soft:  rgba(195, 133, 33, 0.14);  /* --amber @ 14% */
 
     /* Text */
-    --tl-text:       hsl(210 16% 90%);
-    --tl-text-dim:   hsl(210 10% 64%);
-    --tl-text-faint: hsl(210 8% 45%);
+    --tl-text:       var(--text);
+    --tl-text-dim:   var(--text-dim);
+    --tl-text-faint: var(--text-faint);
 
     /* Shape & motion */
     --tl-radius:    10px;
@@ -31,7 +33,7 @@
     --tl-sidebar-w: 300px;
     --tl-shadow:    0 8px 24px hsl(200 30% 3% / 0.45);
     --tl-shadow-sm: 0 2px 8px hsl(200 30% 3% / 0.35);
-    --tl-font: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --tl-font: var(--font-body);
 
     /* Set per-request from config.plot_width (fallback below) */
     --tl-content-max: 1150px;
@@ -460,39 +462,28 @@ html, body {
     flex: 0 0 auto;
 }
 
-/* Dropdown (dcc.Dropdown -> react-select v1 markup) */
-.tl-dropdown .Select-control {
-    background: var(--tl-surface-2);
-    border: 1px solid var(--tl-border);
-    border-radius: var(--tl-radius-sm);
-    color: var(--tl-text);
+/* Dropdown (dcc.Dropdown). Dash 4.x renders a Radix-based control (the old
+   react-select `.Select-*` markup is gone) whose styles are injected as :root
+   rules built on --Dash-* design tokens that default to a light palette — hence
+   the white box / purple focus. The menu is portaled to <body>, so the robust
+   fix is to re-point those tokens to ours on :root. !important beats Dash's
+   injected :root defaults regardless of stylesheet order. This themes the
+   trigger, menu, search and options at once, and keeps the checklist/other dcc
+   components on the same accent. */
+:root {
+    --Dash-Fill-Inverse-Strong: var(--tl-surface-2) !important;   /* trigger / menu / search bg (was #fff) */
+    --Dash-Fill-Interactive-Strong: var(--tl-accent) !important;  /* focus + hover accent (was #7f4bc4) */
+    --Dash-Fill-Interactive-Weak: var(--tl-accent-soft) !important;
+    --Dash-Fill-Disabled: var(--tl-border-soft) !important;       /* option separators / action borders */
+    --Dash-Stroke-Strong: var(--tl-border) !important;
+    --Dash-Stroke-Weak: var(--tl-border-soft) !important;
+    --Dash-Text-Primary: var(--tl-text) !important;
+    --Dash-Text-Strong: var(--tl-text) !important;                /* value text + caret icon */
+    --Dash-Text-Weak: var(--tl-text-dim) !important;
+    --Dash-Text-Disabled: var(--tl-text-dim) !important;          /* placeholder — keep legible */
+    --Dash-Shading-Strong: hsl(200 30% 3% / 0.55) !important;     /* menu drop shadow */
+    --Dash-Shading-Weak: hsl(200 30% 3% / 0.40) !important;
 }
-
-.tl-dropdown .Select-control:hover { border-color: var(--tl-accent-dim); }
-
-.tl-dropdown.is-focused:not(.is-open) > .Select-control {
-    border-color: var(--tl-accent);
-    box-shadow: 0 0 0 2px var(--tl-accent-soft);
-}
-
-.tl-dropdown .Select-placeholder,
-.tl-dropdown .Select--single > .Select-control .Select-value { color: var(--tl-text-dim); }
-.tl-dropdown .Select-value-label { color: var(--tl-text) !important; }
-.tl-dropdown .Select-menu-outer {
-    background: var(--tl-surface-3);
-    border: 1px solid var(--tl-border);
-    border-radius: 0 0 var(--tl-radius-sm) var(--tl-radius-sm);
-}
-.tl-dropdown .Select-option {
-    background: var(--tl-surface-3);
-    color: var(--tl-text-dim);
-}
-.tl-dropdown .Select-option.is-focused {
-    background: var(--tl-surface-2);
-    color: var(--tl-text);
-}
-.tl-dropdown .Select-option.is-selected { color: var(--tl-accent); }
-.tl-dropdown .Select-arrow { border-top-color: var(--tl-text-dim); }
 
 /* Slider (dcc.Slider). Dash 4.x uses a Radix-based slider with `dash-slider-*`
    classes, styled via an injected stylesheet that uses Dash design tokens
