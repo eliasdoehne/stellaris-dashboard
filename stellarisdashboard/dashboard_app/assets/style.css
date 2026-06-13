@@ -356,12 +356,12 @@ ul.event_list {
 
 li.eventitem {
     color: var(--text);
-    margin: auto;
-    padding: 0.05rem 0;
+    margin: 0;
+    padding: 0;
 }
 
 div.eventdescription {
-    padding: 0.1rem 0;
+    padding: 0;
     display: flex;
     flex-direction: row;
     gap: 0.5rem;
