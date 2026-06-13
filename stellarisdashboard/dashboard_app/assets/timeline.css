@@ -6,23 +6,25 @@
    ========================================================================= */
 
 :root {
-    /* Surfaces (deep, low-saturation blue-green-black) */
-    --tl-bg:         hsl(200 18% 7%);
-    --tl-surface-1:  hsl(200 16% 10%);
-    --tl-surface-2:  hsl(200 15% 13%);
-    --tl-surface-3:  hsl(200 14% 17%);
-    --tl-border:     hsl(200 12% 22%);
-    --tl-border-soft: hsl(200 12% 18%);
+    /* Palette derives from the shared design tokens in theme.css so the
+       timeline matches the Flask pages (single source of truth). Only the
+       --tl-* shape/motion tokens below are timeline-specific. */
+    --tl-bg:         var(--bg);
+    --tl-surface-1:  var(--panel);
+    --tl-surface-2:  var(--panel-2);
+    --tl-surface-3:  #38564b;  /* one step lighter than --panel-2, same ramp */
+    --tl-border:     var(--line);
+    --tl-border-soft: var(--line-soft);
 
-    /* Accent (Stellaris amber/gold, refined) */
-    --tl-accent:       hsl(38 85% 60%);
-    --tl-accent-dim:   hsl(38 55% 48%);
-    --tl-accent-soft:  hsl(38 85% 60% / 0.12);
+    /* Accent (amber) */
+    --tl-accent:       var(--amber-bright);
+    --tl-accent-dim:   var(--amber);
+    --tl-accent-soft:  rgba(195, 133, 33, 0.14);  /* --amber @ 14% */
 
     /* Text */
-    --tl-text:       hsl(210 16% 90%);
-    --tl-text-dim:   hsl(210 10% 64%);
-    --tl-text-faint: hsl(210 8% 45%);
+    --tl-text:       var(--text);
+    --tl-text-dim:   var(--text-dim);
+    --tl-text-faint: var(--text-faint);
 
     /* Shape & motion */
     --tl-radius:    10px;
@@ -31,7 +33,7 @@
     --tl-sidebar-w: 300px;
     --tl-shadow:    0 8px 24px hsl(200 30% 3% / 0.45);
     --tl-shadow-sm: 0 2px 8px hsl(200 30% 3% / 0.35);
-    --tl-font: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --tl-font: var(--font-body);
 
     /* Set per-request from config.plot_width (fallback below) */
     --tl-content-max: 1150px;
