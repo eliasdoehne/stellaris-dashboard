@@ -81,6 +81,10 @@ def _setup_engine(game_id):
                 stack.extend(elem.ops)
             else:
                 operations.invoke(elem)
+        # Commit the migration: under SQLAlchemy 2.0 a Connection rolls back on
+        # block exit unless committed, which silently discarded the schema
+        # changes for pre-existing DBs (new columns never landed).
+        connection.commit()
 
     _ENGINES[game_id] = engine
     _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
