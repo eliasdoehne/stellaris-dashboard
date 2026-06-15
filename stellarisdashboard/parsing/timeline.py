@@ -20,6 +20,15 @@ logger = logging.getLogger(__name__)
 def dump_name(name: dict):
     return json.dumps(name, sort_keys=True)
 
+
+def _extract_id(val, default: int = -1) -> int:
+    if isinstance(val, dict) and "reference" in val:
+        return val["reference"]
+    if isinstance(val, (int, float)):
+        return int(val)
+    return default
+
+
 # this is a naive cache for shared_descriptions, which helps to cut down on DB queries while processing
 # it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
 # the built-in @cache decorator was leaking memory, hanging on to references of processor instances
@@ -1074,8 +1083,8 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
                 species_name=species_name,
                 species_class=species_data.get("class", "Unknown Class"),
                 species_id_in_game=species_id_in_game,
-                parent_species_id_in_game=species_data.get("base", -1),
-                home_planet_id=species_data.get("home_planet", -1),
+                parent_species_id_in_game=_extract_id(species_data.get("base", -1)),
+                home_planet_id=_extract_id(species_data.get("home_planet", -1)),
             )
             self._session.add(species)
             traits_dict = species_data.get("traits", {})
