@@ -6,9 +6,13 @@ from typing import Dict
 from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
-from stellarisdashboard.dashboard_app import flask_app, utils
+from stellarisdashboard.dashboard_app import flask_app, utils, event_registry
 
 logger = logging.getLogger(__name__)
+
+# Descriptor-driven event renderer (replaces the old ~50-branch if/elif chain in
+# history_page.html). Exposed to the template as render_event(event, links).
+flask_app.jinja_env.globals["render_event"] = event_registry.render_event
 
 
 @flask_app.route("/history")

@@ -20,6 +20,22 @@ logger = logging.getLogger(__name__)
 def dump_name(name: dict):
     return json.dumps(name, sort_keys=True)
 
+
+def _extract_id(val, default: int = -1) -> int:
+    """Normalize an in-game ID reference to an int.
+
+    Recent Stellaris versions serialize some scalar ID references as a dict of
+    the form ``{"reference": <id>, ...}`` instead of a bare integer. Accept
+    either form and fall back to ``default`` for anything unexpected (a missing
+    value, the "none" sentinel, etc.) so parsing doesn't crash on newer saves.
+    """
+    if isinstance(val, dict):
+        val = val.get("reference", default)
+    if isinstance(val, (int, float)):
+        return int(val)
+    return default
+
+
 # this is a naive cache for shared_descriptions, which helps to cut down on DB queries while processing
 # it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
 # the built-in @cache decorator was leaking memory, hanging on to references of processor instances
@@ -1074,8 +1090,8 @@ class SpeciesProcessor(AbstractGamestateDataProcessor):
                 species_name=species_name,
                 species_class=species_data.get("class", "Unknown Class"),
                 species_id_in_game=species_id_in_game,
-                parent_species_id_in_game=species_data.get("base", -1),
-                home_planet_id=species_data.get("home_planet", -1),
+                parent_species_id_in_game=_extract_id(species_data.get("base", -1)),
+                home_planet_id=_extract_id(species_data.get("home_planet", -1)),
             )
             self._session.add(species)
             traits_dict = species_data.get("traits", {})
@@ -1200,7 +1216,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         subclass, leader_traits = self._get_leader_traits(leader_dict)
         ethic = leader_dict.get("ethic", "ethic_neutral")
         job = leader_dict.get("job")
-        planet_id = leader_dict.get("planet")
+        planet_id = _extract_id(leader_dict.get("planet"))
         planet = self._planets_by_ingame_id.get(planet_id)
         creator_id = leader_dict.get("creator")
         creator = self._countries_by_ingame_id.get(creator_id)
@@ -1249,7 +1265,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         leader_gender = leader_dict.get("gender", "other")
         first_name, second_name = self.get_leader_name(leader_dict)
         level = leader_dict.get("level", -1)
-        species_id = leader_dict.get("species", -1)
+        species_id = _extract_id(leader_dict.get("species", -1))
         leader_species = self._species_dict.get(species_id)
         subclass, leader_traits = self._get_leader_traits(leader_dict)
         ethic = leader_dict.get("ethic", "ethic_neutral")
@@ -3526,7 +3542,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 continue
             attacker_victory = battle_dict.get("attacker_victory") == "yes"
 
-            planet_model = self._planet_models_dict.get(battle_dict.get("planet"))
+            planet_model = self._planet_models_dict.get(_extract_id(battle_dict.get("planet")))
             if planet_model is None:
                 system_id_in_game = battle_dict.get("system")
                 system = self._system_models_dict.get(system_id_in_game)
@@ -3781,7 +3797,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
             for pop_group_id, pop_group_dict in self._gamestate_dict["pop_groups"].items():
                 if not isinstance(pop_group_dict, dict):
                     continue
-                planet_id = pop_group_dict.get("planet")
+                planet_id = _extract_id(pop_group_dict.get("planet"))
                 planet_country_id_in_game = self.country_by_planet_id.get(planet_id)
                 if planet_country_id_in_game != country_id_in_game:
                     continue
@@ -3790,7 +3806,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 if size == 0:
                     continue
 
-                species_id = pop_group_dict.get("key").get("species")
+                species_id = _extract_id(pop_group_dict.get("key").get("species"))
                 stratum = pop_group_dict.get("key").get("category", "unknown stratum")
                 faction_id = pop_group_dict.get("key").get("pop_faction")
 
