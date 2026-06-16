@@ -19,7 +19,6 @@
     PathLayer,
     ScatterplotLayer,
     TextLayer,
-    CollisionFilterExtension,
   } = window.deck;
 
   // --- theme colors (kept in sync with assets/theme.css) ---
@@ -28,12 +27,17 @@
   const HYPERLANE_FAINT = [90, 110, 104, 70];
   const BORDER_COLOR = [235, 238, 236, 230];
   const FILL_ALPHA = 48;
-  const LABEL_COLOR = [217, 217, 217, 255];
+  const SYS_LABEL_COLOR = [223, 230, 227, 255];
+  const SYS_LABEL_BG = [20, 25, 25, 170];
 
-  // Labels are hidden when zoomed out (avoids clutter), revealed past these zoom
-  // thresholds. Collision filtering thins them out further at any zoom.
-  const LABEL_ZOOM_OWNED = 0.8; // owned systems first
-  const LABEL_ZOOM_ALL = 2.2; // then everything
+  // System-name labels reveal as you zoom in (maps-like). Thresholds are
+  // relative to the initial "fit" zoom so they behave the same regardless of
+  // galaxy size. Tiering (owned-only, then all) keeps overlap manageable
+  // without a collision pass.
+  //   +OWNED  -> system names of owned systems
+  //   +ALL    -> every system name
+  const LABEL_DZOOM_OWNED = 1.5; // ~2.8x zoomed in past the overview
+  const LABEL_DZOOM_ALL = 3.0; // ~8x
 
   const container = document.getElementById("galaxy-deck");
   const loadingEl = document.getElementById("galaxy-loading");
@@ -42,16 +46,27 @@
   const selectionEl = document.getElementById("galaxy-selection");
 
   let geometry = null; // {systems, territory, hyperlanes}
-  let systemById = new Map();
   let owners = {}; // in-game system id -> {country_id, country_name, color}
+  let countryLabels = []; // [{name, x, y, color}]
   let borders = []; // [[x0,y0],[x1,y1]], ...
   let dataVersion = 0;
+  let baseZoom = 0; // initial fit zoom
   let currentZoom = 0;
   let deckgl = null;
 
   function ownerColor(id) {
     const o = owners[id];
     return o ? o.color : null;
+  }
+
+  // Mix a color toward white so empire names stay legible on the dark map.
+  function brighten(c, t = 0.5) {
+    return [
+      Math.round(c[0] + (255 - c[0]) * t),
+      Math.round(c[1] + (255 - c[1]) * t),
+      Math.round(c[2] + (255 - c[2]) * t),
+      255,
+    ];
   }
 
   function fitViewState() {
@@ -68,14 +83,35 @@
     const h = Math.max(maxY - minY, 1);
     const vw = container.clientWidth || 800;
     const vh = container.clientHeight || 800;
-    // OrthographicView: pixels-per-world-unit = 2^zoom. Fit with a margin.
+    // OrthographicView: pixels-per-world-unit = 2^zoom. Fit with a small margin.
     const zoom = Math.log2(Math.min(vw / w, vh / h)) - 0.15;
     return { target: [cx, cy, 0], zoom };
   }
 
+  // Recompute empire-name labels (one per owner, at the mean of its systems).
+  function computeCountryLabels() {
+    const acc = {};
+    for (const s of geometry.systems) {
+      const o = owners[s.id];
+      if (!o) continue;
+      let a = acc[o.country_name];
+      if (!a) a = acc[o.country_name] = { sx: 0, sy: 0, n: 0, color: o.color };
+      a.sx += s.x;
+      a.sy += s.y;
+      a.n += 1;
+    }
+    return Object.entries(acc).map(([name, a]) => ({
+      name,
+      x: a.sx / a.n,
+      y: a.sy / a.n,
+      color: brighten(a.color, 0.55),
+    }));
+  }
+
   function buildLayers() {
-    const labelsOwnedVisible = currentZoom >= LABEL_ZOOM_OWNED;
-    const labelsAllVisible = currentZoom >= LABEL_ZOOM_ALL;
+    const dz = currentZoom - baseZoom;
+    const ownedLabels = dz >= LABEL_DZOOM_OWNED;
+    const allLabels = dz >= LABEL_DZOOM_ALL;
 
     const territoryLayer = new SolidPolygonLayer({
       id: "territory",
@@ -125,50 +161,64 @@
       data: geometry.systems,
       getPosition: (d) => [d.x, d.y],
       getFillColor: (d) => ownerColor(d.id) || UNOWNED_DOT,
-      getRadius: 2,
+      getRadius: 2.5,
       radiusUnits: "pixels",
-      radiusMinPixels: 1.5,
-      radiusMaxPixels: 6,
+      radiusMinPixels: 2,
+      radiusMaxPixels: 7,
       pickable: true,
       updateTriggers: { getFillColor: dataVersion },
     });
 
-    // Tier the labels: nothing far out, owned systems at mid zoom, everything
-    // once zoomed in. Collision filtering thins whatever is shown.
-    const labelData = !labelsOwnedVisible
+    // System name labels — tiered by zoom (owned first, then everything).
+    const sysLabelData = !ownedLabels
       ? []
-      : labelsAllVisible
+      : allLabels
       ? geometry.systems
       : geometry.systems.filter((d) => owners[d.id]);
 
-    const labelLayer = new TextLayer({
-      id: "labels",
-      data: labelData,
+    const systemLabelLayer = new TextLayer({
+      id: "system-labels",
+      data: sysLabelData,
       getPosition: (d) => [d.x, d.y],
       getText: (d) => d.name,
-      getColor: LABEL_COLOR,
+      getColor: SYS_LABEL_COLOR,
       getSize: 11,
       sizeUnits: "pixels",
       getTextAnchor: "start",
       getAlignmentBaseline: "center",
-      getPixelOffset: [6, 0],
+      getPixelOffset: [7, 0],
       background: true,
-      getBackgroundColor: [20, 25, 25, 140],
+      getBackgroundColor: SYS_LABEL_BG,
       backgroundPadding: [3, 1],
-      // Collision filtering thins overlapping labels. Guarded so a missing
-      // extension can't blank the whole layer.
-      ...(CollisionFilterExtension
-        ? {
-            extensions: [new CollisionFilterExtension()],
-            collisionEnabled: true,
-            getCollisionPriority: (d) => (owners[d.id] ? 1 : 0),
-            collisionTestProps: { sizeScale: 2 },
-            updateTriggers: { getCollisionPriority: dataVersion },
-          }
-        : {}),
     });
 
-    return [territoryLayer, hyperlaneLayer, borderLayer, systemLayer, labelLayer];
+    // Empire name labels — always shown, bold, drawn on top.
+    const countryLabelLayer = new TextLayer({
+      id: "country-labels",
+      data: countryLabels,
+      getPosition: (d) => [d.x, d.y],
+      getText: (d) => d.name,
+      getColor: (d) => d.color,
+      getSize: 17,
+      sizeUnits: "pixels",
+      fontWeight: "bold",
+      getTextAnchor: "middle",
+      getAlignmentBaseline: "center",
+      background: true,
+      getBackgroundColor: [10, 14, 14, 150],
+      backgroundPadding: [5, 2],
+      characterSet: "auto",
+      updateTriggers: { getText: dataVersion, getColor: dataVersion },
+    });
+
+    return [
+      territoryLayer,
+      hyperlaneLayer,
+      borderLayer,
+      systemLayer,
+      systemLabelLayer,
+      countryLabelLayer,
+    ];
   }
 
   function render() {
@@ -195,6 +245,7 @@
     const payload = await res.json();
     owners = payload.owners || {};
     borders = payload.borders || [];
+    countryLabels = computeCountryLabels();
     dataVersion += 1;
     if (dateLabel) dateLabel.textContent = payload.date;
     render();
@@ -208,22 +259,31 @@
     };
   }
 
+  // Re-tier system labels only when crossing a threshold (avoids churn on every
+  // wheel tick).
+  function labelTier(dz) {
+    if (dz >= LABEL_DZOOM_ALL) return 2;
+    if (dz >= LABEL_DZOOM_OWNED) return 1;
+    return 0;
+  }
+
   async function init() {
     const geomRes = await fetch(cfg.geometryUrl);
     geometry = await geomRes.json();
-    systemById = new Map(geometry.systems.map((s) => [s.id, s]));
 
     const initialViewState = fitViewState();
-    currentZoom = initialViewState.zoom;
+    baseZoom = initialViewState.zoom;
+    currentZoom = baseZoom;
 
     deckgl = new Deck({
       parent: container,
       views: new OrthographicView({ flipY: false }),
       initialViewState,
       controller: { inertia: true },
+      pickingRadius: 8, // forgiving hover/click target around the small dots
       layers: [],
-      getTooltip: ({ object }) => {
-        if (!object || object.name === undefined) return null;
+      getTooltip: ({ object, layer }) => {
+        if (!layer || layer.id !== "systems" || !object) return null;
         const owner = owners[object.id];
         return {
           text: `${object.name}\n${owner ? owner.country_name : "Unclaimed"}`,
@@ -236,13 +296,9 @@
       },
       onViewStateChange: ({ viewState }) => {
         const z = viewState.zoom;
-        // Only re-tier labels when crossing a threshold, to avoid churn.
-        const before = currentZoom;
-        const crossed =
-          (before < LABEL_ZOOM_OWNED) !== (z < LABEL_ZOOM_OWNED) ||
-          (before < LABEL_ZOOM_ALL) !== (z < LABEL_ZOOM_ALL);
+        const retier = labelTier(z - baseZoom) !== labelTier(currentZoom - baseZoom);
         currentZoom = z;
-        if (crossed) render();
+        if (retier) render();
       },
     });
 
