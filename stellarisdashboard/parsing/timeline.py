@@ -22,8 +22,15 @@ def dump_name(name: dict):
 
 
 def _extract_id(val, default: int = -1) -> int:
-    if isinstance(val, dict) and "reference" in val:
-        return val["reference"]
+    """Normalize an in-game ID reference to an int.
+
+    Recent Stellaris versions serialize some scalar ID references as a dict of
+    the form ``{"reference": <id>, ...}`` instead of a bare integer. Accept
+    either form and fall back to ``default`` for anything unexpected (a missing
+    value, the "none" sentinel, etc.) so parsing doesn't crash on newer saves.
+    """
+    if isinstance(val, dict):
+        val = val.get("reference", default)
     if isinstance(val, (int, float)):
         return int(val)
     return default
@@ -1209,7 +1216,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         subclass, leader_traits = self._get_leader_traits(leader_dict)
         ethic = leader_dict.get("ethic", "ethic_neutral")
         job = leader_dict.get("job")
-        planet_id = leader_dict.get("planet")
+        planet_id = _extract_id(leader_dict.get("planet"))
         planet = self._planets_by_ingame_id.get(planet_id)
         creator_id = leader_dict.get("creator")
         creator = self._countries_by_ingame_id.get(creator_id)
@@ -1258,7 +1265,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         leader_gender = leader_dict.get("gender", "other")
         first_name, second_name = self.get_leader_name(leader_dict)
         level = leader_dict.get("level", -1)
-        species_id = leader_dict.get("species", -1)
+        species_id = _extract_id(leader_dict.get("species", -1))
         leader_species = self._species_dict.get(species_id)
         subclass, leader_traits = self._get_leader_traits(leader_dict)
         ethic = leader_dict.get("ethic", "ethic_neutral")
@@ -3535,7 +3542,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 continue
             attacker_victory = battle_dict.get("attacker_victory") == "yes"
 
-            planet_model = self._planet_models_dict.get(battle_dict.get("planet"))
+            planet_model = self._planet_models_dict.get(_extract_id(battle_dict.get("planet")))
             if planet_model is None:
                 system_id_in_game = battle_dict.get("system")
                 system = self._system_models_dict.get(system_id_in_game)
@@ -3790,7 +3797,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
             for pop_group_id, pop_group_dict in self._gamestate_dict["pop_groups"].items():
                 if not isinstance(pop_group_dict, dict):
                     continue
-                planet_id = pop_group_dict.get("planet")
+                planet_id = _extract_id(pop_group_dict.get("planet"))
                 planet_country_id_in_game = self.country_by_planet_id.get(planet_id)
                 if planet_country_id_in_game != country_id_in_game:
                     continue
@@ -3799,7 +3806,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 if size == 0:
                     continue
 
-                species_id = pop_group_dict.get("key").get("species")
+                species_id = _extract_id(pop_group_dict.get("key").get("species"))
                 stratum = pop_group_dict.get("key").get("category", "unknown stratum")
                 faction_id = pop_group_dict.get("key").get("pop_faction")
 
