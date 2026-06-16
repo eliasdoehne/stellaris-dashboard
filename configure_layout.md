@@ -2,7 +2,7 @@
 
 Disabling some graphs means that the dashboard has to do less work, making it faster to browse. Also, you can remove any graphs that you don't care about and arrange them into tabs in whatever way you prefer.
 
-The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Galaxy Map" and "Markets", which are reserved for special tabs and will be ignored.
+The configuration is written in YAML format which is quite easy to understand. You can chose almost any name for the tabs, except for "Markets" (a reserved special tab) and "Galaxy Map" (the galaxy map is now its own page rather than a graph tab); both names are ignored if used here.
 
 For example this would be a valid configuration you can add to the config.yml:
 ```yaml
@@ -27,7 +27,8 @@ Changes to the tab layout will only apply after restarting the dashboard.
 
 Some special graphs are created in the code and cannot be configured manually:
 - Market prices
-- Galaxy map
+
+(The galaxy map is no longer a graph tab — it has its own **Galaxy Map** page.)
 
 Graphs that are disabled by default, you can enable them by adding them to your configuration file:
 - `total_energy_income_graph`

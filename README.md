@@ -66,7 +66,7 @@ For balance and immersion, only some information about other empires is shown by
 
 ## Timelapse Export
 
-Using the controls under the "Galaxy Map" tab to export a gif timelapse of the galaxy map in your game. The timelapse shows the area controlled by each country on the given date. An example can be found here: https://www.youtube.com/watch?v=OoiRCEWs00I 
+Use the controls on the **Galaxy Map** page to export a gif timelapse of the galaxy map in your game. The timelapse shows the area controlled by each country on the given date. An example can be found here: https://www.youtube.com/watch?v=OoiRCEWs00I 
 
 You can either export the timelapse as a single gif file (which can be large and requires more memory), export the individual frames as png images, or both. The export may take several minutes, check the stellaris dashboard console for progress, and for the exact output location.
 
