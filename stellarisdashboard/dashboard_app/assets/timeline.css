@@ -161,16 +161,6 @@ html, body {
     color: var(--tl-text-faint);
 }
 
-.tl-section-title {
-    margin: 0.5rem 0 0;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    text-align: left;
-    color: var(--tl-accent);
-}
-
 .tl-hint {
     font-size: 0.82rem;
     color: var(--tl-text-dim);
@@ -228,22 +218,6 @@ html, body {
     border: 1px solid var(--tl-border-soft);
     border-radius: var(--tl-radius-lg);
     box-shadow: var(--tl-shadow-sm);
-}
-
-/* The galaxy map fills the available space; Plotly keeps its aspect ratio
-   (scaleanchor) so it letterboxes instead of skewing. */
-.tl-card--galaxy {
-    padding: 0.25rem;
-    background: var(--tl-surface-1);
-    max-width: none;
-    height: calc(100vh - 7rem);
-    display: flex;
-}
-
-.tl-graph--galaxy {
-    flex: 1;
-    min-width: 0;
-    height: 100%;
 }
 
 .tl-graph {
@@ -386,21 +360,6 @@ html, body {
 .tl-modal__body .tl-graph,
 .tl-modal__body .js-plotly-plot { height: 100%; }
 
-/* ---------------------------- Galaxy panel ----------------------------- */
-.tl-galaxy-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--tl-border-soft);
-}
-
-.tl-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-}
-
 /* ------------------------- Form controls ------------------------------- */
 .tl-sidebar input[type="text"],
 .tl-sidebar input[type="number"] {
@@ -443,7 +402,6 @@ html, body {
 
 /* Checklists (dcc.Checklist) */
 .tl-checklist label,
-.tl-galaxy-panel .dash-checklist label,
 .tl-checklist .dash-label {
     display: flex;
     align-items: center;
@@ -454,8 +412,7 @@ html, body {
     cursor: pointer;
 }
 
-.tl-checklist input[type="checkbox"],
-.tl-galaxy-panel input[type="checkbox"] {
+.tl-checklist input[type="checkbox"] {
     accent-color: var(--tl-accent);
     width: 1rem;
     height: 1rem;
@@ -485,27 +442,6 @@ html, body {
     --Dash-Shading-Weak: hsl(200 30% 3% / 0.40) !important;
 }
 
-/* Slider (dcc.Slider). Dash 4.x uses a Radix-based slider with `dash-slider-*`
-   classes, styled via an injected stylesheet that uses Dash design tokens
-   (--Dash-Fill-*, --Dash-Text-*). Scope under .tl-galaxy-panel and use
-   !important to retheme over those rules. */
-.tl-slider { margin: 0.5rem 0 1.5rem; }
-.tl-galaxy-panel .dash-slider-track { background-color: var(--tl-surface-3) !important; }
-.tl-galaxy-panel .dash-slider-range { background-color: var(--tl-accent-dim) !important; }
-.tl-galaxy-panel .dash-slider-thumb {
-    background-color: var(--tl-accent) !important;
-    border-color: var(--tl-bg) !important;
-}
-.tl-galaxy-panel .dash-slider-thumb:focus { outline-color: var(--tl-accent) !important; }
-/* Year labels: readable in the dark sidebar. The base rule also overrides the
-   faint `mark-outside-selection` (marks past the handle) via higher specificity. */
-.tl-galaxy-panel .dash-slider-mark { color: var(--tl-text) !important; font-size: 0.68rem; }
-.tl-galaxy-panel .dash-slider-mark-outside-selection { color: var(--tl-text) !important; }
-/* Decade notch ticks (separate `dot` elements, or the `mark::before` tick). */
-.tl-galaxy-panel .dash-slider-dot { background-color: var(--tl-text-dim) !important; }
-.tl-galaxy-panel .dash-slider-dot-outside-selection { background-color: var(--tl-text-faint) !important; }
-.tl-galaxy-panel .dash-slider-mark::before { background-color: var(--tl-text-dim) !important; }
-
 /* --------------------------- Scrollbars -------------------------------- */
 .tl-sidebar::-webkit-scrollbar { width: 8px; }
 .tl-sidebar::-webkit-scrollbar-track { background: transparent; }
@@ -524,6 +460,4 @@ html, body {
         border-right: none;
         border-bottom: 1px solid var(--tl-border-soft);
     }
-    /* Sidebar no longer takes a column, so the viewport math above doesn't hold. */
-    .tl-card--galaxy { height: 75vh; }
 }

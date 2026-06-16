@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+
+{% block head_extra %}
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='galaxy_map.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="galaxy-page" data-galaxy-config='{{ {
+        "gameName": game_name,
+        "geometryUrl": url_for("galaxy_geometry", game_id=game_name),
+        "dataUrl": url_for("galaxy_data", game_id=game_name),
+        "historyUrl": url_for("history_page", game_id=game_name),
+        "maxDate": max_date
+    } | tojson }}'>
+
+    <div class="galaxy-stage">
+        <div id="galaxy-deck" class="galaxy-deck"></div>
+        <div id="galaxy-loading" class="galaxy-loading">Loading galaxy…</div>
+        <div class="galaxy-date-readout">
+            Galaxy Map at <strong id="galaxy-date-label">{{ current_date }}</strong>
+        </div>
+    </div>
+
+    <aside class="galaxy-controls">
+        <section class="galaxy-control-group">
+            <h3 class="galaxy-control-title">Date</h3>
+            <input type="range" id="galaxy-date-slider" class="galaxy-slider"
+                   min="0" max="{{ max_date }}" step="1" value="{{ max_date }}">
+            <p id="galaxy-selection" class="galaxy-selection tl-hint">Click the map to select a system</p>
+        </section>
+
+        <section class="galaxy-control-group">
+            <details class="galaxy-timelapse">
+                <summary class="galaxy-control-title">Timelapse Export</summary>
+                <form class="galaxy-timelapse-form"
+                      action="{{ url_for('galaxy_timelapse', game_id=game_name) }}"
+                      method="POST" hx-post="{{ url_for('galaxy_timelapse', game_id=game_name) }}"
+                      hx-swap="none">
+                    <label class="galaxy-field">Start date
+                        <input type="text" name="start" placeholder="{{ timelapse_defaults.start }}">
+                    </label>
+                    <label class="galaxy-field">End date
+                        <input type="text" name="end" placeholder="{{ timelapse_defaults.end }}">
+                    </label>
+                    <label class="galaxy-field">Step size (days)
+                        <input type="number" name="step" placeholder="{{ timelapse_defaults.step }}">
+                    </label>
+                    <label class="galaxy-field">Frame time (ms)
+                        <input type="number" name="frame_time" placeholder="{{ timelapse_defaults.frame_time }}">
+                    </label>
+                    <label class="galaxy-field">DPI
+                        <input type="number" name="dpi" placeholder="{{ timelapse_defaults.dpi }}">
+                    </label>
+                    <label class="galaxy-check"><input type="checkbox" name="export_gif" checked> Export gif (large file)</label>
+                    <label class="galaxy-check"><input type="checkbox" name="export_webp" {% if not webp_supported %}disabled{% endif %}> Export webp (smaller, slow)</label>
+                    <label class="galaxy-check"><input type="checkbox" name="export_frames"> Export frames</label>
+                    <label class="galaxy-check"><input type="checkbox" name="square_aspect_ratio"> 1:1 aspect ratio</label>
+                    <button type="submit" class="galaxy-button">Export Timelapse</button>
+                    <p class="galaxy-hint tl-hint">Export runs synchronously and may take a while.</p>
+                </form>
+            </details>
+        </section>
+    </aside>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/deck.gl.min.js') }}"></script>
+<script src="{{ url_for('static', filename='galaxy_map.js') }}"></script>
+{% endblock %}
