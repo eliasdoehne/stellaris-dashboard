@@ -16,14 +16,216 @@ body {
     margin: 0;
 }
 
-.page {
+/* ---- App shell (sidebar + topbar) ---------------------------------------
+   Persistent shell shared by every Flask page (Chunk D). Mirrors the Dash
+   timeline shell (timeline.css) via the shared theme tokens so the two halves
+   of the app read as one product. Full-page navigation for now; HTMX swaps
+   land in Chunk E. */
+.app-shell {
+    display: grid;
+    grid-template-columns: 248px 1fr;
     min-height: 100vh;
 }
 
-div.metanav {
-    /* NB: layout.html renders the whole page body inside .metanav, so this is
-       the page container, not a top bar. The real shell arrives in Chunk D. */
-    padding: 0.85rem 1.25rem 2.5rem;
+.sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    padding: 1.5rem 1.1rem 2rem;
+    background: linear-gradient(180deg, var(--panel), var(--bg));
+    border-right: 1px solid var(--line-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+    text-decoration: none;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line-soft);
+}
+.sidebar-brand:hover { text-decoration: none; }
+.brand-title {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    color: var(--text);
+}
+.brand-sub {
+    margin-top: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.4em;
+    color: var(--amber);
+}
+
+.sidebar-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.identity-empire {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.identity-empire--none {
+    color: var(--text-faint);
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+.identity-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--pos);
+    box-shadow: 0 0 6px var(--pos);
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.nav-link {
+    display: block;
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.nav-link:hover {
+    background: var(--panel-2);
+    color: var(--text);
+    text-decoration: none;
+}
+.nav-link.is-active {
+    background: var(--panel-2);
+    color: var(--amber-bright);
+    border-left-color: var(--amber);
+}
+.nav-link--ext {
+    color: var(--text-faint);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+}
+
+.content-area {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.8rem 1.5rem;
+    background: rgba(33, 43, 39, 0.86);  /* --bg @ 86% */
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+}
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--text-dim);
+}
+.crumb--current { color: var(--text); font-weight: 600; }
+.crumb-sep { color: var(--text-faint); }
+.topbar-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.stardate {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+.stardate strong { color: var(--cyan-soft); font-weight: 600; }
+
+.main {
+    flex: 1;
+    padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 3rem;
+}
+
+.version-notice {
+    max-width: 60rem;
+    margin: 0 auto 1.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--amber-deep);
+    border-radius: var(--radius);
+    background: hsl(37, 25%, 10%);
+    color: var(--text-dim);
+}
+
+/* Toast — transient confirmation (e.g. settings saved); auto-dismisses. */
+.toast {
+    position: fixed;
+    top: 4.5rem;
+    right: 1.5rem;
+    z-index: 100;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    animation: toast-in-out 3.6s ease forwards;
+}
+.toast--success { border-left: 3px solid var(--pos); }
+
+@keyframes toast-in-out {
+    0%   { opacity: 0; transform: translateY(-8px); }
+    8%   { opacity: 1; transform: translateY(0); }
+    82%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .toast { animation: none; opacity: 1; }
+}
+
+/* Stack the sidebar above the content on narrow screens. */
+@media (max-width: 860px) {
+    .app-shell { grid-template-columns: 1fr; }
+    .sidebar {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--line-soft);
+    }
 }
 
 h1, h2, h3, h4, h5, h6 {

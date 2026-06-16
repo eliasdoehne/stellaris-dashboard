@@ -1,12 +1,5 @@
 {% extends "layout.html" %}
 
-{% block nav %}
-<a class="button" href={{url_for("/timeline/", game_name=game_name)}}>Graph Dashboard</a>
-{% if is_filtered_page %}
-<a class="button" href={{url_for("history_page", game_id=game_name)}}>Global event ledger</a>
-{% endif %}
-{% endblock %}
-
 {% macro render_leader(event, fallback="an unknown leader") -%}
     {% if "leader" in event %}
         {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }}

@@ -3,7 +3,11 @@
 
 <h1>Settings</h1>
 
-<form class="settingsform" action="/applysettings/" method="POST">
+<!-- htmx: save in place and confirm via an out-of-band toast (apply_settings
+     returns just the #toast-slot fragment on HX-Request, leaving this form as-is).
+     With JS off, the plain POST redirects back here. -->
+<form class="settingsform" action="/applysettings/" method="POST"
+      hx-post="/applysettings/" hx-swap="none">
     <div class="settings">
         <dl>
             <dt>*</dt>

@@ -8,9 +8,7 @@ from stellarisdashboard.dashboard_app import flask_app
 logger = logging.getLogger(__name__)
 
 
-@flask_app.route("/settings/")
-@flask_app.route("/settings")
-def settings_page():
+def _build_settings_dict():
     def _bool_to_lowercase(py_bool: bool) -> str:
         return "true" if py_bool else "false"
 
@@ -19,7 +17,7 @@ def settings_page():
     t_str = "str"
 
     current_values = config.CONFIG.get_adjustable_settings_dict()
-    settings = {
+    return {
         "File Locations": {
             "save_file_path": {
                 "type": t_str,
@@ -140,7 +138,14 @@ def settings_page():
             },
         },
     }
-    return render_template("settings_page.html", current_settings=settings)
+
+
+@flask_app.route("/settings/")
+@flask_app.route("/settings")
+def settings_page():
+    return render_template(
+        "settings_page.html", current_settings=_build_settings_dict()
+    )
 
 
 @flask_app.route("/applysettings/", methods=["POST", "GET"])
@@ -162,4 +167,12 @@ def apply_settings():
         settings[unadjustable_key] = previous_settings[unadjustable_key]
     config.CONFIG.apply_dict(settings)
     config.CONFIG.write_to_file()
-    return redirect("/")
+    if request.headers.get("HX-Request"):
+        # htmx save: confirm with an out-of-band toast swapped into #toast-slot;
+        # the form itself is left untouched (hx-swap="none").
+        return (
+            '<div id="toast-slot" hx-swap-oob="innerHTML">'
+            '<div class="toast toast--success" role="status">Settings applied.</div>'
+            "</div>"
+        )
+    return redirect("/settings/")
