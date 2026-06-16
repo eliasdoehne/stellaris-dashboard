@@ -30,14 +30,23 @@
   const SYS_LABEL_COLOR = [223, 230, 227, 255];
   const SYS_LABEL_BG = [20, 25, 25, 170];
 
-  // System-name labels reveal as you zoom in (maps-like). Thresholds are
-  // relative to the initial "fit" zoom so they behave the same regardless of
-  // galaxy size. Tiering (owned-only, then all) keeps overlap manageable
-  // without a collision pass.
-  //   +OWNED  -> system names of owned systems
-  //   +ALL    -> every system name
+  // Label visibility is tiered by how far you've zoomed past the initial "fit"
+  // zoom (dz), so it behaves the same regardless of galaxy size.
+  //   country labels: shown from COUNTRY_DZOOM_MIN up (hidden when zoomed out
+  //                   very far, where they'd pile into an unreadable heap).
+  //   system labels:  owned-only from +OWNED, then every system from +ALL.
+  const COUNTRY_DZOOM_MIN = -0.8; // hide empire names when zoomed out past this
   const LABEL_DZOOM_OWNED = 1.5; // ~2.8x zoomed in past the overview
   const LABEL_DZOOM_ALL = 3.0; // ~8x
+
+  // Labels are sized in world units (sizeUnits "common") so they grow/shrink
+  // with zoom, then clamped to a readable pixel range. getSize is derived so a
+  // label is ~<px-at-fit> at the fit zoom and scales from there:
+  //   on-screen px = pxAtFit * 2^dz, clamped to [min, max].
+  const SYS_LABEL_PX_AT_FIT = 4.5; // small at fit; only shown once zoomed in
+  const SYS_LABEL_PX = [9, 26]; // [min, max] clamp
+  const COUNTRY_LABEL_PX_AT_FIT = 15;
+  const COUNTRY_LABEL_PX = [12, 23];
 
   const container = document.getElementById("galaxy-deck");
   const loadingEl = document.getElementById("galaxy-loading");
@@ -108,10 +117,17 @@
     }));
   }
 
+  // World-unit size that renders as `pxAtFit` pixels at the fit zoom (so labels
+  // then scale with zoom; px = pxAtFit * 2^dz, clamped per-layer).
+  function worldSize(pxAtFit) {
+    return pxAtFit / Math.pow(2, baseZoom);
+  }
+
   function buildLayers() {
     const dz = currentZoom - baseZoom;
     const ownedLabels = dz >= LABEL_DZOOM_OWNED;
     const allLabels = dz >= LABEL_DZOOM_ALL;
+    const countryLabelsVisible = dz >= COUNTRY_DZOOM_MIN;
 
     const territoryLayer = new SolidPolygonLayer({
       id: "territory",
@@ -182,25 +198,30 @@
       getPosition: (d) => [d.x, d.y],
       getText: (d) => d.name,
       getColor: SYS_LABEL_COLOR,
-      getSize: 11,
-      sizeUnits: "pixels",
+      getSize: worldSize(SYS_LABEL_PX_AT_FIT),
+      sizeUnits: "common",
+      sizeMinPixels: SYS_LABEL_PX[0],
+      sizeMaxPixels: SYS_LABEL_PX[1],
       getTextAnchor: "start",
       getAlignmentBaseline: "center",
       getPixelOffset: [7, 0],
       background: true,
       getBackgroundColor: SYS_LABEL_BG,
       backgroundPadding: [3, 1],
+      updateTriggers: { getSize: baseZoom },
     });
 
-    // Empire name labels — always shown, bold, drawn on top.
+    // Empire name labels — shown except when zoomed out very far, bold, on top.
     const countryLabelLayer = new TextLayer({
       id: "country-labels",
-      data: countryLabels,
+      data: countryLabelsVisible ? countryLabels : [],
       getPosition: (d) => [d.x, d.y],
       getText: (d) => d.name,
       getColor: (d) => d.color,
-      getSize: 17,
-      sizeUnits: "pixels",
+      getSize: worldSize(COUNTRY_LABEL_PX_AT_FIT),
+      sizeUnits: "common",
+      sizeMinPixels: COUNTRY_LABEL_PX[0],
+      sizeMaxPixels: COUNTRY_LABEL_PX[1],
       fontWeight: "bold",
       getTextAnchor: "middle",
       getAlignmentBaseline: "center",
@@ -208,7 +229,7 @@
       getBackgroundColor: [10, 14, 14, 150],
       backgroundPadding: [5, 2],
       characterSet: "auto",
-      updateTriggers: { getText: dataVersion, getColor: dataVersion },
+      updateTriggers: { getText: dataVersion, getColor: dataVersion, getSize: baseZoom },
     });
 
     return [
@@ -259,12 +280,13 @@
     };
   }
 
-  // Re-tier system labels only when crossing a threshold (avoids churn on every
-  // wheel tick).
-  function labelTier(dz) {
-    if (dz >= LABEL_DZOOM_ALL) return 2;
-    if (dz >= LABEL_DZOOM_OWNED) return 1;
-    return 0;
+  // A signature of which labels are visible at a given zoom. We only rebuild
+  // layers when this changes (label size scales smoothly via "common" units, so
+  // it needs no rebuild — only visibility changes do).
+  function labelVisKey(dz) {
+    const sysTier = dz >= LABEL_DZOOM_ALL ? 2 : dz >= LABEL_DZOOM_OWNED ? 1 : 0;
+    const countryVisible = dz >= COUNTRY_DZOOM_MIN ? 1 : 0;
+    return sysTier * 2 + countryVisible;
   }
 
   async function init() {
@@ -296,9 +318,10 @@
       },
       onViewStateChange: ({ viewState }) => {
         const z = viewState.zoom;
-        const retier = labelTier(z - baseZoom) !== labelTier(currentZoom - baseZoom);
+        const changed =
+          labelVisKey(z - baseZoom) !== labelVisKey(currentZoom - baseZoom);
         currentZoom = z;
-        if (retier) render();
+        if (changed) render();
       },
     });
 
