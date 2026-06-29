@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "stellarisdashboard"
-version = "7.1.0"
+version = "8.0.0"
 description = "Reads Stellaris save files while you play and shows detailed statistics and an event ledger for your playthrough."
 readme = "README.md"
 requires-python = ">=3.14"
