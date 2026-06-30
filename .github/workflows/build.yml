@@ -88,6 +88,9 @@ jobs:
       - name: Create Release Draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # gh needs to know the target repo; the release job has no checkout,
+          # so without this gh fails with "fatal: not a git repository".
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create ${{ github.ref_name }} release_files/* --draft --generate-notes
 
