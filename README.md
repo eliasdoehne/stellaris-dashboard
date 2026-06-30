@@ -30,8 +30,11 @@ You can also access the dashboard by opening [http://localhost:28053](http://loc
 
 1. Download the latest release of the dashboard from the [releases page](https://github.com/eliasdoehne/stellaris-dashboard/releases) for your OS.
 2. Extract the zip archive to a location of your choice.
-3. Run the `parse_saves` application to read any existing save files. This will attempt to load any existing save files into the dashboard's database.
-4. Run the `stellarisdashboard` application. (recommended to run from a terminal in Linux and macOs to see the dashboard output)
+3. Run the `stellarisdashboard` application. (recommended to run from a terminal in Linux and macOs to see the dashboard output)
+
+The packaged app tracks new saves as they appear while it runs. Bulk-importing
+save files that already exist on disk is currently only available from a source
+checkout (`uv run stellarisdashboardcli parse-saves`).
 
 ### Building from source (developer setup)
 
