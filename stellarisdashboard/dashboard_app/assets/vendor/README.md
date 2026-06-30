@@ -17,3 +17,7 @@ The standalone `dist.min.js` bundles `@deck.gl/core`, `@deck.gl/layers`,
 `OrthographicView`, `SolidPolygonLayer`, `PathLayer`, `ScatterplotLayer`,
 `TextLayer`, and `CollisionFilterExtension` used by the galaxy map. It has no
 dependency on React, Mapbox, or MapLibre.
+
+- **License:** MIT (the minified bundle has no banner, so the license text is
+  kept alongside it in `deck.gl.LICENSE`). Bundled transitive deps are MIT /
+  Apache-2.0 / BSD-style; their notices remain inside the minified source.
