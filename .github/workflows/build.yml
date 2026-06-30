@@ -9,17 +9,26 @@ on:
     tags:
       - 'v*'
 
+# Cancel superseded runs on the same ref so a rapid push/PR series doesn't queue
+# up several full builds; the latest commit is the only one worth finishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      # Don't let one OS failing kill the others' feedback.
+      fail-fast: false
       matrix:
         python-version:
           - '3.14'
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macOS-latest
+        # PRs build on ubuntu only (fastest, still validates that the
+        # PyInstaller package assembles). The full three-OS matrix runs on
+        # pushes to master, tags, and manual dispatch, where the per-OS
+        # release artifacts actually matter.
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "windows-latest", "macOS-latest"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,6 +39,13 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Cache cargo build
+        # Caches ~/.cargo and the crate's target/ dir so the rust_parser
+        # compile (via maturin during uv sync) and `cargo test` don't start
+        # cold on every run.
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "stellarisdashboard/parsing/rust_parser"
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
