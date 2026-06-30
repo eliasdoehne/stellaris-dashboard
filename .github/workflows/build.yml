@@ -62,9 +62,28 @@ jobs:
         run: uv run python -m pytest -m "not skip_github_actions" --verbose
       - name: pyInstaller build
         run: uv run pyinstaller pyinstaller-package.spec
-      - name: pyInstaller run
+      # Boot the frozen exe to catch runtime-only import failures the static
+      # Analysis misses. The dashboard runs until interrupted, so we give it a
+      # few seconds: still alive => booted clean; early non-zero exit => crash.
+      - name: pyInstaller boot smoke test (unix)
+        if: matrix.os != 'windows-latest'
         run: |
-          dist/stellarisdashboard-build/parse_saves
+          timeout 20s dist/stellarisdashboard-build/dashboard; code=$?
+          if [ "$code" = "124" ] || [ "$code" = "0" ]; then
+            echo "dashboard booted OK (exit $code)"
+          else
+            echo "dashboard crashed on startup (exit $code)"; exit "$code"
+          fi
+      - name: pyInstaller boot smoke test (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $p = Start-Process -FilePath "dist/stellarisdashboard-build/dashboard.exe" -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited -and $p.ExitCode -ne 0) {
+            Write-Error "dashboard crashed on startup (exit $($p.ExitCode))"; exit $p.ExitCode
+          }
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Write-Host "dashboard booted OK"
       # Zip the file, makes a zip containing a zip but fixes download problems due to too many small files
       - name: package files (win)
         if: matrix.os == 'windows-latest'
