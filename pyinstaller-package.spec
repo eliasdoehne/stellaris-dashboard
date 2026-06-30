@@ -34,11 +34,9 @@ a_main = Analysis(
     noarchive=False
 )
 
-# Only the `dashboard` exe is built. The parse-existing-saves capability lives in
-# `cli.f_parse_saves` (also reachable via `stellarisdashboardcli parse-saves`),
-# which the dashboard exe already bundles; a dedicated second exe just doubled the
-# import-graph Analysis for no unique code. Re-exposing it (e.g. a UI button) is
-# tracked separately.
+# Single `dashboard` exe. The parse-existing-saves capability lives in
+# `cli.f_parse_saves` (reachable via `stellarisdashboardcli parse-saves`), which
+# this exe already bundles, so it needs no separate entrypoint.
 pyz_main = PYZ(a_main.pure, a_main.zipped_data,
                cipher=block_cipher)
 exe_main = EXE(pyz_main,
