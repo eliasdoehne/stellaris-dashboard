@@ -7,6 +7,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='theme.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
 <div id="toast-slot" aria-live="polite"></div>
@@ -34,6 +35,7 @@
             <a class="nav-link{% if request.endpoint == 'index_page' %} is-active{% endif %}" href="/">Game Selection</a>
             {% if game_name %}
             <a class="nav-link" hx-boost="false" href="{{ url_for('/timeline/', game_name=game_name) }}">Graphs</a>
+            <a class="nav-link{% if request.endpoint == 'galaxy_page' %} is-active{% endif %}" hx-boost="false" href="{{ url_for('galaxy_page', game_id=game_name) }}">Galaxy Map</a>
             <a class="nav-link{% if request.endpoint == 'history_page' %} is-active{% endif %}" href="{{ url_for('history_page', game_id=game_name) }}">Event Ledger</a>
             {% endif %}
             <a class="nav-link{% if request.endpoint == 'settings_page' %} is-active{% endif %}" href="/settings/">Settings</a>
@@ -46,6 +48,8 @@
             <div class="breadcrumb">
                 {% if request.endpoint == 'settings_page' %}
                     <span class="crumb crumb--current">Settings</span>
+                {% elif request.endpoint == 'galaxy_page' %}
+                    {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">Galaxy Map</span>
                 {% elif country %}
                     <span class="crumb">{{ country }}</span><span class="crumb-sep">›</span><span class="crumb crumb--current">Event Ledger</span>
                 {% elif request.endpoint == 'history_page' %}

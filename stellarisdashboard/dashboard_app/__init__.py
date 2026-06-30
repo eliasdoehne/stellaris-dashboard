@@ -15,6 +15,7 @@ from stellarisdashboard.dashboard_app import (
     history_ledger,
     game_index,
     graph_ledger,
+    galaxy_map,
     settings,
 )
 

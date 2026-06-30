@@ -47,6 +47,7 @@
                 {{ game["num_saves"] }} saves, last updated {{ game["last_updated"] }}
             </p>
             <a class="button" href={{url_for("/timeline/", game_name=game["game_id"])}}>Timeline Graphs</a>
+            <a class="button" href={{url_for("galaxy_page", game_id=game["game_id"])}}>Galaxy Map</a>
             <a class="button" href={{url_for("history_page", game_id=game["game_id"])}}>Event Ledger</a>
         </li>
         {% endfor %}
