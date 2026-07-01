@@ -4,6 +4,7 @@ import itertools
 import logging
 import pathlib
 import threading
+import time
 from typing import Dict, List, Union, Optional, Iterable, Collection
 
 import sqlalchemy
@@ -372,8 +373,8 @@ def days_to_date(days: float) -> str:
     """Converts an integer counting the days passed in-game since 2200.01.01 to a readable date in YYYY.MM.DD format
     (In Stellaris, there are 12 months with 30 days each)
 
-    :param date_str: Date in YYYY.MM.DD format
-    :return: Days passed since 2200.01.01
+    :param days: Days passed since 2200.01.01
+    :return: Date in YYYY.MM.DD format
     """
     days = int(days)
     year_offset = days // 360
@@ -398,8 +399,23 @@ def get_known_games(game_name_prefix: str = "") -> List[str]:
     return [fname.stem for fname in files]
 
 
+# get_available_games_dict opens and queries every game database, and is called
+# from several request handlers and Dash callbacks. Cache the result briefly so
+# one page interaction doesn't re-scan all databases multiple times.
+_AVAILABLE_GAMES_CACHE_TTL_SECONDS = 5.0
+_available_games_cache = (float("-inf"), {})  # (timestamp, result)
+
+
 def get_available_games_dict() -> Dict[str, Dict[str, str]]:
-    """Returns a dictionary mapping game id to some basic info about the game."""
+    """Returns a dictionary mapping game id to some basic info about the game.
+
+    Results may be up to _AVAILABLE_GAMES_CACHE_TTL_SECONDS stale.
+    """
+    global _available_games_cache
+    cached_time, cached_games = _available_games_cache
+    now = time.time()
+    if now - cached_time < _AVAILABLE_GAMES_CACHE_TTL_SECONDS:
+        return cached_games
     games = {}
     for game_id in get_known_games():
         with get_db_session(game_id) as session:
@@ -418,6 +434,7 @@ def get_available_games_dict() -> Dict[str, Dict[str, str]]:
                 galaxy=game.galaxy,
                 last_updated=game.last_updated,
             )
+    _available_games_cache = (now, games)
     return games
 
 
@@ -1542,9 +1559,6 @@ class Leader(Base):
         "HistoricalEvent", back_populates="leader", cascade="all,delete,delete-orphan"
     )
 
-    def get_name_and_class(self):
-        return f"{self.leader_class.capitalize()} {self.get_name()}"
-
     @property
     def rendered_name(self):
         rendered_first = game_info.render_name(self.first_name)
@@ -1628,6 +1642,9 @@ class PlanetDistrict(Base):
         return game_info.convert_id_to_name(self.db_description.text, "district")
 
 
+_RESOURCE_DEPOSIT_SUFFIXES = frozenset(str(i) for i in range(31))
+
+
 class PlanetDeposit(Base):
     __tablename__ = "planet_deposit"
     deposit_id = Column(Integer, primary_key=True)
@@ -1648,9 +1665,10 @@ class PlanetDeposit(Base):
 
     @property
     def is_resource_deposit(self):
-        return any(
-            self.db_description.text.endswith(f"_{amount}") for amount in range(31)
-        )
+        # resource deposits carry a numeric amount suffix, e.g. "d_energy_10";
+        # a single rpartition beats 31 endswith checks on this hot render path
+        _, sep, suffix = self.db_description.text.rpartition("_")
+        return bool(sep) and suffix in _RESOURCE_DEPOSIT_SUFFIXES
 
 
 class PlanetBuilding(Base):

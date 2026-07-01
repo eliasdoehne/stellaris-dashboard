@@ -49,7 +49,7 @@ def get_most_recent_date(session):
     return most_recent_date
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=8192)
 def preformat_history_url(text, game_id, a_class="textlink", **kwargs):
     href = flask.url_for("history_page", game_id=game_id, **kwargs)
     return f'<a class="{a_class}" href={href}>{text}</a>'

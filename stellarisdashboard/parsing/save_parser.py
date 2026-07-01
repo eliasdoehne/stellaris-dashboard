@@ -79,13 +79,10 @@ class SavePathMonitor(abc.ABC):
             filter_string = config.CONFIG.save_name_filter
             if filter_string:
                 new_files = [
-                    f
-                    for (i, f) in enumerate(new_files)
-                    if f.stem.lower().find(filter_string.lower()) >= 0
+                    f for f in new_files if filter_string.lower() in f.stem.lower()
                 ]
-            if filter_string:
                 logger.info(
-                    f'Applying filename filter: "{config.CONFIG.save_name_filter}", reduced from {unfiltered_count} to {len(new_files)} files.'
+                    f'Applying filename filter: "{filter_string}", reduced from {unfiltered_count} to {len(new_files)} files.'
                 )
         return new_files
 
@@ -153,14 +150,14 @@ class ContinuousSavePathMonitor(SavePathMonitor):
             processes=config.CONFIG.threads, initializer=_pool_worker_init
         )
         self._pending_results: Deque[
-            Tuple[pathlib.PurePath, mp.pool.AsyncResult, float]
+            Tuple[pathlib.PurePath, mp.pool.AsyncResult]
         ] = collections.deque()
 
     def get_gamestates_and_check_for_new_files(self):
         while self._pending_results:
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
-                fname, result, submit_time = self._pending_results.popleft()
+                fname, result = self._pending_results.popleft()
                 try:
                     yield fname.parent.stem, result.get()
                 except KeyboardInterrupt:
@@ -176,8 +173,7 @@ class ContinuousSavePathMonitor(SavePathMonitor):
             if len(self._pending_results) >= config.CONFIG.threads:
                 break  # Ignore if there are any additional files
             result = self._pool.apply_async(parse_save, args=(fname,))
-            submit_time = time.time()
-            self._pending_results.append((fname, result, submit_time))
+            self._pending_results.append((fname, result))
 
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
 
@@ -206,13 +202,15 @@ class BatchSavePathMonitor(SavePathMonitor):
         if config.CONFIG.threads > 1 and len(new_files) > 1:
             all_game_ids = [f.parent.stem for f in new_files]
             chunksize = min(16, int(2 * config.CONFIG.threads))
-            for chunk in BatchSavePathMonitor.split_into_chunks(
-                zip(all_game_ids, new_files), chunksize
-            ):
-                chunk_game_ids, chunk_files = zip(*chunk)
-                with concurrent.futures.ProcessPoolExecutor(
-                    max_workers=config.CONFIG.threads
-                ) as executor:
+            # one pool for the whole batch; submitting in chunks still bounds
+            # how many parsed gamestate dicts are held in memory at a time
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=config.CONFIG.threads
+            ) as executor:
+                for chunk in BatchSavePathMonitor.split_into_chunks(
+                    zip(all_game_ids, new_files), chunksize
+                ):
+                    chunk_game_ids, chunk_files = zip(*chunk)
                     futures = [
                         executor.submit(parse_save, save_file)
                         for save_file in chunk_files
