@@ -299,7 +299,6 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         added_new_val = False
         self.dates.append(gs.date / 360.0)
         for cd in gs.country_data:
-            country_name = cd.country.rendered_name
             try:
                 if (
                     not config.CONFIG.show_all_country_types
@@ -309,11 +308,14 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
                 new_val = self._get_value_from_countrydata(cd)
                 if new_val is not None:
                     added_new_val = True
+                    # render the name only for countries that pass the filters
                     self._add_new_value_to_data_dict(
-                        country_name, new_val, default_val=self.DEFAULT_VAL
+                        cd.country.rendered_name, new_val, default_val=self.DEFAULT_VAL
                     )
-            except Exception as e:
-                logger.exception(country_name)
+            except Exception:
+                logger.exception(
+                    f"Error extracting plot data for country {cd.country_id}"
+                )
         if not added_new_val:
             self.dates.pop()  # if nothing was added, we don't need to remember the date.
         self._pad_data_dict(default_val=self.DEFAULT_VAL)
@@ -455,8 +457,10 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
                     self._add_new_value_to_data_dict(
                         key, new_val, default_val=self.DEFAULT_VAL
                     )
-        except Exception as e:
-            logger.exception(player_cd.country.rendered_country_name)
+        except Exception:
+            logger.exception(
+                f"Error extracting budget data for {player_cd.country.rendered_name}"
+            )
         self._pad_data_dict(self.DEFAULT_VAL)
 
     def _get_player_countrydata(self, gs: datamodel.GameState) -> datamodel.CountryData:
@@ -1845,8 +1849,8 @@ class CountryColors:
         v = min(v, _MAX_V)
         v = max(v, _MIN_V)
         if avoid_used:
-            for shift in itertools.chain([0.0], *((v, -v) for v in _V_SHIFTS)):
-                v_shifted = s + shift
+            for shift in itertools.chain([0.0], *((dv, -dv) for dv in _V_SHIFTS)):
+                v_shifted = v + shift
                 if (
                     v_shifted >= _MIN_V
                     and v_shifted <= _MAX_V

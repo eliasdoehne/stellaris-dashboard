@@ -148,18 +148,25 @@ def settings_page():
     )
 
 
-@flask_app.route("/applysettings/", methods=["POST", "GET"])
+@flask_app.route("/applysettings/", methods=["POST"])
 def apply_settings():
     previous_settings = config.CONFIG.get_adjustable_settings_dict()
     settings = request.form.to_dict(flat=True)
-    for key in settings:
+    invalid_keys = []
+    for key, value in settings.items():
         if key in config.Config.BOOL_KEYS:
-            # only checked items are included in form
-            settings[key] = key in settings
-        if key in config.Config.INT_KEYS:
-            settings[key] = int(settings[key])
-        if key in config.Config.FLOAT_KEYS:
-            settings[key] = float(settings[key])
+            # only checked items are included in the form
+            settings[key] = True
+        try:
+            if key in config.Config.INT_KEYS:
+                settings[key] = int(value)
+            if key in config.Config.FLOAT_KEYS:
+                settings[key] = float(value)
+        except ValueError:
+            logger.warning(f"Ignoring invalid value {value!r} for setting {key}")
+            invalid_keys.append(key)
+    for key in invalid_keys:
+        del settings[key]
     for key in previous_settings:
         if key in config.Config.BOOL_KEYS and key not in settings:
             settings[key] = False
