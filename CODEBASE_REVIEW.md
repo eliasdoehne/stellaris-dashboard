@@ -263,24 +263,181 @@ A thin "process one synthetic gamestate twice, assert DB contents and event visi
 
 ## 6. Recommended follow-up actions
 
-Ordered roughly by (impact ÷ effort):
+Ordered roughly by (impact ÷ effort). The **Status** column reflects the fix PR
+accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 
-| # | Action | Refs | Effort |
-|---|--------|------|--------|
-| 1 | Fix the five one-line parsing/config bugs: modifier expiry self-assignment, two `is_known_to_player` typos, `return`→`continue` in `RulerEventProcessor`, `pass`→`continue` (×2) in `_preprocess_tab_layout` | §1.1–1.3, §1.7 | XS |
-| 2 | Fix `rendered_country_name`, `colonized_date` string write, OneDrive default path; delete `Leader.get_name_and_class`; set `event_is_known_to_player` on policy events | §1.4, 1.6, 1.8–1.10 | XS |
-| 3 | Replace `_check_if_gamestate_exists` with an indexed date query | §2.1 | XS |
-| 4 | Replace persisted `hash()` values with a stable digest (planets + bypass network ids); one-time re-diff on upgrade is acceptable | §2.5 | S |
-| 5 | Pre-load lookup dicts to remove the N+1 patterns in `CountryProcessor`, `SpeciesProcessor`, `SystemProcessor._add_system`, `PopStatsProcessor`, `FleetInfoProcessor`, `ScientistEventProcessor` | §2.2 | M |
-| 6 | Cache `get_available_games_dict()` (TTL or mtime-based) and stop calling it per Dash callback | §2.3 | S |
-| 7 | Restrict `/applysettings/` to POST, validate numeric form fields, clean up the `key in settings` idiom; validate timelapse form ints | §3.3, §4 | S |
-| 8 | Declare `normalize_stacked_plots` on `Config` (or pass it through the callback chain) | §3.3 | XS |
-| 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M |
-| 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S |
-| 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M |
-| 12 | Push ledger filtering into SQL and paginate the history page | §2.4 | M |
-| 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS |
-| 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS |
-| 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S |
+| # | Action | Refs | Effort | Status |
+|---|--------|------|--------|--------|
+| 1 | Fix the five one-line parsing/config bugs: modifier expiry self-assignment, two `is_known_to_player` typos, `return`→`continue` in `RulerEventProcessor`, `pass`→`continue` (×2) in `_preprocess_tab_layout` | §1.1–1.3, §1.7 | XS | ✅ done |
+| 2 | Fix `rendered_country_name`, `colonized_date` string write, OneDrive default path; delete `Leader.get_name_and_class`; set `event_is_known_to_player` on policy events; drop the dead `Game.player_country_id` write; fix the Dash 404 path | §1.4, 1.6, 1.8–1.12 | XS | ✅ done |
+| 3 | Replace `_check_if_gamestate_exists` with an indexed date query | §2.1 | XS | ✅ done |
+| 4 | Replace persisted `hash()` values with a stable digest (planets + bypass network ids); one-time re-diff on upgrade is acceptable | §2.5 | S | ⬜ open — semantic change, own PR |
+| 5 | Pre-load lookup dicts to remove the N+1 patterns in `CountryProcessor`, `SpeciesProcessor`, `SystemProcessor._add_system`, `PopStatsProcessor`, `FleetInfoProcessor`, `ScientistEventProcessor` | §2.2 | M | ✅ done |
+| 6 | Cache `get_available_games_dict()` (TTL or mtime-based) and stop calling it per Dash callback | §2.3 | S | ✅ done (5s TTL) |
+| 7 | Restrict `/applysettings/` to POST, validate numeric form fields, clean up the `key in settings` idiom; validate timelapse form ints | §3.3, §4 | S | ✅ done (timelapse form still open) |
+| 8 | Declare `normalize_stacked_plots` on `Config` (or pass it through the callback chain) | §3.3 | XS | ✅ done (declared) |
+| 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M | ⬜ open |
+| 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ⬜ open |
+| 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M | ⬜ open — see proposal in §7 |
+| 12 | Push ledger filtering into SQL and paginate the history page | §2.4 | M | ⬜ open |
+| 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS | ✅ done |
+| 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS | ✅ done |
+| 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⬜ open |
 
-Items 1–3 are safe, high-confidence fixes that could land in a single small PR; item 4 changes on-disk semantics (hash mismatch on upgrade causes one full re-diff) and deserves its own PR with a note in the changelog.
+Also included in the fix PR: `PopStatsProcessor` now tolerates missing
+`pop_jobs`/`pop_groups` sections instead of rolling back the entire save (§3.7),
+and `BatchSavePathMonitor` reuses a single process pool across chunks (§2.7).
+
+---
+
+## 7. Proposal: improved configuration handling
+
+This expands on follow-up item 11. It is a design proposal, not part of the fix
+PR — the migration is incremental and each step is independently shippable.
+
+### 7.1 Pain points in the current design
+
+1. **Import-time side effects.** `config.py` runs `initialize()` at module
+   import (`config.py:568`): it reads `./config.yml` relative to the *current
+   working directory*, creates output directories, and **rewrites the config
+   file** — on any import of any `stellarisdashboard` module. Tests, tooling,
+   and the CLI all touch the filesystem just by importing. The rewrite also
+   normalizes the file, silently discarding user comments and formatting.
+2. **Every setting is declared in up to four places** that must stay in sync:
+   the `Config` dataclass field, `DEFAULT_SETTINGS`, one of the
+   `BOOL_KEYS`/`INT_KEYS`/`FLOAT_KEYS`/… sets, and the UI metadata dict in
+   `dashboard_app/settings.py` (label, description, min/max). Drift between
+   these is exactly how bugs like the undeclared `normalize_stacked_plots`
+   field happen.
+3. **Mixed lifetimes on one mutable global.** Persisted user settings
+   (`save_file_path`), runtime-only state (`debug_mode`,
+   `normalize_stacked_plots`), and transient CLI overrides (`--threads`) all
+   live on the same mutable `config.CONFIG` object, which web request handlers
+   mutate while the parser thread reads it.
+4. **Scattered validation.** `_preprocess_bool` raises, path keys silently
+   reset to defaults, tab-layout problems log-and-fall-back, and
+   `settings.py` does its own `int()`/`float()` casts. There is no single
+   place where "what happens on invalid input" is decided, and no feedback to
+   the user when a value is rejected.
+5. **Untyped defaults.** Most dataclass fields default to `None` and only
+   become usable after `apply_dict` runs, so type checkers can't verify
+   anything and `Config()` alone is an unusable object.
+
+### 7.2 Design goals
+
+- **One declaration per setting** — type, default, validation, persistence,
+  and UI metadata in a single record; everything else derived.
+- **No import-time side effects** — explicit load at entry points, injectable
+  paths for tests, writes only on explicit save.
+- **Separate persisted settings from runtime state.**
+- **Uniform validation** with user-visible feedback.
+- **Backward compatible** — same `config.yml` keys, same `config.CONFIG`
+  call sites during the transition.
+
+### 7.3 Proposed structure
+
+**(a) A declarative setting registry** as the single source of truth:
+
+```python
+@dataclasses.dataclass(frozen=True)
+class SettingSpec:
+    default: Any                        # or a default_factory for resolved paths
+    parse: Callable[[Any], Any]         # YAML/form value -> typed value; raises ValueError
+    category: str                       # settings-page section, e.g. "Performance"
+    label: str                          # settings-page display name
+    description: str = ""
+    min_value: float | None = None      # numeric bounds for the UI + validation
+    max_value: float | None = None
+    persisted: bool = True              # False => runtime-only, never written to YAML
+    requires_restart: bool = False      # drives the "*" marker in the UI
+
+SETTINGS: dict[str, SettingSpec] = {
+    "threads": SettingSpec(
+        default=1, parse=parse_positive_int, category="Performance",
+        label="Number of threads", min_value=1, requires_restart=True,
+        description="Number of threads for reading save files.",
+    ),
+    ...
+}
+```
+
+Derived from this one table:
+- the typed `Config` dataclass (fields can be generated or checked against the
+  registry in a unit test),
+- `DEFAULT_SETTINGS` and the `BOOL_KEYS`/`INT_KEYS`/… behavior (the sets
+  disappear; `parse` replaces them),
+- `_build_settings_dict()` in `settings.py` becomes a ~10-line loop grouping
+  specs by `category`,
+- YAML serialization (only `persisted=True` keys),
+- validation for **both** file loading and the settings form — one code path.
+
+Adding a setting becomes a one-place change plus a UI string.
+
+**(b) An explicit lifecycle** instead of import-time magic:
+
+```python
+# config.py
+def load(config_file: pathlib.Path | None = None) -> Config:
+    """Read + validate the config file. Pure: never writes, never mkdirs."""
+
+def save(cfg: Config, config_file: pathlib.Path | None = None) -> None:
+    """Write persisted settings. Called from apply_settings and first-run setup."""
+
+def get() -> Config:
+    """Return the active config; raises if load() hasn't run (or lazily
+    loads read-only, during the transition)."""
+```
+
+- `__main__.py` and `cli.py` call `config.load()` once at startup.
+- The startup rewrite of `config.yml` is dropped; the file is written on first
+  run (if absent) and on explicit save from the settings page only.
+- Directory creation moves to the code that needs the directory
+  (`Config.db_path` already does this lazily — the same pattern covers the
+  output dir).
+- During migration, `config.CONFIG` remains as a module-level alias so the
+  ~100 existing call sites don't need to change in the same PR.
+
+**(c) Config file resolution order**, replacing the bare CWD dependency:
+
+1. `STELLARIS_DASHBOARD_CONFIG` environment variable (tests, power users),
+2. `./config.yml` if present (backward compatibility with every existing
+   install),
+3. a stable per-user location, e.g. `platformdirs.user_config_dir("stellaris-dashboard")`,
+4. built-in defaults.
+
+New installs land in (3), so the dashboard behaves the same regardless of the
+directory it is launched from — a recurring source of "my settings are gone"
+confusion when the app is started from a different shell/launcher.
+
+**(d) Runtime state moves off the persisted object.** `debug_mode`, the CLI
+`--threads` override, and UI toggles like `normalize_stacked_plots` go to a
+small `RuntimeState` object (or, for pure UI state, stay inside the Dash
+callback chain — `update_content` already receives the checklist value and
+could pass it down instead of writing to global config).
+
+**(e) Immutable snapshots + atomic swap.** `load()`/`apply_dict()` produce a
+*new* frozen `Config`; applying settings swaps one module-level reference.
+Readers (the parser thread, `PlotDataManager`) grab a snapshot at the start of
+a unit of work, which removes the current class of mid-parse races and lets
+`PlotDataManager` detect "settings changed" by comparing object identity or a
+version counter instead of copying three individual fields.
+
+**(f) Uniform validation with feedback.** `parse` raising `ValueError` funnels
+every invalid value — from YAML or the web form — through one handler: log a
+warning, fall back to the default (or previous value for form input), and
+collect the rejects so the settings page can show *"2 settings were reset:
+threads ('abc' is not a number), port (must be 1–65535)"* instead of today's
+mix of crash / silent reset / log-only.
+
+### 7.4 Incremental migration plan
+
+| Step | Change | Risk |
+|------|--------|------|
+| 1 | Introduce `SettingSpec` registry; generate `DEFAULT_SETTINGS`, the `*_KEYS` sets, and `_build_settings_dict` from it. Pure refactor, no behavior change; add a test asserting registry ↔ dataclass consistency. | Low |
+| 2 | Split `initialize()` into `load()`/`save()`; call `load()` from the entry points; keep `config.CONFIG` as an alias; stop rewriting `config.yml` at startup. | Low–Med (startup ordering) |
+| 3 | Move runtime-only flags (`normalize_stacked_plots`, `debug_mode`, CLI overrides) off the persisted object. | Low |
+| 4 | Add the config-file resolution order (env var → CWD → platformdirs). | Low |
+| 5 | Freeze `Config`, swap atomically on apply; migrate consumers to snapshot semantics. | Med |
+
+Steps 1–3 remove the concrete bugs and drift this review found; steps 4–5 are
+quality-of-life and concurrency hardening that can wait.
