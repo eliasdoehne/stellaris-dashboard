@@ -1911,11 +1911,14 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         sector_description: Optional[datamodel.SharedDescription],
     ):
         event_type = datamodel.HistoricalEventType.governed_sector if sector_capital == planet else datamodel.HistoricalEventType.governed_planet
-        # check if governor was ruling same planet/sector before => update date and return
+        # check if governor was ruling same planet/sector before => update date and return.
+        # Filter by planet: governed_planet events have a null db_description, so without
+        # it the query would match a different planet's (or country's) event.
         event = (
             self._session.query(datamodel.HistoricalEvent)
             .filter_by(
                 event_type=event_type,
+                planet=planet,
                 db_description=sector_description,
             )
             .order_by(datamodel.HistoricalEvent.end_date_days.desc())

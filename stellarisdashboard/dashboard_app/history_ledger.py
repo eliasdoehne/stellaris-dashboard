@@ -61,7 +61,12 @@ def get_event_filter() -> "EventFilter":
     system_id = request.args.get("system", None)
     war_id = request.args.get("war", None)
     planet_id = request.args.get("planet", None)
-    min_date = request.args.get("min_date", float("-inf"))
+    # tolerate a missing or non-numeric min_date query param instead of 500ing
+    min_date_raw = request.args.get("min_date")
+    try:
+        min_date = float(min_date_raw) if min_date_raw is not None else float("-inf")
+    except ValueError:
+        min_date = float("-inf")
     event_filter = EventFilter(
         min_date=min_date,
         country_filter=country_id,

@@ -129,10 +129,12 @@ def get_color_vals(
     elif country_colors.has_color_for_name(key_str):
         r, g, b = country_colors.get_color_by_name(key_str)
     else:
-        random.seed(key_str)
-        h = random.uniform(0, 1)
-        l = random.uniform(0.4, 0.6)
-        s = random.uniform(0.5, 1)
+        # local RNG seeded on the key: deterministic per identifier without
+        # perturbing the global random state that other code relies on
+        rng = random.Random(key_str)
+        h = rng.uniform(0, 1)
+        l = rng.uniform(0.4, 0.6)
+        s = rng.uniform(0.5, 1)
         r, g, b = map(
             lambda x: 255 * (x if x > 0.01 else 0), colorsys.hls_to_rgb(h, l, s)
         )
@@ -528,17 +530,22 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         self, gs: datamodel.GameState, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         market_fee = self.get_market_fee(gs)
-        market_resources: List[datamodel.GalacticMarketResource] = sorted(
-            gs.galactic_market_resources, key=lambda r: r.resource_index
+        # Match the DB row to this container by resource index rather than zipping
+        # the save's resource list against the configured list positionally, which
+        # silently misaligns every price if the two ever differ in length/order.
+        res = next(
+            (
+                r
+                for r in gs.galactic_market_resources
+                if r.resource_index == self.resource_index
+            ),
+            None,
         )
-        for res, res_data in zip(market_resources, config.CONFIG.market_resources):
-            if res_data["name"] == self.resource_name and res.availability != 0:
-                yield from self._get_resource_prices(
-                    market_fee, res_data["base_price"], res.fluctuation
-                )
-                yield self.galactic_market_indicator_key, -0.001
-                yield self.internal_market_indicator_key, self.DEFAULT_VAL
-                break
+        if res is None or res.availability == 0:
+            return
+        yield from self._get_resource_prices(market_fee, self.base_price, res.fluctuation)
+        yield self.galactic_market_indicator_key, -0.001
+        yield self.internal_market_indicator_key, self.DEFAULT_VAL
 
     def _iter_internal_market_price(
         self, gs: datamodel.GameState, cd: datamodel.CountryData
