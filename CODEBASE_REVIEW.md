@@ -1,7 +1,7 @@
 # Codebase Review — Code Smells, Performance & Improvement Areas
 
 *Scope: full sweep of `stellarisdashboard/` (~12.5k lines of Python) as of `master` @ `795afa3` (2026-07-01).*
-*Method: manual read-through of every module. The test suite could not be executed in the review environment (project targets Python ≥ 3.14 + the `rust_parser` workspace member), so findings are from static inspection; each "confirmed bug" was traced through the surrounding code paths.*
+*Method: manual read-through of every module; each "confirmed bug" was traced through the surrounding code paths. The original sweep was drafted in a cloud environment without the test suite available, so those findings are from static inspection. Fixes landed since are validated locally against the full `pytest` suite (Python 3.14 + the compiled `rust_parser`).*
 
 ---
 
