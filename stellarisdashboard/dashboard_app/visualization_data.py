@@ -18,6 +18,7 @@ from scipy.spatial import Voronoi
 from sqlalchemy.orm import selectinload
 
 from stellarisdashboard import datamodel, config, game_info
+from stellarisdashboard.country_color_cache import GAME_COUNTRY_COLORS
 from stellarisdashboard.parsing.save_parser import rust_parser
 
 logger = logging.getLogger(__name__)
@@ -97,13 +98,6 @@ def get_current_execution_plot_data(
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
-_GAME_COUNTRY_COLORS = {}
-
-
-def clear_cached_country_colors():
-    _GAME_COUNTRY_COLORS.clear()
-
-
 def get_color_vals(
     game_id: str, key_str: str, range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
@@ -113,12 +107,12 @@ def get_color_vals(
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
     the random number generator. This makes colors consistent across figures and executions.
     """
-    if game_id not in _GAME_COUNTRY_COLORS:
+    if game_id not in GAME_COUNTRY_COLORS:
         country_colors = CountryColors()
         country_colors.load(game_id)
-        _GAME_COUNTRY_COLORS[game_id] = country_colors
+        GAME_COUNTRY_COLORS[game_id] = country_colors
     else:
-        country_colors = _GAME_COUNTRY_COLORS[game_id]
+        country_colors = GAME_COUNTRY_COLORS[game_id]
 
     if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS

@@ -215,8 +215,10 @@ Python's `str`/`frozenset` hashing is randomized per process (`PYTHONHASHSEED`).
 
 ## 3. Code smells & maintainability
 
-### 3.1 Parsing layer imports from the dashboard layer
-`timeline.py:15` imports `clear_cached_country_colors` from `dashboard_app.visualization_data`, giving the save-parsing pipeline a dependency on the web/visualization stack (heavy imports: plotly/scipy/networkx get pulled into the CLI batch-parse path too). Move the country-color cache (and its clear function) into a small shared module, or emit an event/callback instead.
+### 3.1 Parsing layer imports from the dashboard layer — ✅ FIXED
+`timeline.py` imported `clear_cached_country_colors` from `dashboard_app.visualization_data`, giving the save-parsing pipeline a dependency on the web/visualization stack (scipy/networkx got pulled into the CLI batch-parse path too).
+
+**Fix:** the shared cache (`GAME_COUNTRY_COLORS`) and its `clear_cached_country_colors` hook now live in a new dependency-free module `stellarisdashboard/country_color_cache.py`. `visualization_data` imports the dict from there (it still owns the cache contents via `get_color_vals`); `timeline` imports only the clear hook. Verified that importing `parsing.timeline` no longer pulls in `visualization_data`, `networkx`, or `scipy`.
 
 ### 3.2 Import-time side effects in `config.py` — ⏭️ OUT OF SCOPE (own follow-up, §7)
 `config.py:568` runs `initialize()` at import: reads `./config.yml` (CWD-dependent), **creates directories**, and **writes `config.yml`** — on any import of the package (including tests and tooling). Prefer explicit initialization from the entry points (`__main__.py`, `cli.py`) and lazy `CONFIG` access.
@@ -320,7 +322,7 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 7 | Restrict `/applysettings/` to POST, validate numeric form fields, clean up the `key in settings` idiom; validate timelapse form ints | §3.3, §4 | S | ✅ done (timelapse form now validated in item 17) |
 | 8 | Declare `normalize_stacked_plots` on `Config` (or pass it through the callback chain) | §3.3 | XS | ✅ done (declared) |
 | 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M | ⬜ open |
-| 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ⬜ open |
+| 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ✅ done |
 | 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M | ⏭️ out of scope — own follow-up, see §7 |
 | 12 | Default the history page to the player country's ledger (no pagination); reach other countries via the codex; push visibility/scope/date filters into SQL | §2.4 | M | ⬜ open — in scope |
 | 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS | ✅ done |

@@ -14,7 +14,7 @@ import sqlalchemy
 from sqlalchemy.orm import joinedload
 
 from stellarisdashboard import datamodel, game_info, config
-from stellarisdashboard.dashboard_app.visualization_data import clear_cached_country_colors
+from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
 logger = logging.getLogger(__name__)
 
