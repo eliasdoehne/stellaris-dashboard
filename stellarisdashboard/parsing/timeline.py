@@ -7,6 +7,7 @@ import json
 import logging
 import random
 import time
+import zlib
 from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple, Collection
 
 import sqlalchemy
@@ -20,6 +21,20 @@ logger = logging.getLogger(__name__)
 
 def dump_name(name: dict):
     return json.dumps(name, sort_keys=True)
+
+
+def _stable_digest(items: Iterable) -> int:
+    """Order-independent, process-stable digest of an iterable of hashable items.
+
+    Used for values persisted to the DB (planet district/building/deposit/modifier
+    change-detection hashes and bypass network ids). Python's built-in ``hash()``
+    is salted per process (``PYTHONHASHSEED``), so a stored ``hash()`` never matches
+    in a new process — every restart would re-diff and rewrite the child rows the
+    hash columns exist to skip. Sorting the item reprs makes the digest independent
+    of set/dict iteration order; ``crc32`` keeps it deterministic across processes.
+    """
+    canonical = ";".join(sorted(repr(item) for item in items))
+    return zlib.crc32(canonical.encode("utf-8"))
 
 
 def _extract_id(val, default: int = -1) -> int:
@@ -410,11 +425,11 @@ class BypassProcessor(AbstractGamestateDataProcessor):
                 bypass_type = bypass_dict.get("type", "unknown")
                 connections = bypass_dict.get("connections", [])
                 if bypass_type == "lgate":
-                    network_id = hash("lgate")
+                    network_id = _stable_digest(["lgate"])
                 elif bypass_type == "gateway":
-                    network_id = hash(frozenset(connections) | {bypass_id})
+                    network_id = _stable_digest(set(connections) | {bypass_id})
                 elif bypass_type == "wormhole":
-                    network_id = hash(frozenset(connections) | {bypass_id})
+                    network_id = _stable_digest(set(connections) | {bypass_id})
                 else:
                     continue
 
@@ -1635,7 +1650,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
     def _check_and_update_hash(
         self, planet_model: datamodel.Planet, entity_dict, hash_attribute: str
     ) -> bool:
-        current_hash = hash(frozenset(entity_dict.items()))
+        current_hash = _stable_digest(entity_dict.items())
         if current_hash == getattr(planet_model, hash_attribute):
             return False
 

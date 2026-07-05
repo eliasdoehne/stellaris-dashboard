@@ -186,10 +186,12 @@ With an empty filter, `get_event_and_link_dicts` iterates *all* countries and fe
 
 **Chosen approach (no pagination):** rather than paginate, scope the default view to a single country's ledger. The history page should default to the **player country's** ledger, and other countries become reachable through the codex rather than by rendering every country's events at once. Push `event_is_known_to_player`, scope, and date filters into the SQL query so the page only ever materializes the events for the country being viewed. The player-relevant information must remain easy to surface (the player's own ledger is the landing view; cross-country navigation is one click away in the codex).
 
-### 2.5 Persisted `hash()` values are invalidated every restart
-`stellarisdashboard/parsing/timeline.py:1615` (`_check_and_update_hash`), `:411` (bypass `network_id`)
+### 2.5 Persisted `hash()` values are invalidated every restart — ✅ FIXED
+`stellarisdashboard/parsing/timeline.py` (`_check_and_update_hash`, bypass `network_id`)
 
-Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet districts/buildings/deposits/modifiers hashes stored in the DB therefore never match in a new process, so the first save of every session re-diffs and re-writes *every planet's* child rows — exactly the churn the hash columns were added to avoid. Use a stable digest (e.g. `zlib.crc32`/`hashlib` over the sorted items) instead. The same applies to `hash("lgate")`/`hash(frozenset(...))` for `Bypass.network_id` (less severe since bypasses are deleted and recreated each save — but that delete-all also wipes bypasses of *other* games sharing the session? No — DBs are per-game — still, `self._session.query(datamodel.Bypass).delete()` deletes bypasses of *all systems in the game* each save, which is more churn than needed).
+Python's `str`/`frozenset` hashing is randomized per process (`PYTHONHASHSEED`). The planet districts/buildings/deposits/modifiers hashes stored in the DB therefore never matched in a new process, so the first save of every session re-diffed and re-wrote *every planet's* child rows — exactly the churn the hash columns were added to avoid.
+
+**Fix:** a shared `_stable_digest(items)` helper hashes the sorted `repr`s of the items with `zlib.crc32` — order-independent and identical across processes (verified against a different `PYTHONHASHSEED`). It replaces `hash(frozenset(entity_dict.items()))` in `_check_and_update_hash` and `hash("lgate")`/`hash(frozenset(...))` for `Bypass.network_id`. Existing DBs re-diff **once** on the first post-upgrade save (stored old salted value won't match) and then self-correct; no migration needed. Bypass rows are already deleted and recreated each save, so their ids need no migration either.
 
 ### 2.6 `DiplomaticRelationsProcessor` is O(N²) per save — ✅ FIXED
 `timeline.py:742` loaded all relations and looped over *all* real-country pairs on every save. Row creation is one-time, but the pair loop plus per-pair dict lookups ran every save; with large galaxies (100+ countries) this was 10k+ iterations doing attribute access on ORM objects.
@@ -312,7 +314,7 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 1 | Fix the five one-line parsing/config bugs: modifier expiry self-assignment, two `is_known_to_player` typos, `return`→`continue` in `RulerEventProcessor`, `pass`→`continue` (×2) in `_preprocess_tab_layout` | §1.1–1.3, §1.7 | XS | ✅ done |
 | 2 | Fix `rendered_country_name`, `colonized_date` string write, OneDrive default path; delete `Leader.get_name_and_class`; set `event_is_known_to_player` on policy events; drop the dead `Game.player_country_id` write; fix the Dash 404 path | §1.4, 1.6, 1.8–1.12 | XS | ✅ done |
 | 3 | Replace `_check_if_gamestate_exists` with an indexed date query | §2.1 | XS | ✅ done |
-| 4 | Replace persisted `hash()` values with a stable digest (planets + bypass network ids); one-time re-diff on upgrade is acceptable | §2.5 | S | ⬜ open — semantic change, own PR |
+| 4 | Replace persisted `hash()` values with a stable digest (planets + bypass network ids); one-time re-diff on upgrade is acceptable | §2.5 | S | ✅ done |
 | 5 | Pre-load lookup dicts to remove the N+1 patterns in `CountryProcessor`, `SpeciesProcessor`, `SystemProcessor._add_system`, `PopStatsProcessor`, `FleetInfoProcessor`, `ScientistEventProcessor` | §2.2 | M | ✅ done |
 | 6 | Cache `get_available_games_dict()` (TTL or mtime-based) and stop calling it per Dash callback | §2.3 | S | ✅ done (5s TTL) |
 | 7 | Restrict `/applysettings/` to POST, validate numeric form fields, clean up the `key in settings` idiom; validate timelapse form ints | §3.3, §4 | S | ✅ done (timelapse form now validated in item 17) |
