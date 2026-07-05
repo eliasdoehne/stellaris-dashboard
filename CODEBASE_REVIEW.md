@@ -18,9 +18,11 @@ Recommended follow-up actions are collected at the end, ordered by value/effort.
 
 ---
 
-## 1. Confirmed bugs
+## 1. Confirmed bugs — ✅ ALL FIXED
 
-### 1.1 Planet modifier expiry dates are never updated (self-assignment)
+*Every bug in this section was fixed on `claude/codebase-review-report-sk1nxo` (commit `e82a455`) and verified against current code.*
+
+### 1.1 Planet modifier expiry dates are never updated (self-assignment) — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py:1587`
 
 ```python
@@ -30,7 +32,7 @@ if expiration != current_modifiers[modifier_text]:
 
 `expiration` was read from `db_modifier.expiry_date` a few lines above, so the update is a no-op; the branch should assign `current_modifiers[modifier_text]`. A modifier whose expiry date changes in-game keeps its stale date forever.
 
-### 1.2 `is_known_to_player` typo — assignments silently discarded (2 sites)
+### 1.2 `is_known_to_player` typo — assignments silently discarded (2 sites) — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py:2029` and `:2665`
 
 ```python
@@ -40,7 +42,7 @@ matching_event.is_known_to_player = is_known                              # Fact
 
 The column is `event_is_known_to_player`. SQLAlchemy models happily accept arbitrary attribute assignment, so these set a transient Python attribute that is never persisted. Ruler-change and faction-leader events never get their visibility upgraded after first contact. Every other call site spells it correctly.
 
-### 1.3 `RulerEventProcessor`: `return` aborts the whole loop instead of skipping one country
+### 1.3 `RulerEventProcessor`: `return` aborts the whole loop instead of skipping one country — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py:1961`
 
 ```python
@@ -52,7 +54,7 @@ for country_id, country_model in countries_dict.items():
 
 One malformed country entry (which the format allows — other processors guard for it) silently skips ruler, capital, tradition, ascension-perk and edict processing for **all remaining countries** in that save.
 
-### 1.4 Exception handler references a nonexistent attribute
+### 1.4 Exception handler references a nonexistent attribute — ✅ FIXED
 `stellarisdashboard/dashboard_app/visualization_data.py:459`
 
 ```python
@@ -62,7 +64,7 @@ except Exception as e:
 
 `Country` has `rendered_name`, not `rendered_country_name`. When the handler fires it raises `AttributeError`, replacing the original exception and crashing the plot-data update instead of logging it.
 
-### 1.5 `CountryColors._get_rgb`: value shift computed from saturation
+### 1.5 `CountryColors._get_rgb`: value shift computed from saturation — ✅ FIXED
 `stellarisdashboard/dashboard_app/visualization_data.py:1848`
 
 ```python
@@ -72,7 +74,7 @@ for shift in itertools.chain([0.0], *((v, -v) for v in _V_SHIFTS)):
 
 The duplicate-color-avoidance logic shifts brightness starting from the color's *saturation* rather than its *value*, so the "avoid duplicate colors" feature picks wrong (or no) shifts. Note also that the generator expression reuses the name `v`, shadowing the outer `v` and making the bug easy to miss — worth renaming regardless of the fix.
 
-### 1.6 Windows default path: OneDrive and non-OneDrive branches are identical
+### 1.6 Windows default path: OneDrive and non-OneDrive branches are identical — ✅ FIXED
 `stellarisdashboard/config.py:43`
 
 ```python
@@ -82,7 +84,7 @@ non_one_drive_path = home / "OneDrive/Documents/Paradox Interactive/Stellaris/" 
 
 The fallback for non-OneDrive Windows installs (`~/Documents/...`) is unreachable; users without OneDrive get a nonexistent default and the dashboard finds no saves until they configure the path manually.
 
-### 1.7 Tab-layout validation: `pass` where `continue` was intended (2 sites)
+### 1.7 Tab-layout validation: `pass` where `continue` was intended (2 sites) — ✅ FIXED
 `stellarisdashboard/config.py:376` and `:380`
 
 ```python
@@ -99,7 +101,7 @@ for g in plot_list:
 
 Both warnings claim to ignore invalid input but don't. A user with a malformed `config.yml` gets a crash at startup (int case) or garbage tabs instead of the advertised fallback.
 
-### 1.8 `Planet.colonized_date` stored as a raw date string on completion
+### 1.8 `Planet.colonized_date` stored as a raw date string on completion — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py:1790`
 
 ```python
@@ -108,7 +110,7 @@ planet_model.colonized_date = colonization_end_date   # e.g. "2215.03.14" (str) 
 
 `colonized_date` is an `Integer` (days) column and is written as `date_to_days(...)` in `_add_planet_model`. SQLite's loose typing masks the inconsistency, but the column now holds a mix of ints and strings (including the literal `"none"`), which breaks any future comparison/sorting on it. Should be `end_date_days` (already computed a few lines up).
 
-### 1.9 `Leader.get_name_and_class` calls a method that doesn't exist
+### 1.9 `Leader.get_name_and_class` calls a method that doesn't exist — ✅ FIXED
 `stellarisdashboard/datamodel.py:1545`
 
 ```python
@@ -118,17 +120,17 @@ def get_name_and_class(self):
 
 `Leader` has no `get_name`; any caller would crash. Nothing in the repo calls it — it's dead *and* broken. Delete it, or reimplement using `rendered_name`.
 
-### 1.10 (Likely bug) Policy events are permanently hidden from the ledger
+### 1.10 (Likely bug) Policy events are permanently hidden from the ledger — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py:2484`
 
 `PolicyProcessor` creates `new_policy` / `changed_policy` `HistoricalEvent`s without passing `event_is_known_to_player`, which defaults to `False` — including for the **player's own country**. Since the ledger filters on that flag (unless `show_everything` is on), policy events effectively never appear. Every comparable processor sets the flag explicitly; this looks like an omission rather than a decision.
 
-### 1.11 (Likely bug) Dash 404 path renders escaped HTML
+### 1.11 (Likely bug) Dash 404 path renders escaped HTML — ✅ FIXED
 `stellarisdashboard/dashboard_app/graph_ledger.py:239`
 
 `update_content` returns `render_template("404_page.html", ...)` — a raw HTML string — as a Dash `children` output. Dash escapes string children, so the user sees the page's HTML source as text instead of a rendered 404 page. Return a Dash component (e.g. a `dcc.Location` redirect or `html.Div` message) instead.
 
-### 1.12 `Game.player_country_id` assigned but not a column
+### 1.12 `Game.player_country_id` assigned but not a column — ✅ FIXED (assignment removed)
 `stellarisdashboard/parsing/timeline.py:167`
 
 ```python
@@ -141,7 +143,7 @@ Silently stored as a transient attribute and lost on session close. Either add t
 
 ## 2. Performance
 
-### 2.1 Duplicate-save check loads every gamestate, every save
+### 2.1 Duplicate-save check loads every gamestate, every save — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py:98`
 
 ```python
@@ -159,7 +161,7 @@ return self._session.query(datamodel.GameState).filter_by(
 
 (`GameState.date` is already indexed.)
 
-### 2.2 N+1 query patterns in the processor pipeline
+### 2.2 N+1 query patterns in the processor pipeline — ✅ FIXED (all 6 processors)
 
 Several processors issue one query per entity per save instead of pre-loading a lookup dict (the pattern `SystemProcessor`/`PlanetProcessor` already use):
 
@@ -174,13 +176,15 @@ Several processors issue one query per entity per save instead of pre-loading a 
 
 Individually small, but they run for every country/planet/ship on every autosave; together they dominate ingest time as the DB grows.
 
-### 2.3 Every page/callback scans all game databases
+### 2.3 Every page/callback scans all game databases — ✅ FIXED (5s TTL cache)
 `datamodel.get_available_games_dict()` opens a session on **every known game's DB file** and runs 3 queries per game. It is called per request in `history_page`, `galaxy_page`, and per Dash callback (`update_game_header`, `update_country_select_options`, `update_content`). With dozens of campaign DBs, each page interaction re-opens and queries all of them. Cache it with a short TTL or invalidate on DB-file mtime change.
 
 ### 2.4 History ledger loads the entire event table into Python
 `stellarisdashboard/dashboard_app/history_ledger.py:236`
 
-With an empty filter, `get_event_and_link_dicts` iterates *all* countries and fetches *all* their events, then filters visibility/scope in Python (`include_event`). Late-game DBs have tens of thousands of events; the page renders all of them with no pagination. Consider pushing `event_is_known_to_player`, scope, and date filters into the SQL query and paginating the page.
+With an empty filter, `get_event_and_link_dicts` iterates *all* countries and fetches *all* their events, then filters visibility/scope in Python (`include_event`). Late-game DBs have tens of thousands of events; the page renders all of them with no pagination.
+
+**Chosen approach (no pagination):** rather than paginate, scope the default view to a single country's ledger. The history page should default to the **player country's** ledger, and other countries become reachable through the codex rather than by rendering every country's events at once. Push `event_is_known_to_player`, scope, and date filters into the SQL query so the page only ever materializes the events for the country being viewed. The player-relevant information must remain easy to surface (the player's own ledger is the landing view; cross-country navigation is one click away in the codex).
 
 ### 2.5 Persisted `hash()` values are invalidated every restart
 `stellarisdashboard/parsing/timeline.py:1615` (`_check_and_update_hash`), `:411` (bypass `network_id`)
@@ -190,7 +194,12 @@ Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet 
 ### 2.6 `DiplomaticRelationsProcessor` is O(N²) per save
 `timeline.py:742` loads all relations and loops over all real-country pairs on every save. Row creation is one-time, but the pair loop plus per-pair dict lookups run every save; with large galaxies (100+ countries) this is 10k+ iterations doing attribute access on ORM objects. Consider only iterating pairs present in the save's `relations_manager` plus pairs with existing rows.
 
-### 2.7 Smaller items
+**Constraint (must preserve):** the optimization has to keep detecting *cancelled* agreements — a relation that was present in the previous save but is gone in the current one (e.g. a broken treaty). Iterating "pairs present in the save **plus** pairs with existing DB rows" covers this: a pair whose row exists but is absent from `relations_manager` this save is exactly a cancellation and must still be visited so the change is recorded. Any narrowing that skips existing-row pairs would silently miss cancellations, so that union is the required lower bound on what we iterate.
+
+### 2.7 Smaller items — ⚠️ MOSTLY FIXED (5/6)
+
+*Fixed: process pool reused across batch chunks, `is_resource_deposit` uses `rpartition` + suffix set, `preformat_history_url` `lru_cache` bounded (`maxsize=8192`), `extract_data_from_gamestate` renders the name after the filter, dead `submit_time` removed. Still open: `game_data_dirs`/`localization_files` property caching (was "fine today, easy to misuse").*
+
 - `BatchSavePathMonitor` creates a **new `ProcessPoolExecutor` per chunk** (`save_parser.py:213`); create one executor for the whole batch.
 - `PlanetDeposit.is_resource_deposit` (`datamodel.py:1650`) does up to 31 `endswith` calls per deposit per page render; a compiled regex (`_\d+$` with a bound check) or a precomputed suffix set is cheaper.
 - `utils.preformat_history_url` uses an **unbounded** `lru_cache`; bound it (`maxsize=...`) to cap memory over long sessions.
@@ -205,15 +214,23 @@ Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet 
 ### 3.1 Parsing layer imports from the dashboard layer
 `timeline.py:15` imports `clear_cached_country_colors` from `dashboard_app.visualization_data`, giving the save-parsing pipeline a dependency on the web/visualization stack (heavy imports: plotly/scipy/networkx get pulled into the CLI batch-parse path too). Move the country-color cache (and its clear function) into a small shared module, or emit an event/callback instead.
 
-### 3.2 Import-time side effects in `config.py`
+### 3.2 Import-time side effects in `config.py` — ⏭️ OUT OF SCOPE (own follow-up, §7)
 `config.py:568` runs `initialize()` at import: reads `./config.yml` (CWD-dependent), **creates directories**, and **writes `config.yml`** — on any import of the package (including tests and tooling). Prefer explicit initialization from the entry points (`__main__.py`, `cli.py`) and lazy `CONFIG` access.
 
-### 3.3 Mutating global config from request handlers
+**Deliberately deferred:** this is the configuration-handling rework and is intentionally *not* part of this PR. It gets its own follow-up, tracked in full in §7.
+
+### 3.3 Mutating global config from request handlers — ✅ FIXED
+
+*`normalize_stacked_plots` is now declared on `Config`; `/applysettings/` is POST-only with `int()`/`float()` validation (invalid values logged and skipped); the `settings[key] = key in settings` idiom is now `settings[key] = True`. (The timelapse-form int validation of §4 is tracked separately and remains open.)*
+
 - `graph_ledger.update_content` sets `config.CONFIG.normalize_stacked_plots`, a field that isn't declared on the `Config` dataclass (it only exists once that callback has run — anything reading it earlier gets `AttributeError`; `_get_raw_data_for_stacked_and_budget_plots` does exactly that if called first). Declare the field with a default, or better, thread it through as a parameter.
 - `settings.apply_settings` accepts **GET** as well as POST (`settings.py:151`), so any website can change dashboard settings via a cross-site request to `localhost:28053` (CSRF; includes filesystem paths). Restrict to POST, and validate `int()`/`float()` conversions (currently a bad value returns an unhandled 500).
 - `settings[key] = key in settings` (`settings.py:158`) is always `True` — write `settings[key] = True` and let the later "missing bool → False" loop do its job; the current form reads like a bug.
 
-### 3.4 Duplicated / dead / vestigial code
+### 3.4 Duplicated / dead / vestigial code — ⚠️ MOSTLY FIXED
+
+*Fixed: duplicate `PlanetProcessor.ID` dependency, `TruceProcessor.__init__` calls `super().__init__()`, the double `if filter_string:` check, the commented-out debug print, `Leader.get_name_and_class`, the `Game.player_country_id` write. Still open: `BatchSavePathMonitor.split_into_chunks` still uses `while iterable:` (harmless — the `if not chunk: break` does the real work).*
+
 - `RulerEventProcessor.DEPENDENCIES` lists `PlanetProcessor.ID` twice (`timeline.py:1936`).
 - `TruceProcessor.__init__` doesn't call `super().__init__()` (`timeline.py:3656`) — works only because `initialize()` re-sets the base attributes; fragile.
 - `save_parser._apply_filename_filter` checks `if filter_string:` twice back-to-back (`save_parser.py:80-86`).
@@ -221,13 +238,16 @@ Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet 
 - `Leader.get_name_and_class` (see §1.9), `Game.player_country_id` assignment (see §1.12).
 - `BatchSavePathMonitor.split_into_chunks`: `while iterable:` on an iterator is always truthy — the inner `if not chunk: break` does all the work; use `iter(lambda: list(islice(...)), [])` or a plain loop.
 
-### 3.5 Deprecated / inconsistent logging
+### 3.5 Deprecated / inconsistent logging — ✅ FIXED
 `logger.warn(...)` (deprecated alias) at `config.py:510-511` and `timeline.py:196`; everywhere else uses `logger.warning`. Also `logger.exception(country_name)` (`visualization_data.py:316`) logs the country name as the message — include context text.
 
 ### 3.6 Schema typo baked into the DB: `communations`
 `datamodel.py:1005` names the column (and the diplo-dict key used across `timeline.py`) `communations` instead of `communications`. Cosmetic, but it propagates through three modules and will confuse every future reader; renaming needs an alembic migration (the project auto-migrates, and `Config`-driven batch mode is already set up for it).
 
-### 3.7 Misc
+### 3.7 Misc — ⚠️ PARTIALLY FIXED
+
+*Fixed: `PopStatsProcessor` tolerates missing `pop_jobs`/`pop_groups`, `== True` simplified, `get_country_color` type hint corrected, `is_resource_deposit` hot-path rewrite (see §2.7). Still open: `get_color_vals` still seeds the global `random`, `MarketPriceDataContainer` still aligns by `zip` position (now sorted by `resource_index` but not matched on it), the `SectorColonyEventProcessor` governor-event filter still lacks a country/leader guard, and the broad `except Exception` in `process_gamestate` is unchanged.*
+
 - `days_to_date` docstring parameters are copy-pasted from `date_to_days` (`datamodel.py:371`).
 - `get_country_color(game_id: int, ...)` — wrong type hint, it's a `str` (`graph_ledger.py:512`).
 - `if config.CONFIG.production == True:` → `if config.CONFIG.production:` (`graph_ledger.py:524`).
@@ -243,7 +263,7 @@ Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet 
 
 - **Per-plot re-iteration of gamestates:** every one of the ~90 `DataContainer`s iterates `gs.country_data` per gamestate. The containers are tiny, so this is fine today; if plot count keeps growing, a single pass that fans out to containers would cut ORM attribute overhead.
 - **`get_gamestates_since` yields ORM objects across a session boundary** (`datamodel.py:429`): the generator holds its session open until fully consumed; a consumer that breaks early keeps the session (and SQLite read snapshot) alive. Currently all consumers drain it — just a sharp edge to be aware of.
-- **Timelapse export blocks a Flask request** (`galaxy_map.py:216`) for potentially minutes and offers no progress/cancel; the docstring acknowledges this. A background thread + polling endpoint (htmx is already in use) would improve UX. Also `int(form.get("step"))` with a negative/zero value crashes `_day_list` (`range()` empty → `export_days[-1]` IndexError) — validate inputs.
+- **Timelapse export blocks a Flask request — 🔧 IN SCOPE (fix now).** Confirmed: `galaxy_timelapse` (`galaxy_map.py:171`) calls `te.create_timelapse(...)` synchronously (`:216`) and only returns the success toast/redirect after the whole export finishes, so the request is held for the full duration (potentially minutes) with no progress/cancel; the docstring already labels it "(blocking)". **Approach:** move export off the request path so the web server never blocks, and **queue** exports so only one runs at a time (serialize on a single background worker; a request while one is running enqueues rather than spawning a parallel matplotlib job). The trigger endpoint returns immediately (accepted/queued toast); htmx is already in use for status feedback. Also validate `int(form.get("step"))` etc. — a negative/zero step crashes `_day_list` (`range()` empty → `export_days[-1]` IndexError). Keep to the stdlib (`queue.Queue` + a worker `threading.Thread`) — no new dependency.
 - **`EventFilter` min_date** is parsed with `float(request.args.get("min_date", -inf))` — a non-numeric query param yields an unhandled 500 (`history_ledger.py:64,88`).
 
 ---
@@ -266,6 +286,25 @@ A thin "process one synthetic gamestate twice, assert DB contents and event visi
 Ordered roughly by (impact ÷ effort). The **Status** column reflects the fix PR
 accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 
+**Scope & approach decisions for this PR:**
+- Everything below marked *in scope* is rolled into this one PR, but each work
+  increment lands as its **own commit** so the logical structure survives a
+  rebase-merge into `master` (a playtest happens before merge).
+- **No new library dependencies** without explicit approval — lean on the Python
+  standard library.
+- **§2.4 (history ledger):** no pagination. Default the history page to the
+  **player country's** ledger and reach other countries via the codex; push the
+  visibility/scope/date filters into SQL so only the viewed country's events are
+  materialized. Keep player-relevant info easy to surface.
+- **§2.6 (diplomatic relations):** the optimization must still detect *cancelled*
+  agreements (a relation present last save, gone this save) — guaranteed by
+  iterating pairs in the save **∪** pairs with existing DB rows.
+- **§4 (timelapse export):** promoted to *fix now* — move export off the request
+  thread and **queue** it so only one export runs at a time (stdlib
+  `queue.Queue` + worker thread).
+- **§3.2 (config import-time side effects):** explicitly **out of scope** here —
+  it is the configuration rework and gets its own follow-up (see §7).
+
 | # | Action | Refs | Effort | Status |
 |---|--------|------|--------|--------|
 | 1 | Fix the five one-line parsing/config bugs: modifier expiry self-assignment, two `is_known_to_player` typos, `return`→`continue` in `RulerEventProcessor`, `pass`→`continue` (×2) in `_preprocess_tab_layout` | §1.1–1.3, §1.7 | XS | ✅ done |
@@ -278,11 +317,13 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 8 | Declare `normalize_stacked_plots` on `Config` (or pass it through the callback chain) | §3.3 | XS | ✅ done (declared) |
 | 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M | ⬜ open |
 | 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ⬜ open |
-| 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M | ⬜ open — see proposal in §7 |
-| 12 | Push ledger filtering into SQL and paginate the history page | §2.4 | M | ⬜ open |
+| 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M | ⏭️ out of scope — own follow-up, see §7 |
+| 12 | Default the history page to the player country's ledger (no pagination); reach other countries via the codex; push visibility/scope/date filters into SQL | §2.4 | M | ⬜ open — in scope |
 | 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS | ✅ done |
 | 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS | ✅ done |
 | 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⬜ open |
+| 16 | Narrow `DiplomaticRelationsProcessor` to pairs in the save ∪ pairs with existing rows (must still catch cancelled agreements) | §2.6 | S | ⬜ open — in scope |
+| 17 | Move timelapse export off the request thread onto a single-worker queue (one export at a time, non-blocking); validate step/frame/dpi ints | §4 | M | ⬜ open — in scope |
 
 Also included in the fix PR: `PopStatsProcessor` now tolerates missing
 `pop_jobs`/`pop_groups` sections instead of rolling back the entire save (§3.7),
