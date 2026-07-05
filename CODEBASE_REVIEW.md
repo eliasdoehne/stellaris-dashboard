@@ -179,12 +179,14 @@ Individually small, but they run for every country/planet/ship on every autosave
 ### 2.3 Every page/callback scans all game databases — ✅ FIXED (5s TTL cache)
 `datamodel.get_available_games_dict()` opens a session on **every known game's DB file** and runs 3 queries per game. It is called per request in `history_page`, `galaxy_page`, and per Dash callback (`update_game_header`, `update_country_select_options`, `update_content`). With dozens of campaign DBs, each page interaction re-opens and queries all of them. Cache it with a short TTL or invalidate on DB-file mtime change.
 
-### 2.4 History ledger loads the entire event table into Python
-`stellarisdashboard/dashboard_app/history_ledger.py:236`
+### 2.4 History ledger loads the entire event table into Python — ⏸️ HELD (escalated)
+`stellarisdashboard/dashboard_app/history_ledger.py`
 
 With an empty filter, `get_event_and_link_dicts` iterates *all* countries and fetches *all* their events, then filters visibility/scope in Python (`include_event`). Late-game DBs have tens of thousands of events; the page renders all of them with no pagination.
 
-**Chosen approach (no pagination):** rather than paginate, scope the default view to a single country's ledger. The history page should default to the **player country's** ledger, and other countries become reachable through the codex rather than by rendering every country's events at once. Push `event_is_known_to_player`, scope, and date filters into the SQL query so the page only ever materializes the events for the country being viewed. The player-relevant information must remain easy to surface (the player's own ledger is the landing view; cross-country navigation is one click away in the codex).
+**Chosen approach (no pagination):** scope the default view to a single country's ledger — default to the **player country's** ledger, and reach other countries through the codex. Push `event_is_known_to_player`, scope, and date filters into SQL so the page only materializes the viewed country's events.
+
+**Why held:** "the codex" does not exist in the codebase yet. Today the empty-filter history page *is* the country index — a "Country Logs" table of contents linking every empire, each to its `?country=<id>` ledger. Defaulting to the player country is unambiguous, but where other countries then live (a new "codex" page? repurpose the existing TOC?) is a UX-defining decision. Implementing the default without a replacement browse surface would regress the ability to see other empires' ledgers. See escalation.
 
 ### 2.5 Persisted `hash()` values are invalidated every restart — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py` (`_check_and_update_hash`, bypass `network_id`)
@@ -247,8 +249,10 @@ Python's `str`/`frozenset` hashing is randomized per process (`PYTHONHASHSEED`).
 ### 3.5 Deprecated / inconsistent logging — ✅ FIXED
 `logger.warn(...)` (deprecated alias) at `config.py:510-511` and `timeline.py:196`; everywhere else uses `logger.warning`. Also `logger.exception(country_name)` (`visualization_data.py:316`) logs the country name as the message — include context text.
 
-### 3.6 Schema typo baked into the DB: `communations`
-`datamodel.py:1005` names the column (and the diplo-dict key used across `timeline.py`) `communations` instead of `communications`. Cosmetic, but it propagates through three modules and will confuse every future reader; renaming needs an alembic migration (the project auto-migrates, and `Config`-driven batch mode is already set up for it).
+### 3.6 Schema typo baked into the DB: `communations` — ⏸️ HELD (escalated)
+`datamodel.py` names the column (and the diplo-dict key used across `timeline.py`) `communations` instead of `communications`. Cosmetic, but it propagates through three modules and will confuse every future reader.
+
+**Why held:** the project's auto-migrator (`datamodel._get_or_create_engine`) applies **alembic autogenerate** ops directly, and autogenerate detects a rename as *drop + add*, not a rename. Empirically verified: renaming the column produces `AddColumnOp` + `DropColumnOp`, which on every existing DB would **drop all `communations` values** and add an empty `communications` column. The next parse would then see `was_active=False` for every already-met pair and emit spurious `first_contact` events. Doing this safely needs a data-preserving migration step the current framework doesn't support. The cosmetic benefit doesn't justify that risk/effort without a decision — see escalation.
 
 ### 3.7 Misc — ⚠️ MOSTLY FIXED
 
@@ -324,10 +328,10 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M | ⬜ open |
 | 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ✅ done |
 | 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M | ⏭️ out of scope — own follow-up, see §7 |
-| 12 | Default the history page to the player country's ledger (no pagination); reach other countries via the codex; push visibility/scope/date filters into SQL | §2.4 | M | ⬜ open — in scope |
+| 12 | Default the history page to the player country's ledger (no pagination); reach other countries via the codex; push visibility/scope/date filters into SQL | §2.4 | M | ⏸️ held — needs "codex" UX decision (escalated) |
 | 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS | ✅ done |
 | 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS | ✅ done |
-| 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⬜ open |
+| 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⏸️ held — autogenerate migrator would drop the column's data (escalated) |
 | 16 | Narrow `DiplomaticRelationsProcessor` to pairs in the save ∪ pairs with existing rows (must still catch cancelled agreements) | §2.6 | S | ✅ done |
 | 17 | Move timelapse export off the request thread onto a single-worker queue (one export at a time, non-blocking); validate step/frame/dpi ints | §4 | M | ✅ done |
 
