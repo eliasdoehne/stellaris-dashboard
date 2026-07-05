@@ -735,7 +735,7 @@ class DiplomacyDictProcessor(AbstractGamestateDataProcessor):
 
 class DiplomaticRelationsProcessor(AbstractGamestateDataProcessor):
     ID = "diplomatic_relations"
-    DEPENDENCIES = [CountryProcessor.ID]
+    DEPENDENCIES = [CountryProcessor.ID, DiplomacyDictProcessor.ID]
 
     def __init__(self):
         super().__init__()
@@ -746,34 +746,42 @@ class DiplomaticRelationsProcessor(AbstractGamestateDataProcessor):
 
     def extract_data_from_gamestate(self, dependencies):
         countries_dict: Dict[int, datamodel.Country] = dependencies[CountryProcessor.ID]
+        diplomacy_dict = dependencies[DiplomacyDictProcessor.ID]["diplomacy"]
 
+        # A DiplomaticRelation row exists only for ordered country pairs that have
+        # (or once had) some relation. We iterate two sources so DiplomacyUpdatesProcessor
+        # can still detect both directions of change:
+        #   - all existing rows: a pair active in a previous save keeps its row, so a
+        #     relation that vanishes this save is still visited and its event closed
+        #     (cancelled-agreement tracking);
+        #   - pairs active in this save: a newly-formed relation gets a row created here
+        #     so its "started" event fires.
+        # Pairs with no relation at all get no row (a missing row reads identically to an
+        # all-False row for every consumer), which avoids the previous O(N^2) pair sweep.
         self.diplo_relations: Dict[int, Dict[int, datamodel.DiplomaticRelation]] = {}
-        all_relations = self._session.query(datamodel.DiplomaticRelation).all()
 
-        for r in all_relations:
+        for r in self._session.query(datamodel.DiplomaticRelation).all():
             owner_id = r.owner.country_id_in_game
-            if owner_id not in self.diplo_relations:
-                self.diplo_relations[owner_id] = {}
             target_id = r.target.country_id_in_game
-            self.diplo_relations[owner_id][target_id] = r
+            self.diplo_relations.setdefault(owner_id, {})[target_id] = r
 
         for c_id_1, c_model_1 in countries_dict.items():
             if not c_model_1.is_real_country():
                 continue
-            if c_id_1 not in self.diplo_relations:
-                self.diplo_relations[c_id_1] = {}
-            for c_id_2, c_model_2 in countries_dict.items():
-                if not c_model_2.is_real_country():
+            existing_targets = self.diplo_relations.setdefault(c_id_1, {})
+            active_targets = set().union(*diplomacy_dict.get(c_id_1, {}).values())
+            for c_id_2 in active_targets:
+                if c_id_2 == c_id_1 or c_id_2 in existing_targets:
                     continue
-                elif c_id_1 == c_id_2:
+                c_model_2 = countries_dict.get(c_id_2)
+                if c_model_2 is None or not c_model_2.is_real_country():
                     continue
-                if c_id_2 not in self.diplo_relations[c_id_1]:
-                    r = datamodel.DiplomaticRelation(
-                        country_id=c_model_1.country_id,
-                        target_country_id=c_model_2.country_id,
-                    )
-                    self.diplo_relations[c_id_1][c_id_2] = r
-                    self._session.add(r)
+                r = datamodel.DiplomaticRelation(
+                    country_id=c_model_1.country_id,
+                    target_country_id=c_model_2.country_id,
+                )
+                existing_targets[c_id_2] = r
+                self._session.add(r)
 
 
 class SensorLinkProcessor(AbstractGamestateDataProcessor):

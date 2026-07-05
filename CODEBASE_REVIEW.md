@@ -191,10 +191,12 @@ With an empty filter, `get_event_and_link_dicts` iterates *all* countries and fe
 
 Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet districts/buildings/deposits/modifiers hashes stored in the DB therefore never match in a new process, so the first save of every session re-diffs and re-writes *every planet's* child rows — exactly the churn the hash columns were added to avoid. Use a stable digest (e.g. `zlib.crc32`/`hashlib` over the sorted items) instead. The same applies to `hash("lgate")`/`hash(frozenset(...))` for `Bypass.network_id` (less severe since bypasses are deleted and recreated each save — but that delete-all also wipes bypasses of *other* games sharing the session? No — DBs are per-game — still, `self._session.query(datamodel.Bypass).delete()` deletes bypasses of *all systems in the game* each save, which is more churn than needed).
 
-### 2.6 `DiplomaticRelationsProcessor` is O(N²) per save
-`timeline.py:742` loads all relations and loops over all real-country pairs on every save. Row creation is one-time, but the pair loop plus per-pair dict lookups run every save; with large galaxies (100+ countries) this is 10k+ iterations doing attribute access on ORM objects. Consider only iterating pairs present in the save's `relations_manager` plus pairs with existing rows.
+### 2.6 `DiplomaticRelationsProcessor` is O(N²) per save — ✅ FIXED
+`timeline.py:742` loaded all relations and looped over *all* real-country pairs on every save. Row creation is one-time, but the pair loop plus per-pair dict lookups ran every save; with large galaxies (100+ countries) this was 10k+ iterations doing attribute access on ORM objects.
 
-**Constraint (must preserve):** the optimization has to keep detecting *cancelled* agreements — a relation that was present in the previous save but is gone in the current one (e.g. a broken treaty). Iterating "pairs present in the save **plus** pairs with existing DB rows" covers this: a pair whose row exists but is absent from `relations_manager` this save is exactly a cancellation and must still be visited so the change is recorded. Any narrowing that skips existing-row pairs would silently miss cancellations, so that union is the required lower bound on what we iterate.
+**Fix:** the processor now creates a `DiplomaticRelation` row only for ordered pairs that have an active relation *this* save (union of the country's `diplomacy_dict` targets), on top of always loading every existing row. Pairs with no relation get no row — a missing row reads identically to an all-`False` row for every consumer (`Country.diplo_relation_details` / `DiplomaticRelation.active_relations` only surface active flags), so the full N×N sweep is gone. It now depends on `DiplomacyDictProcessor`.
+
+**Constraint preserved — cancelled agreements:** because every existing row is still loaded, a relation present in a previous save but gone this save is still visited by `DiplomacyUpdatesProcessor` (`was_active=True`, `is_now_active=False`) and its event is closed with an end date. The iterated set is "pairs active this save **∪** pairs with existing rows", which is the required lower bound to catch both new and cancelled agreements.
 
 ### 2.7 Smaller items — ⚠️ MOSTLY FIXED (5/6)
 
@@ -322,7 +324,7 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS | ✅ done |
 | 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS | ✅ done |
 | 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⬜ open |
-| 16 | Narrow `DiplomaticRelationsProcessor` to pairs in the save ∪ pairs with existing rows (must still catch cancelled agreements) | §2.6 | S | ⬜ open — in scope |
+| 16 | Narrow `DiplomaticRelationsProcessor` to pairs in the save ∪ pairs with existing rows (must still catch cancelled agreements) | §2.6 | S | ✅ done |
 | 17 | Move timelapse export off the request thread onto a single-worker queue (one export at a time, non-blocking); validate step/frame/dpi ints | §4 | M | ⬜ open — in scope |
 
 Also included in the fix PR: `PopStatsProcessor` now tolerates missing
