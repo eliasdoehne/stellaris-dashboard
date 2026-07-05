@@ -179,14 +179,16 @@ Individually small, but they run for every country/planet/ship on every autosave
 ### 2.3 Every page/callback scans all game databases — ✅ FIXED (5s TTL cache)
 `datamodel.get_available_games_dict()` opens a session on **every known game's DB file** and runs 3 queries per game. It is called per request in `history_page`, `galaxy_page`, and per Dash callback (`update_game_header`, `update_country_select_options`, `update_content`). With dozens of campaign DBs, each page interaction re-opens and queries all of them. Cache it with a short TTL or invalidate on DB-file mtime change.
 
-### 2.4 History ledger loads the entire event table into Python — ⏸️ HELD (escalated)
+### 2.4 History ledger loads the entire event table into Python — 🚧 IN PROGRESS
 `stellarisdashboard/dashboard_app/history_ledger.py`
 
 With an empty filter, `get_event_and_link_dicts` iterates *all* countries and fetches *all* their events, then filters visibility/scope in Python (`include_event`). Late-game DBs have tens of thousands of events; the page renders all of them with no pagination.
 
-**Chosen approach (no pagination):** scope the default view to a single country's ledger — default to the **player country's** ledger, and reach other countries through the codex. Push `event_is_known_to_player`, scope, and date filters into SQL so the page only materializes the viewed country's events.
+**Chosen approach (no pagination):** scope the default view to a single country's ledger — default to the **player country's** ledger, and reach other countries through the Codex. Push `event_is_known_to_player`, scope, and date filters into SQL so the page only materializes the viewed country's events.
 
-**Why held:** "the codex" does not exist in the codebase yet. Today the empty-filter history page *is* the country index — a "Country Logs" table of contents linking every empire, each to its `?country=<id>` ledger. Defaulting to the player country is unambiguous, but where other countries then live (a new "codex" page? repurpose the existing TOC?) is a UX-defining decision. Implementing the default without a replacement browse surface would regress the ability to see other empires' ledgers. See escalation.
+**Step 1 — Codex (done, additive, pending acceptance):** a new `/codex/<game_id>` page (`dashboard_app/codex.py` + `templates/codex_page.html`), linked from the sidebar, presents an organized browsable index of entities (empires — player first — and wars for this first version), each linking to its filtered ledger. This is purely additive: nothing about the existing history page changed, so there is no regression risk while the concept is evaluated for usability.
+
+**Step 2 — history default + SQL pushdown (deferred, gated on acceptance):** once the Codex is accepted as the browse surface, default the history page to the player country's ledger and push the filters into SQL. Deferred until then, because changing the default before a replacement browse surface is accepted could strand users on other empires.
 
 ### 2.5 Persisted `hash()` values are invalidated every restart — ✅ FIXED
 `stellarisdashboard/parsing/timeline.py` (`_check_and_update_hash`, bypass `network_id`)
@@ -328,7 +330,7 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M | ⬜ open |
 | 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ✅ done |
 | 11 | Make `config.initialize()` explicit at entry points instead of import time | §3.2 | M | ⏭️ out of scope — own follow-up, see §7 |
-| 12 | Default the history page to the player country's ledger (no pagination); reach other countries via the codex; push visibility/scope/date filters into SQL | §2.4 | M | ⏸️ held — needs "codex" UX decision (escalated) |
+| 12 | Default the history page to the player country's ledger (no pagination); reach other countries via the codex; push visibility/scope/date filters into SQL | §2.4 | M | 🚧 Codex page done (additive, pending acceptance); history default + SQL pushdown deferred until accepted |
 | 13 | Fix `CountryColors._get_rgb` saturation/value mix-up (and rename the shadowed loop variable) | §1.5 | XS | ✅ done |
 | 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS | ✅ done |
 | 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⏸️ held — autogenerate migrator would drop the column's data (escalated) |
