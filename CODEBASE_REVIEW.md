@@ -265,7 +265,7 @@ Python's `str` hashing is randomized per process (`PYTHONHASHSEED`). The planet 
 
 - **Per-plot re-iteration of gamestates:** every one of the ~90 `DataContainer`s iterates `gs.country_data` per gamestate. The containers are tiny, so this is fine today; if plot count keeps growing, a single pass that fans out to containers would cut ORM attribute overhead.
 - **`get_gamestates_since` yields ORM objects across a session boundary** (`datamodel.py:429`): the generator holds its session open until fully consumed; a consumer that breaks early keeps the session (and SQLite read snapshot) alive. Currently all consumers drain it — just a sharp edge to be aware of.
-- **Timelapse export blocks a Flask request — 🔧 IN SCOPE (fix now).** Confirmed: `galaxy_timelapse` (`galaxy_map.py:171`) calls `te.create_timelapse(...)` synchronously (`:216`) and only returns the success toast/redirect after the whole export finishes, so the request is held for the full duration (potentially minutes) with no progress/cancel; the docstring already labels it "(blocking)". **Approach:** move export off the request path so the web server never blocks, and **queue** exports so only one runs at a time (serialize on a single background worker; a request while one is running enqueues rather than spawning a parallel matplotlib job). The trigger endpoint returns immediately (accepted/queued toast); htmx is already in use for status feedback. Also validate `int(form.get("step"))` etc. — a negative/zero step crashes `_day_list` (`range()` empty → `export_days[-1]` IndexError). Keep to the stdlib (`queue.Queue` + a worker `threading.Thread`) — no new dependency.
+- **Timelapse export blocks a Flask request — ✅ FIXED.** `galaxy_timelapse` used to call `create_timelapse(...)` synchronously, holding the request for the whole export (minutes). Now a module-level `TimelapseExportQueue` (`timelapse_exporter.py`, stdlib `queue.Queue` + a single daemon `threading.Thread`) runs exports off the request path: the endpoint validates the form and enqueues a `TimelapseRequest`, then returns immediately with a "started"/"queued (N ahead)" toast. Only one export runs at a time, which also removes a latent bug — two concurrent export requests previously drove matplotlib's global `pyplot` state on two worker threads at once. Form ints (`step`/`frame_time`/`dpi`) are validated as `>= 1` via `_positive_int` (non-numeric → error toast instead of a 500; zero/negative step no longer crashes `_day_list`), and "no format selected" now returns an error toast instead of silently doing nothing. No new dependency.
 - **`EventFilter` min_date** is parsed with `float(request.args.get("min_date", -inf))` — a non-numeric query param yields an unhandled 500 (`history_ledger.py:64,88`).
 
 ---
@@ -315,7 +315,7 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 4 | Replace persisted `hash()` values with a stable digest (planets + bypass network ids); one-time re-diff on upgrade is acceptable | §2.5 | S | ⬜ open — semantic change, own PR |
 | 5 | Pre-load lookup dicts to remove the N+1 patterns in `CountryProcessor`, `SpeciesProcessor`, `SystemProcessor._add_system`, `PopStatsProcessor`, `FleetInfoProcessor`, `ScientistEventProcessor` | §2.2 | M | ✅ done |
 | 6 | Cache `get_available_games_dict()` (TTL or mtime-based) and stop calling it per Dash callback | §2.3 | S | ✅ done (5s TTL) |
-| 7 | Restrict `/applysettings/` to POST, validate numeric form fields, clean up the `key in settings` idiom; validate timelapse form ints | §3.3, §4 | S | ✅ done (timelapse form still open) |
+| 7 | Restrict `/applysettings/` to POST, validate numeric form fields, clean up the `key in settings` idiom; validate timelapse form ints | §3.3, §4 | S | ✅ done (timelapse form now validated in item 17) |
 | 8 | Declare `normalize_stacked_plots` on `Config` (or pass it through the callback chain) | §3.3 | XS | ✅ done (declared) |
 | 9 | Add a synthetic-gamestate integration test for the timeline pipeline + unit tests for `_preprocess_tab_layout` and date round-trips | §5 | M | ⬜ open |
 | 10 | Move `clear_cached_country_colors` out of `dashboard_app` to break the parsing→dashboard dependency | §3.1 | S | ⬜ open |
@@ -325,7 +325,7 @@ accompanying this report (branch `claude/codebase-review-report-sk1nxo`).
 | 14 | Housekeeping batch: `logger.warn`→`warning`, duplicate dependency entry, `super().__init__()` in `TruceProcessor`, dead `submit_time`, commented-out print, docstring/type-hint fixes, `== True` | §3.4–3.7 | XS | ✅ done |
 | 15 | Plan an alembic rename for `communations` → `communications` | §3.6 | S | ⬜ open |
 | 16 | Narrow `DiplomaticRelationsProcessor` to pairs in the save ∪ pairs with existing rows (must still catch cancelled agreements) | §2.6 | S | ✅ done |
-| 17 | Move timelapse export off the request thread onto a single-worker queue (one export at a time, non-blocking); validate step/frame/dpi ints | §4 | M | ⬜ open — in scope |
+| 17 | Move timelapse export off the request thread onto a single-worker queue (one export at a time, non-blocking); validate step/frame/dpi ints | §4 | M | ✅ done |
 
 Also included in the fix PR: `PopStatsProcessor` now tolerates missing
 `pop_jobs`/`pop_groups` sections instead of rolling back the entire save (§3.7),

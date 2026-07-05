@@ -1,6 +1,9 @@
+import dataclasses
 import datetime
 import io
 import logging
+import queue
+import threading
 from collections import defaultdict
 from typing import Tuple, Optional
 
@@ -21,6 +24,88 @@ from stellarisdashboard.dashboard_app.visualization_data import (
 
 matplotlib.use("Agg")
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(frozen=True)
+class TimelapseRequest:
+    """A single queued timelapse export."""
+
+    game_id: str
+    width: int
+    height: int
+    dpi: int
+    start_date: int
+    end_date: int
+    step_days: int
+    tl_duration: int
+    export_gif: bool
+    export_webp: bool
+    export_frames: bool
+
+
+class TimelapseExportQueue:
+    """Serializes timelapse exports onto a single background worker thread.
+
+    Exports are long-running (minutes) and drive matplotlib's global pyplot
+    state, so running them off the request thread keeps the web server
+    responsive, and running at most one at a time avoids concurrent pyplot use.
+    """
+
+    def __init__(self):
+        self._queue: "queue.Queue[TimelapseRequest]" = queue.Queue()
+        self._lock = threading.Lock()
+        self._worker: Optional[threading.Thread] = None
+        # jobs submitted but not yet finished (queued + the one running)
+        self._active = 0
+
+    def submit(self, request: TimelapseRequest) -> int:
+        """Enqueue an export. Returns how many jobs are ahead of it
+        (0 means it will start immediately)."""
+        with self._lock:
+            ahead = self._active
+            self._active += 1
+            self._queue.put(request)
+            self._ensure_worker_locked()
+        return ahead
+
+    def _ensure_worker_locked(self):
+        if self._worker is None or not self._worker.is_alive():
+            self._worker = threading.Thread(
+                target=self._run, name="timelapse-exporter", daemon=True
+            )
+            self._worker.start()
+
+    def _run(self):
+        while True:
+            request = self._queue.get()
+            try:
+                self._process(request)
+            except Exception:
+                logger.exception(
+                    f"Timelapse export failed for game {request.game_id}"
+                )
+            finally:
+                self._queue.task_done()
+                with self._lock:
+                    self._active -= 1
+
+    def _process(self, request: TimelapseRequest):
+        exporter = TimelapseExporter(
+            request.game_id, request.width, request.height, request.dpi
+        )
+        exporter.create_timelapse(
+            start_date=request.start_date,
+            end_date=request.end_date,
+            step_days=request.step_days,
+            tl_duration=request.tl_duration,
+            export_gif=request.export_gif,
+            export_webp=request.export_webp,
+            export_frames=request.export_frames,
+        )
+
+
+# Module-level singleton: one worker process-wide, so all exports serialize.
+export_queue = TimelapseExportQueue()
 
 
 class TimelapseExporter:
