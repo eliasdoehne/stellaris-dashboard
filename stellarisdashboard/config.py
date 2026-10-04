@@ -41,7 +41,7 @@ def _get_default_stellaris_user_data_path():
     home = pathlib.Path.home()
     if platform.system() == "Windows":
         one_drive_path = home / "OneDrive/Documents/Paradox Interactive/Stellaris/"
-        non_one_drive_path = home / "OneDrive/Documents/Paradox Interactive/Stellaris/"
+        non_one_drive_path = home / "Documents/Paradox Interactive/Stellaris/"
         if one_drive_path.exists():
             return one_drive_path
         else:
@@ -254,6 +254,9 @@ class Config:
     log_to_file: bool = False
     debug_mode: bool = False
 
+    # runtime-only UI state, toggled from the dashboard; not persisted to config.yml
+    normalize_stacked_plots: bool = False
+
     tab_layout: Dict[str, List[str]] = None
     market_resources: List[Dict[str, Any]] = None
     market_fee: List[Dict[str, float]] = None
@@ -375,11 +378,11 @@ class Config:
                 continue
             if not isinstance(plot_list, list):
                 logger.warning(f"Ignoring invalid graph list for tab {tab}")
-                pass
+                continue
             for g in plot_list:
                 if not isinstance(g, str):
                     logger.warning(f"Ignoring invalid graph ID {g}")
-                    pass
+                    continue
                 processed[tab].append(g)
         return dict(processed)
 
@@ -507,8 +510,8 @@ def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):
                 if match:
                     return pathlib.Path(match.group(1))
     except Exception as e:
-        logger.warn(f"Failed to read mod path from {mod_descriptor_path}")
-        logger.warn(e)
+        logger.warning(f"Failed to read mod path from {mod_descriptor_path}")
+        logger.warning(e)
     return None
 
 

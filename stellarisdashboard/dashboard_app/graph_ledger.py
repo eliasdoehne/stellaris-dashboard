@@ -7,7 +7,6 @@ from urllib import parse
 import dash.exceptions
 import plotly.graph_objs as go
 from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
-from flask import render_template
 
 from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app import (
@@ -236,7 +235,16 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
-        return render_template("404_page.html", game_not_found=True, game_name=game_id)
+        # Dash escapes string children, so a rendered HTML template would show
+        # up as its source text; return a component instead.
+        return html.Div(
+            [
+                html.H2("Game not found"),
+                html.P(f'No game matches "{game_id}".'),
+                html.A("Back to game selection", href="/"),
+            ],
+            className="tl-content",
+        )
     game_id = matches[0]
     games_dict = datamodel.get_available_games_dict()
     if game_id not in games_dict:
@@ -509,7 +517,7 @@ def get_plot_value_labels(x_values, y_values, key):
     ]
 
 
-def get_country_color(game_id: int, country_name: str, alpha: float = 1.0) -> str:
+def get_country_color(game_id: str, country_name: str, alpha: float = 1.0) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
     r, g, b = visualization_data.get_color_vals(game_id, country_name)
@@ -521,7 +529,7 @@ def start_dash_app(host, port):
     timeline_app.css.config.serve_locally = True
     timeline_app.scripts.config.serve_locally = True
     timeline_app.layout = get_layout()
-    if config.CONFIG.production == True:
+    if config.CONFIG.production:
         from waitress import serve
 
         serve(timeline_app.server, host=host, port=port)

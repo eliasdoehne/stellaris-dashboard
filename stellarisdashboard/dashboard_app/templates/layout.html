@@ -37,6 +37,7 @@
             <a class="nav-link" hx-boost="false" href="{{ url_for('/timeline/', game_name=game_name) }}">Graphs</a>
             <a class="nav-link{% if request.endpoint == 'galaxy_page' %} is-active{% endif %}" hx-boost="false" href="{{ url_for('galaxy_page', game_id=game_name) }}">Galaxy Map</a>
             <a class="nav-link{% if request.endpoint == 'history_page' %} is-active{% endif %}" href="{{ url_for('history_page', game_id=game_name) }}">Event Ledger</a>
+            <a class="nav-link{% if request.endpoint == 'codex_page' %} is-active{% endif %}" href="{{ url_for('codex_page', game_id=game_name) }}">Codex</a>
             {% endif %}
             <a class="nav-link{% if request.endpoint == 'settings_page' %} is-active{% endif %}" href="/settings/">Settings</a>
             <a class="nav-link nav-link--ext" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki" target="_blank" rel="noopener">Stellaris Wiki ↗</a>
@@ -50,6 +51,8 @@
                     <span class="crumb crumb--current">Settings</span>
                 {% elif request.endpoint == 'galaxy_page' %}
                     {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">Galaxy Map</span>
+                {% elif request.endpoint == 'codex_page' %}
+                    {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">Codex</span>
                 {% elif country %}
                     <span class="crumb">{{ country }}</span><span class="crumb-sep">›</span><span class="crumb crumb--current">Event Ledger</span>
                 {% elif request.endpoint == 'history_page' %}

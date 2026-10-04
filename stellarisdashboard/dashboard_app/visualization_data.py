@@ -18,6 +18,7 @@ from scipy.spatial import Voronoi
 from sqlalchemy.orm import selectinload
 
 from stellarisdashboard import datamodel, config, game_info
+from stellarisdashboard.country_color_cache import GAME_COUNTRY_COLORS
 from stellarisdashboard.parsing.save_parser import rust_parser
 
 logger = logging.getLogger(__name__)
@@ -97,13 +98,6 @@ def get_current_execution_plot_data(
     return _CURRENT_EXECUTION_PLOT_DATA[game_name]
 
 
-_GAME_COUNTRY_COLORS = {}
-
-
-def clear_cached_country_colors():
-    _GAME_COUNTRY_COLORS.clear()
-
-
 def get_color_vals(
     game_id: str, key_str: str, range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
@@ -113,12 +107,12 @@ def get_color_vals(
     For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
     the random number generator. This makes colors consistent across figures and executions.
     """
-    if game_id not in _GAME_COUNTRY_COLORS:
+    if game_id not in GAME_COUNTRY_COLORS:
         country_colors = CountryColors()
         country_colors.load(game_id)
-        _GAME_COUNTRY_COLORS[game_id] = country_colors
+        GAME_COUNTRY_COLORS[game_id] = country_colors
     else:
-        country_colors = _GAME_COUNTRY_COLORS[game_id]
+        country_colors = GAME_COUNTRY_COLORS[game_id]
 
     if key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
@@ -135,10 +129,12 @@ def get_color_vals(
     elif country_colors.has_color_for_name(key_str):
         r, g, b = country_colors.get_color_by_name(key_str)
     else:
-        random.seed(key_str)
-        h = random.uniform(0, 1)
-        l = random.uniform(0.4, 0.6)
-        s = random.uniform(0.5, 1)
+        # local RNG seeded on the key: deterministic per identifier without
+        # perturbing the global random state that other code relies on
+        rng = random.Random(key_str)
+        h = rng.uniform(0, 1)
+        l = rng.uniform(0.4, 0.6)
+        s = rng.uniform(0.5, 1)
         r, g, b = map(
             lambda x: 255 * (x if x > 0.01 else 0), colorsys.hls_to_rgb(h, l, s)
         )
@@ -299,7 +295,6 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
         added_new_val = False
         self.dates.append(gs.date / 360.0)
         for cd in gs.country_data:
-            country_name = cd.country.rendered_name
             try:
                 if (
                     not config.CONFIG.show_all_country_types
@@ -309,11 +304,14 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
                 new_val = self._get_value_from_countrydata(cd)
                 if new_val is not None:
                     added_new_val = True
+                    # render the name only for countries that pass the filters
                     self._add_new_value_to_data_dict(
-                        country_name, new_val, default_val=self.DEFAULT_VAL
+                        cd.country.rendered_name, new_val, default_val=self.DEFAULT_VAL
                     )
-            except Exception as e:
-                logger.exception(country_name)
+            except Exception:
+                logger.exception(
+                    f"Error extracting plot data for country {cd.country_id}"
+                )
         if not added_new_val:
             self.dates.pop()  # if nothing was added, we don't need to remember the date.
         self._pad_data_dict(default_val=self.DEFAULT_VAL)
@@ -455,8 +453,10 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
                     self._add_new_value_to_data_dict(
                         key, new_val, default_val=self.DEFAULT_VAL
                     )
-        except Exception as e:
-            logger.exception(player_cd.country.rendered_country_name)
+        except Exception:
+            logger.exception(
+                f"Error extracting budget data for {player_cd.country.rendered_name}"
+            )
         self._pad_data_dict(self.DEFAULT_VAL)
 
     def _get_player_countrydata(self, gs: datamodel.GameState) -> datamodel.CountryData:
@@ -530,17 +530,22 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         self, gs: datamodel.GameState, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
         market_fee = self.get_market_fee(gs)
-        market_resources: List[datamodel.GalacticMarketResource] = sorted(
-            gs.galactic_market_resources, key=lambda r: r.resource_index
+        # Match the DB row to this container by resource index rather than zipping
+        # the save's resource list against the configured list positionally, which
+        # silently misaligns every price if the two ever differ in length/order.
+        res = next(
+            (
+                r
+                for r in gs.galactic_market_resources
+                if r.resource_index == self.resource_index
+            ),
+            None,
         )
-        for res, res_data in zip(market_resources, config.CONFIG.market_resources):
-            if res_data["name"] == self.resource_name and res.availability != 0:
-                yield from self._get_resource_prices(
-                    market_fee, res_data["base_price"], res.fluctuation
-                )
-                yield self.galactic_market_indicator_key, -0.001
-                yield self.internal_market_indicator_key, self.DEFAULT_VAL
-                break
+        if res is None or res.availability == 0:
+            return
+        yield from self._get_resource_prices(market_fee, self.base_price, res.fluctuation)
+        yield self.galactic_market_indicator_key, -0.001
+        yield self.internal_market_indicator_key, self.DEFAULT_VAL
 
     def _iter_internal_market_price(
         self, gs: datamodel.GameState, cd: datamodel.CountryData
@@ -1845,8 +1850,8 @@ class CountryColors:
         v = min(v, _MAX_V)
         v = max(v, _MIN_V)
         if avoid_used:
-            for shift in itertools.chain([0.0], *((v, -v) for v in _V_SHIFTS)):
-                v_shifted = s + shift
+            for shift in itertools.chain([0.0], *((dv, -dv) for dv in _V_SHIFTS)):
+                v_shifted = v + shift
                 if (
                     v_shifted >= _MIN_V
                     and v_shifted <= _MAX_V
