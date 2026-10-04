@@ -68,6 +68,8 @@ Steady-state path for one save:
 
 Largest gamestate sections by node count: `pop_jobs` 662k, `planets` 611k, `ships` 396k, `country` 356k, `fleet` 222k, `construction` 157k, `ship_design` 115k. The dashboard does not read `construction` at all. From `ships`, `fleet`, `ship_design` and `pop_jobs` it reads only 2–3 fields per entry.
 
+**How much of the save is actually used.** Two ingests were run with the gamestate wrapped in an access-recording dict. Across them, the processors touched **2,091 distinct paths covering 16.2% of the nodes** (440k of 2.7M). This is an upper bound, because lists of dicts were counted in full. The other ~84% is converted to Python objects, pickled, unpickled and thrown away on every save. Filtering only at the top level would save about 10%; the gain comes from filtering nested paths inside `pop_jobs`, `planets`, `ships`, `country` and `fleet`.
+
 In steady state, each late-game save costs roughly **7–8 s of wall time and two full copies of the gamestate in memory**: the worker's copy and the unpickled one in the main process. Only about 1.5 s of that is the ingestion that produces stored data.
 
 ---
@@ -88,7 +90,10 @@ In steady state, each late-game save costs roughly **7–8 s of wall time and tw
       "pop_jobs": {"*": {"type": true, "pop_groups": true}}}
      ```
    - Skipped subtrees are only scanned for matching braces, never materialized.
-   - Issue #134 (StellarMaps' parser) reported **~6× faster parsing (3 s → 0.5 s)** with this approach. Because the processors still receive the same dict shape, no Python processor needs to change.
+   - Two independent indications of the gain:
+     - Issue #134 (StellarMaps' parser) reported **~6× faster parsing (3 s → 0.5 s)** with this approach.
+     - The access recording in §1 shows only 16% of nodes are needed.
+   - Because the processors still receive the same dict shape, no Python processor needs to change.
    - Generate the first spec by recording key accesses while running the test save through `TimelineExtractor`.
    - Keep it honest with a test that wraps the gamestate in an access-recording dict and fails when a processor reads a path the spec does not cover.
 2. **Parse in-process and drop the pickle hop.**
@@ -295,6 +300,7 @@ Add a benchmark harness (parse, ingest ×N, render) on the test save to CI, so e
 
 - Parse timings come from `rust_parser.parse_save_file` on the test save. The pure-Rust comparison is a standalone release build of the current `parser.rs` with the PyO3 layer stripped, run against `jomini 0.27` `TextTape::from_slice` on the same uncompressed `gamestate`.
 - The pool round trip uses `multiprocessing.Pool(1).apply_async(save_parser.parse_save, …)`, the same call path as `ContinuousSavePathMonitor`.
+- The 16% figure comes from wrapping the gamestate in a `dict` subclass that records every `get`, `[]`, `in` and iteration as a normalized path (integer ids become `*`), running two ingests, then counting the nodes under recorded paths.
 - Ingestion timings run `TimelineExtractor.process_gamestate` repeatedly on the same parsed gamestate with the date advanced by one month each time: 120 iterations player-only, 40 with "store data of all countries". SQL statements were counted with a `before_cursor_execute` listener.
 - The restart test re-ran the same harness in a fresh process against the existing DB, with and without `PYTHONHASHSEED=0`.
 - Payload sizes come from building every tab's figures through `graph_ledger.get_raw_plot_data_dicts` and the two layouts used in `update_content`, then JSON-encoding them.
