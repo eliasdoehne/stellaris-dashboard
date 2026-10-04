@@ -2,7 +2,7 @@
 
 *Review date: 2026-10-04. Code reviewed at commit `795afa3` (v8.0.0).*
 
-*Measurements use the 4.0.1 save in `test/saves`: a 52 MB gamestate in the year 2312, with 44 countries, 6,353 planets, 1,185 pop groups and 25 DLCs enabled. They were taken in a 4-vCPU cloud container with Python 3.14, SQLAlchemy 2.0.50 and Dash 4.2. Treat the absolute numbers as indicative and compare the ratios.*
+*Measurements use the 4.0.1 save in `test/saves`: a 52 MB gamestate in the year 2312, with 44 countries, 6,353 planets, 1,185 pop groups and 25 DLCs enabled. They were taken in a 4-vCPU cloud container with Python 3.14, SQLAlchemy 2.0.50 and Dash 4.2. Treat the absolute numbers as indicative and compare the ratios. That save was made with console commands (`cheated_on_save=yes`), which inflates stockpiles but does not affect performance. The format checks in §3 also used real **4.4.6** and **4.5.0** saves.*
 
 ---
 
@@ -11,10 +11,12 @@
 Three findings drive the recommendations.
 
 1. **Most of the per-save cost is spent moving data, not using it.** The Rust parser turns the whole gamestate (2.7 M nodes) into Python objects in a worker process, then pickles it and sends it to the main process. That costs about 5.5–6.5 s per late-game save. The DB ingestion that follows takes about 1.5 s. Parsing only the parts the processors read, in-process, should cut the pre-ingestion cost to around 1 s and roughly halve peak memory.
-2. **Parts of the dashboard have been silently empty since 4.0.**
-   - On the 4.0.1 test save the database ends up with **0 district rows and 0 building rows** for 6,352 planets. Districts and buildings moved into new top-level `districts` and `zones` tables, and the planet code still reads the 3.x keys.
-   - The **Fleet Composition graph is all zeros**, because ships now reference designs through `ship_design_implementation`.
-   - A further break is likely for **4.5 saves** (released 2026-09-22): pop groups reportedly no longer carry a single ethic and faction. That is unverified, because no 4.5 save was available.
+2. **Several graphs and ledger sections are silently wrong on current game versions.** Every save below ingests without an error, so nothing alerts the user. All of it was verified by running the ingestion on real 4.0.1, 4.4.6 and 4.5.0 saves.
+   - **4.0+:** 0 district and 0 building rows. Districts and buildings moved into new `districts` and `zones` tables.
+   - **4.0+:** the **Fleet Composition graph is all zeros**, because ships now reference designs through `ship_design_implementation`.
+   - **Since at least 3.12:** the **Living Metal, Zro and Dark Matter budget graphs are always zero**. The save uses `sr_`-prefixed names.
+   - **4.4+:** a new `colony` layer means "planet" IDs in pops, capitals and sectors are now colony IDs. The player's capital resolves to the *star*, and planet stability, housing and amenities graphs are flat zero.
+   - **4.5 (released 2026-09-22):** pop groups no longer carry a single ethic or faction. **All pops land in "no ethos" / "No faction"**, so the ethos and faction graphs collapse to one bucket.
 3. **Most 2022–2026 DLC systems are in the save but absent from the dashboard.** The test save contains resource stockpiles, the game's own **Empire Timeline** (51 distinct milestone types), situations, subject agreements, astral rifts, cosmic storms, Grand Archive exhibits, first-contact progress, espionage operations, GC resolutions and megastructures. None of these is ingested. Eight ledger event types exist in the schema but are never emitted.
 
 ---
@@ -23,11 +25,13 @@ Three findings drive the recommendations.
 
 Effort key: **S** is about a day or less, **M** is 2–5 days, **L** is 1–3 weeks. "Measured" means observed on the test save. "Est." means an engineering estimate.
 
+The numbers are for reference, not strict priority. If only two things get done, do **#3**, because current game versions get wrong data. Then do **#1**, the largest speed and memory win. §2.9 gives a suggested sequence.
+
 | # | Change | Problem it fixes | Expected effect | Effort |
 |---|---|---|---|---|
 | 1 | **Filtered, in-process parsing.** The Rust side builds Python objects only for the paths the processors read. Parse in a thread with the GIL released, and drop the pickle hop. | The full tree is converted and pickled across processes on every save | Est. 5.5–6.5 s → ~1 s per save. Peak memory roughly halved. | M |
 | 2 | **Never drop saves silently.** Queue new saves instead of marking the overflow as processed. | Saves arriving while a parse is in flight are skipped for good | No data gaps | S |
-| 3 | **Fix the 4.x data-model regressions.** Read districts (type and level), zones and buildings from the new tables, and resolve ship sizes through `ship_design_implementation`. Check pop stats against a 4.5 save. | On 4.x the districts and buildings ledger is empty (measured: 0 rows) and Fleet Composition is all zeros (measured) | Restores planet pages and the fleet graph, and enables zone and specialization events | M |
+| 3 | **Fix the 4.x data-model regressions**, and add the 4.4/4.5 saves to `test/saves` with assertions that these outputs are non-empty. Read districts, zones and buildings from the new tables. Resolve ship sizes through `ship_design_implementation`. Map colony IDs to planets (4.4+). Read the 4.5 ethic and faction shares. Fix the `sr_` resource names. | Several graphs and ledger sections are empty or wrong on current saves. Measured on 4.0.1, 4.4.6 and 4.5.0; see §3.1. | Correct data on current game versions | M |
 | 4 | **Ingestion hygiene.** Stable hashes, `no_autoflush`, lookup maps loaded once per save, a few indexes, and a fix for the per-planet and per-country query loops. | ~2,600–3,900 SQL statements per save. 4,481 autoflushes on first import. The first save after a restart is 2.4× slower. | Measured: the restart penalty drops from 4.0 s to 1.9 s with a fixed hash seed. Est.: steady state 1.5 s → ≤0.5 s, first import 9 s → 2–3 s. | M |
 | 5 | **Smaller graph payloads.** Send each figure once, replace per-point hover strings with `hovertemplate`, turn on compression, and cache figure JSON per save. | Each figure is serialized twice and about 42% of the bytes are preformatted hover text. Compression is off. | Est. 5–10× fewer bytes per tab switch. The Economy tab alone is about 0.75 MB at 40 saves and grows linearly up to the 500-point cap. | S |
 | 6 | **Thread-safe in-memory caches keyed by country perspective.** | Shared plot cache is mutated by the monitor thread and request threads without a lock. Every save resets a user-chosen perspective, which triggers two full reloads. | Removes full reloads after each save and removes data races | S |
@@ -205,16 +209,27 @@ A longer-term option: keep an in-memory snapshot of the previous save's relevant
 | Leader level-ups are only recorded when another attribute (traits, name, class…) changes in the same save. `level` is missing from the change condition. | `timeline.py:1276–1292` | Code inspection |
 | Districts and buildings are never stored on 4.x saves. | `timeline.py:1456`, `:1481` | 0 rows on the 4.0.1 save |
 | Fleet composition is always zero on 4.x. Ship size is looked up through `ship["ship_design"]`, which no longer exists. | `FleetInfoProcessor._get_ship_class` | The sum of all `ship_count_*` is 0 |
+| Living Metal, Zro and Dark Matter budgets are always zero. The save keys are `sr_living_metal`, `sr_zro` and `sr_dark_matter`. | `timeline.py:1039–1041` | DB sum 0.0. These keys appear in 23 budget categories in the 4.0.1 save. |
+| On 4.4+, capital, planet stats and sector capitals use colony IDs as planet IDs. | `RulerEventProcessor._history_add_or_update_capital`, `PopStatsProcessor`, `SectorColonyEventProcessor` | The 4.4.6 and 4.5.0 player capitals resolve to the star. All `planetstats` stability and housing values are 0. |
+| On 4.5, ethic and faction are read from `pop_group.key`, which no longer carries them. | `PopStatsProcessor` | 4.5.0 save: 100% of pops are "no ethos" / "No faction". |
 | Wars that include dead countries log three warnings on every save. | `WarProcessor.update_war_participants` | Log output |
 | Eight `HistoricalEventType`s are never emitted: `megastructure_construction`, `habitat_ringworld_construction`, `voted_for/against_resolution`, `sector_creation`, `planetary_unrest`, `species_rights_reform`, `discovered_new_system`. | `datamodel.py` | grep |
 | `Config.normalize_stacked_plots` only exists after the first Dash callback has run. | `graph_ledger.py:233` | Raises `AttributeError` if figures are built before that callback |
 
 ### 2.9 Suggested order of work
 
-1. **Quick wins (≈1 week):** #2 (save dropping), the hash, autoflush and preloading parts of #4, #5 (payload), #6 (cache safety), the bug fixes in §2.8, and stockpiles, total pops and the Empire Timeline from §3.
-2. **Pipeline (1–2 weeks):** #1 steps 1–2 (filtered, in-process parse) with the access-recording test, then #3 (4.x data-model fixes).
-3. **Coverage foundation (1 week):** #8 (generic metrics), game version per gamestate, then the §3 additions in priority order.
-4. **Structural (as appetite allows):** #1 step 3 (jomini), #7 (ledger), #11 (galaxy map), #12 (move off Dash).
+1. **Correctness first (≈1 week).** Current game versions produce wrong graphs silently, so start here:
+   - #3, the 4.x data-model fixes.
+   - The bug fixes in §2.8.
+   - Add the 4.4.6 and 4.5.0 saves to `test/saves` (check the source repository's license first). Assert that districts, fleet composition, ethos buckets and planet stats are non-empty.
+2. **Quick performance wins (≈1 week):**
+   - #2 (save dropping).
+   - The hash, autoflush and preloading parts of #4.
+   - #5 (payload) and #6 (cache safety).
+   - Stockpiles, total pops and the Empire Timeline from §3.
+3. **Pipeline (1–2 weeks):** #1 steps 1–2 (filtered, in-process parse) with the access-recording test.
+4. **Coverage foundation (1 week):** #8 (generic metrics) and game version per gamestate, then the §3 additions in priority order.
+5. **Structural (as appetite allows):** #1 step 3 (jomini), #7 (ledger), #11 (galaxy map), #12 (move off Dash).
 
 Add a benchmark harness (parse, ingest ×N, render) on the test save to CI, so each step is measured rather than assumed. The scripts behind §1 can be turned into one.
 
@@ -226,7 +241,11 @@ Add a benchmark harness (parse, ingest ×N, render) on the test save to CI, so e
 
 - **Release catalog.** A research subagent compiled a catalog of releases from 2022 to October 2026 using web search (the Stellaris wiki, Paradox dev diaries, Steam and Paradox news, press). Direct page fetches were blocked in this environment, so details come from search-result excerpts. Items marked **†** rest on a single source, or on inference.
 - **What the dashboard reads.** Each feature was checked against the keys that `timeline.py` actually reads.
-- **What the save contains.** Each feature was also checked, where possible, against the **4.0.1 test save**. Its `required_dlcs` include Overlord, First Contact, Galactic Paragons, Astral Planes, The Machine Age, Cosmic Storms and Grand Archive. It does *not* include BioGenesis, Shadows of the Shroud, Infernals or Nomads. "✔ in save" below means the data was located in that file.
+- **What the save contains.** Each feature was also checked against real saves:
+  - the **4.0.1 test save** (late game). Its `required_dlcs` include Overlord, First Contact, Galactic Paragons, Astral Planes, The Machine Age, Cosmic Storms and Grand Archive.
+  - early-game **4.4.6** and **4.5.0** saves from the public test data of [stellaris-galaxy-forge](https://github.com/IanHeinrich/stellaris-galaxy-forge). The 4.5.0 one has BioGenesis, Nomads, Shadows of the Shroud and Infernals enabled.
+  - 3.10.4 and 3.12.1 saves from the history of the test-save repository.
+  - "✔ in save" below means the data was located in at least one of these. Because the 4.4 and 4.5 saves are early game, wars, federations and crisis content are empty in them.
 - **Ranking.** Items are ranked by value to someone reading their game's history, times confidence that the data is in the save, divided by effort.
 
 **Covered today, for reference:**
@@ -236,17 +255,22 @@ Add a benchmark harness (parse, ingest ×N, render) on the test save to CI, so e
 
 ### 3.1 Fix first: 4.x data the dashboard still reads the 3.x way
 
+Rows marked ✔ were checked against the real saves. For districts, fleet composition, the colony layer, pop groups and strategic resources, the "effect today" was reproduced by running `TimelineExtractor` on those saves and inspecting the resulting DB.
+
 | Area | What changed | Effect today | Evidence |
 |---|---|---|---|
 | **Districts, zones, buildings** (4.0) | `planet.districts` is now a list of ids into the top-level `districts` table (`{type, level, zones}`). Buildings hang off `zones` (`{type, buildings}`). | `planet_district` and `planet_building` stay empty. Planet ledger pages show no districts or buildings. Zones, district development levels and specializations are invisible. | ✔ 0 rows after ingesting the 4.0.1 save. Code reads `planet["district"]` / `planet["buildings"]` (`timeline.py:1456`, `:1481`). |
 | **Fleet composition** (4.0) | Ships reference `ship_design_implementation: {design, growth_stage}`. Designs carry `growth_stages[].ship_size` instead of `ship_size`. | Every ship resolves to size `None`. **The Fleet Composition graph is all zeros** and `Fleet.is_civilian_fleet` is wrong. Frigates (187 ships in the save) have no category even after the fix. | ✔ The sum of all `ship_count_*` columns is 0. Resolving through the new path yields corvette 400, frigate 187, destroyer 105, and so on. |
-| **Pop groups split by ethic and faction** (4.5, released 2026-09-22) | Per the patch notes†, a group holds *shares* of each ethic and faction instead of one `key.ethos.ethic` and `key.pop_faction`. | `PopStatsProcessor` would put everyone under "no ethos" / "no faction". | Unverified: no 4.5 save available. **Get a 4.5 save into `test/saves` and check this first.** |
+| **Colony layer** (4.4) | A new top-level `colony.<id>` holds pops, jobs, districts, governor, stability, amenities, housing and designation, plus `carrier = {type: planet\|ship, reference}`. `planets.planet.<id>` keeps only physical data and `colony=<id>`. `country.owned_planets`, `controlled_colonies`, `capital`, `sectors.*.local_capital`, `pop_groups.*.planet` and `pop_jobs.*.planet` hold **colony IDs**. | The capital resolves to the wrong object (the star, in both test saves). Planet stats read stability and housing from the wrong place (all 0). Planet names in the per-planet graphs and the capital-relocation events are wrong. Arkship colonies (Nomads) have a *ship* as their carrier. | ✔ 4.4.6, 4.5.0. Also documented by [stellaris-companion `colony_resolver.py`](https://github.com/gitmaan/stellaris-companion). |
+| **Pop groups no longer split by ethic or faction** (4.5, released 2026-09-22) | `key` holds only `{species, category}`. New fields: `ethos = {ethics: [...], pops: [...]}`, `factions`, `fractions`, `ethics_attraction`. Countries gain 17-element per-ethic arrays (`ethics_distribution`, `pops_with_ethic`, …) whose index order is not stored in the save. | **All pops land in "no ethos" and "No faction".** The ethos and faction graphs collapse to one bucket. | ✔ 4.5.0: 133,554 of 133,554 pops |
+| **Strategic resource names** | Budgets use `sr_living_metal`, `sr_zro`, `sr_dark_matter`. | Those three budget graphs are always 0. | ✔ 3.12.1, 4.0.1, 4.5.0 |
 | **Number scale jumps** (4.0 pops ×100; 4.3 tech costs halved, naval capacity per ship ×5, empire size reworked†) | Series are not comparable across versions. | Graphs show unexplained cliffs. | Record `version` per gamestate and draw markers (§2.4). |
-| **Unemployment removed** (4.4†), **Civilians stratum added** (4.0) | Job and stratum categories changed. | Harmless leftover "unemployed" bucket. Civilians are already handled through the job data. | Patch notes† |
+| **Unemployment strata removed** (4.4), **Civilians stratum added** (4.0) | Job and stratum categories changed. From 4.4, `pop_jobs` lists only real job slots (1,082 entries in the early 4.4.6 save). In 4.0.1 it held about 57 placeholder entries per planet (81,924 in the test save), which is why it is the largest section there. | A harmless leftover "unemployed" bucket. Civilians are already handled through the job and stratum data. | ✔ 4.0.1, 4.4.6 |
+| **Leader home planet** (4.4) | `planet=` replaced by `background_planet = {type, reference}` | The "Home Planet" field on leader pages is empty | ✔ 4.4.6 |
 | **Wars can be joined and left mid-war** (4.4†) | Participants change during a war. | `WarProcessor` only ever *adds* participants, so leaving a war is never recorded. | Code inspection |
 | **Nomadic empires with no systems** (Nomads, 4.4†) | Ownership is not starbase-based. | The galaxy map and "controlled systems" show nomads as owning nothing. | Inference from the release notes† |
 
-### 3.2 Additions available in today's saves (ranked; all ✔ in the 4.0.1 save)
+### 3.2 Additions available in today's saves (ranked; all ✔ in real saves)
 
 | # | Feature (release) | Where it lives in the save | What to add | Effort |
 |---|---|---|---|---|
@@ -257,27 +281,30 @@ Add a benchmark harness (parse, ingest ×N, render) on the test save to CI, so e
 | 5 | **Subjects and specialist vassals** (Overlord) | `agreements.agreements.<id> = {owner, target, date_added, date_changed, active_status, subject_specialization{specialist_type, level, experience}, term_data{agreement_preset, …}}`; `country.subjects`, `country.holding_planets` | Ledger: became subject or overlord (with preset), terms renegotiated, specialization levels, release or integration. Graph: number of subjects and holdings. Map: shade subjects. | M |
 | 6 | **Megastructures**: Arc Furnace, Grand Archive, hyper relays, habitats, ring worlds… | `megastructures.<id> = {type, owner, planet, coordinate}`. The stage is encoded in the type suffix, e.g. `orbital_arc_furnace_2`. Also `dead_mega_structure`. | Ledger: construction, stage upgrades, completion, destruction. This fills the never-emitted `megastructure_construction` and `habitat_ringworld_construction` types. Map markers. | S–M |
 | 7 | **Galactic Community resolutions and elections** | `galactic_community = {proposed, passed, voting, last, council, emissaries, election, community_formed, emergency_fund}`; `resolution.<id> = {type, country, supporters}` | Ledger: resolution proposed, voted and passed with supporters (fills `voted_for/against_resolution`), council elections. A "laws in force over time" view. | M |
-| 8 | **Astral Rifts** (Astral Planes) | `astral_rifts.<id> = {explorer, explorer_fleet, explorable_by, days_left, difficulty, event, event_choice, clues, coordinate}`, `dead_astral_rift`; per-country `astral_actions_usage_states_array` | Ledger: rift explored (leader, fleet) and its outcome event; astral actions used. Map markers. The threads stockpile comes from #2. | M |
-| 9 | **Cosmic Storms** (Cosmic Storms) | `storms.storms.<id> = {name, cluster{position, radius}, affected_country_ids, …}`, `storm_influence_fields`, `dead_cosmic_storm`; `country.num_cosmic_storms_encountered` | A storm layer on the galaxy map per date (position and radius per save are tiny). Ledger: storm entered or left our borders, dissipated. | M |
+| 8 | **Astral Rifts** (Astral Planes) | `astral_rifts.rifts.<id> = {status, explorer_fleet, leader, explorable_by, days_left, difficulty, clues, completed, log, coordinate}`, `astral_rifts.astral_rifts_explored`, `dead_astral_rift`; per-country `astral_actions_usage_states_array` | Ledger: rift explored (leader, fleet) and its outcome event; astral actions used. Map markers. The threads stockpile comes from #2. | M |
+| 9 | **Cosmic Storms** (Cosmic Storms) | `storms.storms.<id>`. In 4.0.1: `{name, cluster{position, radius}, affected_country_ids, …}`. Later saves add `type`, `storm_current_pos`, `path` and the min/max radius. Also `storm_influence_fields`, `dead_cosmic_storm`, `galactic_object.storm` (4.4+) and `country.num_cosmic_storms_encountered`. | A storm layer on the galaxy map per date (position and radius per save are tiny). Ledger: storm entered or left our borders, dissipated. | M |
 | 10 | **Grand Archive specimens** | `exhibits.<id> = {owner, exhibit_state, activated, specimen{specimen, origin, date_added, exhibition_date}}`, `vivarium_critters`, `country.modules.standard_grand_archive_module` | Ledger: specimen acquired (with origin), exhibited. Graph: specimens per empire. | S |
 | 11 | **First contact and pre-FTL observation** (First Contact) | `first_contacts.contacts.<id> = {country, leader, location, date, clues, difficulty, days_left, completed, events}`; `country.first_contact`; `country.awareness` | Ledger: contact protocol started and finished, with the scientist and location. Today only "communications established" appears. Pre-FTL observation milestones. | M |
 | 12 | **Espionage** (Nemesis; rework previewed for 4.5†) | `espionage_operations.operations.<id> = {type, target, spy_network, difficulty, days_left, log, assigned_assets}`, `spy_networks.<id> = {owner, target, leader, power}`, `espionage_assets`; `country.intel_level` | Ledger: operation started and finished with its outcome. Graph: infiltration per target, intel levels. | M |
-| 13 | **Archaeology** (Ancient Relics; arc sites) | `archaeological_sites.sites.<id> = {completed[{country, date}], events[{event_id, …}], clues, difficulty, days_left}`, `dead_archaeological_site` | Ledger: dig chapters and site completion, with location and dates. | S–M |
+| 13 | **Archaeology and relics** (Ancient Relics; arc sites) | `archaeological_sites.sites.<id> = {type, location, completed[{country, date}], events[{event_id, …}], clues, difficulty, days_left, excavator_fleet}`, `dead_archaeological_site`; `country.relics`, `last_activated_relic`, `last_received_relic` (seen in 3.10.4) | Ledger: dig chapters and site completion, with location and dates. Relics gained and activated. | S–M |
 | 14 | **Federation progression** (Federations) | `federation.<id> = {members, associates, leader, federation_progression{federation_type, experience, levels, cohesion, laws, perks, succession_type, last_succession_date}}` | Graphs: federation level, XP and cohesion. Ledger: law changes, presidency changes, members joining and leaving. Today only "formed federation" is derived, from pairwise flags. | M |
 | 15 | **Empire Focus** (4.0) | `country.focus = {priority.current, active cards, reward.rewards[{category, current, progress}]}`, top-level `focus_cards`, plus `focus_*` counters in `country.variables` | Graph: focus progress per category. Ledger: focus changed, reward tier reached. | S |
 | 16 | **Leaders, Paragons-era fields** (partly covered) | `leaders.<id>.experience`, `available_trait`, `council_location`, `leader_terms`, `recruitment_date`; `dead_leader` | XP progression, pending trait picks, veteran classes and destiny traits on leader pages. Also fix the level-up bug (§2.8). | S |
-| 17 | **Game setup and crises** | `galaxy = {crises, victory_year, scaling, num_empires, technology_difficulty_scale, …}`, `additional_crisis_strength` | Show the game settings on the index and ledger pages. Crisis arrival comes from #1. | S |
+| 17 | **Per-colony economy** (4.4+) | `colony.<id>.produces`, `upkeep`, `profits`, e.g. `produces={energy=116.7 food=175.1 …}` | Per-planet income graphs and "most productive worlds". This is cheaper and more accurate than deriving them from jobs. | S |
+| 18 | **Game setup and crises** | `galaxy = {crises, victory_year, scaling, num_empires, technology_difficulty_scale, …}`, `additional_crisis_strength`. Crisis progress has no dedicated section: it shows up in global `flags` (e.g. `war_in_heaven_started`, `great_khan_dead`), country types and the `menace` resource. | Show the game settings on the index and ledger pages. Crisis arrival comes from #1. | S |
 
-### 3.3 Newer content: likely addressable, but needs a post-4.0.1 save to confirm
+### 3.3 Newer content: present in 4.4+ saves, needs a mid- or late-game save to design against
+
+The early 4.4.6 and 4.5.0 saves confirm *where* these systems live, but they are mostly empty that early in a game.
 
 | Release | Trackable systems | Suggested coverage |
 |---|---|---|
 | **BioGenesis** + 4.0 (May 2025) | Biomorphosis paths; advanced authorities; **bioships** with growth stages and food upkeep; Behemoth Fury crisis path; Deep Space Citadel | Authority changes already produce government-reform events. Bioship growth stages come out of the 4.x fleet fix in §3.1. Crisis-path level and resource come from the generic metrics of §2.4. Citadels are covered by megastructures (#6). |
-| **Shadows of the Shroud** + 4.1 "Lyra" (Sep 2025) | Per-empire **attunement** with each Shroud patron (−1000…+1000)†; deeds and callings; accords; covenants on cooldowns; psionic auras; psionic ascension as a situation; **proxy wars** | Attunement time series per patron (high value; probably in country modules or variables). Ledger entries for covenants, accords and callings. Proxy wars tagged in the war ledger. |
+| **Shadows of the Shroud** + 4.1 "Lyra" (Sep 2025) | Per-empire **attunement** with each Shroud patron (−1000…+1000)†; deeds and callings; accords; covenants on cooldowns; psionic auras; psionic ascension as a situation; **proxy wars** | ✔ Keys: `country.modules.standard_shroud_module = {attunement, patron_relations, last_delve_date}`, top-level `patron_relations.<id> = {owner, patron, contact, special_project, leaders}`, `psionic_auras`. Add an attunement time series per patron (high value), ledger entries for covenants, accords and callings, and tag proxy wars in the war ledger. |
 | **Infernals** + 4.2 "Corvus" (Nov 2025) | Volcanic worlds; **Galactic Hyperthermia** crisis path (Galactic Crucible); Red Giant origin | Crisis-path level series. The origin probably runs as a situation (→ #4). The new planet class is picked up automatically. |
 | 4.3 "Cetus" (Mar 2026) | Balance rescale; Utopia, Synthetic Dawn and Humanoids folded into the base game (4.3.6) | Version markers on graphs (§2.4). |
-| **Nomads** + 4.4 "Pegasus" (Jun 2026) | **Arkship** mobile capital; **waystations** with their own stockpiles; waylines; **contracts**; **Ambitions** (five levels; Menace, Valor); joining or leaving wars mid-war; Stellar Cannon | Arkship position on the map. Waystation stockpiles (#2-style graphs). A contract ledger (issued, completed, failed). Ambition level and resource series. War join and leave events. Nomad-aware ownership. |
-| 4.5 "Cygnus" (Sep 2026) | Pop groups hold ethic and faction shares†; federation laws grant automatic pacts; espionage rework† | Update pop stats (§3.1). Federation law ledger (#14). |
+| **Nomads** + 4.4 "Pegasus" (Jun 2026) | **Arkship** mobile capital; **waystations** with their own stockpiles; waylines; **contracts**; **Ambitions** (five levels; Menace, Valor); joining or leaving wars mid-war; Stellar Cannon | ✔ Keys: the arkship is a `colony` whose `carrier` is a ship. Also top-level `waystation_networks`, `contracts`, `missions`; country `is_nomadic` and `waystation_networks_manager` (4.5); `galactic_object.ship_colonies`. Add the arkship position on the map, waystation stockpiles (#2-style graphs), a contract ledger (issued, completed, failed), ambition level and resource series, war join and leave events, and nomad-aware ownership. |
+| 4.5 "Cygnus" (Sep 2026) | Pop groups hold ethic and faction shares (✔); federation laws grant automatic pacts; espionage rework†; situations gain `stage`, with new types such as `situation_nomad_economy` | Update pop stats (§3.1). Federation law ledger (#14). Situation stages (#4). |
 | *Announced:* **Willpower** + 4.6 (Q4 2026) | Ethics → **Ideologies**, radicalization and insurrection; the "Force of Will" ambition | Plan these on top of generic metrics so they need no schema changes. |
 
 ### 3.4 Lower value or poorly suited to save parsing
@@ -306,3 +333,9 @@ Add a benchmark harness (parse, ingest ×N, render) on the test save to CI, so e
 - Payload sizes come from building every tab's figures through `graph_ledger.get_raw_plot_data_dicts` and the two layouts used in `update_content`, then JSON-encoding them.
 - Ledger and galaxy endpoints were timed with Flask's test client against the 46-save DB.
 - Caveat: repeating one save makes the event tables grow more slowly than a real campaign does, so ledger and query costs in long real games will be higher than shown here.
+- The 4.4.6 and 4.5.0 format checks ran `TimelineExtractor` (with "store data of all countries" on) on early-game saves from the `testdata/` folder of [stellaris-galaxy-forge](https://github.com/IanHeinrich/stellaris-galaxy-forge), then inspected the resulting DB and the parsed gamestate. That repository's `docs/format-notes.md` and [stellaris-companion](https://github.com/gitmaan/stellaris-companion) (`colony_resolver.py`) document the 4.4 colony/carrier split independently.
+
+**Sources for the release catalog (§3).** Direct fetches were blocked here, so these were read through search excerpts:
+- Patch pages on the [Stellaris wiki](https://stellaris.paradoxwikis.com/): Patch 4.0, Patch 4.4, Patch 4.5, Nomads, Arkship, Ambition, The Shroud, Astral rift, Cosmic Storms (DLC), BioGenesis.
+- Dev diaries on the [Paradox forum](https://forum.paradoxplaza.com/forum/developer-diary/): #368–#371 (4.0 changes), #391 and #396 (Shadows of the Shroud and 4.1), #404 (Infernals), #412 (4.3), #424 (Nomads and 4.4), #433 (4.5 preliminary release notes).
+- [Paradox press release for Nomads and 4.4](https://www.paradoxinteractive.com/media/press-releases/press-release/paradox-interactive-launches-major-expansion-and-free-update-for-stellaris), and the Steam store pages for Season 10 and Willpower.
