@@ -3943,7 +3943,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["happiness"] /= stats["pop_count"]
                 stats["power"] /= stats["pop_count"]
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
-                stats["support"] = faction_dict.get("support", 0.0)
+                # recent versions (at least 3.12+) store the support fraction as "support_percent"
+                stats["support"] = faction_dict.get("support_percent", faction_dict.get("support", 0.0))
 
                 self._session.add(
                     datamodel.PopStatsByFaction(
