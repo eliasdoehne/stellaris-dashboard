@@ -168,10 +168,41 @@ def galaxy_data(game_id):
     )
 
 
+def _timelapse_toast(message, game_id, kind):
+    """Reply to a timelapse trigger: an out-of-band toast for htmx requests,
+    a redirect back to the galaxy page otherwise."""
+    if request.headers.get("HX-Request"):
+        return (
+            '<div id="toast-slot" hx-swap-oob="innerHTML">'
+            f'<div class="toast toast--{kind}" role="status">{message}</div>'
+            "</div>"
+        )
+    return redirect(url_for("galaxy_page", game_id=game_id))
+
+
+class _TimelapseFormError(Exception):
+    """A user-facing validation error in the timelapse export form."""
+
+
+def _positive_int(raw, default, field_label):
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise _TimelapseFormError(f"{field_label} must be a whole number.")
+    if value < 1:
+        raise _TimelapseFormError(f"{field_label} must be at least 1.")
+    return value
+
+
 @flask_app.route("/galaxy/<game_id>/timelapse", methods=["POST"])
 def galaxy_timelapse(game_id):
-    """Trigger a (blocking) matplotlib timelapse export. Mirrors the behavior of
-    the old Dash ``trigger_timeline_export`` callback."""
+    """Validate the timelapse form and hand the export to the background queue.
+
+    The export itself is long-running; it runs on a single worker thread (see
+    ``timelapse_exporter.export_queue``) so the request returns immediately and
+    only one export runs at a time."""
     matches = datamodel.get_known_games(game_id)
     if not matches:
         return jsonify({"error": "unknown game"}), 404
@@ -183,51 +214,62 @@ def galaxy_timelapse(game_id):
     if not end_date:
         with datamodel.get_db_session(game_id) as session:
             end_date = datamodel.days_to_date(utils.get_most_recent_date(session))
-    step_days = int(form.get("step") or TIMELAPSE_DEFAULT_STEP)
-    frame_time_ms = int(form.get("frame_time") or TIMELAPSE_DEFAULT_FRAME_TIME)
-    dpi = int(form.get("dpi") or TIMELAPSE_DEFAULT_DPI)
 
     export_gif = "export_gif" in form
     export_webp = "export_webp" in form
     export_frames = "export_frames" in form
     square_aspect_ratio = "square_aspect_ratio" in form
 
-    def _fail(message):
-        logger.error(message)
-        if request.headers.get("HX-Request"):
-            return (
-                '<div id="toast-slot" hx-swap-oob="innerHTML">'
-                f'<div class="toast toast--error" role="status">{message}</div>'
-                "</div>"
-            )
-        return redirect(url_for("galaxy_page", game_id=game_id))
-
     try:
-        tl_start_days = datamodel.date_to_days(start_date)
-        tl_end_days = datamodel.date_to_days(end_date)
-    except ValueError:
-        return _fail("Invalid date(s). Use YYYY.MM.DD format.")
-    if tl_start_days >= tl_end_days:
-        return _fail("Start date must be before end date.")
+        step_days = _positive_int(form.get("step"), TIMELAPSE_DEFAULT_STEP, "Step size")
+        frame_time_ms = _positive_int(
+            form.get("frame_time"), TIMELAPSE_DEFAULT_FRAME_TIME, "Frame time"
+        )
+        dpi = _positive_int(form.get("dpi"), TIMELAPSE_DEFAULT_DPI, "DPI")
+        try:
+            tl_start_days = datamodel.date_to_days(start_date)
+            tl_end_days = datamodel.date_to_days(end_date)
+        except ValueError:
+            raise _TimelapseFormError("Invalid date(s). Use YYYY.MM.DD format.")
+        if tl_start_days >= tl_end_days:
+            raise _TimelapseFormError("Start date must be before end date.")
+    except _TimelapseFormError as e:
+        logger.error(f"Rejected timelapse export for {game_id}: {e}")
+        return _timelapse_toast(str(e), game_id, "error")
+
+    if not (export_gif or export_webp or export_frames):
+        return _timelapse_toast(
+            "Select at least one export format (gif, webp, or frames).",
+            game_id,
+            "error",
+        )
 
     width, height = (16, 16) if square_aspect_ratio else (16, 9)
-    logger.info(f"Triggering timelapse export for {game_id}")
-    te = timelapse_exporter.TimelapseExporter(game_id, width, height, dpi)
-    te.create_timelapse(
-        start_date=tl_start_days,
-        end_date=tl_end_days,
-        step_days=step_days,
-        tl_duration=frame_time_ms,
-        export_gif=export_gif,
-        export_webp=export_webp,
-        export_frames=export_frames,
-    )
-
-    message = "Timelapse export finished. Check your output folder."
-    if request.headers.get("HX-Request"):
-        return (
-            '<div id="toast-slot" hx-swap-oob="innerHTML">'
-            f'<div class="toast toast--success" role="status">{message}</div>'
-            "</div>"
+    ahead = timelapse_exporter.export_queue.submit(
+        timelapse_exporter.TimelapseRequest(
+            game_id=game_id,
+            width=width,
+            height=height,
+            dpi=dpi,
+            start_date=tl_start_days,
+            end_date=tl_end_days,
+            step_days=step_days,
+            tl_duration=frame_time_ms,
+            export_gif=export_gif,
+            export_webp=export_webp,
+            export_frames=export_frames,
         )
-    return redirect(url_for("galaxy_page", game_id=game_id))
+    )
+    logger.info(f"Queued timelapse export for {game_id} ({ahead} ahead in queue)")
+
+    if ahead:
+        message = (
+            f"Timelapse export queued ({ahead} already in progress). "
+            "It will run in the background; check your output folder when done."
+        )
+    else:
+        message = (
+            "Timelapse export started in the background. "
+            "Check your output folder when it finishes."
+        )
+    return _timelapse_toast(message, game_id, "success")

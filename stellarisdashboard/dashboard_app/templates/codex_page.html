@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="codex">
+    <p class="codex-intro">
+        A browsable index of this game's entities. Select one to open its event ledger.
+    </p>
+
+    <section class="codex-section">
+        <h2 class="codex-heading">Empires <span class="codex-count">({{ empires | length }})</span></h2>
+        {% if empires %}
+        <ul class="codex-list">
+            {% for empire in empires %}
+            <li class="codex-item{% if empire.is_player %} codex-item--player{% endif %}">
+                <span class="codex-item-name">{{ empire.link | safe }}</span>
+                <span class="codex-item-meta">
+                    {% if empire.is_player %}<span class="codex-tag">You</span>{% endif %}
+                    {{ empire.country_type }}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="codex-empty">No empires to show yet.</p>
+        {% endif %}
+    </section>
+
+    <section class="codex-section">
+        <h2 class="codex-heading">Wars <span class="codex-count">({{ wars | length }})</span></h2>
+        {% if wars %}
+        <ul class="codex-list">
+            {% for war in wars %}
+            <li class="codex-item">
+                <span class="codex-item-name">{{ war.link | safe }}</span>
+                <span class="codex-item-meta">
+                    {{ war.start_date }}{% if war.end_date %} – {{ war.end_date }}{% else %} – ongoing{% endif %}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="codex-empty">No wars have been recorded.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
