@@ -1,3 +1,6 @@
+import contextlib
+import sqlite3
+
 import pytest
 from rust_parser import rust_parser
 
@@ -33,4 +36,19 @@ def test_real_save(tmp_path):
     config.CONFIG.read_all_countries = True
     config.CONFIG.base_output_path = tmp_path
     cli.f_parse_saves(save_path="test/saves")
-    assert len(list(tmp_path.glob('**/*.db'))) > 0, f"When parsing saves, no output .db files were produced (output folder: {tmp_path})"
+    db_files = list(tmp_path.glob('**/*.db'))
+    assert len(db_files) > 0, f"When parsing saves, no output .db files were produced (output folder: {tmp_path})"
+
+    # Guard against save format changes silently leaving parts of the data empty
+    totals = dict(districts=0, buildings=0, ships=0, faction_support=0)
+    for db_file in db_files:
+        with contextlib.closing(sqlite3.connect(db_file)) as con:
+            totals["districts"] += con.execute("SELECT COUNT(*) FROM planet_district").fetchone()[0]
+            totals["buildings"] += con.execute("SELECT COUNT(*) FROM planet_building").fetchone()[0]
+            totals["ships"] += con.execute(
+                "SELECT COALESCE(SUM(ship_count_corvette + ship_count_destroyer + ship_count_cruiser"
+                " + ship_count_battleship + ship_count_titan + ship_count_colossus), 0) FROM country_data"
+            ).fetchone()[0]
+            totals["faction_support"] += con.execute("SELECT COUNT(*) FROM popstats_faction WHERE support > 0").fetchone()[0]
+    for name, total in totals.items():
+        assert total > 0, f"No {name} were extracted from the test saves"

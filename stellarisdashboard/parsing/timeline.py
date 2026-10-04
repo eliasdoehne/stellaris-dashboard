@@ -16,6 +16,8 @@ from sqlalchemy.orm import joinedload
 from stellarisdashboard import datamodel, game_info, config
 from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
+from stellarisdashboard.parsing import save_format
+
 logger = logging.getLogger(__name__)
 
 
@@ -1064,9 +1066,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                         net_volatile_motes=values.get("volatile_motes", 0.0),
                         net_exotic_gases=values.get("exotic_gases", 0.0),
                         net_rare_crystals=values.get("rare_crystals", 0.0),
-                        net_living_metal=values.get("living_metal", 0.0),
-                        net_zro=values.get("zro", 0.0),
-                        net_dark_matter=values.get("dark_matter", 0.0),
+                        net_living_metal=save_format.get_budget_value(values, "living_metal"),
+                        net_zro=save_format.get_budget_value(values, "zro"),
+                        net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
                         net_nanites=values.get("nanites", 0.0),
                         net_minor_artifacts=values.get("minor_artifacts", 0.0),
                         net_astral_threads=values.get("astral_threads", 0.0),
@@ -1254,7 +1256,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         subclass, leader_traits = self._get_leader_traits(leader_dict)
         ethic = leader_dict.get("ethic", "ethic_neutral")
         job = leader_dict.get("job")
-        planet_id = _extract_id(leader_dict.get("planet"))
+        # 4.4 replaced "planet" with "background_planet" = {type=planet, reference=<id>}
+        planet_id = _extract_id(leader_dict.get("planet", leader_dict.get("background_planet")))
         planet = self._planets_by_ingame_id.get(planet_id)
         creator_id = leader_dict.get("creator")
         creator = self._countries_by_ingame_id.get(creator_id)
@@ -1473,7 +1476,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             if isinstance(planets, int):
                 planets = [planets]
             for ingame_id in planets:
-                planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id)
+                planet_dict = save_format.get_planet(self._gamestate_dict, ingame_id)
                 if not isinstance(planet_dict, dict):
                     continue
 
@@ -1491,7 +1494,9 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     planet_model=planet_model,
                     entity_attribute_name="districts",
                     entity_hash_attribute="districts_hash",
-                    current_entities=planet_dict.get("district", []),
+                    current_entities=save_format.get_district_types(
+                        self._gamestate_dict, planet_dict
+                    ),
                     db_entity_factory=datamodel.PlanetDistrict,
                 )
                 was_updated |= self._update_countable_planet_attributes(
@@ -1516,16 +1521,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     self._session.add(planet_model)
 
     def _get_buildings(self, planet_dict):
-        building_ids = planet_dict.get("buildings", {})
-        buildings_dict = self._gamestate_dict.get("buildings", {})
-
-        buildings = []
-        for b_id in building_ids:
-            building = buildings_dict.get(b_id, "Unknown building")
-            if not isinstance(building, dict):
-                continue
-            buildings.append(building.get("type", "Unknown type"))
-        return buildings
+        return save_format.get_building_types(self._gamestate_dict, planet_dict)
 
     def _add_planet_model(
         self, system_model: datamodel.System, planet_id: int, planet_dict: Dict
@@ -1706,10 +1702,11 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 sector_description = self._get_or_add_shared_description(
                     text=dump_name(sector_info.get("name", "Unnamed"))
                 )
-                sector_capital = self._planets_dict.get(
-                    sector_info.get("local_capital")
+                sector_capital_id = save_format.resolve_colony_to_planet_id(
+                    self._gamestate_dict, sector_info.get("local_capital")
                 )
-                sector_capital_planet_dict = self._gamestate_dict["planets"]["planet"].get(sector_info.get("local_capital"))
+                sector_capital = self._planets_dict.get(sector_capital_id)
+                sector_capital_planet_dict = save_format.get_planet(self._gamestate_dict, sector_capital_id)
                 governor_model = self._leaders_dict.get(sector_capital_planet_dict.get("governor")) if sector_capital_planet_dict is not None else None
 
                 for system_id in sector_info.get("systems", []):
@@ -1745,7 +1742,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         if not isinstance(planets, list):
             planets = [planets]
         for planet_id in planets:
-            planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
+            planet_dict = save_format.get_planet(self._gamestate_dict, planet_id)
             if not isinstance(planet_dict, dict):
                 continue
 
@@ -2023,6 +2020,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
         capital_id = country_dict.get("capital")
         if not isinstance(capital_id, int):
             return
+        capital_id = save_format.resolve_colony_to_planet_id(self._gamestate_dict, capital_id)
         capital = self._planet_by_ingame_id.get(capital_id)
         if capital != country_model.capital:
             country_model.capital = capital
@@ -3391,11 +3389,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                 self._fleet_compos[owner_id]["ship_count_colossus"] += 1
 
     def _get_ship_class(self, ship_dict):
-        design_dict = self._gamestate_dict["ship_design"].get(
-            ship_dict.get("ship_design"), {}
-        )
-        ship_class = design_dict.get("ship_size")
-        return ship_class
+        return save_format.get_ship_size(self._gamestate_dict, ship_dict)
 
     def _store_fleet_composition(self):
         for cid, composition in self._fleet_compos.items():
@@ -3872,61 +3866,23 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
 
                 species_id = _extract_id(pop_group_dict.get("key").get("species"))
                 stratum = pop_group_dict.get("key").get("category", "unknown stratum")
-                faction_id = pop_group_dict.get("key").get("pop_faction")
-
-                if faction_id is None:
-                    if stratum == "slave":
-                        faction_id = FactionProcessor.SLAVE_FACTION_ID
-                    elif species_id in robot_species:
-                        faction_id = FactionProcessor.NON_SENTIENT_ROBOT_FACTION_ID
-                    elif stratum == "purge":
-                        faction_id = FactionProcessor.PURGE_FACTION_ID
-                    else:
-                        faction_id = FactionProcessor.NO_FACTION_ID
-
-                ethos = pop_group_dict.get("key").get("ethos", {}).get("ethic")
-                if not isinstance(ethos, str):
-                    ethos = "ethic_no_ethos"
 
                 # crime and power are already totals, but happiness is average, so multiply by size
                 crime = pop_group_dict.get("crime", 0.0)
                 happiness = pop_group_dict.get("happiness", 0.0) * size
                 power = pop_group_dict.get("power", 0.0)
+                group_stats = (size, crime, happiness, power)
 
-                if species_id not in stats_by_species:
-                    stats_by_species[species_id] = init_dict()
-                if faction_id not in stats_by_faction:
-                    stats_by_faction[faction_id] = init_dict()
-                if stratum not in stats_by_stratum:
-                    stats_by_stratum[stratum] = init_dict()
-                if ethos not in stats_by_ethos:
-                    stats_by_ethos[ethos] = init_dict()
-                if planet_id not in stats_by_planet:
-                    stats_by_planet[planet_id] = init_dict()
-
-                stats_by_species[species_id]["pop_count"] += size
-                stats_by_faction[faction_id]["pop_count"] += size
-                stats_by_stratum[stratum]["pop_count"] += size
-                stats_by_ethos[ethos]["pop_count"] += size
-                stats_by_planet[planet_id]["pop_count"] += size
-
-                stats_by_species[species_id]["crime"] += crime
-                stats_by_faction[faction_id]["crime"] += crime
-                stats_by_stratum[stratum]["crime"] += crime
-                stats_by_ethos[ethos]["crime"] += crime
-                stats_by_planet[planet_id]["crime"] += crime
-
-                stats_by_species[species_id]["happiness"] += happiness
-                stats_by_faction[faction_id]["happiness"] += happiness
-                stats_by_stratum[stratum]["happiness"] += happiness
-                stats_by_ethos[ethos]["happiness"] += happiness
-                stats_by_planet[planet_id]["happiness"] += happiness
-
-                stats_by_species[species_id]["power"] += power
-                stats_by_faction[faction_id]["power"] += power
-                stats_by_stratum[stratum]["power"] += power
-                stats_by_ethos[ethos]["power"] += power
-                stats_by_planet[planet_id]["power"] += power
+                self._add_pop_stats(stats_by_species, species_id, size, *group_stats)
+                self._add_pop_stats(stats_by_stratum, stratum, size, *group_stats)
+                self._add_pop_stats(stats_by_planet, planet_id, size, *group_stats)
+                # since 4.5, the pops in one group can hold different ethics and belong to different factions
+                for ethos, pop_count in save_format.get_pop_group_ethics(pop_group_dict):
+                    self._add_pop_stats(stats_by_ethos, ethos, pop_count, *group_stats)
+                for faction_id, pop_count in save_format.get_pop_group_factions(pop_group_dict):
+                    if faction_id is None:
+                        faction_id = self._get_unaffiliated_faction_id(stratum, species_id, robot_species)
+                    self._add_pop_stats(stats_by_faction, faction_id, pop_count, *group_stats)
 
                 # each pop_group can have multiple jobs; collect stats based on fraction assigned to each job
                 unemployed_fraction = 1 # civilians are tracked as a job, so I don't think there will ever be unemployed pops, but let's be safe
@@ -3987,7 +3943,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["happiness"] /= stats["pop_count"]
                 stats["power"] /= stats["pop_count"]
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
-                stats["support"] = faction_dict.get("support", 0.0)
+                # recent versions (at least 3.12+) store the support fraction as "support_percent"
+                stats["support"] = faction_dict.get("support_percent", faction_dict.get("support", 0.0))
 
                 self._session.add(
                     datamodel.PopStatsByFaction(
@@ -4004,7 +3961,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["happiness"] /= stats["pop_count"]
                 stats["power"] /= stats["pop_count"]
 
-                planet_dict = self._gamestate_dict["planets"]["planet"].get(planet_id)
+                # since 4.4, pop groups reference their colony rather than the planet
+                planet_id = save_format.resolve_colony_to_planet_id(self._gamestate_dict, planet_id)
+                planet_dict = save_format.get_planet(self._gamestate_dict, planet_id)
                 if not isinstance(planet_dict, dict):
                     continue
 
@@ -4074,6 +4033,27 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                         **stats,
                     )
                 )
+
+    @staticmethod
+    def _add_pop_stats(stats_dict, key, pop_count, size, crime, happiness, power):
+        """Add pop_count pops of a pop group to stats_dict[key], with a proportional share of the group's stats."""
+        if key not in stats_dict:
+            stats_dict[key] = dict(pop_count=0, crime=0, happiness=0, power=0)
+        fraction = pop_count / size
+        stats_dict[key]["pop_count"] += pop_count
+        stats_dict[key]["crime"] += crime * fraction
+        stats_dict[key]["happiness"] += happiness * fraction
+        stats_dict[key]["power"] += power * fraction
+
+    @staticmethod
+    def _get_unaffiliated_faction_id(stratum, species_id, robot_species) -> int:
+        if stratum == "slave":
+            return FactionProcessor.SLAVE_FACTION_ID
+        elif species_id in robot_species:
+            return FactionProcessor.NON_SENTIENT_ROBOT_FACTION_ID
+        elif stratum == "purge":
+            return FactionProcessor.PURGE_FACTION_ID
+        return FactionProcessor.NO_FACTION_ID
 
     def _initialize_planet_owner_dict(self):
         self.country_by_planet_id = {}
