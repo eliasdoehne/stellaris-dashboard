@@ -11,7 +11,8 @@ Stellaris 4.x moved several pieces of data to new places in the gamestate:
   (``country.owned_planets``, ``country.capital``, ``sector.local_capital``,
   ``pop_group.planet``) now hold colony IDs.
 - 4.5: pop groups are no longer split by ethic and faction. Each group stores how many
-  of its pops hold each ethic instead of a single ``key.ethos.ethic``.
+  of its pops hold each ethic instead of a single ``key.ethos.ethic``, and likewise per
+  faction instead of a single ``key.pop_faction``.
 
 The functions in this module accept the parsed gamestate dictionary and work for
 both the old and the new layouts, so the timeline processors can stay version-agnostic.
@@ -218,11 +219,9 @@ def get_pop_group_factions(pop_group_dict: Dict[str, Any]) -> List[Tuple[Optiona
 
     Before 4.5, each pop group has at most one faction in ``key.pop_faction``.
 
-    Since 4.5, the group's pops can be spread over several factions. The layout of the 4.5
-    ``factions`` field could not be confirmed yet (no 4.5 save with factions was available),
-    so two plausible layouts are accepted, mirroring the 4.5 ``ethos`` field:
-    ``{factions: [ids], pops: [counts]}`` and ``{<faction id>: <count>}``.
-    Anything else counts as unaffiliated.
+    Since 4.5, the group's pops can be spread over several factions:
+    ``factions = {objects: [pop faction IDs], pops: [pop count per faction]}``. The counts sum to
+    at most the group size, and the rest are unaffiliated. Implausible data counts as unaffiliated.
     """
     size = pop_group_dict.get("size", 0)
     key = pop_group_dict.get("key")
@@ -232,10 +231,7 @@ def get_pop_group_factions(pop_group_dict: Dict[str, Any]) -> List[Tuple[Optiona
     factions = pop_group_dict.get("factions")
     pairs = []
     if isinstance(factions, dict):
-        if "pops" in factions:
-            pairs = list(zip(_as_list(factions.get("factions")), _as_list(factions.get("pops"))))
-        else:
-            pairs = list(factions.items())
+        pairs = list(zip(_as_list(factions.get("objects")), _as_list(factions.get("pops"))))
 
     result = [
         (faction_id, pops)

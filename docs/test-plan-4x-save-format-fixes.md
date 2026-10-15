@@ -16,7 +16,7 @@ This plan checks, on real saves from your own game, the fixes from branch `fix-4
 | F8 | Governors come from the colony (governor ledger events) | 4.4+ | No governor events |
 | F9 | Leader home planet uses `background_planet` | 4.4+ | Home planet empty |
 | F10 | Pops are split across their ethics | 4.5+ | 100% "no ethos" |
-| F11 | Pops are split across their factions | 4.5+ | 100% "No faction". **The 4.5 save layout for this is unconfirmed; see §5.** |
+| F11 | Pops are split across their factions | 4.5+ | 100% "No faction". |
 
 Already covered automatically, so not repeated here:
 - The 4.0.1 save in `test/saves` runs through CI.
@@ -118,23 +118,7 @@ If you want clean history, re-import the game from scratch instead.
 | F10 | 7. Pops by ethos | Several ethics for a regular empire. The total equals the empire's pop count. |
 | F11 | 8. Pops by faction | With factions present in-game, pops are spread across them with plausible sizes. |
 
-**If F11 fails** (everything is "No faction" although factions exist in-game), the 4.5 layout differs from what the code accepts. Run the snippet below on one affected save and send the output. It prints a few pop groups only, not the whole save:
-
-```python
-# faction_sample.py, run with: uv run python faction_sample.py <path to .sav>
-import json, sys
-import rust_parser
-
-gs = rust_parser.parse_save_file(sys.argv[1])
-print("version:", gs.get("version"))
-groups = [g for g in gs.get("pop_groups", {}).values() if isinstance(g, dict) and g.get("factions")]
-print(f"{len(groups)} pop groups with non-empty 'factions'")
-for g in groups[:3]:
-    print(json.dumps({k: g.get(k) for k in ("key", "size", "ethos", "factions", "fractions", "wanted_factions")}, default=str))
-factions = gs.get("pop_factions", {})
-sample = next((f for f in factions.values() if isinstance(f, dict)), None) if isinstance(factions, dict) else None
-print("pop_factions sample keys:", sorted(sample) if sample else None)
-```
+**If F11 fails** (everything is "No faction" although factions exist in-game), check that the pop groups carry `factions = {objects, pops}` and that `objects` are keys of the top-level `pop_factions`.
 
 ## 6. DB check script
 
@@ -231,5 +215,4 @@ Names in the output are raw localisation keys (for example `{"key": "SPEC_Alari_
 - The console output around the failure: the traceback, or the `Rolling back` line with the save date.
 - The `check_db.py` output for the affected game.
 - The game version (shown in the save's `meta`, or the launcher) and which DLCs are active.
-- For F11, the `faction_sample.py` output.
 - The `.sav` file itself only if you're comfortable sharing it.
