@@ -973,6 +973,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 net_biomass=0.0,
                 **diplomacy_data,
             )
+            self._session.add(country_data)
             self._extract_country_economy(country_data, country_data_dict)
 
             if country_model.first_player_contact_date is None and diplomacy_data.get(
@@ -980,7 +981,6 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             ):
                 country_model.first_player_contact_date = self._basic_info.date_in_days
                 self._session.add(country_model)
-            self._session.add(country_data)
 
     def _get_diplomacy_towards_player(self, diplomacy_dict, country_id):
         new_key_old_key_list = [
