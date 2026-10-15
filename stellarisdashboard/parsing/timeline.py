@@ -59,6 +59,38 @@ def _extract_id(val, default: int = -1) -> int:
 # the built-in @cache decorator was leaking memory, hanging on to references of processor instances
 _shared_description_cache: dict[str, datamodel.SharedDescription] = {}
 
+_BIOSHIP_FAMILY_HULLS = {
+    "mauler": "corvette",
+    "weaver": "destroyer",
+    "harbinger": "cruiser",
+    "stinger": "battleship",
+}
+_FLEET_COMPOSITION_HULLS = {
+    "corvette",
+    "destroyer",
+    "cruiser",
+    "battleship",
+    "titan",
+    "colossus",
+}
+
+
+def _fleet_composition_hull(ship_size) -> Optional[str]:
+    """Map a ship size to its fleet composition hull, including BioGenesis
+    (<family>_stage_<n>, bio_titan) and Overlord (offspring_*) bioships."""
+    if not isinstance(ship_size, str):
+        return None
+    if ship_size == "bio_titan":
+        return "titan"
+    name = ship_size.removeprefix("offspring_")
+    family, sep, stage = name.partition("_stage_")
+    if sep and stage.isdigit():
+        return _BIOSHIP_FAMILY_HULLS.get(family)
+    if name in _FLEET_COMPOSITION_HULLS:
+        return name
+    return None
+
+
 @dataclasses.dataclass
 class BasicGameInfo:
     game_id: str
@@ -3374,29 +3406,19 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             self._new_fleet_commands[leader_id] = fleet_model
 
     def _count_ship_for_fleet_composition(self, owner_id, ship_dict):
-        ship_class = self._get_ship_class(ship_dict)
-        if isinstance(ship_class, str):
-            if owner_id not in self._fleet_compos:
-                self._fleet_compos[owner_id] = dict(
-                    ship_count_corvette=0,
-                    ship_count_destroyer=0,
-                    ship_count_cruiser=0,
-                    ship_count_battleship=0,
-                    ship_count_titan=0,
-                    ship_count_colossus=0,
-                )
-            if ship_class == "corvette":
-                self._fleet_compos[owner_id]["ship_count_corvette"] += 1
-            elif ship_class == "destroyer":
-                self._fleet_compos[owner_id]["ship_count_destroyer"] += 1
-            elif ship_class == "cruiser":
-                self._fleet_compos[owner_id]["ship_count_cruiser"] += 1
-            elif ship_class == "battleship":
-                self._fleet_compos[owner_id]["ship_count_battleship"] += 1
-            elif ship_class == "titan":
-                self._fleet_compos[owner_id]["ship_count_titan"] += 1
-            elif ship_class == "colossus":
-                self._fleet_compos[owner_id]["ship_count_colossus"] += 1
+        ship_class = _fleet_composition_hull(self._get_ship_class(ship_dict))
+        if ship_class is None:
+            return
+        if owner_id not in self._fleet_compos:
+            self._fleet_compos[owner_id] = dict(
+                ship_count_corvette=0,
+                ship_count_destroyer=0,
+                ship_count_cruiser=0,
+                ship_count_battleship=0,
+                ship_count_titan=0,
+                ship_count_colossus=0,
+            )
+        self._fleet_compos[owner_id][f"ship_count_{ship_class}"] += 1
 
     def _get_ship_class(self, ship_dict):
         return save_format.get_ship_size(self._gamestate_dict, ship_dict)
