@@ -2023,9 +2023,11 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
         capital_id = save_format.resolve_colony_to_planet_id(self._gamestate_dict, capital_id)
         capital = self._planet_by_ingame_id.get(capital_id)
         if capital != country_model.capital:
+            previous_capital = country_model.capital
             country_model.capital = capital
             self._session.add(country_model)
-            if capital is not None:
+            # the first capital seen for a country is not a relocation
+            if capital is not None and previous_capital is not None:
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.capital_relocation,
