@@ -580,6 +580,11 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
         for starbase_id, starbase_dict in starbases.items():
             if not isinstance(starbase_dict, dict):
                 continue
+            # Nomad waystations share a system with the real starbase and don't confer ownership
+            if str(starbase_dict.get("level", "")).startswith(
+                "starbase_level_waystation"
+            ):
+                continue
             system_id_in_game = starbase_system_map.get(starbase_id)
             country_model = fleet_owners_dict.get(
                 ship_to_fleet_id_dict.get(starbase_dict.get("station"))
@@ -593,6 +598,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 )
                 continue
 
+            if system_id_in_game in starbase_systems:
+                # Only one starbase per system determines its owner
+                continue
             starbase_systems.add(system_id_in_game)
 
             self.systems_by_owner_country_id[country_model.country_id_in_game].add(
