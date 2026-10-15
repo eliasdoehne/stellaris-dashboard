@@ -3548,16 +3548,23 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._session.add(war_model)
         return war_model
 
+    @staticmethod
+    def _parse_war_goal(war_goal):
+        if isinstance(war_goal, dict):
+            return war_goal.get("type")
+        return None  # missing or "none"
+
     def update_war_participants(self, war_dict, war_model):
-        war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
-        war_goal_defender = war_dict.get("defender_war_goal", {})
-        if isinstance(war_goal_defender, dict):
-            war_goal_defender = war_goal_defender.get("type")
-        elif not war_goal_defender or war_goal_defender == "none":
-            war_goal_defender = None
-        attackers = {p["country"] for p in war_dict["attackers"]}
+        war_goal_attacker = self._parse_war_goal(war_dict.get("attacker_war_goal"))
+        war_goal_defender = self._parse_war_goal(war_dict.get("defender_war_goal"))
+        attackers = {
+            p.get("country")
+            for p in save_format._as_list(war_dict.get("attackers"))
+            if isinstance(p, dict) and p.get("country") is not None
+        }
         for war_party_info in itertools.chain(
-            war_dict.get("attackers", []), war_dict.get("defenders", [])
+            save_format._as_list(war_dict.get("attackers")),
+            save_format._as_list(war_dict.get("defenders")),
         ):
             if not isinstance(war_party_info, dict):
                 continue  # just in case
