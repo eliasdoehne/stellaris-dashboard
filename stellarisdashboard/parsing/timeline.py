@@ -3561,6 +3561,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                     call_type=call_type,
                     is_attacker=is_attacker,
                 )
+                self._session.add(war_participant)  # before the autoflushing query below
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.war,
