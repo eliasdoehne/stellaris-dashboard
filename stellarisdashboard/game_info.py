@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import threading
-from typing import Iterable
+from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
 # Regex explanation: https://regex101.com/r/qc0QhS/1
@@ -286,6 +286,13 @@ def render_name(json_str: str):
 
 def lookup_key(key: str) -> str:
     return get_global_renderer().render_from_dict({"key": key})
+
+
+def lookup_key_if_known(key: str) -> Optional[str]:
+    """Localised text for the key, or None if the game's localisation has no entry for it."""
+    if key not in get_global_renderer().name_mapping:
+        return None
+    return lookup_key(key) or None
 
 
 @functools.lru_cache(maxsize=2**12)

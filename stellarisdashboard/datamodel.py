@@ -301,6 +301,7 @@ class HistoricalEventType(enum.Enum):
     discovered_anomaly = enum.auto()
     researched_anomaly = enum.auto()
     excavated_dig_site = enum.auto()
+    explored_astral_rift = enum.auto()
 
     def __str__(self):
         return self.name
@@ -366,6 +367,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.discovered_anomaly,
             HistoricalEventType.researched_anomaly,
             HistoricalEventType.excavated_dig_site,
+            HistoricalEventType.explored_astral_rift,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -1909,6 +1911,15 @@ def render_dig_site_description(text: str) -> str:
     return f"{name} (chapter {chapter})" if chapter else name
 
 
+def render_astral_rift_description(text: str) -> str:
+    """Renders a "<rift type>|<step event id>" description, e.g. "The Corridors: Rift Anomaly"."""
+    rift_type, event_id = split_packed_description(text)
+    name = game_info.lookup_key_if_known(f"astral_rift_{rift_type}")
+    name = name or game_info.convert_id_to_name(rift_type)
+    title = game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
+    return f"{name}: {title}" if title else name
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -2042,6 +2053,8 @@ class HistoricalEvent(Base):
             )
         elif self.event_type == HistoricalEventType.excavated_dig_site:
             return render_dig_site_description(self.db_description.text)
+        elif self.event_type == HistoricalEventType.explored_astral_rift:
+            return render_astral_rift_description(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:

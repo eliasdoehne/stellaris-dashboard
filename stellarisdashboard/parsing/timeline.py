@@ -323,6 +323,7 @@ class TimelineExtractor:
         yield FleetInfoProcessor()
         yield AnomalyProcessor()
         yield ArchaeologyProcessor()
+        yield AstralRiftProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3754,6 +3755,70 @@ class ArchaeologyProcessor(AbstractGamestateDataProcessor):
                         start_date_days=start_date,
                         db_description=self._get_or_add_shared_description(
                             f"{site['type']}|{chapter}"
+                        ),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
+
+
+class AstralRiftProcessor(AbstractGamestateDataProcessor):
+    """Records each completed exploration step of an astral rift."""
+
+    ID = "astral_rifts"
+    DEPENDENCIES = [CountryProcessor.ID, SystemProcessor.ID, LeaderProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        systems = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        leaders = dependencies[LeaderProcessor.ID]
+        rifts = (self._gamestate_dict.get("astral_rifts") or {}).get("rifts")
+        if not isinstance(rifts, dict):
+            return
+
+        known = set()  # (system id, step event id, date) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.explored_astral_rift
+        ).options(
+            joinedload(datamodel.HistoricalEvent.system),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.system is not None and event.db_description is not None:
+                _, event_id = datamodel.split_packed_description(event.db_description.text)
+                known.add((event.system.system_id_in_game, event_id, event.start_date_days))
+
+        for rift_id, rift in sorted(rifts.items()):
+            if not isinstance(rift, dict) or not isinstance(rift.get("type"), str):
+                continue
+            country = countries.get(_as_game_id(rift.get("explorer")))
+            coordinate = rift.get("coordinate")
+            system_id = _as_game_id(coordinate.get("origin")) if isinstance(coordinate, dict) else None
+            system = systems.get(system_id)
+            if country is None or system is None:
+                continue
+            leader = leaders.get(_as_game_id(rift.get("leader")))
+            for entry in _as_dict_list(rift.get("completed")):
+                event_id = entry.get("event_id")
+                event_id = event_id if isinstance(event_id, str) else ""
+                date = entry.get("date")
+                if not isinstance(date, str):
+                    continue
+                try:
+                    start_date = datamodel.date_to_days(date)
+                except ValueError:
+                    continue
+                key = (system_id, event_id, start_date)
+                if key in known:
+                    continue
+                known.add(key)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.explored_astral_rift,
+                        country=country,
+                        leader=leader,
+                        system=system,
+                        start_date_days=start_date,
+                        db_description=self._get_or_add_shared_description(
+                            f"{rift['type']}|{event_id}"
                         ),
                         event_is_known_to_player=country.has_met_player(),
                     )

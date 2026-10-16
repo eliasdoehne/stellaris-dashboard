@@ -404,6 +404,13 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    The {{ links[event["country"]] | safe }} completed an excavation at the "{{ event["description"] }}" archaeological site on\n'
         '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
     ),
+    "explored_astral_rift": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "compass", POINT,
+        '\n'
+        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
+        '                    {{ links[event["country"]] | safe }} explored an astral rift ({{ event["description"] }})\n'
+        '                    {% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
     # ---- Statecraft -----------------------------------------------------
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
