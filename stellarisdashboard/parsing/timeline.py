@@ -74,7 +74,14 @@ _NPC_HULLS = {
     "massive_ship_fallen_empire": "titan",
     "ancient_corvette": "corvette",
     "ancient_destroyer": "destroyer",
+    # pirate and marauder hulls: size_multiplier (5/10/20/40) and slot size match the standard class
     "pirate_corvette": "corvette",
+    "pirate_destroyer": "destroyer",
+    "pirate_cruiser": "cruiser",
+    "marauder_corvette": "corvette",
+    "marauder_destroyer": "destroyer",
+    "marauder_cruiser": "cruiser",
+    "marauder_galleon": "battleship",
     "caravaneer_destroyer_01": "destroyer",
     "caravaneer_cruiser_01": "cruiser",
 }
