@@ -48,7 +48,7 @@ Set **autosave to monthly** in the game options. The game removes old autosaves,
 | S5 *(optional)* | 4.4 / 4.0–4.3 via a Steam beta branch | Any short game | — | Older code paths on real data |
 | S6 | Existing DB | Copy an existing `output/db/<game>.db` made with the old dashboard, plus that game's newest saves | — | Upgrade path (§4, Phase 4) |
 
-Optional extras for F10: check one gestalt empire (hive mind or machine) to confirm its pops show as "no ethos". Either play one briefly, or turn on *Store data of all countries* and pick an AI gestalt in the country-perspective dropdown.
+Optional extras for F10: check one gestalt empire (hive mind or machine) to confirm its pops show as "no ethos". Either play one briefly, or pick an AI gestalt in the country-perspective dropdown.
 
 ## 4. Procedure
 
@@ -57,7 +57,6 @@ Optional extras for F10: check one gestalt empire (hive mind or machine) to conf
 2. `uv run pytest`. Everything should pass. The game-file name tests need your Stellaris install path configured; they are the only tests skipped in CI.
 3. Use a separate output folder so test runs don't mix with your real DBs:
    - Set `base_output_path: <some empty folder>` in the `config.yml` of the directory you run from.
-   - Also set `read_all_countries: true` (the *Store data of all countries* setting).
 4. Copy the saves to test into a separate folder, laid out like the game's: `<test-saves>/<game folder>/*.sav`. The live game then can't add files mid-run.
 
 ### Phase 1: batch import and DB checks

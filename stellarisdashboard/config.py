@@ -207,7 +207,6 @@ DEFAULT_SETTINGS = dict(
     show_all_country_types=False,
     save_name_filter="",
     plot_time_resolution=500,
-    read_all_countries=False,
     skip_saves=0,
     log_to_file=False,
     plot_width=1150,
@@ -275,7 +274,6 @@ class Config:
     filter_events_by_type: bool = None
     show_everything: bool = None
     hide_other_players: bool = None
-    read_all_countries: bool = None
     show_all_country_types: bool = None
     include_id_in_names: bool = None
 
@@ -311,7 +309,6 @@ class Config:
         "filter_events_by_type",
         "show_everything",
         "hide_other_players",
-        "read_all_countries",
         "show_all_country_types",
         "log_to_file",
         "include_id_in_names",

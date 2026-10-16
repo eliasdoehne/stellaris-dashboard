@@ -64,7 +64,6 @@ Check that the save file location is correctly configured in the dashboard setti
 For balance and immersion, only some information about other empires is shown by default. You can enable some settings to show everything:
 - `Show information for all countries`: This will reveal information about countries you have never met, essentially a cheat. In multiplayer, other player empires will not be revealed.
 - `Show all country types`: This will include "pseudo-countries" such as enclaves, pirates,  
-- `Store data of all countries`: This will read detailed budgets and pop statistics for non-player countries. It will increase the processing time and database file size, but will allow you to inspect other countries by selecting them from the dropdown menu at the top. (Basic economy information is always read, this setting only controls the very detailed budgets)
 - `Filter history ledger by event type`: By default, the event ledger does not show everything on the main page. For example, more detailed events like leader level-ups are only shown on that specific leader's ledger entry. This setting allows you to change this behavior and see all events on the main page.
 
 ## Timelapse Export
@@ -146,7 +145,7 @@ Support for Multiplayer is **experimental**. The dashboard will avoid showing in
 
 When using the dashboard in observer mode, you should let the game generate at least one save file as a regular country. After that you can switch to observer mode. You can select the country for the 
 
-You should make sure to enable the `Store data of all countries` setting and you may also want to enable the `Show information for all countries` setting.
+You may also want to enable the `Show information for all countries` setting.
 
 ## Update notifications
 If a new version of the dashboard program is released I also release an update in the Steam workshop, and you will then see a notification in the dashboard UI:

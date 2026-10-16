@@ -33,7 +33,6 @@ def test_real_save(tmp_path):
     from stellarisdashboard import cli, config
     from pathlib import Path
     config.CONFIG.debug_mode = True
-    config.CONFIG.read_all_countries = True
     config.CONFIG.base_output_path = tmp_path
     cli.f_parse_saves(save_path="test/saves")
     db_files = list(tmp_path.glob('**/*.db'))

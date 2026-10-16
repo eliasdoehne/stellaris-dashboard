@@ -1087,36 +1087,35 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             )
             country_data.net_biomass += resources.get("biomass", 0.0)
 
-            if country.is_player or config.CONFIG.read_all_countries:
-                self._session.add(
-                    datamodel.BudgetItem(
-                        country_data=country_data,
-                        db_budget_item_name=self._get_or_add_shared_description(
-                            item_name
-                        ),
-                        net_energy=resources.get("energy"),
-                        net_minerals=resources.get("minerals"),
-                        net_food=resources.get("food"),
-                        net_alloys=resources.get("alloys"),
-                        net_consumer_goods=resources.get("consumer_goods"),
-                        net_trade=resources.get("trade", 0.0),
-                        net_unity=resources.get("unity"),
-                        net_influence=resources.get("influence"),
-                        net_volatile_motes=values.get("volatile_motes", 0.0),
-                        net_exotic_gases=values.get("exotic_gases", 0.0),
-                        net_rare_crystals=values.get("rare_crystals", 0.0),
-                        net_living_metal=save_format.get_budget_value(values, "living_metal"),
-                        net_zro=save_format.get_budget_value(values, "zro"),
-                        net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
-                        net_nanites=values.get("nanites", 0.0),
-                        net_minor_artifacts=values.get("minor_artifacts", 0.0),
-                        net_astral_threads=values.get("astral_threads", 0.0),
-                        net_biomass=values.get("biomass", 0.0),
-                        net_physics_research=resources.get("physics_research"),
-                        net_society_research=resources.get("society_research"),
-                        net_engineering_research=resources.get("engineering_research"),
-                    )
+            self._session.add(
+                datamodel.BudgetItem(
+                    country_data=country_data,
+                    db_budget_item_name=self._get_or_add_shared_description(
+                        item_name
+                    ),
+                    net_energy=resources.get("energy"),
+                    net_minerals=resources.get("minerals"),
+                    net_food=resources.get("food"),
+                    net_alloys=resources.get("alloys"),
+                    net_consumer_goods=resources.get("consumer_goods"),
+                    net_trade=resources.get("trade", 0.0),
+                    net_unity=resources.get("unity"),
+                    net_influence=resources.get("influence"),
+                    net_volatile_motes=values.get("volatile_motes", 0.0),
+                    net_exotic_gases=values.get("exotic_gases", 0.0),
+                    net_rare_crystals=values.get("rare_crystals", 0.0),
+                    net_living_metal=save_format.get_budget_value(values, "living_metal"),
+                    net_zro=save_format.get_budget_value(values, "zro"),
+                    net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
+                    net_nanites=values.get("nanites", 0.0),
+                    net_minor_artifacts=values.get("minor_artifacts", 0.0),
+                    net_astral_threads=values.get("astral_threads", 0.0),
+                    net_biomass=values.get("biomass", 0.0),
+                    net_physics_research=resources.get("physics_research"),
+                    net_society_research=resources.get("society_research"),
+                    net_engineering_research=resources.get("engineering_research"),
                 )
+            )
         self._session.add(country_data)  # update
 
 
@@ -3004,11 +3003,6 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
                 or country_id not in country_data_dict
             ):
                 continue
-            if (
-                not config.CONFIG.read_all_countries
-                and country_id != self._basic_info.player_country_id
-            ):
-                continue
             for name, value in product_fluctuation.items():
                 self._session.add(
                     datamodel.InternalMarketResource(
@@ -3881,8 +3875,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         if not isinstance(pop_groups_dict, dict):
             pop_groups_dict = {}
         for country_id_in_game, country_model in countries_dict.items():
-            if not config.CONFIG.read_all_countries and not country_model.is_player:
-                continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}
             stats_by_faction = {}
