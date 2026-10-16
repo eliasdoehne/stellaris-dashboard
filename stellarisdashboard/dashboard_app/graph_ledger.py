@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 from urllib import parse
 
 import dash.exceptions
@@ -412,7 +412,7 @@ def _get_raw_data_for_line_plot(
     plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
     plot_list = []
-    for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
+    for key, label, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if all(y != y for y in y_values):
             continue
         if not x_values:
@@ -420,9 +420,9 @@ def _get_raw_data_for_line_plot(
         line = dict(
             x=x_values,
             y=y_values,
-            name=dict_key_to_legend_label(key),
+            name=dict_key_to_legend_label(label),
             line={"color": get_country_color(game_id, key, 1.0)},
-            text=get_plot_value_labels(x_values, y_values, key),
+            text=get_plot_value_labels(x_values, y_values, label),
             hoverinfo="text",
         )
         plot_list.append(line)
@@ -440,7 +440,7 @@ def _get_raw_data_for_stacked_and_budget_plots(
         config.CONFIG.normalize_stacked_plots
         and plot_spec.style == visualization_data.PlotStyle.stacked
     )
-    for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
+    for key, label, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if not any(y_values):
             continue
         if plot_spec.style == visualization_data.PlotStyle.budget:
@@ -468,20 +468,21 @@ def _get_raw_data_for_stacked_and_budget_plots(
             else:
                 stackgroup = "pos"
             series = [(y_values, stackgroup)]
+        legend_group = str(key)
         for i, (yv, stackgroup) in enumerate(series):
             lines.append(
                 dict(
                     x=x_values,
                     y=yv,
-                    name=dict_key_to_legend_label(key),
-                    legendgroup=key,  # ensure that budget contributions with mixed signs still behave as a single entry
+                    name=dict_key_to_legend_label(label),
+                    legendgroup=legend_group,  # ensure that budget contributions with mixed signs still behave as a single entry
                     hoverinfo="text",
                     mode="lines",
                     line=dict(width=0.5, color=get_country_color(game_id, key, 1.0)),
                     stackgroup=stackgroup,
                     groupnorm="percent" if normalized else "",
                     fillcolor=get_country_color(game_id, key, 0.5),
-                    text=get_plot_value_labels(x_values, yv, key),
+                    text=get_plot_value_labels(x_values, yv, label),
                     showlegend=i == 0,  # only show one legend entry
                 )
             )
@@ -508,19 +509,21 @@ def dict_key_to_legend_label(key: str):
     return " ".join(words)
 
 
-def get_plot_value_labels(x_values, y_values, key):
+def get_plot_value_labels(x_values, y_values, label):
     return [
-        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}"
+        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(label)}"
         if (y and y == y)
         else ""
         for (x, y) in zip(x_values, y_values)
     ]
 
 
-def get_country_color(game_id: str, country_name: str, alpha: float = 1.0) -> str:
+def get_country_color(
+    game_id: str, country_key: Union[str, int], alpha: float = 1.0
+) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
-    r, g, b = visualization_data.get_color_vals(game_id, country_name)
+    r, g, b = visualization_data.get_color_vals(game_id, country_key)
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 

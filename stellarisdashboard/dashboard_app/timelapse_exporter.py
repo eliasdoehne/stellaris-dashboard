@@ -205,8 +205,8 @@ class TimelapseExporter:
         ts = self._ts.strftime("%Y-%m-%d-%H%M%S")
         return f"{self.game_id}-{ts}"
 
-    def rgb(self, name: str):
-        r, g, b = get_color_vals(self.game_id, name)
+    def rgb(self, country_key):
+        r, g, b = get_color_vals(self.game_id, country_key)
         return r / 255.0, g / 255.0, b / 255.0
 
     def draw_frame(
@@ -278,6 +278,7 @@ class TimelapseExporter:
             systems_by_country[country]["y"] += nx_graph.nodes[node]["pos"][1]
             systems_by_country[country]["count"] += 1
             systems_by_country[country]["color"] = nodecolor
+            systems_by_country[country]["name"] = nx_graph.nodes[node]["country_name"]
 
             polygon_patches.append(
                 matplotlib.patches.Polygon(
@@ -301,7 +302,7 @@ class TimelapseExporter:
                 ax.text(
                     x,
                     position,
-                    country,
+                    avg_pos["name"],
                     color="white",
                     size="medium",
                     ha="center",
