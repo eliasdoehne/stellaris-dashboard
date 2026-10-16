@@ -321,6 +321,7 @@ class TimelineExtractor:
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
+        yield AnomalyProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3569,6 +3570,129 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             elif leader_model.fleet_command is not None:
                 leader_model.fleet_command = None
             self._session.add(leader_model)
+
+
+NO_GAME_ID = 4294967295  # the save's "none" value for IDs
+
+
+def _as_game_id(value: Any) -> Optional[int]:
+    """The value if it is a valid in-game ID; None for non-integers and the "none" ID."""
+    if isinstance(value, int) and not isinstance(value, bool) and 0 <= value != NO_GAME_ID:
+        return value
+    return None
+
+
+class AnomalyProcessor(AbstractGamestateDataProcessor):
+    """Tracks anomalies from their discovery until their research is finished."""
+
+    ID = "anomalies"
+    DEPENDENCIES = [
+        CountryProcessor.ID,
+        PlanetProcessor.ID,
+        LeaderProcessor.ID,
+        FleetOwnershipProcessor.ID,
+    ]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        planets = dependencies[PlanetProcessor.ID]
+        leaders = dependencies[LeaderProcessor.ID]
+        fleet_owners = dependencies[FleetOwnershipProcessor.ID]
+        planet_dicts = (self._gamestate_dict.get("planets") or {}).get("planet")
+        if not isinstance(planet_dicts, dict):
+            return
+
+        active = {}  # planet id -> (category, surveying country id)
+        for planet_id, planet_dict in planet_dicts.items():
+            if not isinstance(planet_dict, dict):
+                continue
+            category = planet_dict.get("anomaly")
+            if isinstance(category, str) and category != "none":
+                active[planet_id] = (category, _as_game_id(planet_dict.get("surveyed_by")))
+
+        # one open discovered_anomaly event per anomaly that has not been researched yet
+        open_events = {
+            event.planet.planet_id_in_game: event
+            for event in self._session.query(datamodel.HistoricalEvent)
+            .filter(
+                datamodel.HistoricalEvent.event_type
+                == datamodel.HistoricalEventType.discovered_anomaly,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+                datamodel.HistoricalEvent.planet_id.isnot(None),
+            )
+            .options(
+                joinedload(datamodel.HistoricalEvent.planet),
+                joinedload(datamodel.HistoricalEvent.db_description),
+            )
+        }
+        today = self._basic_info.date_in_days
+
+        for planet_id, (category, surveyor_id) in sorted(active.items()):
+            country = countries.get(surveyor_id)
+            planet = planets.get(planet_id)
+            if planet_id in open_events or country is None or planet is None:
+                continue
+            event = datamodel.HistoricalEvent(
+                event_type=datamodel.HistoricalEventType.discovered_anomaly,
+                country=country,
+                planet=planet,
+                system=planet.system,
+                start_date_days=today,
+                db_description=self._get_or_add_shared_description(category),
+                event_is_known_to_player=country.has_met_player(),
+            )
+            self._session.add(event)
+            open_events[planet_id] = event
+
+        # the leader of the science ship researching an anomaly; the last one seen is kept
+        for planet_id, scientist in self._scientists_researching(leaders).items():
+            event = open_events.get(planet_id)
+            if event is not None and planet_id in active and event.leader is not scientist:
+                event.leader = scientist
+                self._session.add(event)
+
+        # an anomaly that is gone from its planet has been researched
+        for planet_id, event in open_events.items():
+            if planet_id in active or not isinstance(planet_dicts.get(planet_id), dict):
+                continue
+            event.end_date_days = today - 1
+            self._session.add(event)
+            if event.leader is None:
+                continue
+            country = event.leader.country or event.country
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.researched_anomaly,
+                    country=country,
+                    leader=event.leader,
+                    planet=event.planet,
+                    system=event.system,
+                    start_date_days=today,
+                    db_description=event.db_description,
+                    event_is_known_to_player=country.has_met_player(),
+                )
+            )
+
+    def _scientists_researching(self, leaders) -> Dict[int, datamodel.Leader]:
+        """Maps the planet ids that are being researched to the leader of the researching ship."""
+        scientists = {}
+        for fleet_id, fleet_dict in sorted(self._gamestate_dict["fleet"].items()):
+            if not isinstance(fleet_dict, dict):
+                continue
+            orders = fleet_dict.get("current_order")
+            for order in orders if isinstance(orders, list) else [orders]:
+                research = order.get("research_anomaly_order") if isinstance(order, dict) else None
+                planet_id = _as_game_id(research.get("planet")) if isinstance(research, dict) else None
+                ships = fleet_dict.get("ships")
+                if planet_id is None or not isinstance(ships, list):
+                    continue
+                for ship_id in ships:
+                    ship_dict = self._gamestate_dict["ships"].get(ship_id)
+                    leader = leaders.get(ship_dict.get("leader")) if isinstance(ship_dict, dict) else None
+                    if leader is not None:
+                        scientists[planet_id] = leader
+                        break
+        return scientists
 
 
 class WarProcessor(AbstractGamestateDataProcessor):

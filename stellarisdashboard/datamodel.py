@@ -297,6 +297,10 @@ class HistoricalEventType(enum.Enum):
     leader_left_country = enum.auto()
     governed_planet = enum.auto()
 
+    # exploration and discoveries:
+    discovered_anomaly = enum.auto()
+    researched_anomaly = enum.auto()
+
     def __str__(self):
         return self.name
 
@@ -358,6 +362,8 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.conquered_system,
             HistoricalEventType.lost_system,
             HistoricalEventType.founded_with_system,
+            HistoricalEventType.discovered_anomaly,
+            HistoricalEventType.researched_anomaly,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -2012,6 +2018,13 @@ class HistoricalEvent(Base):
             HistoricalEventType.lost_trait,
         ):
             return self.leader.render_trait(self.db_description.text)
+        elif self.event_type in (
+            HistoricalEventType.discovered_anomaly,
+            HistoricalEventType.researched_anomaly,
+        ):
+            return game_info.lookup_id_name(
+                self.db_description.text, remove_prefix="category"
+            )
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
