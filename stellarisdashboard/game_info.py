@@ -286,6 +286,55 @@ def lookup_key(key: str) -> str:
     return get_global_renderer().render_from_dict({"key": key})
 
 
+@functools.lru_cache(maxsize=2**12)
+def lookup_id_name(object_id: str, remove_prefix: str = "") -> str:
+    """
+    Localised name for a game object ID (building, district, ...), falling back to a
+    prettified version of the ID if the game's localisation has no entry for it.
+    """
+    mapping = get_global_renderer().name_mapping
+    for key in (object_id, f"{object_id}_name"):
+        if key in mapping:
+            localised = lookup_key(key)
+            if localised:
+                return localised
+    return convert_id_to_name(object_id, remove_prefix)
+
+
+_KEY_LIKE_RE = re.compile(r"[A-Za-z0-9_.]+")
+
+
+@functools.lru_cache(maxsize=2**12)
+def render_name_or_prettify(name_json: str) -> str:
+    """
+    Like render_name, but a name that is just a localisation key without any entry in
+    the game's localisation (e.g. secret society factions) is prettified instead of
+    being shown as the raw key.
+    """
+    try:
+        name = json.loads(name_json)
+    except (json.JSONDecodeError, TypeError):
+        return str(name_json)
+    is_bare_key = isinstance(name, str)
+    if is_bare_key:
+        name = {"key": name}
+    if isinstance(name, dict):
+        key = name.get("key")
+        if (
+            isinstance(key, str)
+            and name.get("literal") != "yes"
+            and "value" not in name
+            and not name.get("variables")
+            and key not in get_global_renderer().name_mapping
+            and "_" in key
+            and _KEY_LIKE_RE.fullmatch(key)
+        ):
+            return convert_id_to_name(key.replace(".", "_"))
+        if is_bare_key:
+            return get_global_renderer().render_from_dict(name)
+    return render_name(name_json)
+
+
 def get_global_renderer() -> NameRenderer:
     global global_renderer
     if global_renderer is None:
@@ -293,7 +342,10 @@ def get_global_renderer() -> NameRenderer:
 
         global_renderer = NameRenderer(config.CONFIG.localization_files)
         global_renderer.load_name_mapping()
-        render_name.cache_clear()  # drop names cached against the old renderer
+        # drop names cached against the old renderer
+        render_name.cache_clear()
+        lookup_id_name.cache_clear()
+        render_name_or_prettify.cache_clear()
     return global_renderer
 
 

@@ -1363,8 +1363,7 @@ class PoliticalFaction(Base):
     
     @property
     def rendered_name(self):
-        rendered = game_info.render_name(self.faction_name)
-        return rendered
+        return game_info.render_name_or_prettify(self.faction_name)
 
 
 class War(Base):
@@ -1643,7 +1642,7 @@ class PlanetDistrict(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "district")
+        return game_info.lookup_id_name(self.db_description.text, "district")
 
 
 _RESOURCE_DEPOSIT_SUFFIXES = frozenset(str(i) for i in range(31))
@@ -1691,7 +1690,7 @@ class PlanetBuilding(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "building")
+        return game_info.lookup_id_name(self.db_description.text, "building")
 
 
 class PlanetModifier(Base):
