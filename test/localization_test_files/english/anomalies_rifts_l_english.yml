@@ -1,0 +1,8 @@
+﻿l_english:
+ AIANOM_LUMP_CAT:0 "Orbital Debris"
+ AIANOM_MININGDEPO_CAT:0 "Mining Deposit"
+ AIANOM_RESEARCHDEPO_CAT:0 "$AIANOM_MININGDEPO_CAT$"
+ STORMS_ANOM_TRAVELLERS:0 "Aftermath Distress Signal"
+ astral_rift_test_rift:0 "Siege on Paradise"
+ test_rift.1.name:0 "Siege on Paradise"
+ test_rift.2.name:0 "Rift Anomaly"

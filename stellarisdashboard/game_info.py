@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import threading
-from typing import Iterable
+from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
 # Regex explanation: https://regex101.com/r/qc0QhS/1
@@ -288,6 +288,13 @@ def lookup_key(key: str) -> str:
     return get_global_renderer().render_from_dict({"key": key})
 
 
+def lookup_key_if_known(key: str) -> Optional[str]:
+    """Localised text for the key, or None if the game's localisation has no entry for it."""
+    if key not in get_global_renderer().name_mapping:
+        return None
+    return lookup_key(key) or None
+
+
 @functools.lru_cache(maxsize=2**12)
 def lookup_id_name(
     object_id: str, remove_prefix: str = "", loc_prefix: str = ""
@@ -304,6 +311,18 @@ def lookup_id_name(
             if localised:
                 return localised
     return convert_id_to_name(object_id, remove_prefix)
+
+
+@functools.lru_cache(maxsize=2**8)
+def lookup_anomaly_category(category: str) -> str:
+    """Localised anomaly category: the key itself, then its _CAT variant, then a prettified ID."""
+    mapping = get_global_renderer().name_mapping
+    for key in (category, f"{category}_CAT"):
+        if key in mapping:
+            localised = lookup_key(key)
+            if localised:
+                return localised
+    return convert_id_to_name(category, "category")
 
 
 @functools.lru_cache(maxsize=2**8)

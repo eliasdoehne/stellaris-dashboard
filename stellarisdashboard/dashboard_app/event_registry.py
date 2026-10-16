@@ -36,6 +36,7 @@ class Category(enum.Enum):
     SCIENCE = "Science"
     STATECRAFT = "Statecraft"
     LEADERS = "Leaders"
+    EXPLORATION = "Exploration"
 
 
 class Tier(enum.IntEnum):
@@ -382,6 +383,43 @@ REGISTRY: dict[str, EventDescriptor] = {
         Category.SCIENCE, Tier.ROUTINE, "flask", SPAN,
         '\n'
         '                    The {{ links[event["country"]] | safe}} researched the "{{event["description"]}}" technology.\n',
+    ),
+    # ---- Exploration ----------------------------------------------------
+    "discovered_anomaly": EventDescriptor(
+        Category.EXPLORATION, Tier.ROUTINE, "search", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} discovered a "{{ event["description"] }}" anomaly on\n'
+        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
+    "researched_anomaly": EventDescriptor(
+        Category.EXPLORATION, Tier.ROUTINE, "microscope", POINT,
+        '\n'
+        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
+        '                    {{ links[event["country"]] | safe }} finished researching the "{{ event["description"] }}" anomaly on\n'
+        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
+    "excavated_dig_site": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "shovel", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} completed an excavation at the "{{ event["description"] }}" archaeological site on\n'
+        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
+    "explored_astral_rift": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "compass", POINT,
+        '\n'
+        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
+        '                    {{ links[event["country"]] | safe }} explored an astral rift ({{ event["description"] }})\n'
+        '                    {% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
+    "acquired_relic": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "gem", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} acquired the "{{ event["description"] }}" relic.\n',
+    ),
+    "destroyed_leviathan": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "skull", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} destroyed a leviathan{% if "target_country" in event %} guarded by the {{ links[event["target_country"]] | safe }}{% endif %}.\n',
     ),
     # ---- Statecraft -----------------------------------------------------
     "ascension_perk": EventDescriptor(

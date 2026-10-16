@@ -321,6 +321,11 @@ class TimelineExtractor:
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
+        yield AnomalyProcessor()
+        yield ArchaeologyProcessor()
+        yield AstralRiftProcessor()
+        yield RelicProcessor()
+        yield LeviathanProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3571,6 +3576,338 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             self._session.add(leader_model)
 
 
+NO_GAME_ID = 4294967295  # the save's "none" value for IDs
+
+
+def _as_game_id(value: Any) -> Optional[int]:
+    """The value if it is a valid in-game ID; None for non-integers and the "none" ID."""
+    if isinstance(value, int) and not isinstance(value, bool) and 0 <= value != NO_GAME_ID:
+        return value
+    return None
+
+
+class AnomalyProcessor(AbstractGamestateDataProcessor):
+    """Tracks anomalies from their discovery until their research is finished."""
+
+    ID = "anomalies"
+    DEPENDENCIES = [
+        CountryProcessor.ID,
+        PlanetProcessor.ID,
+        LeaderProcessor.ID,
+        FleetOwnershipProcessor.ID,
+    ]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        planets = dependencies[PlanetProcessor.ID]
+        leaders = dependencies[LeaderProcessor.ID]
+        fleet_owners = dependencies[FleetOwnershipProcessor.ID]
+        planet_dicts = (self._gamestate_dict.get("planets") or {}).get("planet")
+        if not isinstance(planet_dicts, dict):
+            return
+
+        active = {}  # planet id -> (category, surveying country id)
+        for planet_id, planet_dict in planet_dicts.items():
+            if not isinstance(planet_dict, dict):
+                continue
+            category = planet_dict.get("anomaly")
+            if isinstance(category, str) and category != "none":
+                active[planet_id] = (category, _as_game_id(planet_dict.get("surveyed_by")))
+
+        # one open discovered_anomaly event per anomaly that has not been researched yet
+        open_events = {
+            event.planet.planet_id_in_game: event
+            for event in self._session.query(datamodel.HistoricalEvent)
+            .filter(
+                datamodel.HistoricalEvent.event_type
+                == datamodel.HistoricalEventType.discovered_anomaly,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+                datamodel.HistoricalEvent.planet_id.isnot(None),
+            )
+            .options(
+                joinedload(datamodel.HistoricalEvent.planet),
+                joinedload(datamodel.HistoricalEvent.db_description),
+            )
+        }
+        today = self._basic_info.date_in_days
+
+        for planet_id, (category, surveyor_id) in sorted(active.items()):
+            country = countries.get(surveyor_id)
+            planet = planets.get(planet_id)
+            if planet_id in open_events or country is None or planet is None:
+                continue
+            event = datamodel.HistoricalEvent(
+                event_type=datamodel.HistoricalEventType.discovered_anomaly,
+                country=country,
+                planet=planet,
+                system=planet.system,
+                start_date_days=today,
+                db_description=self._get_or_add_shared_description(category),
+                event_is_known_to_player=country.has_met_player(),
+            )
+            self._session.add(event)
+            open_events[planet_id] = event
+
+        # the leader of the science ship researching an anomaly; the last one seen is kept
+        for planet_id, scientist in self._scientists_researching(leaders).items():
+            event = open_events.get(planet_id)
+            if event is not None and planet_id in active and event.leader is not scientist:
+                event.leader = scientist
+                self._session.add(event)
+
+        # an anomaly that is gone from its planet has been researched
+        for planet_id, event in open_events.items():
+            if planet_id in active or not isinstance(planet_dicts.get(planet_id), dict):
+                continue
+            event.end_date_days = today - 1
+            self._session.add(event)
+            if event.leader is None:
+                continue
+            country = event.leader.country or event.country
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.researched_anomaly,
+                    country=country,
+                    leader=event.leader,
+                    planet=event.planet,
+                    system=event.system,
+                    start_date_days=today,
+                    db_description=event.db_description,
+                    event_is_known_to_player=country.has_met_player(),
+                )
+            )
+
+    def _scientists_researching(self, leaders) -> Dict[int, datamodel.Leader]:
+        """Maps the planet ids that are being researched to the leader of the researching ship."""
+        scientists = {}
+        for fleet_id, fleet_dict in sorted(self._gamestate_dict["fleet"].items()):
+            if not isinstance(fleet_dict, dict):
+                continue
+            orders = fleet_dict.get("current_order")
+            for order in orders if isinstance(orders, list) else [orders]:
+                research = order.get("research_anomaly_order") if isinstance(order, dict) else None
+                planet_id = _as_game_id(research.get("planet")) if isinstance(research, dict) else None
+                ships = fleet_dict.get("ships")
+                if planet_id is None or not isinstance(ships, list):
+                    continue
+                for ship_id in ships:
+                    ship_dict = self._gamestate_dict["ships"].get(ship_id)
+                    leader = leaders.get(ship_dict.get("leader")) if isinstance(ship_dict, dict) else None
+                    if leader is not None:
+                        scientists[planet_id] = leader
+                        break
+        return scientists
+
+
+def _as_dict_list(value: Any) -> List[Dict[str, Any]]:
+    """The dict entries of a save list; a lone entry is stored as a plain dict."""
+    if isinstance(value, dict):
+        value = [value]
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
+
+class ArchaeologyProcessor(AbstractGamestateDataProcessor):
+    """Records each completed chapter of an archaeological dig site."""
+
+    ID = "archaeology"
+    DEPENDENCIES = [CountryProcessor.ID, PlanetProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        planets = dependencies[PlanetProcessor.ID]
+        sites = (self._gamestate_dict.get("archaeological_sites") or {}).get("sites")
+        if not isinstance(sites, dict):
+            return
+
+        known = set()  # (planet id, chapter) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.excavated_dig_site
+        ).options(
+            joinedload(datamodel.HistoricalEvent.planet),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.planet is not None and event.db_description is not None:
+                _, chapter = datamodel.split_packed_description(event.db_description.text)
+                known.add((event.planet.planet_id_in_game, chapter))
+
+        for site_id, site in sorted(sites.items()):
+            if not isinstance(site, dict) or not isinstance(site.get("type"), str):
+                continue
+            location = site.get("location")
+            planet = planets.get(_as_game_id(location.get("id")) if isinstance(location, dict) else None)
+            if planet is None:
+                continue
+            for chapter, entry in enumerate(_as_dict_list(site.get("completed")), start=1):
+                country = countries.get(_as_game_id(entry.get("country")))
+                date = entry.get("date")
+                key = (planet.planet_id_in_game, str(chapter))
+                if country is None or not isinstance(date, str) or key in known:
+                    continue
+                try:
+                    start_date = datamodel.date_to_days(date)
+                except ValueError:
+                    continue
+                known.add(key)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.excavated_dig_site,
+                        country=country,
+                        planet=planet,
+                        system=planet.system,
+                        start_date_days=start_date,
+                        db_description=self._get_or_add_shared_description(
+                            f"{site['type']}|{chapter}"
+                        ),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
+
+
+class AstralRiftProcessor(AbstractGamestateDataProcessor):
+    """Records each completed exploration step of an astral rift."""
+
+    ID = "astral_rifts"
+    DEPENDENCIES = [CountryProcessor.ID, SystemProcessor.ID, LeaderProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        systems = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        leaders = dependencies[LeaderProcessor.ID]
+        rifts = (self._gamestate_dict.get("astral_rifts") or {}).get("rifts")
+        if not isinstance(rifts, dict):
+            return
+
+        known = set()  # (system id, step event id, date) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.explored_astral_rift
+        ).options(
+            joinedload(datamodel.HistoricalEvent.system),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.system is not None and event.db_description is not None:
+                _, event_id = datamodel.split_packed_description(event.db_description.text)
+                known.add((event.system.system_id_in_game, event_id, event.start_date_days))
+
+        for rift_id, rift in sorted(rifts.items()):
+            if not isinstance(rift, dict) or not isinstance(rift.get("type"), str):
+                continue
+            country = countries.get(_as_game_id(rift.get("explorer")))
+            coordinate = rift.get("coordinate")
+            system_id = _as_game_id(coordinate.get("origin")) if isinstance(coordinate, dict) else None
+            system = systems.get(system_id)
+            if country is None or system is None:
+                continue
+            leader = leaders.get(_as_game_id(rift.get("leader")))
+            for entry in _as_dict_list(rift.get("completed")):
+                event_id = entry.get("event_id")
+                event_id = event_id if isinstance(event_id, str) else ""
+                date = entry.get("date")
+                if not isinstance(date, str):
+                    continue
+                try:
+                    start_date = datamodel.date_to_days(date)
+                except ValueError:
+                    continue
+                key = (system_id, event_id, start_date)
+                if key in known:
+                    continue
+                known.add(key)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.explored_astral_rift,
+                        country=country,
+                        leader=leader,
+                        system=system,
+                        start_date_days=start_date,
+                        db_description=self._get_or_add_shared_description(
+                            f"{rift['type']}|{event_id}"
+                        ),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
+
+
+class RelicProcessor(AbstractGamestateDataProcessor):
+    """Records the relics owned by each country.
+
+    The save has no acquisition dates, so a relic is dated by the first save that shows it.
+    """
+
+    ID = "relics"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        known = set()  # (country id, relic) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.acquired_relic
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.country is not None and event.db_description is not None:
+                known.add((event.country.country_id_in_game, event.db_description.text))
+
+        for country_id, country_dict in sorted(self._gamestate_dict["country"].items()):
+            country = countries.get(country_id)
+            relics = country_dict.get("relics") if isinstance(country_dict, dict) else None
+            if country is None or not isinstance(relics, list):
+                continue
+            for relic in relics:
+                if not isinstance(relic, str) or (country_id, relic) in known:
+                    continue
+                known.add((country_id, relic))
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.acquired_relic,
+                        country=country,
+                        start_date_days=self._basic_info.date_in_days,
+                        db_description=self._get_or_add_shared_description(relic),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
+
+
+class LeviathanProcessor(AbstractGamestateDataProcessor):
+    """Records the destruction of leviathans, as reported by the countries' timeline events."""
+
+    ID = "leviathans"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        known = set()  # (country id, date) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.destroyed_leviathan
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.target_country),
+        ):
+            if event.country is not None:
+                known.add((event.country.country_id_in_game, event.start_date_days))
+
+        kills = collect_leviathan_kills(self._gamestate_dict.get("country"))
+        for country_id, target_id, date_days in sorted(
+            kills, key=lambda k: (k[2], k[0], k[1] or -1)
+        ):
+            country = countries.get(country_id)
+            target = countries.get(target_id)
+            # the leviathan's country may no longer exist in later saves, so it is not part of the key
+            key = (country_id, date_days)
+            if country is None or key in known:
+                continue
+            known.add(key)
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.destroyed_leviathan,
+                    country=country,
+                    target_country=target,
+                    start_date_days=date_days,
+                    event_is_known_to_player=country.has_met_player(),
+                )
+            )
+
+
 class WarProcessor(AbstractGamestateDataProcessor):
     ID = "wars"
     DEPENDENCIES = [
@@ -3923,11 +4260,13 @@ def _is_country_id(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
-    """Collect the (winner, loser, date_days) of all won/lost wars in the countries' timelines."""
-    results = set()
+def iter_timeline_events(
+    countries: Any, definitions: Collection[str]
+) -> Iterable[Tuple[str, List[Any], int]]:
+    """Yield (definition, data, date_days) of the countries' timeline events with one of the
+    definitions, skipping malformed entries."""
     if not isinstance(countries, dict):
-        return results
+        return
     for country in countries.values():
         events = country.get("timeline_events") if isinstance(country, dict) else None
         if not isinstance(events, list):
@@ -3938,21 +4277,43 @@ def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
             definition = event.get("definition")
             data = event.get("data")
             date = event.get("date")
-            if definition not in WAR_RESULT_EVENTS or not isinstance(date, str):
+            if definition not in definitions or not isinstance(date, str):
                 continue
-            if not isinstance(data, list) or len(data) < 2:
-                continue
-            if not (_is_country_id(data[0]) and _is_country_id(data[1])):
+            if not isinstance(data, list):
                 continue
             try:
                 date_days = datamodel.date_to_days(date)
             except ValueError:
                 continue
-            if WAR_RESULT_EVENTS[definition]:
-                results.add((data[0], data[1], date_days))
-            else:
-                results.add((data[1], data[0], date_days))
+            yield definition, data, date_days
+
+
+def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
+    """Collect the (winner, loser, date_days) of all won/lost wars in the countries' timelines."""
+    results = set()
+    for definition, data, date_days in iter_timeline_events(
+        countries, WAR_RESULT_EVENTS
+    ):
+        if len(data) < 2 or not (_is_country_id(data[0]) and _is_country_id(data[1])):
+            continue
+        if WAR_RESULT_EVENTS[definition]:
+            results.add((data[0], data[1], date_days))
+        else:
+            results.add((data[1], data[0], date_days))
     return results
+
+
+def collect_leviathan_kills(countries: Any) -> Set[Tuple[int, Optional[int], int]]:
+    """Collect the (country, leviathan country or None, date_days) of all destroyed leviathans."""
+    kills = set()
+    for _, data, date_days in iter_timeline_events(
+        countries, {"timeline_destroyed_leviathan"}
+    ):
+        if not data or not _is_country_id(data[0]):
+            continue
+        target = data[1] if len(data) > 1 and _is_country_id(data[1]) else None
+        kills.add((data[0], target, date_days))
+    return kills
 
 
 def match_results_to_wars(

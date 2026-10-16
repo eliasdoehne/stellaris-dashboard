@@ -5,7 +5,7 @@ import logging
 import pathlib
 import threading
 import time
-from typing import Dict, List, Union, Optional, Iterable, Collection
+from typing import Dict, List, Union, Optional, Iterable, Collection, Tuple
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -297,6 +297,14 @@ class HistoricalEventType(enum.Enum):
     leader_left_country = enum.auto()
     governed_planet = enum.auto()
 
+    # exploration and discoveries:
+    discovered_anomaly = enum.auto()
+    researched_anomaly = enum.auto()
+    excavated_dig_site = enum.auto()
+    explored_astral_rift = enum.auto()
+    acquired_relic = enum.auto()
+    destroyed_leviathan = enum.auto()
+
     def __str__(self):
         return self.name
 
@@ -358,6 +366,12 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.conquered_system,
             HistoricalEventType.lost_system,
             HistoricalEventType.founded_with_system,
+            HistoricalEventType.discovered_anomaly,
+            HistoricalEventType.researched_anomaly,
+            HistoricalEventType.excavated_dig_site,
+            HistoricalEventType.explored_astral_rift,
+            HistoricalEventType.acquired_relic,
+            HistoricalEventType.destroyed_leviathan,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -1888,6 +1902,28 @@ class Fleet(Base):
         return rendered
 
 
+def split_packed_description(text: str) -> Tuple[str, str]:
+    """Splits a "<key>|<value>" description into its two parts; the value is empty if there is none."""
+    key, _, value = text.partition("|")
+    return key, value
+
+
+def render_dig_site_description(text: str) -> str:
+    """Renders a "<site type>|<chapter>" description, e.g. "Under the Ice (chapter 3)"."""
+    site_type, chapter = split_packed_description(text)
+    name = game_info.lookup_id_name(site_type, remove_prefix="site")
+    return f"{name} (chapter {chapter})" if chapter else name
+
+
+def render_astral_rift_description(text: str) -> str:
+    """Renders a "<rift type>|<step event id>" description, e.g. "The Corridors: Rift Anomaly"."""
+    rift_type, event_id = split_packed_description(text)
+    name = game_info.lookup_key_if_known(f"astral_rift_{rift_type}")
+    name = name or game_info.convert_id_to_name(rift_type)
+    title = game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
+    return f"{name}: {title}" if title and title != name else name
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -2012,6 +2048,17 @@ class HistoricalEvent(Base):
             HistoricalEventType.lost_trait,
         ):
             return self.leader.render_trait(self.db_description.text)
+        elif self.event_type in (
+            HistoricalEventType.discovered_anomaly,
+            HistoricalEventType.researched_anomaly,
+        ):
+            return game_info.lookup_anomaly_category(self.db_description.text)
+        elif self.event_type == HistoricalEventType.acquired_relic:
+            return game_info.lookup_id_name(self.db_description.text, remove_prefix="r")
+        elif self.event_type == HistoricalEventType.excavated_dig_site:
+            return render_dig_site_description(self.db_description.text)
+        elif self.event_type == HistoricalEventType.explored_astral_rift:
+            return render_astral_rift_description(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
