@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 
 NO_ETHOS = "ethic_no_ethos"
 
-# Planet class of the pseudo-planets that represent colonies carried by ships (nomad arkships)
-ARKSHIP_PLANET_CLASS = "pc_arkship"
+# Planet class of the pseudo-planets that represent colonies carried by ships (nomad arkships);
+# the game's own class for arkships, localised as "Arkship"
+ARKSHIP_PLANET_CLASS = "pc_ark"
 
 # Strategic resources that the game prefixes with "sr_" in budgets and stockpiles
 _STRATEGIC_RESOURCE_PREFIX = "sr_"
