@@ -685,6 +685,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             event_type = datamodel.HistoricalEventType.conquered_system
 
         if owner_changed:
+            had_owner = system_model.country is not None
             system_model.country = current_owner
             self._session.add(system_model)
 
@@ -694,7 +695,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 .order_by(datamodel.SystemOwnership.end_date_days.desc())
                 .first()
             )
-            if ownership is not None:
+            if ownership is not None and had_owner:
                 ownership.end_date_days = self._basic_info.date_in_days - 1
                 self._session.add(ownership)
 
