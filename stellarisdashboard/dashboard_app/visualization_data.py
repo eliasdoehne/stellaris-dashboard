@@ -884,7 +884,10 @@ class AbstractPopStatsByJobDataContainer(AbstractPopStatsDataContainer, abc.ABC)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByJob)
-        return ps.job_description
+        key = ps.job_description
+        if key not in self.key_labels:
+            self.key_labels[key] = game_info.lookup_id_name(key, loc_prefix="job_")
+        return key
 
 
 class JobDistributionDataContainer(AbstractPopStatsByJobDataContainer):
@@ -1001,7 +1004,10 @@ class AbstractPopStatsByStratumDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByStratum)
-        return ps.stratum
+        key = ps.stratum
+        if key not in self.key_labels:
+            self.key_labels[key] = game_info.lookup_id_name(key, loc_prefix="pop_cat_")
+        return key
 
 
 class StratumDistributionDataContainer(AbstractPopStatsByStratumDataContainer):

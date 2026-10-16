@@ -86,3 +86,28 @@ def test_ethic_found_in_localisation(fixture_renderer):
 
 def test_ethic_without_localisation_falls_back_to_prettified_id(fixture_renderer):
     assert game_info.lookup_id_name("ethic_no_ethos", "ethic") == "No Ethos"
+
+
+@pytest.mark.parametrize(
+    "job_id, expected",
+    [
+        ("miner", "Miner"),
+        ("fe_guardian_bot", "Guardian"),
+        ("unknown_job", "Unknown Job"),
+    ],
+)
+def test_job_label(fixture_renderer, job_id, expected):
+    assert game_info.lookup_id_name(job_id, loc_prefix="job_") == expected
+
+
+@pytest.mark.parametrize(
+    "stratum_id, expected",
+    [
+        ("worker", "Worker"),
+        # pop_cat_ takes precedence over the bare ruler key
+        ("ruler", "Elite"),
+        ("unknown_stratum", "Unknown Stratum"),
+    ],
+)
+def test_stratum_label(fixture_renderer, stratum_id, expected):
+    assert game_info.lookup_id_name(stratum_id, loc_prefix="pop_cat_") == expected
