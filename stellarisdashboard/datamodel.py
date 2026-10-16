@@ -302,6 +302,7 @@ class HistoricalEventType(enum.Enum):
     researched_anomaly = enum.auto()
     excavated_dig_site = enum.auto()
     explored_astral_rift = enum.auto()
+    acquired_relic = enum.auto()
 
     def __str__(self):
         return self.name
@@ -368,6 +369,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.researched_anomaly,
             HistoricalEventType.excavated_dig_site,
             HistoricalEventType.explored_astral_rift,
+            HistoricalEventType.acquired_relic,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -2051,6 +2053,8 @@ class HistoricalEvent(Base):
             return game_info.lookup_id_name(
                 self.db_description.text, remove_prefix="category"
             )
+        elif self.event_type == HistoricalEventType.acquired_relic:
+            return game_info.lookup_id_name(self.db_description.text, remove_prefix="r")
         elif self.event_type == HistoricalEventType.excavated_dig_site:
             return render_dig_site_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.explored_astral_rift:

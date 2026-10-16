@@ -324,6 +324,7 @@ class TimelineExtractor:
         yield AnomalyProcessor()
         yield ArchaeologyProcessor()
         yield AstralRiftProcessor()
+        yield RelicProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3820,6 +3821,47 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
                         db_description=self._get_or_add_shared_description(
                             f"{rift['type']}|{event_id}"
                         ),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
+
+
+class RelicProcessor(AbstractGamestateDataProcessor):
+    """Records the relics owned by each country.
+
+    The save has no acquisition dates, so a relic is dated by the first save that shows it.
+    """
+
+    ID = "relics"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        known = set()  # (country id, relic) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.acquired_relic
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.country is not None and event.db_description is not None:
+                known.add((event.country.country_id_in_game, event.db_description.text))
+
+        for country_id, country_dict in sorted(self._gamestate_dict["country"].items()):
+            country = countries.get(country_id)
+            relics = country_dict.get("relics") if isinstance(country_dict, dict) else None
+            if country is None or not isinstance(relics, list):
+                continue
+            for relic in relics:
+                if not isinstance(relic, str) or (country_id, relic) in known:
+                    continue
+                known.add((country_id, relic))
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.acquired_relic,
+                        country=country,
+                        start_date_days=self._basic_info.date_in_days,
+                        db_description=self._get_or_add_shared_description(relic),
                         event_is_known_to_player=country.has_met_player(),
                     )
                 )

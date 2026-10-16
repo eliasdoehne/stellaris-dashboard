@@ -411,6 +411,11 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {{ links[event["country"]] | safe }} explored an astral rift ({{ event["description"] }})\n'
         '                    {% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
     ),
+    "acquired_relic": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "gem", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} acquired the "{{ event["description"] }}" relic.\n',
+    ),
     # ---- Statecraft -----------------------------------------------------
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
