@@ -322,6 +322,7 @@ class TimelineExtractor:
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
         yield AnomalyProcessor()
+        yield ArchaeologyProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3693,6 +3694,70 @@ class AnomalyProcessor(AbstractGamestateDataProcessor):
                         scientists[planet_id] = leader
                         break
         return scientists
+
+
+def _as_dict_list(value: Any) -> List[Dict[str, Any]]:
+    """The dict entries of a save list; a lone entry is stored as a plain dict."""
+    if isinstance(value, dict):
+        value = [value]
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
+
+class ArchaeologyProcessor(AbstractGamestateDataProcessor):
+    """Records each completed chapter of an archaeological dig site."""
+
+    ID = "archaeology"
+    DEPENDENCIES = [CountryProcessor.ID, PlanetProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        planets = dependencies[PlanetProcessor.ID]
+        sites = (self._gamestate_dict.get("archaeological_sites") or {}).get("sites")
+        if not isinstance(sites, dict):
+            return
+
+        known = set()  # (planet id, chapter) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.excavated_dig_site
+        ).options(
+            joinedload(datamodel.HistoricalEvent.planet),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.planet is not None and event.db_description is not None:
+                _, chapter = datamodel.split_packed_description(event.db_description.text)
+                known.add((event.planet.planet_id_in_game, chapter))
+
+        for site_id, site in sorted(sites.items()):
+            if not isinstance(site, dict) or not isinstance(site.get("type"), str):
+                continue
+            location = site.get("location")
+            planet = planets.get(_as_game_id(location.get("id")) if isinstance(location, dict) else None)
+            if planet is None:
+                continue
+            for chapter, entry in enumerate(_as_dict_list(site.get("completed")), start=1):
+                country = countries.get(_as_game_id(entry.get("country")))
+                date = entry.get("date")
+                key = (planet.planet_id_in_game, str(chapter))
+                if country is None or not isinstance(date, str) or key in known:
+                    continue
+                try:
+                    start_date = datamodel.date_to_days(date)
+                except ValueError:
+                    continue
+                known.add(key)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.excavated_dig_site,
+                        country=country,
+                        planet=planet,
+                        system=planet.system,
+                        start_date_days=start_date,
+                        db_description=self._get_or_add_shared_description(
+                            f"{site['type']}|{chapter}"
+                        ),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
 
 
 class WarProcessor(AbstractGamestateDataProcessor):

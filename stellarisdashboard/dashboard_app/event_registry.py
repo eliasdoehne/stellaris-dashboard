@@ -398,6 +398,12 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {{ links[event["country"]] | safe }} finished researching the "{{ event["description"] }}" anomaly on\n'
         '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
     ),
+    "excavated_dig_site": EventDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "shovel", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} completed an excavation at the "{{ event["description"] }}" archaeological site on\n'
+        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
     # ---- Statecraft -----------------------------------------------------
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,

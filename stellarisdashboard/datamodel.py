@@ -5,7 +5,7 @@ import logging
 import pathlib
 import threading
 import time
-from typing import Dict, List, Union, Optional, Iterable, Collection
+from typing import Dict, List, Union, Optional, Iterable, Collection, Tuple
 
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Enum
@@ -300,6 +300,7 @@ class HistoricalEventType(enum.Enum):
     # exploration and discoveries:
     discovered_anomaly = enum.auto()
     researched_anomaly = enum.auto()
+    excavated_dig_site = enum.auto()
 
     def __str__(self):
         return self.name
@@ -364,6 +365,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.founded_with_system,
             HistoricalEventType.discovered_anomaly,
             HistoricalEventType.researched_anomaly,
+            HistoricalEventType.excavated_dig_site,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -1894,6 +1896,19 @@ class Fleet(Base):
         return rendered
 
 
+def split_packed_description(text: str) -> Tuple[str, str]:
+    """Splits a "<key>|<value>" description into its two parts; the value is empty if there is none."""
+    key, _, value = text.partition("|")
+    return key, value
+
+
+def render_dig_site_description(text: str) -> str:
+    """Renders a "<site type>|<chapter>" description, e.g. "Under the Ice (chapter 3)"."""
+    site_type, chapter = split_packed_description(text)
+    name = game_info.lookup_id_name(site_type, remove_prefix="site")
+    return f"{name} (chapter {chapter})" if chapter else name
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -2025,6 +2040,8 @@ class HistoricalEvent(Base):
             return game_info.lookup_id_name(
                 self.db_description.text, remove_prefix="category"
             )
+        elif self.event_type == HistoricalEventType.excavated_dig_site:
+            return render_dig_site_description(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
