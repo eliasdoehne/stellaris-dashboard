@@ -6,7 +6,7 @@ use std::time::Instant;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while, take_while1};
 use nom::bytes::streaming::escaped;
-use nom::character::complete::{char, multispace0, multispace1, none_of, one_of};
+use nom::character::complete::{char, multispace0, multispace1, none_of, one_of, satisfy};
 use nom::combinator::{map, map_res, not, opt, peek, recognize};
 use nom::error::context;
 use nom::IResult;
@@ -241,20 +241,25 @@ fn parse_date_str(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
+/// A number token, which must not run into more identifier characters (rejects `influence`, `infinity`, `nano`).
+fn number_token(input: &str) -> IResult<&str, &str> {
+    terminated(
+        recognize(double),
+        peek(not(satisfy(_is_valid_unquoted_str_char))),
+    )(input)
+}
+
 fn parse_int(input: &str) -> IResult<&str, i64> {
     preceded(
         multispace0,
-        map_res(recognize(double), |s: &str| s.parse::<i64>()),
+        map_res(number_token, |s: &str| s.parse::<i64>()),
     )(input)
 }
 
 fn parse_float(input: &str) -> IResult<&str, f64> {
     preceded(
         multispace0,
-        preceded(
-            not(tag("nan")),
-            map_res(recognize(double), |s: &str| s.parse::<f64>()),
-        ),
+        map_res(number_token, |s: &str| s.parse::<f64>()),
     )(input)
 }
 
@@ -597,6 +602,14 @@ mod tests {
         // `parse_float` was grabbing the initial "nan"
         let test_input = "1=nano_shipyard";
         parse_file(test_input).expect("Should parse");
+    }
+
+    #[test]
+    fn test_inf_prefix_in_value() {
+        // from a 4.5 save with nomad waystation debris, `double` grabbed "inf" from "influence"
+        parse_file("a=influence").expect("Should parse");
+        parse_file("a=infinity").expect("Should parse");
+        parse_file("x={ { influence 50 } { alloys 250 } }").expect("Should parse");
     }
 
     #[test]

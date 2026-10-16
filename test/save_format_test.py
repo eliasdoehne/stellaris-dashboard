@@ -188,15 +188,17 @@ def test_get_pop_group_ethics(pop_group, expected):
         ({"size": 100, "key": {"category": "worker"}}, [(None, 100)]),
         # since 4.5: no faction data yet (an empty "factions={ }" is parsed as a list)
         ({"size": 100, "key": {"category": "worker"}, "factions": []}, [(None, 100)]),
-        # since 4.5: the accepted layouts for pops spread over several factions
+        # since 4.5: pop counts per faction, the rest is unaffiliated
         (
-            {"size": 100, "key": {}, "factions": {"factions": [5, 6], "pops": [60, 30]}},
+            {"size": 134, "key": {}, "factions": {"objects": [0, 1, 2], "pops": [60, 50, 24]}},
+            [(0, 60), (1, 50), (2, 24)],
+        ),
+        (
+            {"size": 100, "key": {}, "factions": {"objects": [5, 6], "pops": [60, 30]}},
             [(5, 60), (6, 30), (None, 10)],
         ),
-        ({"size": 100, "key": {}, "factions": {5: 70, 6: 30}}, [(5, 70), (6, 30)]),
         # implausible data is ignored rather than producing wrong numbers
-        ({"size": 100, "key": {}, "factions": {5: 70, 6: 70}}, [(None, 100)]),
-        ({"size": 100, "key": {}, "factions": {-1: 0.5}}, [(None, 100)]),
+        ({"size": 100, "key": {}, "factions": {"objects": [5, 6], "pops": [70, 70]}}, [(None, 100)]),
     ],
 )
 def test_get_pop_group_factions(pop_group, expected):

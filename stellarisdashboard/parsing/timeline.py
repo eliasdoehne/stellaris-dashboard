@@ -59,6 +59,38 @@ def _extract_id(val, default: int = -1) -> int:
 # the built-in @cache decorator was leaking memory, hanging on to references of processor instances
 _shared_description_cache: dict[str, datamodel.SharedDescription] = {}
 
+_BIOSHIP_FAMILY_HULLS = {
+    "mauler": "corvette",
+    "weaver": "destroyer",
+    "harbinger": "cruiser",
+    "stinger": "battleship",
+}
+_FLEET_COMPOSITION_HULLS = {
+    "corvette",
+    "destroyer",
+    "cruiser",
+    "battleship",
+    "titan",
+    "colossus",
+}
+
+
+def _fleet_composition_hull(ship_size) -> Optional[str]:
+    """Map a ship size to its fleet composition hull, including BioGenesis
+    (<family>_stage_<n>, bio_titan) and Overlord (offspring_*) bioships."""
+    if not isinstance(ship_size, str):
+        return None
+    if ship_size == "bio_titan":
+        return "titan"
+    name = ship_size.removeprefix("offspring_")
+    family, sep, stage = name.partition("_stage_")
+    if sep and stage.isdigit():
+        return _BIOSHIP_FAMILY_HULLS.get(family)
+    if name in _FLEET_COMPOSITION_HULLS:
+        return name
+    return None
+
+
 @dataclasses.dataclass
 class BasicGameInfo:
     game_id: str
@@ -580,6 +612,11 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
         for starbase_id, starbase_dict in starbases.items():
             if not isinstance(starbase_dict, dict):
                 continue
+            # Nomad waystations share a system with the real starbase and don't confer ownership
+            if str(starbase_dict.get("level", "")).startswith(
+                "starbase_level_waystation"
+            ):
+                continue
             system_id_in_game = starbase_system_map.get(starbase_id)
             country_model = fleet_owners_dict.get(
                 ship_to_fleet_id_dict.get(starbase_dict.get("station"))
@@ -593,6 +630,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 )
                 continue
 
+            if system_id_in_game in starbase_systems:
+                # Only one starbase per system determines its owner
+                continue
             starbase_systems.add(system_id_in_game)
 
             self.systems_by_owner_country_id[country_model.country_id_in_game].add(
@@ -933,6 +973,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 net_biomass=0.0,
                 **diplomacy_data,
             )
+            self._session.add(country_data)
             self._extract_country_economy(country_data, country_data_dict)
 
             if country_model.first_player_contact_date is None and diplomacy_data.get(
@@ -940,7 +981,6 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             ):
                 country_model.first_player_contact_date = self._basic_info.date_in_days
                 self._session.add(country_model)
-            self._session.add(country_data)
 
     def _get_diplomacy_towards_player(self, diplomacy_dict, country_id):
         new_key_old_key_list = [
@@ -2023,9 +2063,11 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
         capital_id = save_format.resolve_colony_to_planet_id(self._gamestate_dict, capital_id)
         capital = self._planet_by_ingame_id.get(capital_id)
         if capital != country_model.capital:
+            previous_capital = country_model.capital
             country_model.capital = capital
             self._session.add(country_model)
-            if capital is not None:
+            # the first capital seen for a country is not a relocation
+            if capital is not None and previous_capital is not None:
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.capital_relocation,
@@ -3364,29 +3406,19 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             self._new_fleet_commands[leader_id] = fleet_model
 
     def _count_ship_for_fleet_composition(self, owner_id, ship_dict):
-        ship_class = self._get_ship_class(ship_dict)
-        if isinstance(ship_class, str):
-            if owner_id not in self._fleet_compos:
-                self._fleet_compos[owner_id] = dict(
-                    ship_count_corvette=0,
-                    ship_count_destroyer=0,
-                    ship_count_cruiser=0,
-                    ship_count_battleship=0,
-                    ship_count_titan=0,
-                    ship_count_colossus=0,
-                )
-            if ship_class == "corvette":
-                self._fleet_compos[owner_id]["ship_count_corvette"] += 1
-            elif ship_class == "destroyer":
-                self._fleet_compos[owner_id]["ship_count_destroyer"] += 1
-            elif ship_class == "cruiser":
-                self._fleet_compos[owner_id]["ship_count_cruiser"] += 1
-            elif ship_class == "battleship":
-                self._fleet_compos[owner_id]["ship_count_battleship"] += 1
-            elif ship_class == "titan":
-                self._fleet_compos[owner_id]["ship_count_titan"] += 1
-            elif ship_class == "colossus":
-                self._fleet_compos[owner_id]["ship_count_colossus"] += 1
+        ship_class = _fleet_composition_hull(self._get_ship_class(ship_dict))
+        if ship_class is None:
+            return
+        if owner_id not in self._fleet_compos:
+            self._fleet_compos[owner_id] = dict(
+                ship_count_corvette=0,
+                ship_count_destroyer=0,
+                ship_count_cruiser=0,
+                ship_count_battleship=0,
+                ship_count_titan=0,
+                ship_count_colossus=0,
+            )
+        self._fleet_compos[owner_id][f"ship_count_{ship_class}"] += 1
 
     def _get_ship_class(self, ship_dict):
         return save_format.get_ship_size(self._gamestate_dict, ship_dict)
@@ -3516,16 +3548,23 @@ class WarProcessor(AbstractGamestateDataProcessor):
         self._session.add(war_model)
         return war_model
 
+    @staticmethod
+    def _parse_war_goal(war_goal):
+        if isinstance(war_goal, dict):
+            return war_goal.get("type")
+        return None  # missing or "none"
+
     def update_war_participants(self, war_dict, war_model):
-        war_goal_attacker = war_dict.get("attacker_war_goal", {}).get("type")
-        war_goal_defender = war_dict.get("defender_war_goal", {})
-        if isinstance(war_goal_defender, dict):
-            war_goal_defender = war_goal_defender.get("type")
-        elif not war_goal_defender or war_goal_defender == "none":
-            war_goal_defender = None
-        attackers = {p["country"] for p in war_dict["attackers"]}
+        war_goal_attacker = self._parse_war_goal(war_dict.get("attacker_war_goal"))
+        war_goal_defender = self._parse_war_goal(war_dict.get("defender_war_goal"))
+        attackers = {
+            p.get("country")
+            for p in save_format._as_list(war_dict.get("attackers"))
+            if isinstance(p, dict) and p.get("country") is not None
+        }
         for war_party_info in itertools.chain(
-            war_dict.get("attackers", []), war_dict.get("defenders", [])
+            save_format._as_list(war_dict.get("attackers")),
+            save_format._as_list(war_dict.get("defenders")),
         ):
             if not isinstance(war_party_info, dict):
                 continue  # just in case
@@ -3559,6 +3598,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                     call_type=call_type,
                     is_attacker=is_attacker,
                 )
+                self._session.add(war_participant)  # before the autoflushing query below
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.war,
