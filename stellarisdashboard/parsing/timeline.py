@@ -1538,7 +1538,8 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                 self._gamestate_dict["galactic_object"].items()
             )
         ]
-        # colonies carried by ships (nomad arkships) are recorded as planets without a system
+        # colonies carried by ships (nomad arkships) are recorded as planets without a system;
+        # the system is set from the carrying ship's position below
         planets_by_system.append(
             (None, save_format.get_arkship_planet_ids(self._gamestate_dict))
         )
@@ -1551,6 +1552,10 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(planet_dict, dict):
                     continue
 
+                if save_format.is_arkship_planet_id(ingame_id):
+                    system_id = save_format.get_arkship_system_id(
+                        self._gamestate_dict, ingame_id
+                    )
                 if ingame_id not in self.planets_by_ingame_id:
                     system_model = systems_by_id.get(system_id)
                     self.planets_by_ingame_id[ingame_id] = self._add_planet_model(
@@ -1561,6 +1566,15 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
 
                 planet_model = self.planets_by_ingame_id[ingame_id]
                 was_updated = False
+                # an arkship keeps its last known system while in transit
+                arkship_system = (
+                    systems_by_id.get(system_id)
+                    if save_format.is_arkship_planet_id(ingame_id)
+                    else None
+                )
+                if arkship_system is not None and planet_model.system is not arkship_system:
+                    planet_model.system = arkship_system
+                    was_updated = True
                 was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
                     entity_attribute_name="districts",

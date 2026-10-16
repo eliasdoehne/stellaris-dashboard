@@ -1619,7 +1619,7 @@ class Planet(Base):
     planet_class = Column(String(20))
     # negative for the pseudo-planets of nomad arkship colonies, see save_format.arkship_planet_id
     planet_id_in_game = Column(Integer, index=True)
-    # null for arkship colonies, because the save data used here does not say which system a ship is in
+    # for arkship colonies, the last known system of the carrying ship (null if never known)
     system_id = Column(ForeignKey(System.system_id), nullable=True, index=True)
     colonized_date = Column(Integer)
 
