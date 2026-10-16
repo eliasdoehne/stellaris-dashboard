@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Optional, Union
 from urllib import parse
 
 import dash.exceptions
@@ -107,6 +107,14 @@ def _with_color_alpha(color, alpha):
     inner = color[color.index("(") + 1 : color.index(")")]
     r, g, b = (c.strip() for c in inner.split(",")[:3])
     return f"rgba({r},{g},{b},{alpha})"
+
+
+def _get_player_legend_label(game_id) -> Optional[str]:
+    """Legend label of the player's country, as rendered for its per-country series
+    (including the ID suffix if include_id_in_names is set)."""
+    with datamodel.get_db_session(game_id) as session:
+        player = session.query(datamodel.Country).filter_by(is_player=True).first()
+        return dict_key_to_legend_label(player.rendered_name) if player else None
 
 
 def _emphasize_player_in_compact_data(figure_data, player_label):
@@ -266,14 +274,7 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
     plot_data = visualization_data.get_current_execution_plot_data(
         game_id, country_perspective
     )
-    # Legend label of the player's own country, used to highlight it in the
-    # compact thumbnails (see _emphasize_player_in_compact_data).
-    player_country_name = games_dict[game_id].get("country_name")
-    player_label = (
-        dict_key_to_legend_label(player_country_name)
-        if player_country_name
-        else None
-    )
+    player_label = _get_player_legend_label(game_id)
     # Each plot becomes a compact card in a responsive grid. The full-detail
     # figure is stashed in a Store and rendered in the modal on demand.
     grid_children = []

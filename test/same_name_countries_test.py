@@ -83,3 +83,28 @@ def test_same_name_countries_get_distinct_colors(same_name_countries, monkeypatc
     assert visualization_data.get_color_vals(
         game_id, 3
     ) == visualization_data.get_color_vals(game_id, 3)
+
+
+def test_player_series_is_emphasized_with_id_in_names(
+    same_name_countries, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(config.CONFIG, "base_output_path", tmp_path)
+    (tmp_path / "db").mkdir()
+    game_id = "player_label_test"
+    player = _country(0, name="Player Empire")
+    player.is_player = True
+    with datamodel.get_db_session(game_id, write=True) as session:
+        session.add(player)
+        session.commit()
+
+    player_label = graph_ledger._get_player_legend_label(game_id)
+    figure_data = [
+        dict(name="Player Empire (0)", line={"color": "rgba(1,2,3,0.5)"}),
+        dict(name="Mirrored Empire (1)", line={"color": "rgba(4,5,6,1.0)"}),
+    ]
+    emphasized = graph_ledger._emphasize_player_in_compact_data(
+        figure_data, player_label
+    )
+    assert player_label == "Player Empire (0)"
+    assert emphasized[-1]["name"] == "Player Empire (0)"
+    assert emphasized[-1]["line"]["width"] == graph_ledger.COMPACT_PLAYER_WIDTH
