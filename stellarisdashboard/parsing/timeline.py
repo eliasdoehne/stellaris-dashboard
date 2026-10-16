@@ -3773,6 +3773,15 @@ class WarProcessor(AbstractGamestateDataProcessor):
             )
 
 
+# country timeline events reporting a war result; True if data is [winner, loser]
+WAR_RESULT_EVENTS = {
+    "timeline_war_won": True,
+    "timeline_first_war_won": True,
+    "timeline_war_lost": False,
+    "timeline_first_war_lost": False,
+}
+
+
 @dataclasses.dataclass(frozen=True)
 class WarTruceCandidate:
     """The in-game country IDs of an unresolved war that can be matched to a truce."""
@@ -3830,6 +3839,98 @@ def match_truces_to_wars(
         )
         matches[truce_id] = best
         remaining.remove(best)
+    return matches
+
+
+@dataclasses.dataclass(frozen=True)
+class WarSidesCandidate:
+    """An unresolved war with the in-game country IDs on each side."""
+
+    war: Any
+    last_seen_days: int
+    attackers: frozenset
+    defenders: frozenset
+
+    @staticmethod
+    def from_war(war: datamodel.War) -> "WarSidesCandidate":
+        return WarSidesCandidate(
+            war=war,
+            last_seen_days=war.end_date_days or 0,
+            attackers=frozenset(
+                wp.country.country_id_in_game for wp in war.participants if wp.is_attacker
+            ),
+            defenders=frozenset(
+                wp.country.country_id_in_game
+                for wp in war.participants
+                if not wp.is_attacker
+            ),
+        )
+
+
+def _is_country_id(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
+    """Collect the (winner, loser, date_days) of all won/lost wars in the countries' timelines."""
+    results = set()
+    if not isinstance(countries, dict):
+        return results
+    for country in countries.values():
+        events = country.get("timeline_events") if isinstance(country, dict) else None
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            definition = event.get("definition")
+            data = event.get("data")
+            date = event.get("date")
+            if definition not in WAR_RESULT_EVENTS or not isinstance(date, str):
+                continue
+            if not isinstance(data, list) or len(data) < 2:
+                continue
+            if not (_is_country_id(data[0]) and _is_country_id(data[1])):
+                continue
+            try:
+                date_days = datamodel.date_to_days(date)
+            except ValueError:
+                continue
+            if WAR_RESULT_EVENTS[definition]:
+                results.add((data[0], data[1], date_days))
+            else:
+                results.add((data[1], data[0], date_days))
+    return results
+
+
+def match_results_to_wars(
+    results: Collection[Tuple[int, int, int]],
+    candidates: Collection[WarSidesCandidate],
+    current_days: int,
+) -> Dict[Any, Tuple[bool, int]]:
+    """Match unresolved wars to the won/lost results that ended them.
+
+    A result matches a war if it is dated after the war was last seen (and not after
+    the current date) and the winner and loser are on opposite sides of the war. The
+    earliest matching result is used, and each result resolves at most one war.
+    Returns {war: (attacker_won, end_date_days)}.
+    """
+    remaining = sorted(results, key=lambda r: r[2])
+    matches = {}
+    for candidate in sorted(candidates, key=lambda c: c.last_seen_days):
+        for result in remaining:
+            winner, loser, date_days = result
+            if not candidate.last_seen_days < date_days <= current_days:
+                continue
+            if winner in candidate.attackers and loser in candidate.defenders:
+                attacker_won = True
+            elif winner in candidate.defenders and loser in candidate.attackers:
+                attacker_won = False
+            else:
+                continue
+            matches[candidate.war] = (attacker_won, date_days)
+            remaining.remove(result)
+            break
     return matches
 
 
@@ -3901,7 +4002,28 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             self._history_add_peace_events(matching_war)
             self._session.add(matching_war)
 
-        # resolve the wars that are no longer in the save file and do not match any truce:
+        #  ...then based on the war results in the countries' timelines (wars won outright)
+        sides = [
+            WarSidesCandidate.from_war(w)
+            for w in unresolved_wars
+            if w.war_id not in resolved
+        ]
+        for war, (attacker_won, end_date) in match_results_to_wars(
+            collect_war_results(self._gamestate_dict.get("country")),
+            sides,
+            self._basic_info.date_in_days,
+        ).items():
+            resolved.add(war.war_id)
+            war.end_date_days = end_date
+            war.outcome = (
+                datamodel.WarOutcome.attacker_victory
+                if attacker_won
+                else datamodel.WarOutcome.defender_victory
+            )
+            self._history_add_peace_events(war)
+            self._session.add(war)
+
+        # resolve the wars that are no longer in the save file and have no known result:
         for war in unresolved_wars:
             if war.war_id in resolved:
                 continue

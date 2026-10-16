@@ -193,6 +193,8 @@ class WarOutcome(enum.Enum):
     in_progress = enum.auto()
     truce = enum.auto()
     resolution_unknown = enum.auto()
+    attacker_victory = enum.auto()
+    defender_victory = enum.auto()
 
     def __str__(self):
         return game_info.convert_id_to_name(self.name)
