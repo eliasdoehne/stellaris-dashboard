@@ -21,6 +21,10 @@ from stellarisdashboard.parsing import timeline
         ("ancient_corvette", "corvette"),
         ("ancient_destroyer", "destroyer"),
         ("pirate_corvette", "corvette"),
+        ("pirate_destroyer", "destroyer"),
+        ("pirate_cruiser", "cruiser"),
+        ("marauder_corvette", "corvette"),
+        ("marauder_galleon", "battleship"),
         # BioGenesis and Overlord bioships
         ("mauler_stage_2", "corvette"),
         ("weaver_stage_1", "destroyer"),
@@ -34,6 +38,7 @@ from stellarisdashboard.parsing import timeline
         ("military_station_small", None),
         ("space_whale_3", None),
         ("unknown_stage_1", None),
+        ("npc_warship_01", None),
         ("mauler_stage_x", None),
         (None, None),
     ],

@@ -74,7 +74,14 @@ _NPC_HULLS = {
     "massive_ship_fallen_empire": "titan",
     "ancient_corvette": "corvette",
     "ancient_destroyer": "destroyer",
+    # pirate and marauder hulls: size_multiplier (5/10/20/40) and slot size match the standard class
     "pirate_corvette": "corvette",
+    "pirate_destroyer": "destroyer",
+    "pirate_cruiser": "cruiser",
+    "marauder_corvette": "corvette",
+    "marauder_destroyer": "destroyer",
+    "marauder_cruiser": "cruiser",
+    "marauder_galleon": "battleship",
     "caravaneer_destroyer_01": "destroyer",
     "caravaneer_cruiser_01": "cruiser",
 }
@@ -135,6 +142,9 @@ class TimelineExtractor:
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.process_time()
         with datamodel.get_db_session(game_id=game_id, write=True) as self._session:
+            sqlalchemy.event.listen(
+                self._session, "before_flush", datamodel.drop_special_country_events
+            )
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
                 if self._check_if_gamestate_exists(db_game):
@@ -253,6 +263,18 @@ class TimelineExtractor:
         )
 
     def _identify_player_country(self):
+        player_country = self._find_player_country()
+        countries = self._gamestate_dict.get("country")
+        if player_country is not None and not (
+            isinstance(countries, dict) and isinstance(countries.get(player_country), dict)
+        ):
+            logger.warning(
+                f"Player country {player_country} is not in the gamestate, treating as no player"
+            )
+            return None
+        return player_country
+
+    def _find_player_country(self):
         players = self._gamestate_dict.get("player")
         if players:
             if len(players) == 1:
@@ -531,6 +553,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             secondary_color = flag_colors[1] if len(flag_colors) >= 2 else primary_color
             origin = country_data_dict.get("government", {}).get("origin")
             country_model = known_countries.get(country_id)
+            is_new_country = country_model is None
 
             if country_model is None or primary_color != country_model.primary_color or secondary_color != country_model.secondary_color:
                 clear_cached_country_colors()
@@ -563,6 +586,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                 country_model.secondary_color = secondary_color
                 country_model.origin = origin
                 self._session.add(country_model)
+            country_model.founded_in_gamestate = is_new_country
             self.countries_by_ingame_id[country_id] = country_model
 
 
@@ -682,9 +706,15 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             event_type = datamodel.HistoricalEventType.expanded_to_system
         elif system_model.country != current_owner:
             owner_changed = True
-            event_type = datamodel.HistoricalEventType.conquered_system
+            # Successor states, liberated empires and rebels take their systems when first seen
+            event_type = (
+                datamodel.HistoricalEventType.founded_with_system
+                if current_owner.founded_in_gamestate
+                else datamodel.HistoricalEventType.conquered_system
+            )
 
         if owner_changed:
+            had_owner = system_model.country is not None
             system_model.country = current_owner
             self._session.add(system_model)
 
@@ -694,7 +724,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 .order_by(datamodel.SystemOwnership.end_date_days.desc())
                 .first()
             )
-            if ownership is not None:
+            if ownership is not None and had_owner:
                 ownership.end_date_days = self._basic_info.date_in_days - 1
                 self._session.add(ownership)
 
@@ -1027,7 +1057,10 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             for attitude in attitudes:
                 if not isinstance(attitude, dict):
                     continue
-                if attitude.get("country") == self._basic_info.player_country_id:
+                if (
+                    self._basic_info.player_country_id is not None
+                    and attitude.get("country") == self._basic_info.player_country_id
+                ):
                     attitude_towards_player = attitude.get("attitude")
                     break
             attitude_towards_player = datamodel.Attitude.__members__.get(
@@ -1104,6 +1137,8 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             )
             country_data.net_biomass += resources.get("biomass", 0.0)
 
+            if not country.is_real_country():
+                continue  # only the totals are kept for special countries
             self._session.add(
                 datamodel.BudgetItem(
                     country_data=country_data,
@@ -1530,7 +1565,8 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                 self._gamestate_dict["galactic_object"].items()
             )
         ]
-        # colonies carried by ships (nomad arkships) are recorded as planets without a system
+        # colonies carried by ships (nomad arkships) are recorded as planets without a system;
+        # the system is set from the carrying ship's position below
         planets_by_system.append(
             (None, save_format.get_arkship_planet_ids(self._gamestate_dict))
         )
@@ -1543,6 +1579,10 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(planet_dict, dict):
                     continue
 
+                if save_format.is_arkship_planet_id(ingame_id):
+                    system_id = save_format.get_arkship_system_id(
+                        self._gamestate_dict, ingame_id
+                    )
                 if ingame_id not in self.planets_by_ingame_id:
                     system_model = systems_by_id.get(system_id)
                     self.planets_by_ingame_id[ingame_id] = self._add_planet_model(
@@ -1553,6 +1593,15 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
 
                 planet_model = self.planets_by_ingame_id[ingame_id]
                 was_updated = False
+                # an arkship keeps its last known system while in transit
+                arkship_system = (
+                    systems_by_id.get(system_id)
+                    if save_format.is_arkship_planet_id(ingame_id)
+                    else None
+                )
+                if arkship_system is not None and planet_model.system is not arkship_system:
+                    planet_model.system = arkship_system
+                    was_updated = True
                 was_updated |= self._update_countable_planet_attributes(
                     planet_model=planet_model,
                     entity_attribute_name="districts",
@@ -2559,6 +2608,8 @@ class PolicyProcessor(AbstractGamestateDataProcessor):
         rulers_dict = dependencies[RulerEventProcessor.ID]
 
         for country_id, country_model in countries_dict.items():
+            if not country_model.is_real_country():
+                continue
             current_stance_per_policy = self._get_current_policies(country_id)
 
             previous_policy_by_name = self._load_previous_policies(country_model)
@@ -3046,6 +3097,7 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
             if (
                 not isinstance(product_fluctuation, dict)
                 or country_id not in country_data_dict
+                or not country_data_dict[country_id].country.is_real_country()
             ):
                 continue
             for name, value in product_fluctuation.items():
@@ -3252,8 +3304,9 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
                     matching_event = self._get_matching_historical_event(
                         country_model, tech_name
                     )
-                    matching_event.end_date_days = self._basic_info.date_in_days - 1
-                    self._session.add(matching_event)
+                    if matching_event is not None:  # not stored for special countries
+                        matching_event.end_date_days = self._basic_info.date_in_days - 1
+                        self._session.add(matching_event)
                     tech_model = in_progress_techs[tech_name]
                     tech_model.is_completed = True
                     self._session.add(tech_model)
@@ -3772,6 +3825,15 @@ class WarProcessor(AbstractGamestateDataProcessor):
             )
 
 
+# country timeline events reporting a war result; True if data is [winner, loser]
+WAR_RESULT_EVENTS = {
+    "timeline_war_won": True,
+    "timeline_first_war_won": True,
+    "timeline_war_lost": False,
+    "timeline_first_war_lost": False,
+}
+
+
 @dataclasses.dataclass(frozen=True)
 class WarTruceCandidate:
     """The in-game country IDs of an unresolved war that can be matched to a truce."""
@@ -3829,6 +3891,98 @@ def match_truces_to_wars(
         )
         matches[truce_id] = best
         remaining.remove(best)
+    return matches
+
+
+@dataclasses.dataclass(frozen=True)
+class WarSidesCandidate:
+    """An unresolved war with the in-game country IDs on each side."""
+
+    war: Any
+    last_seen_days: int
+    attackers: frozenset
+    defenders: frozenset
+
+    @staticmethod
+    def from_war(war: datamodel.War) -> "WarSidesCandidate":
+        return WarSidesCandidate(
+            war=war,
+            last_seen_days=war.end_date_days or 0,
+            attackers=frozenset(
+                wp.country.country_id_in_game for wp in war.participants if wp.is_attacker
+            ),
+            defenders=frozenset(
+                wp.country.country_id_in_game
+                for wp in war.participants
+                if not wp.is_attacker
+            ),
+        )
+
+
+def _is_country_id(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
+    """Collect the (winner, loser, date_days) of all won/lost wars in the countries' timelines."""
+    results = set()
+    if not isinstance(countries, dict):
+        return results
+    for country in countries.values():
+        events = country.get("timeline_events") if isinstance(country, dict) else None
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            definition = event.get("definition")
+            data = event.get("data")
+            date = event.get("date")
+            if definition not in WAR_RESULT_EVENTS or not isinstance(date, str):
+                continue
+            if not isinstance(data, list) or len(data) < 2:
+                continue
+            if not (_is_country_id(data[0]) and _is_country_id(data[1])):
+                continue
+            try:
+                date_days = datamodel.date_to_days(date)
+            except ValueError:
+                continue
+            if WAR_RESULT_EVENTS[definition]:
+                results.add((data[0], data[1], date_days))
+            else:
+                results.add((data[1], data[0], date_days))
+    return results
+
+
+def match_results_to_wars(
+    results: Collection[Tuple[int, int, int]],
+    candidates: Collection[WarSidesCandidate],
+    current_days: int,
+) -> Dict[Any, Tuple[bool, int]]:
+    """Match unresolved wars to the won/lost results that ended them.
+
+    A result matches a war if it is dated after the war was last seen (and not after
+    the current date) and the winner and loser are on opposite sides of the war. The
+    earliest matching result is used, and each result resolves at most one war.
+    Returns {war: (attacker_won, end_date_days)}.
+    """
+    remaining = sorted(results, key=lambda r: r[2])
+    matches = {}
+    for candidate in sorted(candidates, key=lambda c: c.last_seen_days):
+        for result in remaining:
+            winner, loser, date_days = result
+            if not candidate.last_seen_days < date_days <= current_days:
+                continue
+            if winner in candidate.attackers and loser in candidate.defenders:
+                attacker_won = True
+            elif winner in candidate.defenders and loser in candidate.attackers:
+                attacker_won = False
+            else:
+                continue
+            matches[candidate.war] = (attacker_won, date_days)
+            remaining.remove(result)
+            break
     return matches
 
 
@@ -3900,7 +4054,28 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             self._history_add_peace_events(matching_war)
             self._session.add(matching_war)
 
-        # resolve the wars that are no longer in the save file and do not match any truce:
+        #  ...then based on the war results in the countries' timelines (wars won outright)
+        sides = [
+            WarSidesCandidate.from_war(w)
+            for w in unresolved_wars
+            if w.war_id not in resolved
+        ]
+        for war, (attacker_won, end_date) in match_results_to_wars(
+            collect_war_results(self._gamestate_dict.get("country")),
+            sides,
+            self._basic_info.date_in_days,
+        ).items():
+            resolved.add(war.war_id)
+            war.end_date_days = end_date
+            war.outcome = (
+                datamodel.WarOutcome.attacker_victory
+                if attacker_won
+                else datamodel.WarOutcome.defender_victory
+            )
+            self._history_add_peace_events(war)
+            self._session.add(war)
+
+        # resolve the wars that are no longer in the save file and have no known result:
         for war in unresolved_wars:
             if war.war_id in resolved:
                 continue
@@ -3980,6 +4155,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         if not isinstance(pop_groups_dict, dict):
             pop_groups_dict = {}
         for country_id_in_game, country_model in countries_dict.items():
+            if not country_model.is_real_country():
+                continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}
             stats_by_faction = {}

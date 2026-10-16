@@ -289,13 +289,16 @@ def lookup_key(key: str) -> str:
 
 
 @functools.lru_cache(maxsize=2**12)
-def lookup_id_name(object_id: str, remove_prefix: str = "") -> str:
+def lookup_id_name(
+    object_id: str, remove_prefix: str = "", loc_prefix: str = ""
+) -> str:
     """
     Localised name for a game object ID (building, district, ...), falling back to a
     prettified version of the ID if the game's localisation has no entry for it.
+    loc_prefix is prepended to the ID for IDs stored without their localisation prefix.
     """
     mapping = get_global_renderer().name_mapping
-    for key in (object_id, f"{object_id}_name"):
+    for key in (f"{loc_prefix}{object_id}", f"{loc_prefix}{object_id}_name"):
         if key in mapping:
             localised = lookup_key(key)
             if localised:

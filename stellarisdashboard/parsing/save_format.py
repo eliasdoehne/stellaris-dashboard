@@ -77,6 +77,29 @@ def _get_ship_carried_colony(gamestate: Dict[str, Any], colony_id) -> Optional[D
     return None
 
 
+def _get_carrying_ship(gamestate: Dict[str, Any], colony: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    ships = gamestate.get("ships")
+    if not isinstance(ships, dict):
+        return None
+    ship = ships.get(_as_id(colony["carrier"].get("reference")))
+    return ship if isinstance(ship, dict) else None
+
+
+def get_arkship_system_id(gamestate: Dict[str, Any], planet_id) -> Optional[int]:
+    """
+    Return the ID of the system that the ship carrying an arkship colony is in, or None if the
+    ship is in transit (its coordinate origin is not a system) or cannot be found.
+    """
+    colony = _get_ship_carried_colony(gamestate, -1 - planet_id)
+    ship = _get_carrying_ship(gamestate, colony) if colony is not None else None
+    coordinate = ship.get("coordinate") if ship is not None else None
+    system_id = _as_id(coordinate.get("origin")) if isinstance(coordinate, dict) else None
+    systems = gamestate.get("galactic_object")
+    if isinstance(systems, dict) and system_id in systems:
+        return system_id
+    return None
+
+
 def resolve_colony_to_planet_id(gamestate: Dict[str, Any], colony_id) -> Optional[int]:
     """
     Map an ID taken from a field that holds colony IDs since 4.4 (``country.owned_planets``,
@@ -128,9 +151,12 @@ def get_planet(gamestate: Dict[str, Any], planet_id) -> Optional[Dict[str, Any]]
         if colony is None:
             return None
         result = {**colony, "planet_class": ARKSHIP_PLANET_CLASS}
-        ship = (gamestate.get("ships") or {}).get(_as_id(colony["carrier"].get("reference")))
+        ship = _get_carrying_ship(gamestate, colony)
+        # the colony has no colonize_date of its own, the carrying ship has
+        if ship is not None and ship.get("colonize_date"):
+            result["colonize_date"] = ship["colonize_date"]
         fleet = None
-        if isinstance(ship, dict):
+        if ship is not None:
             fleet = (gamestate.get("fleet") or {}).get(_as_id(ship.get("fleet")))
         if isinstance(fleet, dict) and "name" in fleet:
             result["name"] = fleet["name"]

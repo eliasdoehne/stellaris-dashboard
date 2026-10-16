@@ -193,6 +193,8 @@ class WarOutcome(enum.Enum):
     in_progress = enum.auto()
     truce = enum.auto()
     resolution_unknown = enum.auto()
+    attacker_victory = enum.auto()
+    defender_victory = enum.auto()
 
     def __str__(self):
         return game_info.convert_id_to_name(self.name)
@@ -288,6 +290,7 @@ class HistoricalEventType(enum.Enum):
     army_combat = enum.auto()
     conquered_system = enum.auto()
     lost_system = enum.auto()
+    founded_with_system = enum.auto()
 
     # more leader events
     leader_changed_ethic = enum.auto()
@@ -354,6 +357,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.edict,
             HistoricalEventType.conquered_system,
             HistoricalEventType.lost_system,
+            HistoricalEventType.founded_with_system,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -367,6 +371,32 @@ class HistoricalEventType(enum.Enum):
         }:
             return HistoricalEventScope.system
         return HistoricalEventScope.all
+
+
+# Routine events that are not stored for special (non-"real") countries, see drop_special_country_events.
+SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES = frozenset(
+    {
+        HistoricalEventType.new_policy,
+        HistoricalEventType.changed_policy,
+        HistoricalEventType.leader_recruited,
+        HistoricalEventType.leader_died,
+        HistoricalEventType.level_up,
+        HistoricalEventType.gained_trait,
+        HistoricalEventType.lost_trait,
+        HistoricalEventType.ruled_empire,
+        HistoricalEventType.governed_sector,
+        HistoricalEventType.councilor,
+        HistoricalEventType.faction_leader,
+        HistoricalEventType.fleet_command,
+        HistoricalEventType.researched_technology,
+        HistoricalEventType.tradition,
+        HistoricalEventType.ascension_perk,
+        HistoricalEventType.edict,
+        HistoricalEventType.agenda_preparation,
+        HistoricalEventType.agenda_launch,
+        HistoricalEventType.leader_left_country,
+    }
+)
 
 
 def date_to_days(date_str: str) -> int:
@@ -724,6 +754,9 @@ class Country(Base):
     primary_color = Column(String(80))
     secondary_color = Column(String(80))
     origin = Column(String(80))
+
+    # Not persisted: set by CountryProcessor for countries first seen in the current gamestate
+    founded_in_gamestate = False
 
     game = relationship("Game", back_populates="countries")
     capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)
@@ -1612,7 +1645,7 @@ class Planet(Base):
     planet_class = Column(String(20))
     # negative for the pseudo-planets of nomad arkship colonies, see save_format.arkship_planet_id
     planet_id_in_game = Column(Integer, index=True)
-    # null for arkship colonies, because the save data used here does not say which system a ship is in
+    # for arkship colonies, the last known system of the carrying ship (null if never known)
     system_id = Column(ForeignKey(System.system_id), nullable=True, index=True)
     colonized_date = Column(Integer)
 
@@ -1991,3 +2024,24 @@ class HistoricalEvent(Base):
             yield self.target_country
         if self.combat_id is not None:
             yield from self.combat.involved_countries()
+
+
+def drop_special_country_events(session, flush_context, instances):
+    """before_flush hook: discard pending routine events of special countries."""
+    for obj in list(session.new):
+        if (
+            not isinstance(obj, HistoricalEvent)
+            or obj.event_type not in SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES
+        ):
+            continue
+        country = obj.country
+        if country is None and obj.country_id is not None:
+            country = session.get(Country, obj.country_id)
+        if country is None or country.is_real_country():
+            continue
+        # detach from the back-populated collections so the flush doesn't see them
+        for rel in ("country", "leader", "system", "planet", "faction"):
+            if rel in obj.__dict__:
+                setattr(obj, rel, None)
+        if obj in session:  # detaching may already have expunged it
+            session.expunge(obj)

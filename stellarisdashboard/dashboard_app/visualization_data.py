@@ -64,12 +64,17 @@ def get_plot_specifications_for_tab_layout():
     }
 
 
+# Unknown graph IDs already warned about, so the per-request lookup logs each only once.
+_WARNED_UNKNOWN_PLOT_IDS: Set[str] = set()
+
+
 def _filter_known_plot_ids(tab: str, plot_ids: Iterable[str]) -> List[str]:
     known = []
     for plot_id in plot_ids:
         if plot_id in PLOT_SPECIFICATIONS:
             known.append(plot_id)
-        else:
+        elif plot_id not in _WARNED_UNKNOWN_PLOT_IDS:
+            _WARNED_UNKNOWN_PLOT_IDS.add(plot_id)
             logger.warning(f"Ignoring unknown graph ID {plot_id} in tab {tab}")
     return known
 
@@ -751,7 +756,7 @@ class BudgetSumDataContainer(AbstractPerCountryDataContainer, abc.ABC):
     def _get_value_from_countrydata(
         self, cd: datamodel.CountryData
     ) -> Union[None, float]:
-        if cd.show_economic_info():
+        if cd.show_economic_info() and cd.budget:  # no items for special countries
             return sum(self.function_from_budgetitem(bi) for bi in cd.budget)
 
 
@@ -879,7 +884,10 @@ class AbstractPopStatsByJobDataContainer(AbstractPopStatsDataContainer, abc.ABC)
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByJob)
-        return ps.job_description
+        key = ps.job_description
+        if key not in self.key_labels:
+            self.key_labels[key] = game_info.lookup_id_name(key, loc_prefix="job_")
+        return key
 
 
 class JobDistributionDataContainer(AbstractPopStatsByJobDataContainer):
@@ -960,7 +968,10 @@ class AbstractPopStatsByEthosDataContainer(AbstractPopStatsDataContainer, abc.AB
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByEthos)
-        return ps.ethos
+        key = ps.ethos
+        if key not in self.key_labels:
+            self.key_labels[key] = game_info.lookup_id_name(key, "ethic")
+        return key
 
 
 class EthosDistributionDataContainer(AbstractPopStatsByEthosDataContainer):
@@ -993,7 +1004,10 @@ class AbstractPopStatsByStratumDataContainer(AbstractPopStatsDataContainer, abc.
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByStratum)
-        return ps.stratum
+        key = ps.stratum
+        if key not in self.key_labels:
+            self.key_labels[key] = game_info.lookup_id_name(key, loc_prefix="pop_cat_")
+        return key
 
 
 class StratumDistributionDataContainer(AbstractPopStatsByStratumDataContainer):

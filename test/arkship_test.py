@@ -8,7 +8,7 @@ from stellarisdashboard.parsing import save_format, timeline
 # Minimal 4.5 gamestate with one real planet (colony 0) and one nomad arkship colony (colony 1)
 GAMESTATE = {
     "date": "2300.01.01",
-    "galactic_object": {10: {"planet": [3]}},
+    "galactic_object": {10: {"planet": [3]}, 11: {}},
     "planets": {
         "planet": {
             3: {"planet_class": "pc_continental", "name": {"key": "Earth"}, "colony": 0}
@@ -23,7 +23,9 @@ GAMESTATE = {
             "free_housing": 3.0,
         },
     },
-    "ships": {12: {"fleet": 20}},
+    "ships": {
+        12: {"fleet": 20, "coordinate": {"origin": 11, "x": 1.0, "y": 2.0}, "colonize_date": "2250.03.04"}
+    },
     "fleet": {20: {"name": {"key": "Ark One"}, "ships": [12]}},
     "country": {0: {"owned_planets": [0, 1], "capital": 1}},
     "pop_groups": {
@@ -46,8 +48,11 @@ def session(tmp_path, monkeypatch):
     (tmp_path / "db").mkdir()
     with datamodel.get_db_session("arkship_test", write=True) as session:
         yield session
-    # the cache would otherwise hand descriptions of this session to later tests
+    # the cached description and engine would otherwise carry this test's rows into later tests
     timeline._shared_description_cache.clear()
+    datamodel._ENGINES.pop("arkship_test").dispose()
+    datamodel._SESSIONMAKERS.pop("arkship_test")
+    datamodel._DB_LOCKS.pop("arkship_test")
 
 
 class Save:
@@ -79,13 +84,22 @@ class Save:
         system = (
             self.session.query(datamodel.System).filter_by(system_id_in_game=10).first()
         )
+        other = (
+            self.session.query(datamodel.System).filter_by(system_id_in_game=11).first()
+        )
         if system is None:
             system = datamodel.System(
                 game=self.game, system_id_in_game=10, name="{}", star_class="sc_g"
             )
             self.session.add(system)
             self.session.flush()
-        systems = {"systems_by_ingame_id": {10: system}}
+        if other is None:
+            other = datamodel.System(
+                game=self.game, system_id_in_game=11, name="{}", star_class="sc_g"
+            )
+            self.session.add(other)
+            self.session.flush()
+        systems = {"systems_by_ingame_id": {10: system, 11: other}}
         planets = self.run(
             timeline.PlanetProcessor(), {timeline.SystemProcessor.ID: systems}
         )
@@ -112,7 +126,8 @@ def test_arkship_planet_created_and_updated_not_duplicated(session):
     assert set(planets) == {3, ARKSHIP_ID}
     ark = planets[ARKSHIP_ID]
     assert ark.planet_class == save_format.ARKSHIP_PLANET_CLASS
-    assert ark.system is None
+    assert ark.system.system_id_in_game == 11
+    assert ark.colonized_date == datamodel.date_to_days("2250.03.04")
     assert ark.planet_name == '{"key": "Ark One"}'
     assert planets[3].system is not None
     session.commit()
@@ -128,6 +143,38 @@ def test_arkship_planet_created_and_updated_not_duplicated(session):
     assert session.query(datamodel.Planet).count() == 2
 
 
+def test_arkship_system_follows_ship_and_is_kept_in_transit(session):
+    planets = Save(session, GAMESTATE, 100).planets()
+    session.commit()
+
+    moved = copy.deepcopy(GAMESTATE)
+    moved["ships"][12]["coordinate"]["origin"] = 10
+    planets = Save(session, moved, 130).planets()
+    assert planets[ARKSHIP_ID].system.system_id_in_game == 10
+
+    # origin is not a system while in transit, or the ship / coordinate is missing or odd
+    for odd in (4294967295, 999, None, "x"):
+        moved["ships"][12]["coordinate"]["origin"] = odd
+        assert Save(session, moved, 140).planets()[ARKSHIP_ID].system.system_id_in_game == 10
+    for odd in ({}, None, "x", {12: "x"}):
+        broken = copy.deepcopy(moved)
+        if isinstance(odd, dict) and 12 in odd:
+            broken["ships"] = odd
+        elif isinstance(odd, dict):
+            broken["ships"][12].pop("coordinate")
+        else:
+            broken["ships"][12]["coordinate"] = odd
+        assert Save(session, broken, 150).planets()[ARKSHIP_ID].system.system_id_in_game == 10
+
+
+def test_arkship_without_known_system_has_none(session):
+    gamestate = copy.deepcopy(GAMESTATE)
+    gamestate["ships"] = {}
+    ark = Save(session, gamestate, 100).planets()[ARKSHIP_ID]
+    assert ark.system is None
+    assert ark.colonized_date is None
+
+
 def test_arkship_pseudo_planet_is_dropped_with_its_colony(session):
     Save(session, GAMESTATE, 100).planets()
     gone = copy.deepcopy(GAMESTATE)
@@ -139,7 +186,8 @@ def test_arkship_pseudo_planet_is_dropped_with_its_colony(session):
 
 def _country(session, save):
     country = datamodel.Country(
-        game=save.game, country_id_in_game=0, country_name="Nomads"
+        game=save.game, country_id_in_game=0, country_name="Nomads",
+        country_type="default",
     )
     session.add(country)
     session.flush()
@@ -173,7 +221,7 @@ def test_arkship_is_capital_without_spurious_relocations(session):
     assert _capital_relocations(session) == []
 
 
-def test_relocating_capital_to_arkship_adds_one_event_without_system(session):
+def test_relocating_capital_to_arkship_adds_one_event_in_the_ships_system(session):
     save = Save(session, GAMESTATE, 100)
     planets = save.planets()
     country = _country(session, save)
@@ -190,7 +238,7 @@ def test_relocating_capital_to_arkship_adds_one_event_without_system(session):
     events = _capital_relocations(session)
     assert len(events) == 1
     assert events[0].planet is planets[ARKSHIP_ID]
-    assert events[0].system is None
+    assert events[0].system.system_id_in_game == 11
 
 
 def test_arkship_planet_stats(session):
