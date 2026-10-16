@@ -64,12 +64,17 @@ def get_plot_specifications_for_tab_layout():
     }
 
 
+# Unknown graph IDs already warned about, so the per-request lookup logs each only once.
+_WARNED_UNKNOWN_PLOT_IDS: Set[str] = set()
+
+
 def _filter_known_plot_ids(tab: str, plot_ids: Iterable[str]) -> List[str]:
     known = []
     for plot_id in plot_ids:
         if plot_id in PLOT_SPECIFICATIONS:
             known.append(plot_id)
-        else:
+        elif plot_id not in _WARNED_UNKNOWN_PLOT_IDS:
+            _WARNED_UNKNOWN_PLOT_IDS.add(plot_id)
             logger.warning(f"Ignoring unknown graph ID {plot_id} in tab {tab}")
     return known
 
