@@ -12,6 +12,8 @@ from typing import List, Dict, Any
 
 import yaml
 
+from stellarisdashboard import legacy_config_defaults
+
 LOG_LEVELS = {
     "CRITICAL": logging.CRITICAL,
     "ERROR": logging.ERROR,
@@ -219,6 +221,38 @@ DEFAULT_SETTINGS = dict(
 )
 
 
+def _comparable_setting(key, value):
+    """
+    Bring a setting into a form in which it can be compared to a default value.
+
+    For tab layouts, the graph list of the Markets tab is blanked, because it is filled
+    dynamically from the market resources and is ignored when applying the settings.
+    The tab order and the order of the graphs in each tab are kept, because the
+    dashboard displays them in that order (so a reordered layout is a customization).
+    """
+    if key == "tab_layout" and isinstance(value, dict):
+        return [
+            (tab, [] if tab == MARKET_TAB else graphs) for tab, graphs in value.items()
+        ]
+    return value
+
+
+def _is_legacy_default(key, value):
+    """True if value was the default for this setting in some previous version."""
+    legacy_values = {
+        "tab_layout": legacy_config_defaults.LEGACY_TAB_LAYOUTS,
+        "market_resources": legacy_config_defaults.LEGACY_MARKET_RESOURCES,
+    }[key]
+    value = _comparable_setting(key, value)
+    return any(value == _comparable_setting(key, legacy) for legacy in legacy_values)
+
+
+def _is_current_default(key, value):
+    return _comparable_setting(key, value) == _comparable_setting(
+        key, DEFAULT_SETTINGS[key]
+    )
+
+
 @dataclasses.dataclass
 class Config:
     """Stores the settings for the dashboard."""
@@ -307,6 +341,10 @@ class Config:
         "tab_layout",
     }
     LIST_KEYS = {"market_resources", "market_fee"}
+    # These settings are only written to config.yml if they were customized. Otherwise
+    # the file would freeze the defaults of the version that created it, hiding
+    # changes to the defaults (e.g. newly added graphs) from existing installs.
+    ONLY_PERSISTED_IF_CUSTOMIZED_KEYS = {"tab_layout", "market_resources"}
     ALL_KEYS = (
         PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
     )
@@ -393,6 +431,10 @@ class Config:
         logger.info(f"Writing settings to {fname}")
         with open(fname, "w") as f:
             settings_dict = self.get_dict()
+            for key in Config.ONLY_PERSISTED_IF_CUSTOMIZED_KEYS:
+                value = settings_dict[key]
+                if _is_current_default(key, value) or _is_legacy_default(key, value):
+                    del settings_dict[key]
             yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
 
     def get_dict(self):
@@ -529,6 +571,13 @@ def _apply_existing_settings(config: Config):
         logger.info(f"Reading settings from {settings_file}...")
         with open(settings_file, "r") as f:
             file_settings = yaml.load(f, Loader=yaml.SafeLoader) or {}
+            for key in Config.ONLY_PERSISTED_IF_CUSTOMIZED_KEYS:
+                if key in file_settings and _is_legacy_default(key, file_settings[key]):
+                    logger.info(
+                        f"Ignoring stored setting {key}: it is an outdated default, "
+                        f"using the current default instead."
+                    )
+                    del file_settings[key]
             settings.update(file_settings)
     config.apply_dict(settings)
 
