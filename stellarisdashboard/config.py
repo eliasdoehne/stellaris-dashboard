@@ -145,7 +145,6 @@ DEFAULT_TAB_LAYOUT = {
     ],
     "Science": [
         "technology_progress_graph",
-        "survey_progress_graph",
         "research_output_graph",
         "research_output_by_category_graph",
     ],

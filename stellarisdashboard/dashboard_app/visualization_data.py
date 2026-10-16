@@ -59,9 +59,19 @@ class PlotSpecification:
 
 def get_plot_specifications_for_tab_layout():
     return {
-        tab: [PLOT_SPECIFICATIONS[plot] for plot in plots]
+        tab: [PLOT_SPECIFICATIONS[plot] for plot in _filter_known_plot_ids(tab, plots)]
         for tab, plots in config.CONFIG.tab_layout.items()
     }
+
+
+def _filter_known_plot_ids(tab: str, plot_ids: Iterable[str]) -> List[str]:
+    known = []
+    for plot_id in plot_ids:
+        if plot_id in PLOT_SPECIFICATIONS:
+            known.append(plot_id)
+        else:
+            logger.warning(f"Ignoring unknown graph ID {plot_id} in tab {tab}")
+    return known
 
 
 # The PlotDataManager is cached in memory for each "active" game
@@ -391,12 +401,6 @@ class TechCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if _override_visibility(cd) or cd.show_tech_info():
             return cd.tech_count
-
-
-class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if _override_visibility(cd) or cd.show_tech_info():
-            return cd.exploration_progress
 
 
 class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
@@ -1077,12 +1081,6 @@ RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     data_container_factory=TotalScienceOutputDataContainer,
     style=PlotStyle.line,
 )
-SURVEY_PROGRESS_GRAPH = PlotSpecification(
-    plot_id="survey-count",
-    title="Surveyed Planets",
-    data_container_factory=ExploredSystemsCountDataContainer,
-    style=PlotStyle.line,
-)
 MILITARY_POWER_GRAPH = PlotSpecification(
     plot_id="military-power",
     title="Military Strength",
@@ -1565,7 +1563,6 @@ PLOT_SPECIFICATIONS = {
     "planet_crime_graph": PLANET_CRIME_GRAPH,
     "planet_power_graph": PLANET_POWER_GRAPH,
     "technology_progress_graph": TECHNOLOGY_PROGRESS_GRAPH,
-    "survey_progress_graph": SURVEY_PROGRESS_GRAPH,
     "research_output_graph": RESEARCH_OUTPUT_GRAPH,
     "research_output_by_category_graph": RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
     "fleet_size_graph": FLEET_SIZE_GRAPH,

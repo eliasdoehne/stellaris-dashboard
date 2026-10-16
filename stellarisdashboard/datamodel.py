@@ -1092,6 +1092,7 @@ class CountryData(Base):
     empire_cohesion = Column(Float)
 
     tech_count = Column(Integer)
+    # Unused since Stellaris 4.x (the survey data is gone), kept for existing databases
     exploration_progress = Column(Integer)
     owned_planets = Column(Integer)
     controlled_systems = Column(Integer)

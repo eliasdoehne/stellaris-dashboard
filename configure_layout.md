@@ -53,7 +53,6 @@ Graphs that are enabled by default:
 - `technology_progress_graph`
 - `research_output_by_category_graph`
 - `research_output_graph`
-- `survey_progress_graph`
 - `military_power_graph`
 - `fleet_size_graph`
 - `fleet_composition_graph`

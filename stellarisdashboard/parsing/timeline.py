@@ -949,7 +949,6 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 empire_size=country_data_dict.get("empire_size", 0),
                 empire_cohesion=country_data_dict.get("empire_cohesion", 0),
                 tech_count=tech_count,
-                exploration_progress=len(country_data_dict.get("surveyed", [])),
                 owned_planets=len(country_data_dict.get("owned_planets", [])),
                 controlled_systems=len(systems_by_country_id.get(country_id, [])),
                 victory_rank=country_data_dict.get("victory_rank", 0),
