@@ -960,7 +960,10 @@ class AbstractPopStatsByEthosDataContainer(AbstractPopStatsDataContainer, abc.AB
 
     def _get_key_from_popstats(self, ps: PopStatsType) -> str:
         assert isinstance(ps, datamodel.PopStatsByEthos)
-        return ps.ethos
+        key = ps.ethos
+        if key not in self.key_labels:
+            self.key_labels[key] = game_info.lookup_id_name(key, "ethic")
+        return key
 
 
 class EthosDistributionDataContainer(AbstractPopStatsByEthosDataContainer):

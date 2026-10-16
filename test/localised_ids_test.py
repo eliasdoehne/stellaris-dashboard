@@ -78,3 +78,11 @@ def test_faction_name(fixture_renderer, faction_name, expected):
 )
 def test_faction_type(fixture_renderer, faction_type, expected):
     assert game_info.lookup_faction_type(faction_type) == expected
+
+
+def test_ethic_found_in_localisation(fixture_renderer):
+    assert game_info.lookup_id_name("ethic_xenophile", "ethic") == "Xenophile"
+
+
+def test_ethic_without_localisation_falls_back_to_prettified_id(fixture_renderer):
+    assert game_info.lookup_id_name("ethic_no_ethos", "ethic") == "No Ethos"
