@@ -396,6 +396,16 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% endif %}\n'
         '                    {{event["description"]}}\n',
     ),
+    "empire_renamed": EventDescriptor(
+        Category.STATECRAFT, Tier.ROUTINE, "gavel", POINT,
+        '\n'
+        '                    {% if "leader" in event %}\n'
+        '                    {{ render_leader(event) }} renamed the {{ links[event["country"]] | safe }}\n'
+        '                    {% else %}\n'
+        '                    The {{ links[event["country"]] | safe }} was renamed\n'
+        '                    {% endif %}\n'
+        '                    {{event["description"]}}.\n',
+    ),
     "species_rights_reform": EventDescriptor(Category.STATECRAFT, Tier.MAJOR, "gavel"),
     "new_faction": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "faction", POINT,

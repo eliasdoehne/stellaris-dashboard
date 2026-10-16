@@ -2463,6 +2463,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
             authority = gov_dict.get("authority", "other")
             gov_type = gov_dict.get("type", "other")
             gov_was_reformed = False
+            empire_was_renamed = False
 
             prev_gov = (
                 self._session.query(datamodel.Government)
@@ -2497,11 +2498,12 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                 gov_was_reformed = (
                     (ethics != previous_ethics)
                     or (civics != previous_civics)
-                    or (gov_name != prev_gov.gov_name)
+                    or (authority != prev_gov.authority)
                     or (gov_type != prev_gov.gov_type)
                 )
+                empire_was_renamed = gov_name != prev_gov.gov_name
                 # nothing has changed...
-                if not gov_was_reformed:
+                if not (gov_was_reformed or empire_was_renamed):
                     continue
 
             ethics = dict(zip([f"ethics_{i}" for i in range(1, 6)], sorted(ethics)))
@@ -2525,6 +2527,21 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                         event_type=datamodel.HistoricalEventType.government_reform,
                         country=country_model,
                         leader=rulers_dict.get(country_id),
+                        start_date_days=self._basic_info.date_in_days,
+                        end_date_days=self._basic_info.date_in_days,
+                        event_is_known_to_player=country_model.has_met_player(),
+                    )
+                )
+            if empire_was_renamed:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.empire_renamed,
+                        country=country_model,
+                        leader=rulers_dict.get(country_id),
+                        # The names are JSON, which never contains a raw newline
+                        db_description=self._get_or_add_shared_description(
+                            f"{prev_gov.gov_name}\n{gov_name}"
+                        ),
                         start_date_days=self._basic_info.date_in_days,
                         end_date_days=self._basic_info.date_in_days,
                         event_is_known_to_player=country_model.has_met_player(),

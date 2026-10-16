@@ -247,6 +247,7 @@ class HistoricalEventType(enum.Enum):
     # related to internal politics:
     new_faction = enum.auto()
     government_reform = enum.auto()
+    empire_renamed = enum.auto()
     species_rights_reform = enum.auto()  # TODO
     new_policy = enum.auto()
     changed_policy = enum.auto()
@@ -304,6 +305,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.megastructure_construction,
             HistoricalEventType.new_faction,
             HistoricalEventType.government_reform,
+            HistoricalEventType.empire_renamed,
             HistoricalEventType.species_rights_reform,
             HistoricalEventType.first_contact,
             HistoricalEventType.non_aggression_pact,
@@ -1919,6 +1921,9 @@ class HistoricalEvent(Base):
             ]
             ref = " ".join(reform_lines)
             return ref
+        elif self.event_type == HistoricalEventType.empire_renamed:
+            old_name, new_name = self.db_description.text.split("\n")
+            return f"from {game_info.render_name(old_name)} to {game_info.render_name(new_name)}"
         elif self.event_type == HistoricalEventType.terraforming:
             current_pc, target_pc = self.db_description.text.split(",")
             current_pc = game_info.lookup_key(current_pc)
