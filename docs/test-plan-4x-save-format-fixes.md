@@ -106,7 +106,7 @@ If you want clean history, re-import the game from scratch instead.
 |---|---|---|
 | F1 | 1. Districts | Non-empty. City, mining, generator and farming appear in plausible totals. |
 | F2 | 2. Buildings | Non-empty. Capital buildings appear. |
-| F3 | 3. Fleet composition | Non-zero once you have military ships. Matches the fleet manager (frigates excluded). |
+| F3 | 3. Fleet composition | Non-zero once you have military ships. Matches the fleet manager. |
 | F4 | 4. Strategic budgets | Non-zero whenever the game shows living metal, zro or dark matter income or upkeep. |
 | F5 | 8. Faction support | Support > 0 for your factions. Matches in-game % ÷ 100. |
 | F6 | 5. Capital | The planet class is a real planet type, not a star (`pc_*_star`). |
@@ -203,7 +203,6 @@ Names in the output are raw localisation keys (for example `{"key": "SPEC_Alari_
 
 ## 7. Known limitations (not failures)
 
-- **Frigates** are not counted in fleet composition. This needs a new DB column and is a separate change.
 - **Zones and district specializations** (4.0) are not stored. Only districts and buildings are.
 - **History is not backfilled** in existing DBs. See Phase 4.
 - **Nomad arkship colonies** are recorded as planets of class `pc_ark` with a negative in-game ID and no system, because the save data read here does not say which system the ship is in. They show up in the planet graphs and as the capital, but not on the galaxy map.
