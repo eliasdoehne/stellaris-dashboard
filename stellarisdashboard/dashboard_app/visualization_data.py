@@ -59,9 +59,19 @@ class PlotSpecification:
 
 def get_plot_specifications_for_tab_layout():
     return {
-        tab: [PLOT_SPECIFICATIONS[plot] for plot in plots]
+        tab: [PLOT_SPECIFICATIONS[plot] for plot in _filter_known_plot_ids(tab, plots)]
         for tab, plots in config.CONFIG.tab_layout.items()
     }
+
+
+def _filter_known_plot_ids(tab: str, plot_ids: Iterable[str]) -> List[str]:
+    known = []
+    for plot_id in plot_ids:
+        if plot_id in PLOT_SPECIFICATIONS:
+            known.append(plot_id)
+        else:
+            logger.warning(f"Ignoring unknown graph ID {plot_id} in tab {tab}")
+    return known
 
 
 # The PlotDataManager is cached in memory for each "active" game
@@ -99,12 +109,13 @@ def get_current_execution_plot_data(
 
 
 def get_color_vals(
-    game_id: str, key_str: str, range_min: float = 0.1, range_max: float = 1.0
+    game_id: str, key: Union[str, int], range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
-    """Generate RGB values for the given identifier. Some special values (tech categories)
-    have hardcoded colors to roughly match the game's look and feel.
+    """Generate RGB values for the given identifier. An int identifies a country by its
+    in-game ID (names are not unique, e.g. an Astral Planes mirrored empire shares its original's name).
+    Some special string values (tech categories) have hardcoded colors to roughly match the game's look and feel.
 
-    For unknown identifiers, a random color is generated, with the key_str being applied as a seed to
+    For unknown identifiers, a random color is generated, with the key being applied as a seed to
     the random number generator. This makes colors consistent across figures and executions.
     """
     if game_id not in GAME_COUNTRY_COLORS:
@@ -114,7 +125,13 @@ def get_color_vals(
     else:
         country_colors = GAME_COUNTRY_COLORS[game_id]
 
-    if key_str.lower() == "physics":
+    key_str = str(key)
+    if isinstance(key, int):
+        if country_colors.has_color_for_country(key):
+            r, g, b = country_colors.get_color_by_country(key)
+        else:
+            r, g, b = _random_color(f"country_{key}")
+    elif key_str.lower() == "physics":
         r, g, b = COLOR_PHYSICS
     elif key_str.lower() == "society":
         r, g, b = COLOR_SOCIETY
@@ -126,19 +143,19 @@ def get_color_vals(
         r, g, b = 255, 0, 0
     elif key_str.endswith("internal_market"):
         r, g, b = 0, 0, 255
-    elif country_colors.has_color_for_name(key_str):
-        r, g, b = country_colors.get_color_by_name(key_str)
     else:
-        # local RNG seeded on the key: deterministic per identifier without
-        # perturbing the global random state that other code relies on
-        rng = random.Random(key_str)
-        h = rng.uniform(0, 1)
-        l = rng.uniform(0.4, 0.6)
-        s = rng.uniform(0.5, 1)
-        r, g, b = map(
-            lambda x: 255 * (x if x > 0.01 else 0), colorsys.hls_to_rgb(h, l, s)
-        )
+        r, g, b = _random_color(key_str)
     return r, g, b
+
+
+def _random_color(seed: str) -> Tuple[float, float, float]:
+    # local RNG seeded on the key: deterministic per identifier without
+    # perturbing the global random state that other code relies on
+    rng = random.Random(seed)
+    h = rng.uniform(0, 1)
+    l = rng.uniform(0.4, 0.6)
+    s = rng.uniform(0.5, 1)
+    return tuple(255 * (x if x > 0.01 else 0) for x in colorsys.hls_to_rgb(h, l, s))
 
 
 class PlotDataManager:
@@ -176,10 +193,10 @@ class PlotDataManager:
 
         self.data_containers_by_plot_id = {}
         for plot_spec in self.plot_specifications:
-            self.data_containers_by_plot_id[
-                plot_spec.plot_id
-            ] = plot_spec.data_container_factory(
-                self.country_perspective, **plot_spec.data_container_factory_kwargs
+            self.data_containers_by_plot_id[plot_spec.plot_id] = (
+                plot_spec.data_container_factory(
+                    self.country_perspective, **plot_spec.data_container_factory_kwargs
+                )
             )
 
     @property
@@ -240,10 +257,12 @@ class PlotDataManager:
 
     def get_data_for_plot(
         self, ps: PlotSpecification
-    ) -> Iterable[Tuple[str, List[int], List[float]]]:
+    ) -> Iterable[Tuple[Union[str, int], str, List[int], List[float]]]:
         """
         Used to access the raw data for the provided plot specification. Individual traces to be plotted are
-        yielded one-by-one as tuples in the form (legend key_object, x values, y values).
+        yielded one-by-one as tuples in the form (key, legend label, x values, y values). The key identifies
+        the trace (for per-country plots, the country's in-game ID) and is used for assigning colors;
+        the label is the text to display.
 
         :param ps:
         :return:
@@ -260,12 +279,16 @@ class AbstractPlotDataContainer(abc.ABC):
 
     def __init__(self, country_perspective: Optional[int], **kwargs):
         self.dates: List[float] = []
-        self.data_dict: Dict[str, List[float]] = {}
+        self.data_dict: Dict[Union[str, int], List[float]] = {}
+        # display text for keys that are not themselves the label (e.g. country IDs)
+        self.key_labels: Dict[Union[str, int], str] = {}
         self._country_perspective = country_perspective
 
-    def iterate_traces(self) -> Iterable[Tuple[str, List[int], List[float]]]:
+    def iterate_traces(
+        self,
+    ) -> Iterable[Tuple[Union[str, int], str, List[int], List[float]]]:
         for key, values in self.data_dict.items():
-            yield key, self.dates, values
+            yield key, self.key_labels.get(key, key), self.dates, values
 
     def _add_new_value_to_data_dict(self, key, new_val, default_val=DEFAULT_VAL):
         if key not in self.data_dict:
@@ -304,9 +327,13 @@ class AbstractPerCountryDataContainer(AbstractPlotDataContainer, abc.ABC):
                 new_val = self._get_value_from_countrydata(cd)
                 if new_val is not None:
                     added_new_val = True
-                    # render the name only for countries that pass the filters
+                    # names are not unique (e.g. mirrored empires), so key on the ID
+                    # and keep the name as the label. Render it only for countries
+                    # that pass the filters
+                    key = cd.country.country_id_in_game
+                    self.key_labels[key] = cd.country.rendered_name
                     self._add_new_value_to_data_dict(
-                        cd.country.rendered_name, new_val, default_val=self.DEFAULT_VAL
+                        key, new_val, default_val=self.DEFAULT_VAL
                     )
             except Exception:
                 logger.exception(
@@ -391,12 +418,6 @@ class TechCountDataContainer(AbstractPerCountryDataContainer):
     def _get_value_from_countrydata(self, cd: datamodel.CountryData):
         if _override_visibility(cd) or cd.show_tech_info():
             return cd.tech_count
-
-
-class ExploredSystemsCountDataContainer(AbstractPerCountryDataContainer):
-    def _get_value_from_countrydata(self, cd: datamodel.CountryData):
-        if _override_visibility(cd) or cd.show_tech_info():
-            return cd.exploration_progress
 
 
 class TotalScienceOutputDataContainer(AbstractPerCountryDataContainer):
@@ -498,6 +519,7 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
     def _iterate_budgetitems(
         self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
+        yield "frigates", cd.ship_count_frigate
         yield "corvettes", cd.ship_count_corvette
         yield "destroyers", cd.ship_count_destroyer * 2
         yield "cruisers", cd.ship_count_cruiser * 4
@@ -543,7 +565,9 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         )
         if res is None or res.availability == 0:
             return
-        yield from self._get_resource_prices(market_fee, self.base_price, res.fluctuation)
+        yield from self._get_resource_prices(
+            market_fee, self.base_price, res.fluctuation
+        )
         yield self.galactic_market_indicator_key, -0.001
         yield self.internal_market_indicator_key, self.DEFAULT_VAL
 
@@ -557,7 +581,9 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
                 res_data = r
                 break
         if res_data is None:
-            logger.info(f"Could not find configuration for resource {self.resource_name}")
+            logger.info(
+                f"Could not find configuration for resource {self.resource_name}"
+            )
             return
         if res_data["base_price"] is None:
             return
@@ -911,11 +937,6 @@ class PlanetCrimeDataContainer(AbstractPopStatsByPlanetDataContainer):
         return ps.crime
 
 
-class PlanetMigrationDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
-        return ps.migration
-
-
 class PlanetAmenitiesDataContainer(AbstractPopStatsByPlanetDataContainer):
     def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.free_amenities
@@ -1077,12 +1098,6 @@ RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     data_container_factory=TotalScienceOutputDataContainer,
     style=PlotStyle.line,
 )
-SURVEY_PROGRESS_GRAPH = PlotSpecification(
-    plot_id="survey-count",
-    title="Surveyed Planets",
-    data_container_factory=ExploredSystemsCountDataContainer,
-    style=PlotStyle.line,
-)
 MILITARY_POWER_GRAPH = PlotSpecification(
     plot_id="military-power",
     title="Military Strength",
@@ -1166,12 +1181,6 @@ PLANET_POP_DISTRIBUTION_GRAPH = PlotSpecification(
     title="Population by Planet",
     data_container_factory=PlanetDistributionDataContainer,
     style=PlotStyle.stacked,
-)
-PLANET_MIGRATION_GRAPH = PlotSpecification(
-    plot_id="empire-planet-migration",
-    title="Migration by Planet",
-    data_container_factory=PlanetMigrationDataContainer,
-    style=PlotStyle.line,
 )
 PLANET_AMENITIES_GRAPH = PlotSpecification(
     plot_id="empire-planet-amenities",
@@ -1557,7 +1566,6 @@ PLOT_SPECIFICATIONS = {
     "faction_crime_graph": FACTION_CRIME_GRAPH,
     "faction_power_graph": FACTION_POWER_GRAPH,
     "planet_pop_distribution_graph": PLANET_POP_DISTRIBUTION_GRAPH,
-    "planet_migration_graph": PLANET_MIGRATION_GRAPH,
     "planet_stability_graph": PLANET_STABILITY_GRAPH,
     "planet_happiness_graph": PLANET_HAPPINESS_GRAPH,
     "planet_amenities_graph": PLANET_AMENITIES_GRAPH,
@@ -1565,7 +1573,6 @@ PLOT_SPECIFICATIONS = {
     "planet_crime_graph": PLANET_CRIME_GRAPH,
     "planet_power_graph": PLANET_POWER_GRAPH,
     "technology_progress_graph": TECHNOLOGY_PROGRESS_GRAPH,
-    "survey_progress_graph": SURVEY_PROGRESS_GRAPH,
     "research_output_graph": RESEARCH_OUTPUT_GRAPH,
     "research_output_by_category_graph": RESEARCH_OUTPUT_BY_CATEGORY_GRAPH,
     "fleet_size_graph": FLEET_SIZE_GRAPH,
@@ -1628,6 +1635,7 @@ class GalaxyMapData:
 
     UNCLAIMED = "Unclaimed"
     ARTIFICIAL_NODE = "artificial-node"
+    _UNCLAIMED_TUPLE = (None, UNCLAIMED, UNCLAIMED)
 
     def __init__(self, game_id: str):
         self.game_id = game_id
@@ -1642,7 +1650,9 @@ class GalaxyMapData:
                 self.galaxy_graph.add_node(
                     system.system_id_in_game,
                     name=system.rendered_name,
+                    # "country" is the owner's key: in-game country ID, or UNCLAIMED
                     country=GalaxyMapData.UNCLAIMED,
+                    country_name=GalaxyMapData.UNCLAIMED,
                     system_id=system.system_id,
                     country_id=None,
                     pos=[-system.coordinate_x, -system.coordinate_y],
@@ -1667,13 +1677,12 @@ class GalaxyMapData:
         start_time = time.process_time()
         systems_by_owner = self._get_system_ids_by_owner(time_days)
         owner_by_system = {}
-        owner_id_by_system = {}
         for country_tuple, nodes in systems_by_owner.items():
-            country_id, country_name = country_tuple
+            country_id, country_key, country_name = country_tuple
             for node in nodes:
-                owner_by_system[node] = country_name
-                owner_id_by_system[node] = country_id
-                self.galaxy_graph.nodes[node]["country"] = country_name
+                owner_by_system[node] = country_key
+                self.galaxy_graph.nodes[node]["country"] = country_key
+                self.galaxy_graph.nodes[node]["country_name"] = country_name
                 self.galaxy_graph.nodes[node]["country_id"] = country_id
 
         for edge in self.galaxy_graph.edges:
@@ -1694,21 +1703,19 @@ class GalaxyMapData:
         country_ridges: Dict[str, Set[Tuple[GalaxyMapCoordinate, GalaxyMapCoordinate]]],
     ) -> Iterable[Tuple[List[float], List[float]]]:
         """
-        :param country_ridges: Dict mapping country name to ridges (defined by pairs of vertices)
+        :param country_ridges: Dict mapping country key (see _country_display_tuple) to ridges (defined by pairs of vertices)
         :return: Iterate over those ridges which lie at the border of a country (to another country,
             to unclaimed space, or to the edge of the galaxy)
         """
-        for c1, r1 in country_ridges.items():
-            for c2, r2 in country_ridges.items():
-                if c2 <= c1:
-                    continue
-                intersecting_ridges = r1 & r2
-                for rv1, rv2 in intersecting_ridges:
-                    yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
+        for (_, r1), (_, r2) in itertools.combinations(country_ridges.items(), 2):
+            for rv1, rv2 in r1 & r2:
+                yield [rv1[0], rv2[0]], [rv1[1], rv2[1]]
 
-    def _get_system_ids_by_owner(self, time_days) -> Dict[Tuple[str, str], Set[int]]:
+    def _get_system_ids_by_owner(
+        self, time_days
+    ) -> Dict[Tuple[Optional[int], Union[int, str], str], Set[int]]:
         owned_systems = set()
-        systems_by_owner = {(None, GalaxyMapData.UNCLAIMED): set()}
+        systems_by_owner = {self._UNCLAIMED_TUPLE: set()}
 
         with datamodel.get_db_session(self.game_id) as session:
             # eager-load to avoid an N+1 lazy SELECT per system in get_owner_country_at
@@ -1726,7 +1733,7 @@ class GalaxyMapData:
                     systems_by_owner[country_tuple] = set()
                 systems_by_owner[country_tuple].add(system.system_id_in_game)
 
-        systems_by_owner[(None, GalaxyMapData.UNCLAIMED)] |= (
+        systems_by_owner[self._UNCLAIMED_TUPLE] |= (
             set(self.galaxy_graph.nodes) - owned_systems
         )
         return systems_by_owner
@@ -1796,14 +1803,22 @@ class GalaxyMapData:
 
                 self.galaxy_graph.graph["system_borders"][rp].add(rv_tuple)
 
-    def _country_display_tuple(self, country: datamodel.Country) -> Tuple[str, str]:
+    def _country_display_tuple(
+        self, country: datamodel.Country
+    ) -> Tuple[Optional[int], Union[int, str], str]:
+        """(database ID, key, display name) of the country shown as owner. The key is
+        the in-game ID, as names are not unique."""
         if country is None:
-            return (None, GalaxyMapData.UNCLAIMED)
+            return self._UNCLAIMED_TUPLE
         if config.CONFIG.show_everything:
-            return (country.country_id, country.rendered_name)
+            return (
+                country.country_id,
+                country.country_id_in_game,
+                country.rendered_name,
+            )
         if not country.has_met_player():
-            return (None, GalaxyMapData.UNCLAIMED)
-        return (country.country_id, country.rendered_name)
+            return self._UNCLAIMED_TUPLE
+        return (country.country_id, country.country_id_in_game, country.rendered_name)
 
 
 _MIN_V = 0.4
@@ -1819,7 +1834,7 @@ _GRAYSCALE_S = 0.2
 class CountryColors:
     def __init__(self):
         self.map_colors: Dict[str, tuple] = {}
-        self.country_name_to_primary_color: Dict[str, tuple] = {}
+        self.country_id_to_primary_color: Dict[int, tuple] = {}
         self._used_hsv = set()
 
     def load(self, game_id: str):
@@ -1831,7 +1846,6 @@ class CountryColors:
 
         with datamodel.get_db_session(game_id) as session:
             for c in session.query(datamodel.Country).order_by("country_id_in_game"):
-                name = c.rendered_name
                 # avoid grayscale colors if possible; they can be hard to distinguish
                 color = (
                     c.secondary_color
@@ -1842,7 +1856,7 @@ class CountryColors:
                 # try to avoid duplicate colors
                 # don't bother for non-default-or-fallen-empire countries, so that the "real" countries are more likely to get their color
                 rgb = self._get_rgb(color, avoid_used=c.is_real_country())
-                self.country_name_to_primary_color[name] = rgb
+                self.country_id_to_primary_color[c.country_id_in_game] = rgb
 
     def _get_rgb(self, key: str, avoid_used: bool):
         r, g, b = self.map_colors.get(key, (0, 0, 0))
@@ -1861,7 +1875,7 @@ class CountryColors:
                     break
             self._used_hsv.add(self._round_hsv(h, s, v))
         return tuple(int(v * 255) for v in colorsys.hsv_to_rgb(h, s, v))
-    
+
     @staticmethod
     def _round_hsv(h: float, s: float, v: float):
         return round(h, 1), round(s, 1), round(v, 1)
@@ -1871,11 +1885,11 @@ class CountryColors:
         _, s, _ = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
         return s < _GRAYSCALE_S
 
-    def has_color_for_name(self, country_name: str):
-        return country_name in self.country_name_to_primary_color
+    def has_color_for_country(self, country_id_in_game: int):
+        return country_id_in_game in self.country_id_to_primary_color
 
-    def get_color_by_name(self, country_name: str):
-        return self.country_name_to_primary_color[country_name]
+    def get_color_by_country(self, country_id_in_game: int):
+        return self.country_id_to_primary_color[country_id_in_game]
 
     @staticmethod
     def _parse_map_colors(path: pathlib.Path):

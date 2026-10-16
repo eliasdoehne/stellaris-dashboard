@@ -2,6 +2,7 @@ import functools
 import json
 import logging
 import re
+import threading
 from typing import Iterable
 
 logger = logging.getLogger(__name__)
@@ -273,6 +274,7 @@ class NameRenderer:
 
 
 global_renderer: NameRenderer = None
+_renderer_lock = threading.Lock()  # guards lazy setup (warm-up thread vs. requests)
 
 
 # Pure function of json_str for the singleton renderer; hot on the read path.
@@ -286,14 +288,85 @@ def lookup_key(key: str) -> str:
     return get_global_renderer().render_from_dict({"key": key})
 
 
+@functools.lru_cache(maxsize=2**12)
+def lookup_id_name(object_id: str, remove_prefix: str = "") -> str:
+    """
+    Localised name for a game object ID (building, district, ...), falling back to a
+    prettified version of the ID if the game's localisation has no entry for it.
+    """
+    mapping = get_global_renderer().name_mapping
+    for key in (object_id, f"{object_id}_name"):
+        if key in mapping:
+            localised = lookup_key(key)
+            if localised:
+                return localised
+    return convert_id_to_name(object_id, remove_prefix)
+
+
+@functools.lru_cache(maxsize=2**8)
+def lookup_faction_type(faction_type: str) -> str:
+    """
+    Localised name of a political faction type. Secret society types carry their guiding
+    ethic as a suffix (the_masquerade_xenophile) that their loc key (pft_the_masquerade) lacks.
+    """
+    mapping = get_global_renderer().name_mapping
+    key = f"pft_{faction_type}"
+    base_key, _, ethic = key.rpartition("_")
+    if key not in mapping and base_key in mapping and f"ethic_{ethic}" in mapping:
+        key = base_key
+    return lookup_key(key)
+
+
+_KEY_LIKE_RE = re.compile(r"[A-Za-z0-9_.]+")
+
+
+@functools.lru_cache(maxsize=2**12)
+def render_name_or_prettify(name_json: str) -> str:
+    """
+    Like render_name, but a name that is just a localisation key without any entry in
+    the game's localisation (e.g. secret society factions) is prettified instead of
+    being shown as the raw key.
+    """
+    try:
+        name = json.loads(name_json)
+    except (json.JSONDecodeError, TypeError):
+        return str(name_json)
+    is_bare_key = isinstance(name, str)
+    if is_bare_key:
+        name = {"key": name}
+    if isinstance(name, dict):
+        key = name.get("key")
+        if (
+            isinstance(key, str)
+            and name.get("literal") != "yes"
+            and "value" not in name
+            and not name.get("variables")
+            and key not in get_global_renderer().name_mapping
+            and "_" in key
+            and _KEY_LIKE_RE.fullmatch(key)
+        ):
+            return convert_id_to_name(key.replace(".", "_"))
+        if is_bare_key:
+            return get_global_renderer().render_from_dict(name)
+    return render_name(name_json)
+
+
 def get_global_renderer() -> NameRenderer:
     global global_renderer
     if global_renderer is None:
-        from stellarisdashboard import config
+        with _renderer_lock:
+            if global_renderer is None:  # double-checked
+                from stellarisdashboard import config
 
-        global_renderer = NameRenderer(config.CONFIG.localization_files)
-        global_renderer.load_name_mapping()
-        render_name.cache_clear()  # drop names cached against the old renderer
+                renderer = NameRenderer(config.CONFIG.localization_files)
+                renderer.load_name_mapping()
+                # publish only once loaded, so no thread sees a half-loaded renderer
+                global_renderer = renderer
+                # drop names cached against the old renderer
+                render_name.cache_clear()
+                lookup_id_name.cache_clear()
+                lookup_faction_type.cache_clear()
+                render_name_or_prettify.cache_clear()
     return global_renderer
 
 

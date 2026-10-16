@@ -340,7 +340,7 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% else %} The\n'
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} relocated their capital to {{ render_planet_and_class(event) }}\n'
-        '                    in the {{ links[event["system"]] | safe }} system.\n',
+        '                    {% if "system" in event %}in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
     ),
     "terraforming": EventDescriptor(
         Category.EXPANSION, Tier.ROUTINE, "planet", SPAN,
@@ -361,7 +361,7 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% else %} The\n'
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} created the {{ event["description"] }} sector{% if "planet" in event %}\n'
-        '                    with capital on the planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system\n'
+        '                    with capital on the planet {{ links[event["planet"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}\n'
         '                    {% endif %}.\n',
     ),
     "planetary_unrest": EventDescriptor(Category.EXPANSION, Tier.ROUTINE, "unrest"),
@@ -395,6 +395,16 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    Government reforms in the {{ links[event["country"]] | safe}}:\n'
         '                    {% endif %}\n'
         '                    {{event["description"]}}\n',
+    ),
+    "empire_renamed": EventDescriptor(
+        Category.STATECRAFT, Tier.ROUTINE, "gavel", POINT,
+        '\n'
+        '                    {% if "leader" in event %}\n'
+        '                    {{ render_leader(event) }} renamed the {{ links[event["country"]] | safe }}\n'
+        '                    {% else %}\n'
+        '                    The {{ links[event["country"]] | safe }} was renamed\n'
+        '                    {% endif %}\n'
+        '                    {{event["description"]}}.\n',
     ),
     "species_rights_reform": EventDescriptor(Category.STATECRAFT, Tier.MAJOR, "gavel"),
     "new_faction": EventDescriptor(
@@ -454,7 +464,7 @@ REGISTRY: dict[str, EventDescriptor] = {
         Category.LEADERS, Tier.MAJOR, "crown", SPAN,
         '\n'
         '                    {{ render_leader(event, "An unknown leader") }} ruled the {{ links[event["country"]] | safe}}\n'
-        '                    {% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system {% endif %}.\n',
+        '                    {% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %} {% endif %}.\n',
     ),
     "leader_died": EventDescriptor(
         Category.LEADERS, Tier.MAJOR, "skull", POINT,

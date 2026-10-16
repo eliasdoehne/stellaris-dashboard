@@ -27,9 +27,9 @@ TIMELAPSE_DEFAULT_FRAME_TIME = 100
 TIMELAPSE_DEFAULT_DPI = 100
 
 
-def _rgb(game_id: str, country_name: str):
+def _rgb(game_id: str, country_key):
     """Empire color as an [r, g, b] int triple for deck.gl layers."""
-    r, g, b = visualization_data.get_color_vals(game_id, country_name)
+    r, g, b = visualization_data.get_color_vals(game_id, country_key)
     return [int(r), int(g), int(b)]
 
 
@@ -133,20 +133,21 @@ def galaxy_data(game_id):
 
     color_cache = {}
 
-    def color_for(name):
-        if name not in color_cache:
-            color_cache[name] = _rgb(game_id, name)
-        return color_cache[name]
+    def color_for(key):
+        if key not in color_cache:
+            color_cache[key] = _rgb(game_id, key)
+        return color_cache[key]
 
     owners = {}
     country_ridges = {UNCLAIMED: set(system_borders.get(galaxy.ARTIFICIAL_NODE, set()))}
     for node in graph.nodes:
         ndata = graph.nodes[node]
-        country = ndata["country"]
+        country = ndata["country"]  # in-game ID, as names are not unique
         if country != UNCLAIMED:
             owners[node] = {
                 "country_id": ndata["country_id"],
-                "country_name": country,
+                "country_key": country,
+                "country_name": ndata["country_name"],
                 "color": color_for(country),
             }
         country_ridges.setdefault(country, set()).update(

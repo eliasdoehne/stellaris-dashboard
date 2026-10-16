@@ -44,11 +44,11 @@ Set **autosave to monthly** in the game options. The game removes old autosaves,
 | **S1: early** | 4.5.x | A new game with a regular (non-gestalt) empire. Keep the first ~12 monthly autosaves. | Capital, starting districts and buildings, a few ships | F1–F4, F6, F7, F9, F10 (baseline) |
 | **S2: mid-game** | 4.5.x | Continue S1, or use an existing campaign, to roughly 2240+. Keep 12+ consecutive monthly autosaves. | **Factions formed** (most important). At least 3 colonies, at least 1 sector with a governor, a mixed fleet (corvettes, destroyers, cruisers…), and any income or upkeep of living metal, zro or dark matter. | F3–F11, especially F11 |
 | **S3: changes** | 4.5.x | From a mid-game save, do one thing per month and keep each monthly save: build a district, build a building, appoint or replace a sector governor, build ships of a new hull size, relocate the capital if possible. | Before/after pairs for each action | Change detection, ledger events (F1, F2, F6, F8) |
-| S4 *(optional)* | 4.5.x | A Nomads empire (arkship) and/or BioGenesis bioships, if you own them | Arkship colony; bioships | Arkship colonies are skipped without errors; bioship growth-stage sizes (F3) |
+| S4 *(optional)* | 4.5.x | A Nomads empire (arkship) and/or BioGenesis bioships, if you own them | Arkship colony; bioships | Arkship colonies appear as "Arkship" (`pc_ark`) planets (no system) in planet graphs and as the capital; bioship growth-stage sizes (F3) |
 | S5 *(optional)* | 4.4 / 4.0–4.3 via a Steam beta branch | Any short game | — | Older code paths on real data |
 | S6 | Existing DB | Copy an existing `output/db/<game>.db` made with the old dashboard, plus that game's newest saves | — | Upgrade path (§4, Phase 4) |
 
-Optional extras for F10: check one gestalt empire (hive mind or machine) to confirm its pops show as "no ethos". Either play one briefly, or turn on *Store data of all countries* and pick an AI gestalt in the country-perspective dropdown.
+Optional extras for F10: check one gestalt empire (hive mind or machine) to confirm its pops show as "no ethos". Either play one briefly, or pick an AI gestalt in the country-perspective dropdown.
 
 ## 4. Procedure
 
@@ -57,7 +57,6 @@ Optional extras for F10: check one gestalt empire (hive mind or machine) to conf
 2. `uv run pytest`. Everything should pass. The game-file name tests need your Stellaris install path configured; they are the only tests skipped in CI.
 3. Use a separate output folder so test runs don't mix with your real DBs:
    - Set `base_output_path: <some empty folder>` in the `config.yml` of the directory you run from.
-   - Also set `read_all_countries: true` (the *Store data of all countries* setting).
 4. Copy the saves to test into a separate folder, laid out like the game's: `<test-saves>/<game folder>/*.sav`. The live game then can't add files mid-run.
 
 ### Phase 1: batch import and DB checks
@@ -70,8 +69,7 @@ Load the save matching the latest imported date (the script prints it). Compare 
 - **F1/F2:** pick two or three planets. The ledger planet page (Event Ledger → planet link) shows *Districts* and *Buildings*, which should match the planet view. For districts, the dashboard count equals the district's level shown in-game.
 - **F3:** compare hull counts with the fleet manager.
   - The DB stores raw counts.
-  - The *Fleet Composition* graph (Military tab) weights them: destroyer ×2, cruiser ×4, battleship ×8, titan ×16, colossus ×32.
-  - Frigates are not counted yet.
+  - The *Fleet Composition* graph (Military tab) weights them: frigate and corvette ×1, destroyer ×2, cruiser ×4, battleship ×8, titan ×16, colossus ×32.
 - **F4:** compare the Budget tab's Living Metal, Zro and Dark Matter graphs with the in-game resource tooltip (income and upkeep by category).
 - **F5:** *Faction Support* (Pops tab) against the support % on the in-game Factions screen. The dashboard stores a fraction: 0.25 means 25%.
 - **F6:** the capital on the country's ledger page or the Codex matches the in-game capital.
@@ -108,7 +106,7 @@ If you want clean history, re-import the game from scratch instead.
 |---|---|---|
 | F1 | 1. Districts | Non-empty. City, mining, generator and farming appear in plausible totals. |
 | F2 | 2. Buildings | Non-empty. Capital buildings appear. |
-| F3 | 3. Fleet composition | Non-zero once you have military ships. Matches the fleet manager (frigates excluded). |
+| F3 | 3. Fleet composition | Non-zero once you have military ships. Matches the fleet manager. |
 | F4 | 4. Strategic budgets | Non-zero whenever the game shows living metal, zro or dark matter income or upkeep. |
 | F5 | 8. Faction support | Support > 0 for your factions. Matches in-game % ÷ 100. |
 | F6 | 5. Capital | The planet class is a real planet type, not a star (`pc_*_star`). |
@@ -163,9 +161,9 @@ for name, n in q(
 ):
     print(f"     {name}: {n}")
 
-print("3. Player fleet composition (corvette, destroyer, cruiser, battleship, titan, colossus):")
+print("3. Player fleet composition (frigate, corvette, destroyer, cruiser, battleship, titan, colossus):")
 print("    ", q(
-    "SELECT ship_count_corvette, ship_count_destroyer, ship_count_cruiser, ship_count_battleship,"
+    "SELECT ship_count_frigate, ship_count_corvette, ship_count_destroyer, ship_count_cruiser, ship_count_battleship,"
     " ship_count_titan, ship_count_colossus FROM country_data WHERE country_data_id = ?", cd_id)[0])
 
 print("4. Player net living metal / zro / dark matter (sum of budget items):")
@@ -205,10 +203,9 @@ Names in the output are raw localisation keys (for example `{"key": "SPEC_Alari_
 
 ## 7. Known limitations (not failures)
 
-- **Frigates** are not counted in fleet composition. This needs a new DB column and is a separate change.
 - **Zones and district specializations** (4.0) are not stored. Only districts and buildings are.
 - **History is not backfilled** in existing DBs. See Phase 4.
-- **Nomad arkship colonies** have no planet, so they are left out of per-planet stats and capital tracking.
+- **Nomad arkship colonies** are recorded as planets of class `pc_ark` with a negative in-game ID and no system, because the save data read here does not say which system the ship is in. They show up in the planet graphs and as the capital, but not on the galaxy map.
 
 ## 8. What to send back if something fails
 

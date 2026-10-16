@@ -55,7 +55,7 @@
   const selectionEl = document.getElementById("galaxy-selection");
 
   let geometry = null; // {systems, territory, hyperlanes}
-  let owners = {}; // in-game system id -> {country_id, country_name, color}
+  let owners = {}; // in-game system id -> {country_id, country_key, country_name, color}
   let countryLabels = []; // [{name, x, y, color}]
   let borders = []; // [[x0,y0],[x1,y1]], ...
   let dataVersion = 0;
@@ -103,14 +103,21 @@
     for (const s of geometry.systems) {
       const o = owners[s.id];
       if (!o) continue;
-      let a = acc[o.country_name];
-      if (!a) a = acc[o.country_name] = { sx: 0, sy: 0, n: 0, color: o.color };
+      let a = acc[o.country_key];
+      if (!a)
+        a = acc[o.country_key] = {
+          name: o.country_name,
+          sx: 0,
+          sy: 0,
+          n: 0,
+          color: o.color,
+        };
       a.sx += s.x;
       a.sy += s.y;
       a.n += 1;
     }
-    return Object.entries(acc).map(([name, a]) => ({
-      name,
+    return Object.values(acc).map((a) => ({
+      name: a.name,
       x: a.sx / a.n,
       y: a.sy / a.n,
       color: brighten(a.color, 0.55),
@@ -148,7 +155,7 @@
       getColor: (d) => {
         const oa = owners[d.a];
         const ob = owners[d.b];
-        if (oa && ob && oa.country_name === ob.country_name) {
+        if (oa && ob && oa.country_key === ob.country_key) {
           const c = oa.color;
           return [c[0], c[1], c[2], HYPERLANE_OWNED_ALPHA];
         }

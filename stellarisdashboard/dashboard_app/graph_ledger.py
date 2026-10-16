@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Union
 from urllib import parse
 
 import dash.exceptions
@@ -107,6 +107,14 @@ def _with_color_alpha(color, alpha):
     inner = color[color.index("(") + 1 : color.index(")")]
     r, g, b = (c.strip() for c in inner.split(",")[:3])
     return f"rgba({r},{g},{b},{alpha})"
+
+
+def _get_player_legend_label(game_id) -> Optional[str]:
+    """Legend label of the player's country, as rendered for its per-country series
+    (including the ID suffix if include_id_in_names is set)."""
+    with datamodel.get_db_session(game_id) as session:
+        player = session.query(datamodel.Country).filter_by(is_player=True).first()
+        return dict_key_to_legend_label(player.rendered_name) if player else None
 
 
 def _emphasize_player_in_compact_data(figure_data, player_label):
@@ -266,14 +274,7 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
     plot_data = visualization_data.get_current_execution_plot_data(
         game_id, country_perspective
     )
-    # Legend label of the player's own country, used to highlight it in the
-    # compact thumbnails (see _emphasize_player_in_compact_data).
-    player_country_name = games_dict[game_id].get("country_name")
-    player_label = (
-        dict_key_to_legend_label(player_country_name)
-        if player_country_name
-        else None
-    )
+    player_label = _get_player_legend_label(game_id)
     # Each plot becomes a compact card in a responsive grid. The full-detail
     # figure is stashed in a Store and rendered in the modal on demand.
     grid_children = []
@@ -412,7 +413,7 @@ def _get_raw_data_for_line_plot(
     plot_spec: visualization_data.PlotSpecification,
 ) -> List[Dict[str, Any]]:
     plot_list = []
-    for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
+    for key, label, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if all(y != y for y in y_values):
             continue
         if not x_values:
@@ -420,9 +421,9 @@ def _get_raw_data_for_line_plot(
         line = dict(
             x=x_values,
             y=y_values,
-            name=dict_key_to_legend_label(key),
+            name=dict_key_to_legend_label(label),
             line={"color": get_country_color(game_id, key, 1.0)},
-            text=get_plot_value_labels(x_values, y_values, key),
+            text=get_plot_value_labels(x_values, y_values, label),
             hoverinfo="text",
         )
         plot_list.append(line)
@@ -440,7 +441,7 @@ def _get_raw_data_for_stacked_and_budget_plots(
         config.CONFIG.normalize_stacked_plots
         and plot_spec.style == visualization_data.PlotStyle.stacked
     )
-    for key, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
+    for key, label, x_values, y_values in plot_data.get_data_for_plot(plot_spec):
         if not any(y_values):
             continue
         if plot_spec.style == visualization_data.PlotStyle.budget:
@@ -468,20 +469,21 @@ def _get_raw_data_for_stacked_and_budget_plots(
             else:
                 stackgroup = "pos"
             series = [(y_values, stackgroup)]
+        legend_group = str(key)
         for i, (yv, stackgroup) in enumerate(series):
             lines.append(
                 dict(
                     x=x_values,
                     y=yv,
-                    name=dict_key_to_legend_label(key),
-                    legendgroup=key,  # ensure that budget contributions with mixed signs still behave as a single entry
+                    name=dict_key_to_legend_label(label),
+                    legendgroup=legend_group,  # ensure that budget contributions with mixed signs still behave as a single entry
                     hoverinfo="text",
                     mode="lines",
                     line=dict(width=0.5, color=get_country_color(game_id, key, 1.0)),
                     stackgroup=stackgroup,
                     groupnorm="percent" if normalized else "",
                     fillcolor=get_country_color(game_id, key, 0.5),
-                    text=get_plot_value_labels(x_values, yv, key),
+                    text=get_plot_value_labels(x_values, yv, label),
                     showlegend=i == 0,  # only show one legend entry
                 )
             )
@@ -508,19 +510,21 @@ def dict_key_to_legend_label(key: str):
     return " ".join(words)
 
 
-def get_plot_value_labels(x_values, y_values, key):
+def get_plot_value_labels(x_values, y_values, label):
     return [
-        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(key)}"
+        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(label)}"
         if (y and y == y)
         else ""
         for (x, y) in zip(x_values, y_values)
     ]
 
 
-def get_country_color(game_id: str, country_name: str, alpha: float = 1.0) -> str:
+def get_country_color(
+    game_id: str, country_key: Union[str, int], alpha: float = 1.0
+) -> str:
     alpha = min(alpha, 1)
     alpha = max(alpha, 0)
-    r, g, b = visualization_data.get_color_vals(game_id, country_name)
+    r, g, b = visualization_data.get_color_vals(game_id, country_key)
     color = f"rgba({r},{g},{b},{alpha})"
     return color
 

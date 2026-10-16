@@ -92,6 +92,15 @@ def _setup_engine(game_id):
     _DB_LOCKS[game_id] = threading.Lock()
 
 
+def warm_up_databases():
+    """Run the lazy engine setup (including auto-migration) for all existing game databases."""
+    for game_id in get_known_games():
+        try:
+            _get_or_create_sessionmaker(game_id)
+        except Exception:
+            logger.exception(f"Failed to warm up database for game {game_id}")
+
+
 @contextlib.contextmanager
 def get_db_session(game_id, write: bool = False) -> sqlalchemy.orm.Session:
     # write=True serializes on the per-game lock; readers rely on WAL snapshots
@@ -238,6 +247,7 @@ class HistoricalEventType(enum.Enum):
     # related to internal politics:
     new_faction = enum.auto()
     government_reform = enum.auto()
+    empire_renamed = enum.auto()
     species_rights_reform = enum.auto()  # TODO
     new_policy = enum.auto()
     changed_policy = enum.auto()
@@ -295,6 +305,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.megastructure_construction,
             HistoricalEventType.new_faction,
             HistoricalEventType.government_reform,
+            HistoricalEventType.empire_renamed,
             HistoricalEventType.species_rights_reform,
             HistoricalEventType.first_contact,
             HistoricalEventType.non_aggression_pact,
@@ -895,13 +906,18 @@ class Government(Base):
     civic_3 = Column(String(80))
     civic_4 = Column(String(80))
     civic_5 = Column(String(80))
+    civic_6 = Column(String(80))
+    civic_7 = Column(String(80))
+    civic_8 = Column(String(80))
 
     country = relationship("Country", back_populates="governments")
 
+    # one entry per civic_N column above
+    CIVIC_COLUMNS = tuple(f"civic_{i}" for i in range(1, 9))
+
     @property
     def civics(self):
-        civics = {self.civic_1, self.civic_2, self.civic_3, self.civic_4, self.civic_5}
-        return civics - {None}
+        return {getattr(self, column) for column in self.CIVIC_COLUMNS} - {None}
 
     @property
     def ethics(self):
@@ -1092,6 +1108,7 @@ class CountryData(Base):
     empire_cohesion = Column(Float)
 
     tech_count = Column(Integer)
+    # Unused since Stellaris 4.x (the survey data is gone), kept for existing databases
     exploration_progress = Column(Integer)
     owned_planets = Column(Integer)
     controlled_systems = Column(Integer)
@@ -1109,6 +1126,7 @@ class CountryData(Base):
     net_trade = Column(Float, nullable=False, default=0.0, server_default="0.0") # server_default is needed for alembic automigration
     net_biomass = Column(Float, nullable=False, default=0.0, server_default="0.0") # server_default is needed for alembic automigration
 
+    ship_count_frigate = Column(Integer, nullable=False, default=0, server_default="0") # server_default is needed for alembic automigration
     ship_count_corvette = Column(Integer, default=0)
     ship_count_destroyer = Column(Integer, default=0)
     ship_count_cruiser = Column(Integer, default=0)
@@ -1357,12 +1375,11 @@ class PoliticalFaction(Base):
 
     @property
     def rendered_type(self):
-        return game_info.lookup_key(f"pft_{str(self.db_faction_type.text)}")
+        return game_info.lookup_faction_type(str(self.db_faction_type.text))
     
     @property
     def rendered_name(self):
-        rendered = game_info.render_name(self.faction_name)
-        return rendered
+        return game_info.render_name_or_prettify(self.faction_name)
 
 
 class War(Base):
@@ -1593,8 +1610,10 @@ class Planet(Base):
 
     planet_name = Column(String(50))
     planet_class = Column(String(20))
+    # negative for the pseudo-planets of nomad arkship colonies, see save_format.arkship_planet_id
     planet_id_in_game = Column(Integer, index=True)
-    system_id = Column(ForeignKey(System.system_id), nullable=False, index=True)
+    # null for arkship colonies, because the save data used here does not say which system a ship is in
+    system_id = Column(ForeignKey(System.system_id), nullable=True, index=True)
     colonized_date = Column(Integer)
 
     historical_events = relationship(
@@ -1639,7 +1658,7 @@ class PlanetDistrict(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "district")
+        return game_info.lookup_id_name(self.db_description.text, "district")
 
 
 _RESOURCE_DEPOSIT_SUFFIXES = frozenset(str(i) for i in range(31))
@@ -1687,7 +1706,7 @@ class PlanetBuilding(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "building")
+        return game_info.lookup_id_name(self.db_description.text, "building")
 
 
 class PlanetModifier(Base):
@@ -1811,7 +1830,7 @@ class PlanetStats(Base):
     power = Column(Float)
     crime = Column(Float)
 
-    migration = Column(Float)
+    migration = Column(Float)  # unused since 4.x, kept for existing DBs
     free_amenities = Column(Float)
     free_housing = Column(Float)
     stability = Column(Float)
@@ -1907,6 +1926,9 @@ class HistoricalEvent(Base):
             ]
             ref = " ".join(reform_lines)
             return ref
+        elif self.event_type == HistoricalEventType.empire_renamed:
+            old_name, new_name = self.db_description.text.split("\n")
+            return f"from {game_info.render_name(old_name)} to {game_info.render_name(new_name)}"
         elif self.event_type == HistoricalEventType.terraforming:
             current_pc, target_pc = self.db_description.text.split(",")
             current_pc = game_info.lookup_key(current_pc)

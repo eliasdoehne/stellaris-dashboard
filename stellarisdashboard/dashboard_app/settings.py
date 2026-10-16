@@ -71,12 +71,6 @@ def _build_settings_dict():
             },
         },
         "Performance": {
-            "read_all_countries": {
-                "type": t_bool,
-                "value": _bool_to_lowercase(current_values["read_all_countries"]),
-                "name": "Store data of all countries",
-                "description": "Store budgets and internal stats of all countries. This makes a larger database and could slow things down.",
-            },
             "save_name_filter": {
                 "type": t_str,
                 "value": current_values["save_name_filter"],

@@ -65,7 +65,21 @@ _BIOSHIP_FAMILY_HULLS = {
     "harbinger": "cruiser",
     "stinger": "battleship",
 }
+# Fallen empire and NPC warship sizes, mapped by the hull class of their design (the
+# reactor/thruster components in the 4.0.1 test save, or the hull named in the key).
+# Space fauna, crystals, and other unique guardians are left out on purpose.
+_NPC_HULLS = {
+    "small_ship_fallen_empire": "destroyer",
+    "large_ship_fallen_empire": "battleship",
+    "massive_ship_fallen_empire": "titan",
+    "ancient_corvette": "corvette",
+    "ancient_destroyer": "destroyer",
+    "pirate_corvette": "corvette",
+    "caravaneer_destroyer_01": "destroyer",
+    "caravaneer_cruiser_01": "cruiser",
+}
 _FLEET_COMPOSITION_HULLS = {
+    "frigate",
     "corvette",
     "destroyer",
     "cruiser",
@@ -77,11 +91,14 @@ _FLEET_COMPOSITION_HULLS = {
 
 def _fleet_composition_hull(ship_size) -> Optional[str]:
     """Map a ship size to its fleet composition hull, including BioGenesis
-    (<family>_stage_<n>, bio_titan) and Overlord (offspring_*) bioships."""
+    (<family>_stage_<n>, bio_titan) and Overlord (offspring_*) bioships, and
+    fallen empire and NPC warships."""
     if not isinstance(ship_size, str):
         return None
     if ship_size == "bio_titan":
         return "titan"
+    if ship_size in _NPC_HULLS:
+        return _NPC_HULLS[ship_size]
     name = ship_size.removeprefix("offspring_")
     family, sep, stage = name.partition("_stage_")
     if sep and stage.isdigit():
@@ -949,7 +966,6 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
                 empire_size=country_data_dict.get("empire_size", 0),
                 empire_cohesion=country_data_dict.get("empire_cohesion", 0),
                 tech_count=tech_count,
-                exploration_progress=len(country_data_dict.get("surveyed", [])),
                 owned_planets=len(country_data_dict.get("owned_planets", [])),
                 controlled_systems=len(systems_by_country_id.get(country_id, [])),
                 victory_rank=country_data_dict.get("victory_rank", 0),
@@ -1088,36 +1104,35 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             )
             country_data.net_biomass += resources.get("biomass", 0.0)
 
-            if country.is_player or config.CONFIG.read_all_countries:
-                self._session.add(
-                    datamodel.BudgetItem(
-                        country_data=country_data,
-                        db_budget_item_name=self._get_or_add_shared_description(
-                            item_name
-                        ),
-                        net_energy=resources.get("energy"),
-                        net_minerals=resources.get("minerals"),
-                        net_food=resources.get("food"),
-                        net_alloys=resources.get("alloys"),
-                        net_consumer_goods=resources.get("consumer_goods"),
-                        net_trade=resources.get("trade", 0.0),
-                        net_unity=resources.get("unity"),
-                        net_influence=resources.get("influence"),
-                        net_volatile_motes=values.get("volatile_motes", 0.0),
-                        net_exotic_gases=values.get("exotic_gases", 0.0),
-                        net_rare_crystals=values.get("rare_crystals", 0.0),
-                        net_living_metal=save_format.get_budget_value(values, "living_metal"),
-                        net_zro=save_format.get_budget_value(values, "zro"),
-                        net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
-                        net_nanites=values.get("nanites", 0.0),
-                        net_minor_artifacts=values.get("minor_artifacts", 0.0),
-                        net_astral_threads=values.get("astral_threads", 0.0),
-                        net_biomass=values.get("biomass", 0.0),
-                        net_physics_research=resources.get("physics_research"),
-                        net_society_research=resources.get("society_research"),
-                        net_engineering_research=resources.get("engineering_research"),
-                    )
+            self._session.add(
+                datamodel.BudgetItem(
+                    country_data=country_data,
+                    db_budget_item_name=self._get_or_add_shared_description(
+                        item_name
+                    ),
+                    net_energy=resources.get("energy"),
+                    net_minerals=resources.get("minerals"),
+                    net_food=resources.get("food"),
+                    net_alloys=resources.get("alloys"),
+                    net_consumer_goods=resources.get("consumer_goods"),
+                    net_trade=resources.get("trade", 0.0),
+                    net_unity=resources.get("unity"),
+                    net_influence=resources.get("influence"),
+                    net_volatile_motes=values.get("volatile_motes", 0.0),
+                    net_exotic_gases=values.get("exotic_gases", 0.0),
+                    net_rare_crystals=values.get("rare_crystals", 0.0),
+                    net_living_metal=save_format.get_budget_value(values, "living_metal"),
+                    net_zro=save_format.get_budget_value(values, "zro"),
+                    net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
+                    net_nanites=values.get("nanites", 0.0),
+                    net_minor_artifacts=values.get("minor_artifacts", 0.0),
+                    net_astral_threads=values.get("astral_threads", 0.0),
+                    net_biomass=values.get("biomass", 0.0),
+                    net_physics_research=resources.get("physics_research"),
+                    net_society_research=resources.get("society_research"),
+                    net_engineering_research=resources.get("engineering_research"),
                 )
+            )
         self._session.add(country_data)  # update
 
 
@@ -1509,10 +1524,18 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         }
         systems_by_id = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
 
-        for system_id, system_dict in sorted(
-            self._gamestate_dict["galactic_object"].items()
-        ):
-            planets = system_dict.get("planet", [])
+        planets_by_system = [
+            (system_id, system_dict.get("planet", []))
+            for system_id, system_dict in sorted(
+                self._gamestate_dict["galactic_object"].items()
+            )
+        ]
+        # colonies carried by ships (nomad arkships) are recorded as planets without a system
+        planets_by_system.append(
+            (None, save_format.get_arkship_planet_ids(self._gamestate_dict))
+        )
+
+        for system_id, planets in planets_by_system:
             if isinstance(planets, int):
                 planets = [planets]
             for ingame_id in planets:
@@ -1993,7 +2016,9 @@ class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         planet_models = dependencies[PlanetProcessor.ID]
         for ingame_id, planet_model in planet_models.items():
-            planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id, {})
+            planet_dict = save_format.get_planet(self._gamestate_dict, ingame_id)
+            if planet_dict is None and not save_format.is_arkship_planet_id(ingame_id):
+                planet_dict = {}  # the planet no longer exists
             if not isinstance(planet_dict, dict):
                 continue
             self._update_planet_model(planet_dict, planet_model)
@@ -2435,9 +2460,18 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
             if not isinstance(civics_list, list):
                 civics_list = [civics_list]
             civics = set(civics_list)
+            max_civics = len(datamodel.Government.CIVIC_COLUMNS)
+            if len(civics) > max_civics:
+                logger.warning(
+                    f"{self._basic_info.logger_str} Country {country_id} has {len(civics)} civics, "
+                    f"but only {max_civics} can be stored. Ignoring the rest."
+                )
+            # truncate before comparing, since the previous government only has the stored civics
+            civics = set(sorted(civics)[:max_civics])
             authority = gov_dict.get("authority", "other")
             gov_type = gov_dict.get("type", "other")
             gov_was_reformed = False
+            empire_was_renamed = False
 
             prev_gov = (
                 self._session.query(datamodel.Government)
@@ -2461,26 +2495,20 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                     prev_gov.ethics_5,
                 ]
                 previous_ethics = set(previous_ethics) - {None}
-                previous_civics = [
-                    prev_gov.civic_1,
-                    prev_gov.civic_2,
-                    prev_gov.civic_3,
-                    prev_gov.civic_4,
-                    prev_gov.civic_5,
-                ]
-                previous_civics = set(previous_civics) - {None}
+                previous_civics = prev_gov.civics
                 gov_was_reformed = (
                     (ethics != previous_ethics)
                     or (civics != previous_civics)
-                    or (gov_name != prev_gov.gov_name)
+                    or (authority != prev_gov.authority)
                     or (gov_type != prev_gov.gov_type)
                 )
+                empire_was_renamed = gov_name != prev_gov.gov_name
                 # nothing has changed...
-                if not gov_was_reformed:
+                if not (gov_was_reformed or empire_was_renamed):
                     continue
 
             ethics = dict(zip([f"ethics_{i}" for i in range(1, 6)], sorted(ethics)))
-            civics = dict(zip([f"civic_{i}" for i in range(1, 6)], sorted(civics)))
+            civics = dict(zip(datamodel.Government.CIVIC_COLUMNS, sorted(civics)))
 
             gov = datamodel.Government(
                 country=country_model,
@@ -2500,6 +2528,21 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                         event_type=datamodel.HistoricalEventType.government_reform,
                         country=country_model,
                         leader=rulers_dict.get(country_id),
+                        start_date_days=self._basic_info.date_in_days,
+                        end_date_days=self._basic_info.date_in_days,
+                        event_is_known_to_player=country_model.has_met_player(),
+                    )
+                )
+            if empire_was_renamed:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.empire_renamed,
+                        country=country_model,
+                        leader=rulers_dict.get(country_id),
+                        # The names are JSON, which never contains a raw newline
+                        db_description=self._get_or_add_shared_description(
+                            f"{prev_gov.gov_name}\n{gov_name}"
+                        ),
                         start_date_days=self._basic_info.date_in_days,
                         end_date_days=self._basic_info.date_in_days,
                         event_is_known_to_player=country_model.has_met_player(),
@@ -3005,11 +3048,6 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
                 or country_id not in country_data_dict
             ):
                 continue
-            if (
-                not config.CONFIG.read_all_countries
-                and country_id != self._basic_info.player_country_id
-            ):
-                continue
             for name, value in product_fluctuation.items():
                 self._session.add(
                     datamodel.InternalMarketResource(
@@ -3411,6 +3449,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             return
         if owner_id not in self._fleet_compos:
             self._fleet_compos[owner_id] = dict(
+                ship_count_frigate=0,
                 ship_count_corvette=0,
                 ship_count_destroyer=0,
                 ship_count_cruiser=0,
@@ -3733,6 +3772,66 @@ class WarProcessor(AbstractGamestateDataProcessor):
             )
 
 
+@dataclasses.dataclass(frozen=True)
+class WarTruceCandidate:
+    """The in-game country IDs of an unresolved war that can be matched to a truce."""
+
+    war: Any
+    attacker_leader: Optional[int]
+    defender_leader: Optional[int]
+    participants: frozenset
+
+    @staticmethod
+    def from_war(war: datamodel.War) -> "WarTruceCandidate":
+        def leader_of(participants: List[datamodel.WarParticipant]) -> Optional[int]:
+            # the primary participant started the war; allies are called in later
+            primary = [wp for wp in participants if wp.call_type == "primary"]
+            leader = (primary or participants or [None])[0]
+            return None if leader is None else leader.country.country_id_in_game
+
+        participants = sorted(war.participants, key=lambda wp: wp.warparticipant_id)
+        return WarTruceCandidate(
+            war=war,
+            attacker_leader=leader_of([wp for wp in participants if wp.is_attacker]),
+            defender_leader=leader_of(
+                [wp for wp in participants if not wp.is_attacker]
+            ),
+            participants=frozenset(
+                wp.country.country_id_in_game for wp in participants
+            ),
+        )
+
+
+def match_truces_to_wars(
+    truces: Dict[Any, Collection[int]], candidates: Collection[WarTruceCandidate]
+) -> Dict[Any, WarTruceCandidate]:
+    """Match each truce to the unresolved war it ended, if any.
+
+    A war matches a truce if the truce includes the leaders of both sides (or has
+    exactly the same countries as the war). If several wars match, the one sharing the
+    most countries with the truce is chosen. Each war is matched at most once.
+    """
+    remaining = list(candidates)
+    matches = {}
+    for truce_id, countries in truces.items():
+        countries = frozenset(countries)
+        matching = [
+            c
+            for c in remaining
+            if c.participants == countries
+            or (c.attacker_leader in countries and c.defender_leader in countries)
+        ]
+        if not matching:
+            continue
+        best = max(
+            matching,
+            key=lambda c: (len(c.participants & countries), -len(c.participants)),
+        )
+        matches[truce_id] = best
+        remaining.remove(best)
+    return matches
+
+
 class TruceProcessor(AbstractGamestateDataProcessor):
     ID = "truces"
     DEPENDENCIES = [
@@ -3767,13 +3866,9 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             )
             .all()
         )
-        war_by_participant_countries = {
-            frozenset(wp.country.country_id_in_game for wp in w.participants): w
-            for w in unresolved_wars
-        }
+        candidates = [WarTruceCandidate.from_war(w) for w in unresolved_wars]
 
-        resolved = set()
-        #  resolve wars based on truces...
+        truce_countries = {}
         for truce_id, countries in diplo_truces.items():
             truce_info = truces_dict.get(truce_id)
             if not isinstance(truce_info, dict):
@@ -3781,13 +3876,16 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             truce_type = truce_info.get("truce_type", "other")
             if truce_type != "war":
                 continue  # truce is due to diplomatic agreements or similar, ignore
+            truce_countries[truce_id] = countries
 
-            countries_frozen = frozenset(countries)
-            if countries_frozen in war_by_participant_countries:
-                matching_war = war_by_participant_countries[countries_frozen]
-                resolved.add(countries_frozen)
-            else:
-                continue
+        #  resolve wars based on truces...
+        resolved = set()
+        for truce_id, candidate in match_truces_to_wars(
+            truce_countries, candidates
+        ).items():
+            truce_info = truces_dict[truce_id]
+            matching_war = candidate.war
+            resolved.add(matching_war.war_id)
 
             end_date = truce_info.get("start_date")  # start of truce => end of war
             if (
@@ -3803,8 +3901,8 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             self._session.add(matching_war)
 
         # resolve the wars that are no longer in the save file and do not match any truce:
-        for countries, war in war_by_participant_countries.items():
-            if countries in resolved:
+        for war in unresolved_wars:
+            if war.war_id in resolved:
                 continue
             war.outcome = datamodel.WarOutcome.resolution_unknown
             self._session.add(war)
@@ -3882,8 +3980,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         if not isinstance(pop_groups_dict, dict):
             pop_groups_dict = {}
         for country_id_in_game, country_model in countries_dict.items():
-            if not config.CONFIG.read_all_countries and not country_model.is_player:
-                continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}
             stats_by_faction = {}
@@ -4007,7 +4103,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(planet_dict, dict):
                     continue
 
-                stats["migration"] = planet_dict.get("migration", 0.0)
                 stats["free_amenities"] = planet_dict.get("free_amenities", 0.0)
                 stats["free_housing"] = planet_dict.get("free_housing", 0.0)
                 stats["stability"] = planet_dict.get("stability", 0.0)

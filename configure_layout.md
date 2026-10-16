@@ -53,7 +53,6 @@ Graphs that are enabled by default:
 - `technology_progress_graph`
 - `research_output_by_category_graph`
 - `research_output_graph`
-- `survey_progress_graph`
 - `military_power_graph`
 - `fleet_size_graph`
 - `fleet_composition_graph`
@@ -68,7 +67,6 @@ Graphs that are enabled by default:
 - `faction_power_graph`
 - `faction_happiness_graph`
 - `planet_pop_distribution_graph`
-- `planet_migration_graph`
 - `planet_amenities_graph`
 - `planet_stability_graph`
 - `planet_housing_graph`

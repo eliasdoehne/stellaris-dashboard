@@ -60,8 +60,11 @@ GAMESTATE_44 = {
             "stability": 61.5,
             "governor": 4,
         },
-        1: {"carrier": {"type": "ship", "reference": 12}},
+        1: {"carrier": {"type": "ship", "reference": 12}, "stability": 70.0},
     },
+    "ships": {12: {"fleet": 20}},
+    "fleet": {20: {"name": {"key": "Ark One"}, "ships": [12]}},
+    "country": {0: {"owned_planets": [0, 1, 99]}, 1: {"owned_planets": 1}},
     "districts": {7: {"type": "district_city", "level": 1, "zones": [20]}},
     "zones": {20: {"type": "zone_government", "buildings": [30]}},
     "buildings": {30: {"type": "building_capital"}},
@@ -73,9 +76,29 @@ def test_resolve_colony_to_planet_id():
     assert save_format.resolve_colony_to_planet_id(GAMESTATE_40, 3) == 3
     # since 4.4, they hold colony IDs, which are resolved through the colony's carrier
     assert save_format.resolve_colony_to_planet_id(GAMESTATE_44, 0) == 3
-    # colonies carried by ships (nomad arkships) and unknown colonies have no planet
-    assert save_format.resolve_colony_to_planet_id(GAMESTATE_44, 1) is None
+    # colonies carried by ships (nomad arkships) resolve to a pseudo-planet with a negative ID
+    assert save_format.resolve_colony_to_planet_id(GAMESTATE_44, 1) == save_format.arkship_planet_id(1)
+    assert save_format.arkship_planet_id(0) < 0
+    # unknown colonies have no planet
     assert save_format.resolve_colony_to_planet_id(GAMESTATE_44, 99) is None
+
+
+def test_arkship_pseudo_planet():
+    planet_id = save_format.arkship_planet_id(1)
+    assert save_format.is_arkship_planet_id(planet_id)
+    assert not save_format.is_arkship_planet_id(3)
+    # only owned colonies carried by ships get a pseudo-planet
+    assert save_format.get_arkship_planet_ids(GAMESTATE_44) == [planet_id]
+
+    planet = save_format.get_planet(GAMESTATE_44, planet_id)
+    assert planet["planet_class"] == save_format.ARKSHIP_PLANET_CLASS
+    assert planet["name"] == {"key": "Ark One"}
+    assert planet["stability"] == 70.0
+    # colonies on planets or unknown colonies are no arkships
+    assert save_format.get_planet(GAMESTATE_44, save_format.arkship_planet_id(0)) is None
+    assert save_format.get_planet(GAMESTATE_44, save_format.arkship_planet_id(99)) is None
+    # nothing changes for saves that predate the colony table
+    assert save_format.get_arkship_planet_ids(GAMESTATE_40) == []
 
 
 def test_get_planet():
