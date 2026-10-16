@@ -327,6 +327,7 @@ class TimelineExtractor:
         yield RelicProcessor()
         yield LeviathanProcessor()
         yield FirstContactProcessor()
+        yield EspionageProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3919,6 +3920,145 @@ class FirstContactProcessor(AbstractGamestateDataProcessor):
                 event.leader = leader
                 changed = True
             if changed:
+                self._session.add(event)
+
+
+# operations that restart after completing; others end when they reach full progress
+REPEATABLE_OPERATIONS = frozenset(
+    {"operation_acquire_asset", "operation_extort_favors", "operation_steal_technology"}
+)
+OPERATION_COMPLETE_INFO = 10
+
+
+def _date_to_days_or_none(date: Any) -> Optional[int]:
+    try:
+        return datamodel.date_to_days(date)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def espionage_start_day(operation: Dict[str, Any]) -> Optional[int]:
+    """The day of an operation's first roll, or None if it has not rolled yet."""
+    for entry in _as_dict_list(operation.get("log")):
+        day = _date_to_days_or_none(entry.get("date"))
+        if day is not None:
+            return day
+    return None
+
+
+def espionage_completion_days(operation: Dict[str, Any]) -> List[int]:
+    """The days an operation was completed: its completed list, or the roll that filled a one-off operation."""
+    days = [
+        day
+        for entry in _as_dict_list(operation.get("completed"))
+        if (day := _date_to_days_or_none(entry.get("date"))) is not None
+    ]
+    if "completed" in operation or operation.get("type") in REPEATABLE_OPERATIONS:
+        return days
+    for entry in _as_dict_list(operation.get("log")):
+        info, day = entry.get("info"), _date_to_days_or_none(entry.get("date"))
+        if isinstance(info, (int, float)) and info >= OPERATION_COMPLETE_INFO and day is not None:
+            return [day]
+    return []
+
+
+class EspionageProcessor(AbstractGamestateDataProcessor):
+    """Tracks the espionage operations of spy networks while they run and when they complete."""
+
+    ID = "espionage"
+    DEPENDENCIES = [CountryProcessor.ID, LeaderProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        leaders = dependencies[LeaderProcessor.ID]
+        operations = (self._gamestate_dict.get("espionage_operations") or {}).get("operations")
+        networks = self._gamestate_dict.get("spy_networks")
+        if not isinstance(operations, dict) or not isinstance(networks, dict):
+            return
+        today = self._basic_info.date_in_days
+        event_type = datamodel.HistoricalEventType
+
+        running = {}  # operation id -> stored span, while the operation is in the save
+        known_completions = set()  # (owner id, target id, operation type, day) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter(
+            datamodel.HistoricalEvent.event_type.in_(
+                [event_type.espionage_operation, event_type.completed_espionage_operation]
+            )
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.target_country),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.country is None or event.target_country is None or event.db_description is None:
+                continue
+            operation_type, operation_id = datamodel.split_packed_description(event.db_description.text)
+            if event.event_type == event_type.espionage_operation:
+                running[operation_id] = event
+            else:
+                known_completions.add(
+                    (
+                        event.country.country_id_in_game,
+                        event.target_country.country_id_in_game,
+                        operation_type,
+                        event.start_date_days,
+                    )
+                )
+
+        live_ids = set()
+        for operation_id, operation in sorted(operations.items()):
+            network = networks.get(operation.get("spy_network")) if isinstance(operation, dict) else None
+            target = operation.get("target") if isinstance(operation, dict) else None
+            if not isinstance(network, dict) or not isinstance(target, dict):
+                continue
+            operation_type = operation.get("type")
+            owner_id = _as_game_id(network.get("owner"))
+            target_id = _as_game_id(target.get("id"))
+            owner = countries.get(owner_id)
+            target_country = countries.get(target_id)
+            if not isinstance(operation_type, str) or owner is None or target_country is None:
+                continue
+            leader = leaders.get(_as_game_id(network.get("leader")))
+            live_ids.add(str(operation_id))
+
+            event = running.get(str(operation_id))
+            if event is None:
+                running[str(operation_id)] = event = datamodel.HistoricalEvent(
+                    event_type=event_type.espionage_operation,
+                    country=owner,
+                    target_country=target_country,
+                    leader=leader,
+                    start_date_days=espionage_start_day(operation) or today,
+                    db_description=self._get_or_add_shared_description(
+                        f"{operation_type}|{operation_id}"
+                    ),
+                    event_is_known_to_player=owner.has_met_player(),
+                )
+                self._session.add(event)
+            elif event.leader is None and leader is not None:
+                event.leader = leader
+                self._session.add(event)
+
+            for day in espionage_completion_days(operation):
+                key = (owner_id, target_id, operation_type, day)
+                if key in known_completions:
+                    continue
+                known_completions.add(key)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=event_type.completed_espionage_operation,
+                        country=owner,
+                        target_country=target_country,
+                        leader=leader,
+                        start_date_days=day,
+                        db_description=self._get_or_add_shared_description(operation_type),
+                        event_is_known_to_player=owner.has_met_player(),
+                    )
+                )
+
+        # an operation that is gone from the save has ended
+        for operation_id, event in running.items():
+            if operation_id not in live_ids and event.end_date_days is None:
+                event.end_date_days = max(today - 1, event.start_date_days)
                 self._session.add(event)
 
 

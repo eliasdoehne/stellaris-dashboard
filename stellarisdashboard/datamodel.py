@@ -305,6 +305,8 @@ class HistoricalEventType(enum.Enum):
     acquired_relic = enum.auto()
     destroyed_leviathan = enum.auto()
     first_contact_process = enum.auto()
+    espionage_operation = enum.auto()
+    completed_espionage_operation = enum.auto()
 
     def __str__(self):
         return self.name
@@ -374,6 +376,8 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.acquired_relic,
             HistoricalEventType.destroyed_leviathan,
             HistoricalEventType.first_contact_process,
+            HistoricalEventType.espionage_operation,
+            HistoricalEventType.completed_espionage_operation,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -1938,6 +1942,14 @@ def render_first_contact_description(status: str) -> str:
     return FIRST_CONTACT_PROCESS_VERBS.get(status, "made contact with")
 
 
+def render_espionage_description(text: str) -> str:
+    """Renders an operation type, optionally packed as "<type>|<operation id>", e.g. "Steal Technology"."""
+    operation_type, _ = split_packed_description(text)
+    return game_info.lookup_key_if_known(operation_type) or game_info.convert_id_to_name(
+        operation_type, remove_prefix="operation"
+    )
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -2073,6 +2085,11 @@ class HistoricalEvent(Base):
             return render_dig_site_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.explored_astral_rift:
             return render_astral_rift_description(self.db_description.text)
+        elif self.event_type in (
+            HistoricalEventType.espionage_operation,
+            HistoricalEventType.completed_espionage_operation,
+        ):
+            return render_espionage_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.first_contact_process:
             return render_first_contact_description(
                 self.db_description.text if self.db_description else ""
