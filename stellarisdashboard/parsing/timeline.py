@@ -3744,6 +3744,66 @@ class WarProcessor(AbstractGamestateDataProcessor):
             )
 
 
+@dataclasses.dataclass(frozen=True)
+class WarTruceCandidate:
+    """The in-game country IDs of an unresolved war that can be matched to a truce."""
+
+    war: Any
+    attacker_leader: Optional[int]
+    defender_leader: Optional[int]
+    participants: frozenset
+
+    @staticmethod
+    def from_war(war: datamodel.War) -> "WarTruceCandidate":
+        def leader_of(participants: List[datamodel.WarParticipant]) -> Optional[int]:
+            # the primary participant started the war; allies are called in later
+            primary = [wp for wp in participants if wp.call_type == "primary"]
+            leader = (primary or participants or [None])[0]
+            return None if leader is None else leader.country.country_id_in_game
+
+        participants = sorted(war.participants, key=lambda wp: wp.warparticipant_id)
+        return WarTruceCandidate(
+            war=war,
+            attacker_leader=leader_of([wp for wp in participants if wp.is_attacker]),
+            defender_leader=leader_of(
+                [wp for wp in participants if not wp.is_attacker]
+            ),
+            participants=frozenset(
+                wp.country.country_id_in_game for wp in participants
+            ),
+        )
+
+
+def match_truces_to_wars(
+    truces: Dict[Any, Collection[int]], candidates: Collection[WarTruceCandidate]
+) -> Dict[Any, WarTruceCandidate]:
+    """Match each truce to the unresolved war it ended, if any.
+
+    A war matches a truce if the truce includes the leaders of both sides (or has
+    exactly the same countries as the war). If several wars match, the one sharing the
+    most countries with the truce is chosen. Each war is matched at most once.
+    """
+    remaining = list(candidates)
+    matches = {}
+    for truce_id, countries in truces.items():
+        countries = frozenset(countries)
+        matching = [
+            c
+            for c in remaining
+            if c.participants == countries
+            or (c.attacker_leader in countries and c.defender_leader in countries)
+        ]
+        if not matching:
+            continue
+        best = max(
+            matching,
+            key=lambda c: (len(c.participants & countries), -len(c.participants)),
+        )
+        matches[truce_id] = best
+        remaining.remove(best)
+    return matches
+
+
 class TruceProcessor(AbstractGamestateDataProcessor):
     ID = "truces"
     DEPENDENCIES = [
@@ -3778,13 +3838,9 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             )
             .all()
         )
-        war_by_participant_countries = {
-            frozenset(wp.country.country_id_in_game for wp in w.participants): w
-            for w in unresolved_wars
-        }
+        candidates = [WarTruceCandidate.from_war(w) for w in unresolved_wars]
 
-        resolved = set()
-        #  resolve wars based on truces...
+        truce_countries = {}
         for truce_id, countries in diplo_truces.items():
             truce_info = truces_dict.get(truce_id)
             if not isinstance(truce_info, dict):
@@ -3792,13 +3848,16 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             truce_type = truce_info.get("truce_type", "other")
             if truce_type != "war":
                 continue  # truce is due to diplomatic agreements or similar, ignore
+            truce_countries[truce_id] = countries
 
-            countries_frozen = frozenset(countries)
-            if countries_frozen in war_by_participant_countries:
-                matching_war = war_by_participant_countries[countries_frozen]
-                resolved.add(countries_frozen)
-            else:
-                continue
+        #  resolve wars based on truces...
+        resolved = set()
+        for truce_id, candidate in match_truces_to_wars(
+            truce_countries, candidates
+        ).items():
+            truce_info = truces_dict[truce_id]
+            matching_war = candidate.war
+            resolved.add(matching_war.war_id)
 
             end_date = truce_info.get("start_date")  # start of truce => end of war
             if (
@@ -3814,8 +3873,8 @@ class TruceProcessor(AbstractGamestateDataProcessor):
             self._session.add(matching_war)
 
         # resolve the wars that are no longer in the save file and do not match any truce:
-        for countries, war in war_by_participant_countries.items():
-            if countries in resolved:
+        for war in unresolved_wars:
+            if war.war_id in resolved:
                 continue
             war.outcome = datamodel.WarOutcome.resolution_unknown
             self._session.add(war)
