@@ -314,6 +314,18 @@ def lookup_id_name(
 
 
 @functools.lru_cache(maxsize=2**8)
+def lookup_anomaly_category(category: str) -> str:
+    """Localised anomaly category: the key itself, then its _CAT variant, then a prettified ID."""
+    mapping = get_global_renderer().name_mapping
+    for key in (category, f"{category}_CAT"):
+        if key in mapping:
+            localised = lookup_key(key)
+            if localised:
+                return localised
+    return convert_id_to_name(category, "category")
+
+
+@functools.lru_cache(maxsize=2**8)
 def lookup_faction_type(faction_type: str) -> str:
     """
     Localised name of a political faction type. Secret society types carry their guiding

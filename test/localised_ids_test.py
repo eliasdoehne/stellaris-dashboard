@@ -3,11 +3,12 @@ import pathlib
 
 import pytest
 
-from stellarisdashboard import game_info
+from stellarisdashboard import datamodel, game_info
 
 
 def _clear_caches():
     game_info.lookup_id_name.cache_clear()
+    game_info.lookup_anomaly_category.cache_clear()
     game_info.lookup_faction_type.cache_clear()
     game_info.render_name_or_prettify.cache_clear()
     game_info.render_name.cache_clear()
@@ -111,3 +112,30 @@ def test_job_label(fixture_renderer, job_id, expected):
 )
 def test_stratum_label(fixture_renderer, stratum_id, expected):
     assert game_info.lookup_id_name(stratum_id, loc_prefix="pop_cat_") == expected
+
+
+@pytest.mark.parametrize(
+    "category, expected",
+    [
+        ("STORMS_ANOM_TRAVELLERS", "Aftermath Distress Signal"),
+        ("AIANOM_LUMP", "Orbital Debris"),
+        # the _CAT value references another key
+        ("AIANOM_RESEARCHDEPO", "Mining Deposit"),
+        ("unknown_thing_category", "Unknown Thing"),
+    ],
+)
+def test_anomaly_category(fixture_renderer, category, expected):
+    assert game_info.lookup_anomaly_category(category) == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("test_rift|test_rift.2", "Siege on Paradise: Rift Anomaly"),
+        # a step titled like the rift itself is not repeated
+        ("test_rift|test_rift.1", "Siege on Paradise"),
+        ("test_rift|", "Siege on Paradise"),
+    ],
+)
+def test_astral_rift_description(fixture_renderer, text, expected):
+    assert datamodel.render_astral_rift_description(text) == expected
