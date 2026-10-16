@@ -303,6 +303,7 @@ class HistoricalEventType(enum.Enum):
     excavated_dig_site = enum.auto()
     explored_astral_rift = enum.auto()
     acquired_relic = enum.auto()
+    destroyed_leviathan = enum.auto()
 
     def __str__(self):
         return self.name
@@ -370,6 +371,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.excavated_dig_site,
             HistoricalEventType.explored_astral_rift,
             HistoricalEventType.acquired_relic,
+            HistoricalEventType.destroyed_leviathan,
         }:
             return HistoricalEventScope.country
         elif self in {

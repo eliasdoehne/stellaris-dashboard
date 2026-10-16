@@ -325,6 +325,7 @@ class TimelineExtractor:
         yield ArchaeologyProcessor()
         yield AstralRiftProcessor()
         yield RelicProcessor()
+        yield LeviathanProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3867,6 +3868,46 @@ class RelicProcessor(AbstractGamestateDataProcessor):
                 )
 
 
+class LeviathanProcessor(AbstractGamestateDataProcessor):
+    """Records the destruction of leviathans, as reported by the countries' timeline events."""
+
+    ID = "leviathans"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        known = set()  # (country id, date) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.destroyed_leviathan
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.target_country),
+        ):
+            if event.country is not None:
+                known.add((event.country.country_id_in_game, event.start_date_days))
+
+        kills = collect_leviathan_kills(self._gamestate_dict.get("country"))
+        for country_id, target_id, date_days in sorted(
+            kills, key=lambda k: (k[2], k[0], k[1] or -1)
+        ):
+            country = countries.get(country_id)
+            target = countries.get(target_id)
+            # the leviathan's country may no longer exist in later saves, so it is not part of the key
+            key = (country_id, date_days)
+            if country is None or key in known:
+                continue
+            known.add(key)
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.destroyed_leviathan,
+                    country=country,
+                    target_country=target,
+                    start_date_days=date_days,
+                    event_is_known_to_player=country.has_met_player(),
+                )
+            )
+
+
 class WarProcessor(AbstractGamestateDataProcessor):
     ID = "wars"
     DEPENDENCIES = [
@@ -4219,11 +4260,13 @@ def _is_country_id(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
-    """Collect the (winner, loser, date_days) of all won/lost wars in the countries' timelines."""
-    results = set()
+def iter_timeline_events(
+    countries: Any, definitions: Collection[str]
+) -> Iterable[Tuple[str, List[Any], int]]:
+    """Yield (definition, data, date_days) of the countries' timeline events with one of the
+    definitions, skipping malformed entries."""
     if not isinstance(countries, dict):
-        return results
+        return
     for country in countries.values():
         events = country.get("timeline_events") if isinstance(country, dict) else None
         if not isinstance(events, list):
@@ -4234,21 +4277,43 @@ def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
             definition = event.get("definition")
             data = event.get("data")
             date = event.get("date")
-            if definition not in WAR_RESULT_EVENTS or not isinstance(date, str):
+            if definition not in definitions or not isinstance(date, str):
                 continue
-            if not isinstance(data, list) or len(data) < 2:
-                continue
-            if not (_is_country_id(data[0]) and _is_country_id(data[1])):
+            if not isinstance(data, list):
                 continue
             try:
                 date_days = datamodel.date_to_days(date)
             except ValueError:
                 continue
-            if WAR_RESULT_EVENTS[definition]:
-                results.add((data[0], data[1], date_days))
-            else:
-                results.add((data[1], data[0], date_days))
+            yield definition, data, date_days
+
+
+def collect_war_results(countries: Any) -> Set[Tuple[int, int, int]]:
+    """Collect the (winner, loser, date_days) of all won/lost wars in the countries' timelines."""
+    results = set()
+    for definition, data, date_days in iter_timeline_events(
+        countries, WAR_RESULT_EVENTS
+    ):
+        if len(data) < 2 or not (_is_country_id(data[0]) and _is_country_id(data[1])):
+            continue
+        if WAR_RESULT_EVENTS[definition]:
+            results.add((data[0], data[1], date_days))
+        else:
+            results.add((data[1], data[0], date_days))
     return results
+
+
+def collect_leviathan_kills(countries: Any) -> Set[Tuple[int, Optional[int], int]]:
+    """Collect the (country, leviathan country or None, date_days) of all destroyed leviathans."""
+    kills = set()
+    for _, data, date_days in iter_timeline_events(
+        countries, {"timeline_destroyed_leviathan"}
+    ):
+        if not data or not _is_country_id(data[0]):
+            continue
+        target = data[1] if len(data) > 1 and _is_country_id(data[1]) else None
+        kills.add((data[0], target, date_days))
+    return kills
 
 
 def match_results_to_wars(
