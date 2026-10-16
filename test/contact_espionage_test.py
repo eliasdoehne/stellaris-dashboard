@@ -79,3 +79,12 @@ def test_espionage_completion_of_repeatable_operation_is_the_completed_list():
 def test_render_espionage_description():
     assert render_espionage_description("operation_steal_technology|822083587") == "Steal Technology"
     assert render_espionage_description("operation_gather_information") == "Gather Information"
+
+
+def test_first_contact_end_day_of_process_seen_open_is_before_the_save():
+    completed = [{"stage": "caravaneers_stage_2", "date": "2244.05.13"}]
+    save_day = date_to_days("2245.08.01")
+    assert first_contact_end_day("finished", completed, START, save_day) == save_day - 1
+    assert first_contact_end_day("in_progress", completed, START, save_day) is None
+    late = [{"stage": "x", "date": "2245.08.01"}]
+    assert first_contact_end_day("finished", late, START, save_day) == save_day

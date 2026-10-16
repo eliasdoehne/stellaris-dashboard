@@ -3832,8 +3832,14 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
 FIRST_CONTACT_STATUSES = ("in_progress", "finished", "aborted")
 
 
-def first_contact_end_day(status: str, completed: Any, start_day: int) -> Optional[int]:
-    """The day a first contact process ended: None while in progress, else its last completed stage."""
+def first_contact_end_day(
+    status: str, completed: Any, start_day: int, seen_open_on: Optional[int] = None
+) -> Optional[int]:
+    """The day a first contact process ended: None while in progress.
+
+    A process seen open before ended in the day before this save; otherwise this is the last
+    recorded stage, as the final stage is not always in the completed list.
+    """
     if status == "in_progress":
         return None
     days = []
@@ -3842,7 +3848,8 @@ def first_contact_end_day(status: str, completed: Any, start_day: int) -> Option
             days.append(datamodel.date_to_days(entry["date"]))
         except (KeyError, ValueError, TypeError, AttributeError):
             continue
-    return max(days, default=start_day)
+    last_stage_day = max(days, default=start_day)
+    return last_stage_day if seen_open_on is None else max(seen_open_on - 1, last_stage_day)
 
 
 class FirstContactProcessor(AbstractGamestateDataProcessor):
@@ -3891,10 +3898,16 @@ class FirstContactProcessor(AbstractGamestateDataProcessor):
             except ValueError:
                 continue
             status = contact["status"]
-            end_day = first_contact_end_day(status, contact.get("completed"), start_day)
             leader = leaders.get(_as_game_id(contact.get("leader")))
             key = (owner_id, target_id, start_day)
             event = known.get(key)
+            was_open = event is not None and event.end_date_days is None
+            end_day = first_contact_end_day(
+                status,
+                contact.get("completed"),
+                start_day,
+                self._basic_info.date_in_days if was_open else None,
+            )
             if event is None:
                 known[key] = event = datamodel.HistoricalEvent(
                     event_type=datamodel.HistoricalEventType.first_contact_process,
@@ -3910,7 +3923,7 @@ class FirstContactProcessor(AbstractGamestateDataProcessor):
                 self._session.add(event)
                 continue
             changed = False
-            if event.end_date_days != end_day:
+            if was_open and end_day is not None:
                 event.end_date_days = end_day
                 changed = True
             if event.db_description is None or event.db_description.text != status:
