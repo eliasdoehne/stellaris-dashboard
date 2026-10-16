@@ -166,6 +166,24 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} established first contact with the {{ links[event["target_country"]] | safe }}.\n',
     ),
+    "first_contact_process": EventDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "handshake", SPAN,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }}{% if "leader" in event %}\'s {{ event["leader"].leader_class }} {{ links[event["leader"]] | safe }}{% endif %}\n'
+        '                    {{ event["description"] }} the {{ links[event["target_country"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
+    "espionage_operation": EventDescriptor(
+        Category.DIPLOMACY, Tier.ROUTINE, "eye", SPAN,
+        '\n'
+        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
+        '                    {{ links[event["country"]] | safe }} ran the "{{ event["description"] }}" operation against the {{ links[event["target_country"]] | safe }}.\n',
+    ),
+    "completed_espionage_operation": EventDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "key", POINT,
+        '\n'
+        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
+        '                    {{ links[event["country"]] | safe }} completed the "{{ event["description"] }}" operation against the {{ links[event["target_country"]] | safe }}.\n',
+    ),
     "formed_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", SPAN,
         '\n'
