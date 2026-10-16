@@ -67,7 +67,6 @@ Graphs that are enabled by default:
 - `faction_power_graph`
 - `faction_happiness_graph`
 - `planet_pop_distribution_graph`
-- `planet_migration_graph`
 - `planet_amenities_graph`
 - `planet_stability_graph`
 - `planet_housing_graph`

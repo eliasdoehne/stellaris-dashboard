@@ -915,11 +915,6 @@ class PlanetCrimeDataContainer(AbstractPopStatsByPlanetDataContainer):
         return ps.crime
 
 
-class PlanetMigrationDataContainer(AbstractPopStatsByPlanetDataContainer):
-    def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
-        return ps.migration
-
-
 class PlanetAmenitiesDataContainer(AbstractPopStatsByPlanetDataContainer):
     def _get_value_from_popstats(self, ps: datamodel.PlanetStats):
         return ps.free_amenities
@@ -1164,12 +1159,6 @@ PLANET_POP_DISTRIBUTION_GRAPH = PlotSpecification(
     title="Population by Planet",
     data_container_factory=PlanetDistributionDataContainer,
     style=PlotStyle.stacked,
-)
-PLANET_MIGRATION_GRAPH = PlotSpecification(
-    plot_id="empire-planet-migration",
-    title="Migration by Planet",
-    data_container_factory=PlanetMigrationDataContainer,
-    style=PlotStyle.line,
 )
 PLANET_AMENITIES_GRAPH = PlotSpecification(
     plot_id="empire-planet-amenities",
@@ -1555,7 +1544,6 @@ PLOT_SPECIFICATIONS = {
     "faction_crime_graph": FACTION_CRIME_GRAPH,
     "faction_power_graph": FACTION_POWER_GRAPH,
     "planet_pop_distribution_graph": PLANET_POP_DISTRIBUTION_GRAPH,
-    "planet_migration_graph": PLANET_MIGRATION_GRAPH,
     "planet_stability_graph": PLANET_STABILITY_GRAPH,
     "planet_happiness_graph": PLANET_HAPPINESS_GRAPH,
     "planet_amenities_graph": PLANET_AMENITIES_GRAPH,

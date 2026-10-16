@@ -4006,7 +4006,6 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 if not isinstance(planet_dict, dict):
                     continue
 
-                stats["migration"] = planet_dict.get("migration", 0.0)
                 stats["free_amenities"] = planet_dict.get("free_amenities", 0.0)
                 stats["free_housing"] = planet_dict.get("free_housing", 0.0)
                 stats["stability"] = planet_dict.get("stability", 0.0)

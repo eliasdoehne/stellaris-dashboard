@@ -135,7 +135,6 @@ DEFAULT_TAB_LAYOUT = {
     ],
     "Planets": [
         "planet_count_graph",
-        "planet_migration_graph",
         "planet_stability_graph",
         "planet_happiness_graph",
         "planet_amenities_graph",

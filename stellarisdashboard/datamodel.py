@@ -1812,7 +1812,7 @@ class PlanetStats(Base):
     power = Column(Float)
     crime = Column(Float)
 
-    migration = Column(Float)
+    migration = Column(Float)  # unused since 4.x, kept for existing DBs
     free_amenities = Column(Float)
     free_housing = Column(Float)
     stability = Column(Float)
