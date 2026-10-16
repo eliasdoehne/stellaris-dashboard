@@ -260,6 +260,18 @@ class TimelineExtractor:
         )
 
     def _identify_player_country(self):
+        player_country = self._find_player_country()
+        countries = self._gamestate_dict.get("country")
+        if player_country is not None and not (
+            isinstance(countries, dict) and isinstance(countries.get(player_country), dict)
+        ):
+            logger.warning(
+                f"Player country {player_country} is not in the gamestate, treating as no player"
+            )
+            return None
+        return player_country
+
+    def _find_player_country(self):
         players = self._gamestate_dict.get("player")
         if players:
             if len(players) == 1:
@@ -1042,7 +1054,10 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             for attitude in attitudes:
                 if not isinstance(attitude, dict):
                     continue
-                if attitude.get("country") == self._basic_info.player_country_id:
+                if (
+                    self._basic_info.player_country_id is not None
+                    and attitude.get("country") == self._basic_info.player_country_id
+                ):
                     attitude_towards_player = attitude.get("attitude")
                     break
             attitude_towards_player = datamodel.Attitude.__members__.get(
