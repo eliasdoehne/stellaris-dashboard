@@ -303,6 +303,20 @@ def lookup_id_name(object_id: str, remove_prefix: str = "") -> str:
     return convert_id_to_name(object_id, remove_prefix)
 
 
+@functools.lru_cache(maxsize=2**8)
+def lookup_faction_type(faction_type: str) -> str:
+    """
+    Localised name of a political faction type. Secret society types carry their guiding
+    ethic as a suffix (the_masquerade_xenophile) that their loc key (pft_the_masquerade) lacks.
+    """
+    mapping = get_global_renderer().name_mapping
+    key = f"pft_{faction_type}"
+    base_key, _, ethic = key.rpartition("_")
+    if key not in mapping and base_key in mapping and f"ethic_{ethic}" in mapping:
+        key = base_key
+    return lookup_key(key)
+
+
 _KEY_LIKE_RE = re.compile(r"[A-Za-z0-9_.]+")
 
 
@@ -351,6 +365,7 @@ def get_global_renderer() -> NameRenderer:
                 # drop names cached against the old renderer
                 render_name.cache_clear()
                 lookup_id_name.cache_clear()
+                lookup_faction_type.cache_clear()
                 render_name_or_prettify.cache_clear()
     return global_renderer
 

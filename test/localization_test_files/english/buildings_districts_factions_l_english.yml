@@ -3,3 +3,7 @@
  building_research_lab_1_desc:0 "Produces research."
  district_city:0 "City District"
  secret_society_test_faction:0 "Order of the Test"
+ the_masquerade:0 "The Masquerade"
+ pft_the_masquerade:0 "$the_masquerade$"
+ pft_imperialist:0 "Imperialist Faction"
+ ethic_xenophile:0 "Xenophile"

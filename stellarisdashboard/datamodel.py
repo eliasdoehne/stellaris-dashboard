@@ -1375,7 +1375,7 @@ class PoliticalFaction(Base):
 
     @property
     def rendered_type(self):
-        return game_info.lookup_key(f"pft_{str(self.db_faction_type.text)}")
+        return game_info.lookup_faction_type(str(self.db_faction_type.text))
     
     @property
     def rendered_name(self):

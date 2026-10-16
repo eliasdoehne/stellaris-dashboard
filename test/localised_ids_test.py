@@ -8,6 +8,7 @@ from stellarisdashboard import game_info
 
 def _clear_caches():
     game_info.lookup_id_name.cache_clear()
+    game_info.lookup_faction_type.cache_clear()
     game_info.render_name_or_prettify.cache_clear()
     game_info.render_name.cache_clear()
 
@@ -65,3 +66,15 @@ def test_district_falls_back_to_prettified_id(fixture_renderer):
 )
 def test_faction_name(fixture_renderer, faction_name, expected):
     assert game_info.render_name_or_prettify(json.dumps(faction_name)) == expected
+
+
+@pytest.mark.parametrize(
+    "faction_type, expected",
+    [
+        ("imperialist", "Imperialist Faction"),
+        # secret societies append their ethic to the type, but not to the loc key
+        ("the_masquerade_xenophile", "The Masquerade"),
+    ],
+)
+def test_faction_type(fixture_renderer, faction_type, expected):
+    assert game_info.lookup_faction_type(faction_type) == expected
