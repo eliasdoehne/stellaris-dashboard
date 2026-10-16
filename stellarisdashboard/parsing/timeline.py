@@ -65,7 +65,21 @@ _BIOSHIP_FAMILY_HULLS = {
     "harbinger": "cruiser",
     "stinger": "battleship",
 }
+# Fallen empire and NPC warship sizes, mapped by the hull class of their design (the
+# reactor/thruster components in the 4.0.1 test save, or the hull named in the key).
+# Space fauna, crystals, and other unique guardians are left out on purpose.
+_NPC_HULLS = {
+    "small_ship_fallen_empire": "destroyer",
+    "large_ship_fallen_empire": "battleship",
+    "massive_ship_fallen_empire": "titan",
+    "ancient_corvette": "corvette",
+    "ancient_destroyer": "destroyer",
+    "pirate_corvette": "corvette",
+    "caravaneer_destroyer_01": "destroyer",
+    "caravaneer_cruiser_01": "cruiser",
+}
 _FLEET_COMPOSITION_HULLS = {
+    "frigate",
     "corvette",
     "destroyer",
     "cruiser",
@@ -77,11 +91,14 @@ _FLEET_COMPOSITION_HULLS = {
 
 def _fleet_composition_hull(ship_size) -> Optional[str]:
     """Map a ship size to its fleet composition hull, including BioGenesis
-    (<family>_stage_<n>, bio_titan) and Overlord (offspring_*) bioships."""
+    (<family>_stage_<n>, bio_titan) and Overlord (offspring_*) bioships, and
+    fallen empire and NPC warships."""
     if not isinstance(ship_size, str):
         return None
     if ship_size == "bio_titan":
         return "titan"
+    if ship_size in _NPC_HULLS:
+        return _NPC_HULLS[ship_size]
     name = ship_size.removeprefix("offspring_")
     family, sep, stage = name.partition("_stage_")
     if sep and stage.isdigit():
@@ -3404,6 +3421,7 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
             return
         if owner_id not in self._fleet_compos:
             self._fleet_compos[owner_id] = dict(
+                ship_count_frigate=0,
                 ship_count_corvette=0,
                 ship_count_destroyer=0,
                 ship_count_cruiser=0,

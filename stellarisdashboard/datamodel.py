@@ -1110,6 +1110,7 @@ class CountryData(Base):
     net_trade = Column(Float, nullable=False, default=0.0, server_default="0.0") # server_default is needed for alembic automigration
     net_biomass = Column(Float, nullable=False, default=0.0, server_default="0.0") # server_default is needed for alembic automigration
 
+    ship_count_frigate = Column(Integer, nullable=False, default=0, server_default="0") # server_default is needed for alembic automigration
     ship_count_corvette = Column(Integer, default=0)
     ship_count_destroyer = Column(Integer, default=0)
     ship_count_cruiser = Column(Integer, default=0)

@@ -45,7 +45,7 @@ def test_real_save(tmp_path):
             totals["districts"] += con.execute("SELECT COUNT(*) FROM planet_district").fetchone()[0]
             totals["buildings"] += con.execute("SELECT COUNT(*) FROM planet_building").fetchone()[0]
             totals["ships"] += con.execute(
-                "SELECT COALESCE(SUM(ship_count_corvette + ship_count_destroyer + ship_count_cruiser"
+                "SELECT COALESCE(SUM(ship_count_frigate + ship_count_corvette + ship_count_destroyer + ship_count_cruiser"
                 " + ship_count_battleship + ship_count_titan + ship_count_colossus), 0) FROM country_data"
             ).fetchone()[0]
             totals["faction_support"] += con.execute("SELECT COUNT(*) FROM popstats_faction WHERE support > 0").fetchone()[0]

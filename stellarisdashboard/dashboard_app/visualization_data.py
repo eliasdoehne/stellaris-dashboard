@@ -502,6 +502,7 @@ class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
     def _iterate_budgetitems(
         self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
+        yield "frigates", cd.ship_count_frigate
         yield "corvettes", cd.ship_count_corvette
         yield "destroyers", cd.ship_count_destroyer * 2
         yield "cruisers", cd.ship_count_cruiser * 4

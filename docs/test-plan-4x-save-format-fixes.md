@@ -69,8 +69,7 @@ Load the save matching the latest imported date (the script prints it). Compare 
 - **F1/F2:** pick two or three planets. The ledger planet page (Event Ledger → planet link) shows *Districts* and *Buildings*, which should match the planet view. For districts, the dashboard count equals the district's level shown in-game.
 - **F3:** compare hull counts with the fleet manager.
   - The DB stores raw counts.
-  - The *Fleet Composition* graph (Military tab) weights them: destroyer ×2, cruiser ×4, battleship ×8, titan ×16, colossus ×32.
-  - Frigates are not counted yet.
+  - The *Fleet Composition* graph (Military tab) weights them: frigate and corvette ×1, destroyer ×2, cruiser ×4, battleship ×8, titan ×16, colossus ×32.
 - **F4:** compare the Budget tab's Living Metal, Zro and Dark Matter graphs with the in-game resource tooltip (income and upkeep by category).
 - **F5:** *Faction Support* (Pops tab) against the support % on the in-game Factions screen. The dashboard stores a fraction: 0.25 means 25%.
 - **F6:** the capital on the country's ledger page or the Codex matches the in-game capital.
@@ -162,9 +161,9 @@ for name, n in q(
 ):
     print(f"     {name}: {n}")
 
-print("3. Player fleet composition (corvette, destroyer, cruiser, battleship, titan, colossus):")
+print("3. Player fleet composition (frigate, corvette, destroyer, cruiser, battleship, titan, colossus):")
 print("    ", q(
-    "SELECT ship_count_corvette, ship_count_destroyer, ship_count_cruiser, ship_count_battleship,"
+    "SELECT ship_count_frigate, ship_count_corvette, ship_count_destroyer, ship_count_cruiser, ship_count_battleship,"
     " ship_count_titan, ship_count_colossus FROM country_data WHERE country_data_id = ?", cd_id)[0])
 
 print("4. Player net living metal / zro / dark matter (sum of budget items):")
