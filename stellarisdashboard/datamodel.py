@@ -92,6 +92,15 @@ def _setup_engine(game_id):
     _DB_LOCKS[game_id] = threading.Lock()
 
 
+def warm_up_databases():
+    """Run the lazy engine setup (including auto-migration) for all existing game databases."""
+    for game_id in get_known_games():
+        try:
+            _get_or_create_sessionmaker(game_id)
+        except Exception:
+            logger.exception(f"Failed to warm up database for game {game_id}")
+
+
 @contextlib.contextmanager
 def get_db_session(game_id, write: bool = False) -> sqlalchemy.orm.Session:
     # write=True serializes on the per-game lock; readers rely on WAL snapshots

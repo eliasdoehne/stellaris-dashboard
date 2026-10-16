@@ -2,6 +2,7 @@ import functools
 import json
 import logging
 import re
+import threading
 from typing import Iterable
 
 logger = logging.getLogger(__name__)
@@ -273,6 +274,7 @@ class NameRenderer:
 
 
 global_renderer: NameRenderer = None
+_renderer_lock = threading.Lock()  # guards lazy setup (warm-up thread vs. requests)
 
 
 # Pure function of json_str for the singleton renderer; hot on the read path.
@@ -338,14 +340,18 @@ def render_name_or_prettify(name_json: str) -> str:
 def get_global_renderer() -> NameRenderer:
     global global_renderer
     if global_renderer is None:
-        from stellarisdashboard import config
+        with _renderer_lock:
+            if global_renderer is None:  # double-checked
+                from stellarisdashboard import config
 
-        global_renderer = NameRenderer(config.CONFIG.localization_files)
-        global_renderer.load_name_mapping()
-        # drop names cached against the old renderer
-        render_name.cache_clear()
-        lookup_id_name.cache_clear()
-        render_name_or_prettify.cache_clear()
+                renderer = NameRenderer(config.CONFIG.localization_files)
+                renderer.load_name_mapping()
+                # publish only once loaded, so no thread sees a half-loaded renderer
+                global_renderer = renderer
+                # drop names cached against the old renderer
+                render_name.cache_clear()
+                lookup_id_name.cache_clear()
+                render_name_or_prettify.cache_clear()
     return global_renderer
 
 
