@@ -290,6 +290,7 @@ class HistoricalEventType(enum.Enum):
     army_combat = enum.auto()
     conquered_system = enum.auto()
     lost_system = enum.auto()
+    founded_with_system = enum.auto()
 
     # more leader events
     leader_changed_ethic = enum.auto()
@@ -356,6 +357,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.edict,
             HistoricalEventType.conquered_system,
             HistoricalEventType.lost_system,
+            HistoricalEventType.founded_with_system,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -726,6 +728,9 @@ class Country(Base):
     primary_color = Column(String(80))
     secondary_color = Column(String(80))
     origin = Column(String(80))
+
+    # Not persisted: set by CountryProcessor for countries first seen in the current gamestate
+    founded_in_gamestate = False
 
     game = relationship("Game", back_populates="countries")
     capital = relationship("Planet", foreign_keys=[capital_planet_id], post_update=True)

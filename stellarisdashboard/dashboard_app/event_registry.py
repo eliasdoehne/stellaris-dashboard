@@ -123,6 +123,13 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war"]] | safe }} {% endif %}.\n',
         li_class="gained_system",
     ),
+    "founded_with_system": EventDescriptor(
+        Category.WARFARE, Tier.MAJOR, "flag", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} was founded with the {{ links[event["system"]] | safe }} system, formerly held by the'
+        ' {{ links[event["target_country"]] | safe }}.\n',
+        li_class="gained_system",
+    ),
     "lost_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
         '\n'

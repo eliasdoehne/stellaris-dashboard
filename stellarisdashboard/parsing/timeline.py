@@ -531,6 +531,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
             secondary_color = flag_colors[1] if len(flag_colors) >= 2 else primary_color
             origin = country_data_dict.get("government", {}).get("origin")
             country_model = known_countries.get(country_id)
+            is_new_country = country_model is None
 
             if country_model is None or primary_color != country_model.primary_color or secondary_color != country_model.secondary_color:
                 clear_cached_country_colors()
@@ -563,6 +564,7 @@ class CountryProcessor(AbstractGamestateDataProcessor):
                 country_model.secondary_color = secondary_color
                 country_model.origin = origin
                 self._session.add(country_model)
+            country_model.founded_in_gamestate = is_new_country
             self.countries_by_ingame_id[country_id] = country_model
 
 
@@ -682,7 +684,12 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             event_type = datamodel.HistoricalEventType.expanded_to_system
         elif system_model.country != current_owner:
             owner_changed = True
-            event_type = datamodel.HistoricalEventType.conquered_system
+            # Successor states, liberated empires and rebels take their systems when first seen
+            event_type = (
+                datamodel.HistoricalEventType.founded_with_system
+                if current_owner.founded_in_gamestate
+                else datamodel.HistoricalEventType.conquered_system
+            )
 
         if owner_changed:
             had_owner = system_model.country is not None
