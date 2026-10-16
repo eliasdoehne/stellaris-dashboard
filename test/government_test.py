@@ -126,3 +126,54 @@ def test_rename_and_reform_logs_both(session, country_with_initial_government):
         date_in_days=130,
     )
     assert _event_types(session) == ["empire_renamed", "government_reform"]
+
+
+SEVEN_CIVICS = [f"civic_{name}" for name in "abcdefg"]
+
+
+def _governments(session):
+    return (
+        session.query(datamodel.Government)
+        .order_by(datamodel.Government.start_date_days)
+        .all()
+    )
+
+
+def test_seven_civics_are_stored_and_seventh_change_is_a_reform(session):
+    country = datamodel.Country(is_player=True)
+    session.add(country)
+    _process_government(
+        session, country, _country_dict(civics=SEVEN_CIVICS), date_in_days=100
+    )
+    (government,) = _governments(session)
+    assert government.civics == set(SEVEN_CIVICS)
+    assert government.civic_7 is not None
+    assert government.civic_8 is None
+
+    # same civics (in a different order) in a later save: nothing changes
+    _process_government(
+        session, country, _country_dict(civics=SEVEN_CIVICS[::-1]), date_in_days=130
+    )
+    assert len(_governments(session)) == 1
+    assert _event_types(session) == []
+
+    # replacing the 7th civic (alphabetically) is a government reform
+    changed_civics = SEVEN_CIVICS[:6] + ["civic_z"]
+    _process_government(
+        session, country, _country_dict(civics=changed_civics), date_in_days=160
+    )
+    governments = _governments(session)
+    assert len(governments) == 2
+    assert governments[-1].civics == set(changed_civics)
+    assert _event_types(session) == ["government_reform"]
+
+
+def test_more_than_eight_civics_keeps_first_eight(session):
+    country = datamodel.Country(is_player=True)
+    session.add(country)
+    civics = [f"civic_{i}" for i in range(10)]
+    _process_government(session, country, _country_dict(civics=civics), 100)
+    _process_government(session, country, _country_dict(civics=civics), 130)
+    (government,) = _governments(session)
+    assert government.civics == set(sorted(civics)[:8])
+    assert _event_types(session) == []

@@ -906,13 +906,18 @@ class Government(Base):
     civic_3 = Column(String(80))
     civic_4 = Column(String(80))
     civic_5 = Column(String(80))
+    civic_6 = Column(String(80))
+    civic_7 = Column(String(80))
+    civic_8 = Column(String(80))
 
     country = relationship("Country", back_populates="governments")
 
+    # one entry per civic_N column above
+    CIVIC_COLUMNS = tuple(f"civic_{i}" for i in range(1, 9))
+
     @property
     def civics(self):
-        civics = {self.civic_1, self.civic_2, self.civic_3, self.civic_4, self.civic_5}
-        return civics - {None}
+        return {getattr(self, column) for column in self.CIVIC_COLUMNS} - {None}
 
     @property
     def ethics(self):

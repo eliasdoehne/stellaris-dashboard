@@ -2460,6 +2460,14 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
             if not isinstance(civics_list, list):
                 civics_list = [civics_list]
             civics = set(civics_list)
+            max_civics = len(datamodel.Government.CIVIC_COLUMNS)
+            if len(civics) > max_civics:
+                logger.warning(
+                    f"{self._basic_info.logger_str} Country {country_id} has {len(civics)} civics, "
+                    f"but only {max_civics} can be stored. Ignoring the rest."
+                )
+            # truncate before comparing, since the previous government only has the stored civics
+            civics = set(sorted(civics)[:max_civics])
             authority = gov_dict.get("authority", "other")
             gov_type = gov_dict.get("type", "other")
             gov_was_reformed = False
@@ -2487,14 +2495,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                     prev_gov.ethics_5,
                 ]
                 previous_ethics = set(previous_ethics) - {None}
-                previous_civics = [
-                    prev_gov.civic_1,
-                    prev_gov.civic_2,
-                    prev_gov.civic_3,
-                    prev_gov.civic_4,
-                    prev_gov.civic_5,
-                ]
-                previous_civics = set(previous_civics) - {None}
+                previous_civics = prev_gov.civics
                 gov_was_reformed = (
                     (ethics != previous_ethics)
                     or (civics != previous_civics)
@@ -2507,7 +2508,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                     continue
 
             ethics = dict(zip([f"ethics_{i}" for i in range(1, 6)], sorted(ethics)))
-            civics = dict(zip([f"civic_{i}" for i in range(1, 6)], sorted(civics)))
+            civics = dict(zip(datamodel.Government.CIVIC_COLUMNS, sorted(civics)))
 
             gov = datamodel.Government(
                 country=country_model,
