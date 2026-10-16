@@ -13,6 +13,9 @@ Stellaris 4.x moved several pieces of data to new places in the gamestate:
 - 4.5: pop groups are no longer split by ethic and faction. Each group stores how many
   of its pops hold each ethic instead of a single ``key.ethos.ethic``, and likewise per
   faction instead of a single ``key.pop_faction``.
+- 4.5 (nomads): a colony can be carried by a ship (an arkship) instead of a planet. These
+  colonies have no entry in ``planets.planet``, so they are exposed as pseudo-planets with a
+  negative planet ID (see ``arkship_planet_id``).
 
 The functions in this module accept the parsed gamestate dictionary and work for
 both the old and the new layouts, so the timeline processors can stay version-agnostic.
@@ -23,6 +26,9 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 NO_ETHOS = "ethic_no_ethos"
+
+# Planet class of the pseudo-planets that represent colonies carried by ships (nomad arkships)
+ARKSHIP_PLANET_CLASS = "pc_arkship"
 
 # Strategic resources that the game prefixes with "sr_" in budgets and stockpiles
 _STRATEGIC_RESOURCE_PREFIX = "sr_"
@@ -45,13 +51,39 @@ def _as_id(value) -> Optional[int]:
     return None
 
 
+def arkship_planet_id(colony_id: int) -> int:
+    """
+    Planet ID of the pseudo-planet for a ship-carried colony. Real planet IDs are never
+    negative, so the ID cannot collide with them, and it stays stable as long as the colony does.
+    """
+    return -1 - colony_id
+
+
+def is_arkship_planet_id(planet_id) -> bool:
+    return isinstance(planet_id, int) and planet_id < 0
+
+
+def _get_ship_carried_colony(gamestate: Dict[str, Any], colony_id) -> Optional[Dict[str, Any]]:
+    colonies = gamestate.get("colony")
+    if not isinstance(colonies, dict):
+        return None
+    colony = colonies.get(_as_id(colony_id))
+    if not isinstance(colony, dict):
+        return None
+    carrier = colony.get("carrier")
+    if isinstance(carrier, dict) and carrier.get("type") == "ship":
+        return colony
+    return None
+
+
 def resolve_colony_to_planet_id(gamestate: Dict[str, Any], colony_id) -> Optional[int]:
     """
     Map an ID taken from a field that holds colony IDs since 4.4 (``country.owned_planets``,
     ``country.capital``, ``sector.local_capital``, ``pop_group.planet``) to a planet ID.
 
-    Before 4.4 these fields hold planet IDs, which are returned unchanged. Returns None if
-    the colony is not carried by a planet (e.g. a nomad arkship, which is carried by a ship).
+    Before 4.4 these fields hold planet IDs, which are returned unchanged. If the colony is
+    carried by a ship (a nomad arkship), the ID of its pseudo-planet is returned, see
+    ``arkship_planet_id``. Returns None for unknown colonies.
     """
     colonies = gamestate.get("colony")
     if not isinstance(colonies, dict):
@@ -60,9 +92,24 @@ def resolve_colony_to_planet_id(gamestate: Dict[str, Any], colony_id) -> Optiona
     if not isinstance(colony, dict):
         return None
     carrier = colony.get("carrier")
-    if isinstance(carrier, dict) and carrier.get("type") == "planet":
-        return _as_id(carrier.get("reference"))
+    if isinstance(carrier, dict):
+        if carrier.get("type") == "planet":
+            return _as_id(carrier.get("reference"))
+        if carrier.get("type") == "ship":
+            return arkship_planet_id(_as_id(colony_id))
     return None
+
+
+def get_arkship_planet_ids(gamestate: Dict[str, Any]) -> List[int]:
+    """Return the pseudo-planet IDs of all ship-carried colonies that a country owns."""
+    result = set()
+    for country in (gamestate.get("country") or {}).values():
+        if not isinstance(country, dict):
+            continue
+        for colony_id in _as_list(country.get("owned_planets")):
+            if _get_ship_carried_colony(gamestate, colony_id) is not None:
+                result.add(arkship_planet_id(_as_id(colony_id)))
+    return sorted(result)
 
 
 def get_planet(gamestate: Dict[str, Any], planet_id) -> Optional[Dict[str, Any]]:
@@ -70,7 +117,24 @@ def get_planet(gamestate: Dict[str, Any], planet_id) -> Optional[Dict[str, Any]]
     Return the planet's dictionary. Since 4.4, the data of a colonized planet is split between
     the planet (physical data, modifiers) and its colony (pops, districts, governor, stability, ...).
     In that case, a merged view is returned, so callers can read either kind of field.
+
+    For the pseudo-planet of a ship-carried colony, the colony's data is returned, with the
+    planet class ARKSHIP_PLANET_CLASS and the name of the carrying ship's fleet.
     """
+    if is_arkship_planet_id(planet_id):
+        colony_id = -1 - planet_id
+        colony = _get_ship_carried_colony(gamestate, colony_id)
+        if colony is None:
+            return None
+        result = {**colony, "planet_class": ARKSHIP_PLANET_CLASS}
+        ship = (gamestate.get("ships") or {}).get(_as_id(colony["carrier"].get("reference")))
+        fleet = None
+        if isinstance(ship, dict):
+            fleet = (gamestate.get("fleet") or {}).get(_as_id(ship.get("fleet")))
+        if isinstance(fleet, dict) and "name" in fleet:
+            result["name"] = fleet["name"]
+        return result
+
     planet = gamestate.get("planets", {}).get("planet", {}).get(planet_id)
     if not isinstance(planet, dict):
         return planet

@@ -44,7 +44,7 @@ Set **autosave to monthly** in the game options. The game removes old autosaves,
 | **S1: early** | 4.5.x | A new game with a regular (non-gestalt) empire. Keep the first ~12 monthly autosaves. | Capital, starting districts and buildings, a few ships | F1–F4, F6, F7, F9, F10 (baseline) |
 | **S2: mid-game** | 4.5.x | Continue S1, or use an existing campaign, to roughly 2240+. Keep 12+ consecutive monthly autosaves. | **Factions formed** (most important). At least 3 colonies, at least 1 sector with a governor, a mixed fleet (corvettes, destroyers, cruisers…), and any income or upkeep of living metal, zro or dark matter. | F3–F11, especially F11 |
 | **S3: changes** | 4.5.x | From a mid-game save, do one thing per month and keep each monthly save: build a district, build a building, appoint or replace a sector governor, build ships of a new hull size, relocate the capital if possible. | Before/after pairs for each action | Change detection, ledger events (F1, F2, F6, F8) |
-| S4 *(optional)* | 4.5.x | A Nomads empire (arkship) and/or BioGenesis bioships, if you own them | Arkship colony; bioships | Arkship colonies are skipped without errors; bioship growth-stage sizes (F3) |
+| S4 *(optional)* | 4.5.x | A Nomads empire (arkship) and/or BioGenesis bioships, if you own them | Arkship colony; bioships | Arkship colonies appear as "pc_arkship" planets (no system) in planet graphs and as the capital; bioship growth-stage sizes (F3) |
 | S5 *(optional)* | 4.4 / 4.0–4.3 via a Steam beta branch | Any short game | — | Older code paths on real data |
 | S6 | Existing DB | Copy an existing `output/db/<game>.db` made with the old dashboard, plus that game's newest saves | — | Upgrade path (§4, Phase 4) |
 
@@ -206,7 +206,7 @@ Names in the output are raw localisation keys (for example `{"key": "SPEC_Alari_
 - **Frigates** are not counted in fleet composition. This needs a new DB column and is a separate change.
 - **Zones and district specializations** (4.0) are not stored. Only districts and buildings are.
 - **History is not backfilled** in existing DBs. See Phase 4.
-- **Nomad arkship colonies** have no planet, so they are left out of per-planet stats and capital tracking.
+- **Nomad arkship colonies** are recorded as planets of class `pc_arkship` with a negative in-game ID and no system, because the save data read here does not say which system the ship is in. They show up in the planet graphs and as the capital, but not on the galaxy map.
 
 ## 8. What to send back if something fails
 

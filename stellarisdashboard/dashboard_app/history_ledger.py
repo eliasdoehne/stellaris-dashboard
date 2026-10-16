@@ -333,8 +333,10 @@ class EventTemplateDictBuilder:
             )
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
 
-            if "planet" in event_dict and event_dict["system"] is None:
-                event_dict["system"] = event_dict["planet"].system
+            if "planet" in event_dict and "system" not in event_dict:
+                # planets carried by ships (nomad arkships) have no system
+                if event_dict["planet"].system is not None:
+                    event_dict["system"] = event_dict["planet"].system
             if "faction" in event_dict:
                 event_dict["faction_type"] = event.faction.rendered_type
             if event.combat:

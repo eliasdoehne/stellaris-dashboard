@@ -1524,10 +1524,18 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         }
         systems_by_id = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
 
-        for system_id, system_dict in sorted(
-            self._gamestate_dict["galactic_object"].items()
-        ):
-            planets = system_dict.get("planet", [])
+        planets_by_system = [
+            (system_id, system_dict.get("planet", []))
+            for system_id, system_dict in sorted(
+                self._gamestate_dict["galactic_object"].items()
+            )
+        ]
+        # colonies carried by ships (nomad arkships) are recorded as planets without a system
+        planets_by_system.append(
+            (None, save_format.get_arkship_planet_ids(self._gamestate_dict))
+        )
+
+        for system_id, planets in planets_by_system:
             if isinstance(planets, int):
                 planets = [planets]
             for ingame_id in planets:
@@ -2008,7 +2016,9 @@ class PlanetUpdateProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         planet_models = dependencies[PlanetProcessor.ID]
         for ingame_id, planet_model in planet_models.items():
-            planet_dict = self._gamestate_dict["planets"]["planet"].get(ingame_id, {})
+            planet_dict = save_format.get_planet(self._gamestate_dict, ingame_id)
+            if planet_dict is None and not save_format.is_arkship_planet_id(ingame_id):
+                planet_dict = {}  # the planet no longer exists
             if not isinstance(planet_dict, dict):
                 continue
             self._update_planet_model(planet_dict, planet_model)
