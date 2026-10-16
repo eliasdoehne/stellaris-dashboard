@@ -63,7 +63,7 @@ Check that the save file location is correctly configured in the dashboard setti
 
 For balance and immersion, only some information about other empires is shown by default. You can enable some settings to show everything:
 - `Show information for all countries`: This will reveal information about countries you have never met, essentially a cheat. In multiplayer, other player empires will not be revealed.
-- `Show all country types`: This will include "pseudo-countries" such as enclaves, pirates,  
+- `Show all country types`: This will include "pseudo-countries" such as enclaves, pirates, and traders. For these special countries only territory, wars and diplomacy are tracked; routine events (leaders, policies, technologies, etc.) and detailed economy and population statistics are not stored.
 - `Filter history ledger by event type`: By default, the event ledger does not show everything on the main page. For example, more detailed events like leader level-ups are only shown on that specific leader's ledger entry. This setting allows you to change this behavior and see all events on the main page.
 
 ## Timelapse Export

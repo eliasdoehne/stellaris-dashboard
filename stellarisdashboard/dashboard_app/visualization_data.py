@@ -756,7 +756,7 @@ class BudgetSumDataContainer(AbstractPerCountryDataContainer, abc.ABC):
     def _get_value_from_countrydata(
         self, cd: datamodel.CountryData
     ) -> Union[None, float]:
-        if cd.show_economic_info():
+        if cd.show_economic_info() and cd.budget:  # no items for special countries
             return sum(self.function_from_budgetitem(bi) for bi in cd.budget)
 
 

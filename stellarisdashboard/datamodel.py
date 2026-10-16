@@ -373,6 +373,32 @@ class HistoricalEventType(enum.Enum):
         return HistoricalEventScope.all
 
 
+# Routine events that are not stored for special (non-"real") countries, see drop_special_country_events.
+SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES = frozenset(
+    {
+        HistoricalEventType.new_policy,
+        HistoricalEventType.changed_policy,
+        HistoricalEventType.leader_recruited,
+        HistoricalEventType.leader_died,
+        HistoricalEventType.level_up,
+        HistoricalEventType.gained_trait,
+        HistoricalEventType.lost_trait,
+        HistoricalEventType.ruled_empire,
+        HistoricalEventType.governed_sector,
+        HistoricalEventType.councilor,
+        HistoricalEventType.faction_leader,
+        HistoricalEventType.fleet_command,
+        HistoricalEventType.researched_technology,
+        HistoricalEventType.tradition,
+        HistoricalEventType.ascension_perk,
+        HistoricalEventType.edict,
+        HistoricalEventType.agenda_preparation,
+        HistoricalEventType.agenda_launch,
+        HistoricalEventType.leader_left_country,
+    }
+)
+
+
 def date_to_days(date_str: str) -> int:
     """Converts a date given in-game ("2200.03.01") to an integer counting the days passed since
     2200.01.01.
@@ -1998,3 +2024,24 @@ class HistoricalEvent(Base):
             yield self.target_country
         if self.combat_id is not None:
             yield from self.combat.involved_countries()
+
+
+def drop_special_country_events(session, flush_context, instances):
+    """before_flush hook: discard pending routine events of special countries."""
+    for obj in list(session.new):
+        if (
+            not isinstance(obj, HistoricalEvent)
+            or obj.event_type not in SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES
+        ):
+            continue
+        country = obj.country
+        if country is None and obj.country_id is not None:
+            country = session.get(Country, obj.country_id)
+        if country is None or country.is_real_country():
+            continue
+        # detach from the back-populated collections so the flush doesn't see them
+        for rel in ("country", "leader", "system", "planet", "faction"):
+            if rel in obj.__dict__:
+                setattr(obj, rel, None)
+        if obj in session:  # detaching may already have expunged it
+            session.expunge(obj)

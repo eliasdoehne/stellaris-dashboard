@@ -142,6 +142,9 @@ class TimelineExtractor:
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.process_time()
         with datamodel.get_db_session(game_id=game_id, write=True) as self._session:
+            sqlalchemy.event.listen(
+                self._session, "before_flush", datamodel.drop_special_country_events
+            )
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
                 if self._check_if_gamestate_exists(db_game):
@@ -1134,6 +1137,8 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             )
             country_data.net_biomass += resources.get("biomass", 0.0)
 
+            if not country.is_real_country():
+                continue  # only the totals are kept for special countries
             self._session.add(
                 datamodel.BudgetItem(
                     country_data=country_data,
@@ -2603,6 +2608,8 @@ class PolicyProcessor(AbstractGamestateDataProcessor):
         rulers_dict = dependencies[RulerEventProcessor.ID]
 
         for country_id, country_model in countries_dict.items():
+            if not country_model.is_real_country():
+                continue
             current_stance_per_policy = self._get_current_policies(country_id)
 
             previous_policy_by_name = self._load_previous_policies(country_model)
@@ -3090,6 +3097,7 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
             if (
                 not isinstance(product_fluctuation, dict)
                 or country_id not in country_data_dict
+                or not country_data_dict[country_id].country.is_real_country()
             ):
                 continue
             for name, value in product_fluctuation.items():
@@ -3296,8 +3304,9 @@ class ScientistEventProcessor(AbstractGamestateDataProcessor):
                     matching_event = self._get_matching_historical_event(
                         country_model, tech_name
                     )
-                    matching_event.end_date_days = self._basic_info.date_in_days - 1
-                    self._session.add(matching_event)
+                    if matching_event is not None:  # not stored for special countries
+                        matching_event.end_date_days = self._basic_info.date_in_days - 1
+                        self._session.add(matching_event)
                     tech_model = in_progress_techs[tech_name]
                     tech_model.is_completed = True
                     self._session.add(tech_model)
@@ -4146,6 +4155,8 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
         if not isinstance(pop_groups_dict, dict):
             pop_groups_dict = {}
         for country_id_in_game, country_model in countries_dict.items():
+            if not country_model.is_real_country():
+                continue
             country_data = country_data_dict[country_id_in_game]
             stats_by_species = {}
             stats_by_faction = {}

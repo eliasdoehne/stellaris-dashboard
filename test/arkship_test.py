@@ -186,7 +186,8 @@ def test_arkship_pseudo_planet_is_dropped_with_its_colony(session):
 
 def _country(session, save):
     country = datamodel.Country(
-        game=save.game, country_id_in_game=0, country_name="Nomads"
+        game=save.game, country_id_in_game=0, country_name="Nomads",
+        country_type="default",
     )
     session.add(country)
     session.flush()
