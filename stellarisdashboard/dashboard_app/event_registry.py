@@ -166,6 +166,12 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} established first contact with the {{ links[event["target_country"]] | safe }}.\n',
     ),
+    "first_contact_process": EventDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "handshake", SPAN,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }}{% if "leader" in event %}\'s {{ event["leader"].leader_class }} {{ links[event["leader"]] | safe }}{% endif %}\n'
+        '                    {{ event["description"] }} the {{ links[event["target_country"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
     "formed_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", SPAN,
         '\n'

@@ -304,6 +304,7 @@ class HistoricalEventType(enum.Enum):
     explored_astral_rift = enum.auto()
     acquired_relic = enum.auto()
     destroyed_leviathan = enum.auto()
+    first_contact_process = enum.auto()
 
     def __str__(self):
         return self.name
@@ -372,6 +373,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.explored_astral_rift,
             HistoricalEventType.acquired_relic,
             HistoricalEventType.destroyed_leviathan,
+            HistoricalEventType.first_contact_process,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -1924,6 +1926,18 @@ def render_astral_rift_description(text: str) -> str:
     return f"{name}: {title}" if title and title != name else name
 
 
+FIRST_CONTACT_PROCESS_VERBS = {
+    "in_progress": "began first contact with",
+    "finished": "made first contact with",
+    "aborted": "abandoned first contact with",
+}
+
+
+def render_first_contact_description(status: str) -> str:
+    """The verb phrase of a first contact process with the given status."""
+    return FIRST_CONTACT_PROCESS_VERBS.get(status, "made contact with")
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -2059,6 +2073,10 @@ class HistoricalEvent(Base):
             return render_dig_site_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.explored_astral_rift:
             return render_astral_rift_description(self.db_description.text)
+        elif self.event_type == HistoricalEventType.first_contact_process:
+            return render_first_contact_description(
+                self.db_description.text if self.db_description else ""
+            )
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:

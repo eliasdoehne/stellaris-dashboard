@@ -326,6 +326,7 @@ class TimelineExtractor:
         yield AstralRiftProcessor()
         yield RelicProcessor()
         yield LeviathanProcessor()
+        yield FirstContactProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -3825,6 +3826,100 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=country.has_met_player(),
                     )
                 )
+
+
+FIRST_CONTACT_STATUSES = ("in_progress", "finished", "aborted")
+
+
+def first_contact_end_day(status: str, completed: Any, start_day: int) -> Optional[int]:
+    """The day a first contact process ended: None while in progress, else its last completed stage."""
+    if status == "in_progress":
+        return None
+    days = []
+    for entry in _as_dict_list(completed):
+        try:
+            days.append(datamodel.date_to_days(entry["date"]))
+        except (KeyError, ValueError, TypeError, AttributeError):
+            continue
+    return max(days, default=start_day)
+
+
+class FirstContactProcessor(AbstractGamestateDataProcessor):
+    """Tracks the first contact processes of the save, with the envoy, system and outcome."""
+
+    ID = "first_contact_process"
+    DEPENDENCIES = [CountryProcessor.ID, SystemProcessor.ID, LeaderProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        systems = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        leaders = dependencies[LeaderProcessor.ID]
+        contacts = (self._gamestate_dict.get("first_contacts") or {}).get("contacts")
+        if not isinstance(contacts, dict):
+            return
+
+        known = {}  # (owner id, met country id, start day) -> stored event
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.first_contact_process
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.target_country),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.country is not None and event.target_country is not None:
+                known[
+                    (
+                        event.country.country_id_in_game,
+                        event.target_country.country_id_in_game,
+                        event.start_date_days,
+                    )
+                ] = event
+
+        for contact_id, contact in sorted(contacts.items()):
+            if not isinstance(contact, dict) or contact.get("status") not in FIRST_CONTACT_STATUSES:
+                continue
+            owner_id = _as_game_id(contact.get("owner"))
+            target_id = _as_game_id(contact.get("country"))
+            owner = countries.get(owner_id)
+            target = countries.get(target_id)
+            date = contact.get("date")
+            if owner is None or target is None or not isinstance(date, str):
+                continue
+            try:
+                start_day = datamodel.date_to_days(date)
+            except ValueError:
+                continue
+            status = contact["status"]
+            end_day = first_contact_end_day(status, contact.get("completed"), start_day)
+            leader = leaders.get(_as_game_id(contact.get("leader")))
+            key = (owner_id, target_id, start_day)
+            event = known.get(key)
+            if event is None:
+                known[key] = event = datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.first_contact_process,
+                    country=owner,
+                    target_country=target,
+                    leader=leader,
+                    system=systems.get(_as_game_id(contact.get("location"))),
+                    start_date_days=start_day,
+                    end_date_days=end_day,
+                    db_description=self._get_or_add_shared_description(status),
+                    event_is_known_to_player=owner.has_met_player(),
+                )
+                self._session.add(event)
+                continue
+            changed = False
+            if event.end_date_days != end_day:
+                event.end_date_days = end_day
+                changed = True
+            if event.db_description is None or event.db_description.text != status:
+                event.db_description = self._get_or_add_shared_description(status)
+                changed = True
+            if event.leader is None and leader is not None:
+                event.leader = leader
+                changed = True
+            if changed:
+                self._session.add(event)
 
 
 class RelicProcessor(AbstractGamestateDataProcessor):
