@@ -4,8 +4,8 @@ Replaces the ~50-branch ``if/elif`` chain that used to live in
 ``history_page.html``. Each ``HistoricalEventType`` maps to an
 :class:`EventDescriptor` carrying:
 
-* ``category`` / ``tier`` — the two editorial axes from
-  ``scratch/ledger-rework/02-event-type-mapping.md`` (new, data-driven metadata;
+* ``category`` / ``tier`` — the two editorial axes (topic group and
+  importance) of an event type (data-driven metadata;
   recorded here but **not yet surfaced in the UI** — that lands in Chunk H), and
 * ``icon`` — a name for a future glyph (also not rendered yet), plus
 * the bits needed to reproduce the old per-branch markup exactly: an optional
@@ -98,7 +98,7 @@ class EventDescriptor:
 
 
 # event_type -> EventDescriptor. Sentences are copied verbatim from the old
-# per-branch markup. category/tier follow 02-event-type-mapping.md.
+# per-branch markup. category is the topic group, tier the importance.
 REGISTRY: dict[str, EventDescriptor] = {
     # ---- Warfare --------------------------------------------------------
     "war": EventDescriptor(
