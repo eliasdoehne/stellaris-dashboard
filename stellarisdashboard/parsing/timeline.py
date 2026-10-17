@@ -128,6 +128,10 @@ class BasicGameInfo:
         return f"{self.game_id} {datamodel.days_to_date(self.date_in_days)}"
 
 
+# games whose missing player country has already been warned about
+_warned_missing_player_games: Set[Optional[str]] = set()
+
+
 class TimelineExtractor:
     def __init__(self):
         self.basic_info: BasicGameInfo = None
@@ -276,18 +280,21 @@ class TimelineExtractor:
         self.basic_info = BasicGameInfo(
             game_id=game_id,
             date_in_days=date_in_days,
-            player_country_id=self._identify_player_country(),
+            player_country_id=self._identify_player_country(game_id),
             other_players=self._other_players,
             number_of_parsed_saves=self.number_of_parsed_saves,
         )
 
-    def _identify_player_country(self):
+    def _identify_player_country(self, game_id: Optional[str] = None):
         player_country = self._find_player_country()
         countries = self._gamestate_dict.get("country")
         if player_country is not None and not (
             isinstance(countries, dict) and isinstance(countries.get(player_country), dict)
         ):
-            logger.warning(
+            # warn once per game, the player's empire stays missing in every later save
+            log = logger.debug if game_id in _warned_missing_player_games else logger.warning
+            _warned_missing_player_games.add(game_id)
+            log(
                 f"Player country {player_country} is not in the gamestate, treating as no player"
             )
             return None
