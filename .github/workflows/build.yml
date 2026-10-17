@@ -68,17 +68,23 @@ jobs:
       - name: pyInstaller boot smoke test (unix)
         if: matrix.os != 'windows-latest'
         run: |
-          # `timeout` returns 124 when it has to kill a still-running process —
-          # that is the success case here (the dashboard booted and kept serving).
-          # Disable errexit around it so the 124 doesn't abort the step.
-          set +e
-          timeout 20s dist/stellarisdashboard-build/dashboard
-          code=$?
-          set -e
-          if [ "$code" = "124" ] || [ "$code" = "0" ]; then
-            echo "dashboard booted OK (exit $code)"
+          # macOS runners have no `timeout`: run it in the background and check it is still alive after 20 s.
+          dist/stellarisdashboard-build/dashboard &
+          pid=$!
+          sleep 20
+          if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid"
+            echo "dashboard booted OK (still running)"
           else
-            echo "dashboard crashed on startup (exit $code)"; exit "$code"
+            set +e
+            wait "$pid"
+            code=$?
+            set -e
+            if [ "$code" = "0" ]; then
+              echo "dashboard booted OK (exit 0)"
+            else
+              echo "dashboard crashed on startup (exit $code)"; exit "$code"
+            fi
           fi
       - name: pyInstaller boot smoke test (win)
         if: matrix.os == 'windows-latest'
