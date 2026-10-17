@@ -1,7 +1,8 @@
 """
 Helpers that hide differences between Stellaris save format versions.
 
-Stellaris 4.x moved several pieces of data to new places in the gamestate:
+Stellaris 4.x moved several pieces of data to new places in the gamestate (pre-4.0 layouts
+are not supported):
 
 - 4.0: districts became entries in a top-level ``districts`` table (with a ``level``),
   buildings moved into the top-level ``zones`` attached to districts, and ships reference
@@ -18,7 +19,7 @@ Stellaris 4.x moved several pieces of data to new places in the gamestate:
   negative planet ID (see ``arkship_planet_id``).
 
 The functions in this module accept the parsed gamestate dictionary and work for
-both the old and the new layouts, so the timeline processors can stay version-agnostic.
+the 4.0-4.3, 4.4 and 4.5 layouts, so the timeline processors can stay version-agnostic.
 """
 import logging
 from typing import Any, Dict, List, Optional, Tuple
@@ -105,7 +106,7 @@ def resolve_colony_to_planet_id(gamestate: Dict[str, Any], colony_id) -> Optiona
     Map an ID taken from a field that holds colony IDs since 4.4 (``country.owned_planets``,
     ``country.capital``, ``sector.local_capital``, ``pop_group.planet``) to a planet ID.
 
-    Before 4.4 these fields hold planet IDs, which are returned unchanged. If the colony is
+    Without a ``colony`` table (4.0-4.3) these fields hold planet IDs, which are returned unchanged. If the colony is
     carried by a ship (a nomad arkship), the ID of its pseudo-planet is returned, see
     ``arkship_planet_id``. Returns None for unknown colonies.
     """
@@ -179,12 +180,8 @@ def get_district_types(gamestate: Dict[str, Any], planet_dict: Dict[str, Any]) -
     """
     Return one entry per district on the planet, e.g. ["district_city", "district_city", "district_mining"].
 
-    In 3.x, the planet repeats the ``district`` key once per district. Since 4.0, ``districts``
-    lists IDs into the top-level ``districts`` table, and each entry's ``level`` is its count.
+    ``districts`` lists IDs into the top-level ``districts`` table, and each entry's ``level`` is its count.
     """
-    if "district" in planet_dict:
-        return [d for d in _as_list(planet_dict["district"]) if isinstance(d, str)]
-
     districts_table = gamestate.get("districts", {})
     result = []
     for district_id in _as_list(planet_dict.get("districts")):
@@ -202,14 +199,11 @@ def get_building_types(gamestate: Dict[str, Any], planet_dict: Dict[str, Any]) -
     """
     Return the type of each building on the planet.
 
-    In 3.x, the planet lists its building IDs in ``buildings``. In 4.0-4.3, buildings belong to
-    zones, which belong to the planet's districts. Since 4.4, the colony also caches the building
-    IDs in ``buildings_cache``.
+    In 4.0-4.3, buildings belong to zones, which belong to the planet's districts. Since 4.4,
+    the colony also caches the building IDs in ``buildings_cache``.
     """
     if "buildings_cache" in planet_dict:
         building_ids = _as_list(planet_dict["buildings_cache"])
-    elif "buildings" in planet_dict:
-        building_ids = _as_list(planet_dict["buildings"])
     else:
         building_ids = _get_building_ids_from_zones(gamestate, planet_dict)
 
@@ -242,28 +236,22 @@ def get_ship_size(gamestate: Dict[str, Any], ship_dict: Dict[str, Any]) -> Optio
     """
     Return the ship size (e.g. "corvette", "science") of a ship.
 
-    In 3.x, the ship references its design in ``ship_design`` and the design has a ``ship_size``.
-    Since 4.0, the reference is ``ship_design_implementation = {design, growth_stage}`` and the
+    The ship references its design as ``ship_design_implementation = {design, growth_stage}`` and the
     design lists one ``ship_size`` per growth stage (bioships can grow into larger sizes).
     """
-    designs = gamestate.get("ship_design", {})
     implementation = ship_dict.get("ship_design_implementation")
-    if isinstance(implementation, dict):
-        design = designs.get(_as_id(implementation.get("design")))
-        if not isinstance(design, dict):
-            return None
-        stages = [s for s in _as_list(design.get("growth_stages")) if isinstance(s, dict)]
-        if not stages:
-            return design.get("ship_size")
-        stage_index = implementation.get("growth_stage", 0)
-        if not isinstance(stage_index, int):
-            stage_index = 0
-        return stages[min(max(stage_index, 0), len(stages) - 1)].get("ship_size")
-
-    design = designs.get(ship_dict.get("ship_design"))
+    if not isinstance(implementation, dict):
+        return None
+    design = gamestate.get("ship_design", {}).get(_as_id(implementation.get("design")))
     if not isinstance(design, dict):
         return None
-    return design.get("ship_size")
+    stages = [s for s in _as_list(design.get("growth_stages")) if isinstance(s, dict)]
+    if not stages:
+        return design.get("ship_size")
+    stage_index = implementation.get("growth_stage", 0)
+    if not isinstance(stage_index, int):
+        stage_index = 0
+    return stages[min(max(stage_index, 0), len(stages) - 1)].get("ship_size")
 
 
 def get_budget_value(values: Dict[str, Any], resource: str, default: float = 0.0):
