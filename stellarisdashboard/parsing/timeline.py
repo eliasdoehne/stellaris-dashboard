@@ -335,6 +335,7 @@ class TimelineExtractor:
         yield GovernmentProcessor()
         yield PolicyProcessor()
         yield FactionProcessor()
+        yield FirstContactProcessor()
         yield DiplomacyUpdatesProcessor()
         yield GalacticCommunityProcessor()
         yield ScientistEventProcessor()
@@ -345,7 +346,6 @@ class TimelineExtractor:
         yield AstralRiftProcessor()
         yield RelicProcessor()
         yield LeviathanProcessor()
-        yield FirstContactProcessor()
         yield EspionageProcessor()
         yield WarProcessor()
         yield TruceProcessor()
@@ -2971,7 +2971,17 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                     else:  # update the relation
                         relation.toggle(diplo_dict_key)
 
+                    # the first contact process event already records this contact, with exact dates
+                    covered_by_process = (
+                        event_type == datamodel.HistoricalEventType.first_contact
+                        and self._has_first_contact_process(
+                            country_model, target_country_model
+                        )
+                    )
+
                     if is_now_active:  # Create new historical event entry
+                        if covered_by_process:
+                            continue
                         for (et, c_model, tc_model, c_ruler) in country_tuples:
                             matching_event = datamodel.HistoricalEvent(
                                 event_type=et,
@@ -2998,10 +3008,27 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                     is_known_to_player
                                 )
                                 self._session.add(matching_event)
-                            else:
+                            elif not covered_by_process:
                                 logger.warning(
                                     f"Could not find event matching {relation}, {diplo_dict_key}"
                                 )
+
+    def _has_first_contact_process(self, country_a, country_b) -> bool:
+        process_type = datamodel.HistoricalEventType.first_contact_process
+        query = self._session.query(datamodel.HistoricalEvent.historical_event_id).filter(
+            datamodel.HistoricalEvent.event_type == process_type,
+            sqlalchemy.or_(
+                sqlalchemy.and_(
+                    datamodel.HistoricalEvent.country == country_a,
+                    datamodel.HistoricalEvent.target_country == country_b,
+                ),
+                sqlalchemy.and_(
+                    datamodel.HistoricalEvent.country == country_b,
+                    datamodel.HistoricalEvent.target_country == country_a,
+                ),
+            ),
+        )
+        return query.first() is not None
 
     def _get_event_description(self, event_type, country_model, target_country_model):
         if country_model is None or target_country_model is None:
