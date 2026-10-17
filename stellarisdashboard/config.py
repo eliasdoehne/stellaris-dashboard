@@ -2,6 +2,7 @@ import dataclasses
 import itertools
 import json
 import logging
+import multiprocessing
 import pathlib
 import platform
 import re
@@ -588,6 +589,10 @@ def initialize():
     global logger
     initialize_logger()
     logger = logging.getLogger()
+    # Spawned workers (Windows) re-import this module; keep them from repeating the startup logs.
+    is_worker_process = multiprocessing.parent_process() is not None
+    if is_worker_process:
+        logger.setLevel(logging.WARNING)
     CONFIG = Config()
     _apply_existing_settings(CONFIG)
 
@@ -597,7 +602,8 @@ def initialize():
         (CONFIG.base_output_path / "output").mkdir(parents=True)
 
     configure_logger()
-    CONFIG.write_to_file()
+    if not is_worker_process:
+        CONFIG.write_to_file()
 
 
 def configure_logger():
