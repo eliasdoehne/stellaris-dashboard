@@ -213,11 +213,30 @@ class TimelineExtractor:
                 logger.info(
                     f"{self.basic_info.logger_str}   - Processing {data_processor.ID}"
                 )
-                data_processor.extract_data_from_gamestate(
-                    {key: all_dependencies[key] for key in data_processor.DEPENDENCIES}
-                )
-                all_dependencies[data_processor.ID] = data_processor.data()
-                self._session.flush()
+                # a failing processor only loses its own rows; processors depending on it are skipped
+                savepoint = self._session.begin_nested()
+                try:
+                    data_processor.extract_data_from_gamestate(
+                        {
+                            key: all_dependencies[key]
+                            for key in data_processor.DEPENDENCIES
+                        }
+                    )
+                    data = data_processor.data()
+                    self._session.flush()
+                except Exception:
+                    savepoint.rollback()
+                    # descriptions created inside the rolled-back savepoint are no longer persisted
+                    _shared_description_cache.clear()
+                    if config.CONFIG.debug_mode:
+                        raise
+                    logger.exception(
+                        f"{self.basic_info.logger_str}   - Processor {data_processor.ID} failed, "
+                        f"discarding its changes"
+                    )
+                    continue
+                savepoint.commit()
+                all_dependencies[data_processor.ID] = data
                 logger.info(
                     f"{self.basic_info.logger_str}         done ({time.process_time() - t_start:.3f} s)"
                 )
