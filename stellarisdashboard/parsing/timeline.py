@@ -128,6 +128,10 @@ class BasicGameInfo:
         return f"{self.game_id} {datamodel.days_to_date(self.date_in_days)}"
 
 
+# games whose missing player country has already been warned about
+_warned_missing_player_games: Set[Optional[str]] = set()
+
+
 class TimelineExtractor:
     def __init__(self):
         self.basic_info: BasicGameInfo = None
@@ -213,11 +217,30 @@ class TimelineExtractor:
                 logger.info(
                     f"{self.basic_info.logger_str}   - Processing {data_processor.ID}"
                 )
-                data_processor.extract_data_from_gamestate(
-                    {key: all_dependencies[key] for key in data_processor.DEPENDENCIES}
-                )
-                all_dependencies[data_processor.ID] = data_processor.data()
-                self._session.flush()
+                # a failing processor only loses its own rows; processors depending on it are skipped
+                savepoint = self._session.begin_nested()
+                try:
+                    data_processor.extract_data_from_gamestate(
+                        {
+                            key: all_dependencies[key]
+                            for key in data_processor.DEPENDENCIES
+                        }
+                    )
+                    data = data_processor.data()
+                    self._session.flush()
+                except Exception:
+                    savepoint.rollback()
+                    # descriptions created inside the rolled-back savepoint are no longer persisted
+                    _shared_description_cache.clear()
+                    if config.CONFIG.debug_mode:
+                        raise
+                    logger.exception(
+                        f"{self.basic_info.logger_str}   - Processor {data_processor.ID} failed, "
+                        f"discarding its changes"
+                    )
+                    continue
+                savepoint.commit()
+                all_dependencies[data_processor.ID] = data
                 logger.info(
                     f"{self.basic_info.logger_str}         done ({time.process_time() - t_start:.3f} s)"
                 )
@@ -257,18 +280,21 @@ class TimelineExtractor:
         self.basic_info = BasicGameInfo(
             game_id=game_id,
             date_in_days=date_in_days,
-            player_country_id=self._identify_player_country(),
+            player_country_id=self._identify_player_country(game_id),
             other_players=self._other_players,
             number_of_parsed_saves=self.number_of_parsed_saves,
         )
 
-    def _identify_player_country(self):
+    def _identify_player_country(self, game_id: Optional[str] = None):
         player_country = self._find_player_country()
         countries = self._gamestate_dict.get("country")
         if player_country is not None and not (
             isinstance(countries, dict) and isinstance(countries.get(player_country), dict)
         ):
-            logger.warning(
+            # warn once per game, the player's empire stays missing in every later save
+            log = logger.debug if game_id in _warned_missing_player_games else logger.warning
+            _warned_missing_player_games.add(game_id)
+            log(
                 f"Player country {player_country} is not in the gamestate, treating as no player"
             )
             return None
@@ -316,6 +342,7 @@ class TimelineExtractor:
         yield GovernmentProcessor()
         yield PolicyProcessor()
         yield FactionProcessor()
+        yield FirstContactProcessor()
         yield DiplomacyUpdatesProcessor()
         yield GalacticCommunityProcessor()
         yield ScientistEventProcessor()
@@ -326,7 +353,6 @@ class TimelineExtractor:
         yield AstralRiftProcessor()
         yield RelicProcessor()
         yield LeviathanProcessor()
-        yield FirstContactProcessor()
         yield EspionageProcessor()
         yield WarProcessor()
         yield TruceProcessor()
@@ -2952,7 +2978,17 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                     else:  # update the relation
                         relation.toggle(diplo_dict_key)
 
+                    # the first contact process event already records this contact, with exact dates
+                    covered_by_process = (
+                        event_type == datamodel.HistoricalEventType.first_contact
+                        and self._has_first_contact_process(
+                            country_model, target_country_model
+                        )
+                    )
+
                     if is_now_active:  # Create new historical event entry
+                        if covered_by_process:
+                            continue
                         for (et, c_model, tc_model, c_ruler) in country_tuples:
                             matching_event = datamodel.HistoricalEvent(
                                 event_type=et,
@@ -2979,10 +3015,27 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                     is_known_to_player
                                 )
                                 self._session.add(matching_event)
-                            else:
+                            elif not covered_by_process:
                                 logger.warning(
                                     f"Could not find event matching {relation}, {diplo_dict_key}"
                                 )
+
+    def _has_first_contact_process(self, country_a, country_b) -> bool:
+        process_type = datamodel.HistoricalEventType.first_contact_process
+        query = self._session.query(datamodel.HistoricalEvent.historical_event_id).filter(
+            datamodel.HistoricalEvent.event_type == process_type,
+            sqlalchemy.or_(
+                sqlalchemy.and_(
+                    datamodel.HistoricalEvent.country == country_a,
+                    datamodel.HistoricalEvent.target_country == country_b,
+                ),
+                sqlalchemy.and_(
+                    datamodel.HistoricalEvent.country == country_b,
+                    datamodel.HistoricalEvent.target_country == country_a,
+                ),
+            ),
+        )
+        return query.first() is not None
 
     def _get_event_description(self, event_type, country_model, target_country_model):
         if country_model is None or target_country_model is None:

@@ -5,7 +5,6 @@
    styling (that lives in style.css). Existing pages must render unchanged
    except for the themed colours/typography these tokens drive.
 
-   Palette + token reference: scratch/ledger-rework/04-design-draft-feedback.md
    Typography uses system font stacks (no bundled font files).
    ============================================================================ */
 

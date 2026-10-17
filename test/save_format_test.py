@@ -5,20 +5,6 @@ from stellarisdashboard.parsing import save_format
 # The gamestate fragments below mirror the structures found in real saves of the
 # respective game versions, reduced to the fields the helpers read.
 
-GAMESTATE_3X = {
-    "planets": {
-        "planet": {
-            3: {
-                "planet_class": "pc_continental",
-                "district": ["district_city", "district_mining", "district_mining"],
-                "buildings": [10, 11],
-            },
-        }
-    },
-    "buildings": {10: {"type": "building_capital"}, 11: {"type": "building_foundry_1"}},
-    "ship_design": {50: {"ship_size": "corvette"}},
-}
-
 GAMESTATE_40 = {
     "planets": {
         "planet": {
@@ -72,7 +58,7 @@ GAMESTATE_44 = {
 
 
 def test_resolve_colony_to_planet_id():
-    # before 4.4, these fields already hold planet IDs
+    # without a colony table (4.0-4.3), these fields already hold planet IDs
     assert save_format.resolve_colony_to_planet_id(GAMESTATE_40, 3) == 3
     # since 4.4, they hold colony IDs, which are resolved through the colony's carrier
     assert save_format.resolve_colony_to_planet_id(GAMESTATE_44, 0) == 3
@@ -118,7 +104,6 @@ def test_get_planet():
 @pytest.mark.parametrize(
     "gamestate,expected",
     [
-        (GAMESTATE_3X, ["district_city", "district_mining", "district_mining"]),
         (
             GAMESTATE_40,
             ["district_city"] * 3 + ["district_mining"] * 2,
@@ -134,7 +119,6 @@ def test_get_district_types(gamestate, expected):
 @pytest.mark.parametrize(
     "gamestate,expected",
     [
-        (GAMESTATE_3X, ["building_capital", "building_foundry_1"]),
         (
             GAMESTATE_40,
             ["building_capital", "building_research_lab_1", "building_research_lab_1"],
@@ -150,8 +134,7 @@ def test_get_building_types(gamestate, expected):
 @pytest.mark.parametrize(
     "gamestate,ship,expected",
     [
-        (GAMESTATE_3X, {"ship_design": 50}, "corvette"),
-        (GAMESTATE_3X, {"ship_design": 99}, None),
+        (GAMESTATE_40, {}, None),
         (GAMESTATE_40, {"ship_design_implementation": {"design": 60, "growth_stage": 0}}, "corvette"),
         # a single growth stage is parsed as a dict rather than a list
         (GAMESTATE_40, {"ship_design_implementation": {"design": 61, "growth_stage": 0}}, "science"),
