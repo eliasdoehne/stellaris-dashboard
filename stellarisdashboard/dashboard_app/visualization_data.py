@@ -18,7 +18,7 @@ from scipy.spatial import Voronoi
 from sqlalchemy.orm import selectinload
 
 from stellarisdashboard import datamodel, config, game_info
-from stellarisdashboard.country_color_cache import GAME_COUNTRY_COLORS
+from stellarisdashboard.country_color_cache import GAME_COUNTRY_COLORS, LRUDict
 from stellarisdashboard.parsing.save_parser import rust_parser
 
 logger = logging.getLogger(__name__)
@@ -80,8 +80,12 @@ def _filter_known_plot_ids(tab: str, plot_ids: Iterable[str]) -> List[str]:
 
 
 # The PlotDataManager is cached in memory for each "active" game
-# (one that was requested or had a save file parsed in the current execution).
-_CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = {}
+# (one that was requested or had a save file parsed in the current execution);
+# only the most recently used games are kept, as each holds all plot data of a game.
+_MAX_CACHED_PLOT_DATA_GAMES = 3
+_CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = LRUDict(
+    _MAX_CACHED_PLOT_DATA_GAMES
+)
 
 
 def get_current_execution_plot_data(
@@ -92,7 +96,6 @@ def get_current_execution_plot_data(
     :param game_name: The exact name of a game for which a database is available
     :return:
     """
-    global _CURRENT_EXECUTION_PLOT_DATA
     if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
         with datamodel.get_db_session(game_name) as session:
             game = session.query(datamodel.Game).filter_by(game_name=game_name).first()
@@ -104,13 +107,13 @@ def get_current_execution_plot_data(
             for ps in pslist
         ]
         plot_specifications += get_market_graphs(config.CONFIG.market_resources)
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = PlotDataManager(
-            game_name, plot_specifications
-        )
-        _CURRENT_EXECUTION_PLOT_DATA[game_name].initialize()
-    _CURRENT_EXECUTION_PLOT_DATA[game_name].country_perspective = country_perspective
-    _CURRENT_EXECUTION_PLOT_DATA[game_name].update_with_new_gamestate()
-    return _CURRENT_EXECUTION_PLOT_DATA[game_name]
+        new_manager = PlotDataManager(game_name, plot_specifications)
+        new_manager.initialize()
+        _CURRENT_EXECUTION_PLOT_DATA[game_name] = new_manager
+    manager = _CURRENT_EXECUTION_PLOT_DATA[game_name]
+    manager.country_perspective = country_perspective
+    manager.update_with_new_gamestate()
+    return manager
 
 
 def get_color_vals(
