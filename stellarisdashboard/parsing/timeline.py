@@ -655,6 +655,10 @@ class FleetOwnershipProcessor(AbstractGamestateDataProcessor):
                 self.owner_by_fleet_id[fleet_id] = country_model
 
 
+# a crisis claiming a system within this many days of its previous owner losing it is credited with the loss
+CRISIS_CLAIM_WINDOW_DAYS = 2 * 360
+
+
 class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
     ID = "system_owners"
     DEPENDENCIES = [SystemProcessor.ID, CountryProcessor.ID, FleetOwnershipProcessor.ID]
@@ -743,8 +747,9 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             fleet = fleets.get(fleet_id)
             if not isinstance(fleet, dict) or not fleet.get("military_power"):
                 continue
-            coordinate = (fleet.get("movement_manager") or {}).get("coordinate") or {}
-            system_id = coordinate.get("origin")
+            movement = fleet.get("movement_manager")
+            coordinate = movement.get("coordinate") if isinstance(movement, dict) else None
+            system_id = coordinate.get("origin") if isinstance(coordinate, dict) else None
             if isinstance(system_id, int):
                 result.setdefault(system_id, country)
         return result
@@ -870,10 +875,6 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             lost_event.target_country = crisis_country
             self._session.add(lost_event)
         return previous_owner
-
-
-# a crisis claiming a system within this many days of its previous owner losing it is credited with the loss
-CRISIS_CLAIM_WINDOW_DAYS = 2 * 360
 
 
 class DiplomacyDictProcessor(AbstractGamestateDataProcessor):
