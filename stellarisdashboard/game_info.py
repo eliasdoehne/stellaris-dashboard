@@ -339,6 +339,60 @@ def lookup_faction_type(faction_type: str) -> str:
     return lookup_key(key)
 
 
+_BLOCK_START_RE = re.compile(r"([A-Za-z0-9_]+)\s*=\s*\{")
+_FIELD_RE = re.compile(r'([A-Za-z0-9_]+)\s*=\s*"?([A-Za-z0-9_.]+)"?')
+
+
+def parse_top_level_fields(lines: Iterable[str], field: str) -> dict[str, str]:
+    """Maps each top-level block of a game script file to the value of its own (not nested) field."""
+    values = {}
+    block, depth = None, 0
+    for line in lines:
+        line = line.split("#", 1)[0]
+        if depth == 0:
+            match = _BLOCK_START_RE.match(line)
+            block = match.group(1) if match else None
+        elif depth == 1 and block is not None:
+            match = _FIELD_RE.match(line.strip())
+            if match and match.group(1) == field:
+                values.setdefault(block, match.group(2))
+        depth = max(0, depth + line.count("{") - line.count("}"))
+    return values
+
+
+@functools.lru_cache(maxsize=8)
+def _common_block_fields(subdir: str, field: str) -> dict[str, str]:
+    """The field per block over common/<subdir>/*.txt of the game and enabled mods; later files override."""
+    from stellarisdashboard import config
+
+    values = {}
+    try:
+        data_dirs = [d for d in config.CONFIG.game_data_dirs if d is not None]
+    except Exception:
+        logger.warning("Could not determine the game data directories", exc_info=True)
+        return values
+    for data_dir in data_dirs:
+        for path in sorted((data_dir / "common" / subdir).glob("*.txt")):
+            try:
+                with open(path, "rt", encoding="utf-8-sig", errors="replace") as f:
+                    values.update(parse_top_level_fields(f, field))
+            except OSError:
+                logger.warning(f"Could not read game file {path}")
+    return values
+
+
+def dig_site_stage_count(site_type: str) -> Optional[int]:
+    """The number of chapters of an archaeological site type, None if the game files are unavailable."""
+    stages = _common_block_fields("archaeological_site_types", "stages").get(site_type)
+    return int(stages) if stages is not None and stages.isdigit() else None
+
+
+def first_contact_stage_role(stage: str) -> Optional[str]:
+    """The role of a first contact stage from its icon (starter, progress, question, success, fail)."""
+    icon = _common_block_fields("first_contact", "icon").get(stage)
+    return icon.removeprefix("GFX_firstcontact_icon_") if icon else None
+
+
 _KEY_LIKE_RE = re.compile(r"[A-Za-z0-9_.]+")
 
 

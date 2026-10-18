@@ -17,6 +17,11 @@ ledger markup, so ``history_page.html`` collapses to a single loop. Rendering
 goes through Flask's own Jinja environment with the same event dict, so the
 output is text-equivalent to the previous chain.
 
+Multi-stage arcs (:class:`~stellarisdashboard.datamodel.Storyline`) have a
+:class:`StorylineDescriptor` in :data:`STORYLINE_REGISTRY`; :func:`render_storyline`
+renders one as a single ``<li>`` with a ``<details>`` card that expands to its
+stages, and :func:`render_event` delegates to it for ``event_type == "storyline"``.
+
 Event types that the parser doesn't emit yet (and that had no branch) carry
 ``sentence=None``; :func:`render_event` returns empty markup for them, matching
 the old chain's fall-through (no output).
@@ -165,6 +170,11 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% else %} The\n'
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} established first contact with the {{ links[event["target_country"]] | safe }}.\n',
+    ),
+    "first_contact_stage": EventDescriptor(
+        Category.DIPLOMACY, Tier.ROUTINE, "handshake", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }}\'s first contact with the {{ links[event["target_country"]] | safe }}: {{ event["description"] }}.\n',
     ),
     "first_contact_process": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "handshake", SPAN,
@@ -611,7 +621,46 @@ REGISTRY: dict[str, EventDescriptor] = {
 }
 
 
+@dataclass(frozen=True)
+class StorylineDescriptor:
+    category: Category
+    tier: Tier
+    icon: str
+    stage_noun: str  # singular, e.g. "chapter"
+    sentence: str  # Jinja; the storyline item dict is named ``event``
+    state_labels: dict[str, str]
+
+
+_STORYLINE_LEADER = '{% if "leader" in event %} ({{ render_leader(event) | trim }}){% endif %}'
+_STORYLINE_SYSTEM = '{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}'
+_STORYLINE_COUNTRY = '{% if "country" in event %} by the {{ links[event["country"]] | safe }}{% endif %}'
+
+# StorylineType name -> StorylineDescriptor
+STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
+    "dig_site": StorylineDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "shovel", "chapter",
+        'Excavation of the "{{ event["title"] }}" archaeological site'
+        '{% if "planet" in event %} on {{ render_planet_and_class(event) }}{% endif %}'
+        + _STORYLINE_SYSTEM + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
+        {"active": "excavating", "paused": "paused", "completed": "fully excavated"},
+    ),
+    "astral_rift": StorylineDescriptor(
+        Category.EXPLORATION, Tier.MAJOR, "compass", "step",
+        'Exploration of the astral rift "{{ event["title"] }}"'
+        + _STORYLINE_SYSTEM + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
+        {"active": "exploring", "paused": "paused", "completed": "fully explored"},
+    ),
+    "first_contact": StorylineDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "handshake", "stage",
+        'First contact between the {{ links[event["country"]] | safe }}'
+        ' and the {{ links[event["target_country"]] | safe }}'
+        + _STORYLINE_SYSTEM + _STORYLINE_LEADER,
+        {"active": "in progress", "completed": "contact made", "abandoned": "abandoned"},
+    ),
+}
+
 _COMPILED: dict[str, object] = {}
+_COMPILED_STORYLINES: dict[str, object] = {}
 
 
 def _compiled(event_type: str):
@@ -640,10 +689,74 @@ def _compiled(event_type: str):
     return template
 
 
+def _compiled_storyline(storyline_type: str):
+    """Lazily compile (and cache) the card template for a storyline type."""
+    if storyline_type in _COMPILED_STORYLINES:
+        return _COMPILED_STORYLINES[storyline_type]
+    descriptor = STORYLINE_REGISTRY.get(storyline_type)
+    if descriptor is None:
+        _COMPILED_STORYLINES[storyline_type] = None
+        return None
+    from stellarisdashboard.dashboard_app import flask_app
+
+    head = (
+        '<span class="dateblock">' + _DATEBLOCKS[SPAN] + "</span>\n"
+        + '<span class="eventtext">' + descriptor.sentence
+        + '<span class="storyline_meta"> <span class="storyline_state state_{{ event["state"] }}">{{ state_label }}</span>'
+        + '{% if event["stage_count"] %} {{ event["stage_count"] }} {{ stage_noun }}{% if event["stage_count"] != 1 %}s{% endif %}{% endif %}'
+        + "</span></span>\n"
+    )
+    source = (
+        _MACROS
+        + '<li class="eventitem storyline {{ event["storyline_type"] }}_storyline">\n'
+        + '{% if event["stages"] %}'
+        + '<details class="storyline_card"><summary class="storyline_summary eventdescription">\n'
+        + head
+        + "</summary>\n"
+        + '<ul class="event_list storyline_stages">'
+        + '{% for stage in event["stages"] %}'
+        + '<li class="eventitem storyline_stage"><span class="dateblock">{{ stage["start_date"] }}:</span> '
+        + '<span class="eventtext">{{ stage_noun | capitalize }} {{ stage["index"] }}'
+        + '{% if "detail" in stage %}: {{ stage["detail"] }}{% endif %}'
+        + '{% if "country" in stage %} by the {{ links[stage["country"]] | safe }}{% endif %}'
+        + '{% if "leader" in stage %} ({{ render_leader(stage) | trim }}){% endif %}'
+        + "</span></li>"
+        + "{% endfor %}"
+        + "</ul></details>\n"
+        + "{% else %}"
+        + '<div class="eventdescription">\n' + head + "</div>\n"
+        + "{% endif %}"
+        + "</li>"
+    )
+    template = flask_app.jinja_env.from_string(source)
+    _COMPILED_STORYLINES[storyline_type] = template
+    return template
+
+
+def render_storyline(event, links) -> Markup:
+    """Render one storyline item as a ``<li>`` card that expands to its stages."""
+    storyline_type = event.get("storyline_type")
+    template = _compiled_storyline(storyline_type)
+    if template is None:
+        return Markup("")
+    descriptor = STORYLINE_REGISTRY[storyline_type]
+    state = event.get("state")
+    return Markup(
+        template.render(
+            event=event,
+            links=links,
+            state_label=descriptor.state_labels.get(state, state),
+            stage_noun=descriptor.stage_noun,
+        )
+    )
+
+
 def render_event(event, links) -> Markup:
     """Render one event's ``<li>`` of ledger markup, dispatching on
     ``event_type``. Returns empty markup for types with no template (matching
     the old chain's fall-through)."""
+    if event.get("event_type") == "storyline":
+        return render_storyline(event, links)
     template = _compiled(event.get("event_type"))
     if template is None:
         return Markup("")

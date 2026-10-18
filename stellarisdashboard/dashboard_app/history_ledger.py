@@ -278,6 +278,7 @@ class EventTemplateDictBuilder:
         self._details[key_object] = self._get_details(key_object)
         self._titles[key_object] = self._get_title(key_object)
         self._formatted_urls[key_object] = self._get_url_for(key_object)
+        storyline_items = {}  # storyline_id -> item dict, per section
         for event in event_list:
             if not self.event_filter.include_event(event):
                 continue
@@ -342,8 +343,26 @@ class EventTemplateDictBuilder:
             if event.combat:
                 event_dict.update(self._combat_dict(event.combat))
 
+            if event.storyline_id is not None:
+                # members fold into one card per storyline, placed at its first visible member
+                item = storyline_items.get(event.storyline_id)
+                if item is None:
+                    item = storyline_items[event.storyline_id] = self._storyline_dict(
+                        event.storyline
+                    )
+                    self._events[key_object].append(item)
+                    self._preformat_storyline_urls(event.storyline)
+                if event.stage_index is not None:
+                    sort_key = (event.start_date_days, event.stage_index)
+                    item["stages"].append((sort_key, self._stage_dict(event, start)))
+                self._preformat_urls(event)
+                continue
             self._events[key_object].append(event_dict)
             self._preformat_urls(event)
+        for item in storyline_items.values():
+            item["stages"] = [s for _, s in sorted(item["stages"], key=lambda s: s[0])]
+            # the furthest stage reached, which counts stages hidden from the player too
+            item["stage_count"] = max((s["index"] for s in item["stages"]), default=0)
         if not self._events[key_object] and self.event_filter.is_empty_filter:
             del self._events[key_object]
 
@@ -380,6 +399,52 @@ class EventTemplateDictBuilder:
             self._formatted_urls[event.system] = self._get_url_for(event.system)
         if event.war:
             self._formatted_urls[event.war] = self._get_url_for(event.war)
+
+    def _preformat_storyline_urls(self, storyline):
+        for entity in (
+            storyline.country,
+            storyline.target_country,
+            storyline.leader,
+            storyline.system,
+            storyline.planet,
+        ):
+            if entity is not None:
+                self._formatted_urls[entity] = self._get_url_for(entity)
+
+    def _storyline_dict(self, storyline: datamodel.Storyline) -> dict:
+        end_date = None
+        if storyline.end_date_days is not None:
+            end_date = datamodel.days_to_date(storyline.end_date_days)
+        item = dict(
+            event_type="storyline",
+            storyline_type=str(storyline.storyline_type),
+            state=str(storyline.state),
+            title=storyline.rendered_title,
+            start_date=datamodel.days_to_date(storyline.start_date_days),
+            end_date=end_date,
+            is_active=storyline.end_date_days is None,
+            country=storyline.country,
+            target_country=storyline.target_country,
+            leader=storyline.leader,
+            system=storyline.system,
+            planet=storyline.planet,
+        )
+        item = {k: v for (k, v) in item.items() if v is not None}
+        item["stages"] = []
+        return item
+
+    @staticmethod
+    def _stage_dict(event: datamodel.HistoricalEvent, start_date: str) -> dict:
+        """A compact stage line: country and leader only where they differ from the storyline's."""
+        storyline = event.storyline
+        stage = dict(
+            start_date=start_date,
+            index=event.stage_index,
+            detail=event.stage_detail,
+            country=event.country if event.country is not storyline.country else None,
+            leader=event.leader if event.leader is not storyline.leader else None,
+        )
+        return {k: v for (k, v) in stage.items() if v is not None}
 
     def _get_title(self, key) -> str:
         if isinstance(key, datamodel.Country):

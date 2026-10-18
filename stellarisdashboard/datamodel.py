@@ -307,6 +307,7 @@ class HistoricalEventType(enum.Enum):
     first_contact_process = enum.auto()
     espionage_operation = enum.auto()
     completed_espionage_operation = enum.auto()
+    first_contact_stage = enum.auto()
 
     def __str__(self):
         return self.name
@@ -378,6 +379,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.first_contact_process,
             HistoricalEventType.espionage_operation,
             HistoricalEventType.completed_espionage_operation,
+            HistoricalEventType.first_contact_stage,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -1942,12 +1944,103 @@ def render_first_contact_description(status: str) -> str:
     return FIRST_CONTACT_PROCESS_VERBS.get(status, "made contact with")
 
 
+FIRST_CONTACT_STAGE_LABELS = {
+    "starter": "contact detected",
+    "progress": "investigation progressed",
+    "question": "complications arose",
+    "success": "communications established",
+    "fail": "communications failed",
+}
+FIRST_CONTACT_APPROACHES = ("hostile", "proactive", "cautious")
+
+
+def render_first_contact_stage(stage: str) -> str:
+    """A first contact stage by its role in the game files, e.g. "communications established (cautious)"."""
+    role = "starter" if stage == "base_contact_set" else game_info.first_contact_stage_role(stage)
+    label = FIRST_CONTACT_STAGE_LABELS.get(role) or game_info.convert_id_to_name(stage)
+    approach = next((a for a in FIRST_CONTACT_APPROACHES if a in stage.split("_")), None)
+    return f"{label} ({approach})" if approach else label
+
+
 def render_espionage_description(text: str) -> str:
     """Renders an operation type, optionally packed as "<type>|<operation id>", e.g. "Steal Technology"."""
     operation_type, _ = split_packed_description(text)
     return game_info.lookup_key_if_known(operation_type) or game_info.convert_id_to_name(
         operation_type, remove_prefix="operation"
     )
+
+
+class StorylineType(enum.Enum):
+    dig_site = enum.auto()
+    astral_rift = enum.auto()
+    first_contact = enum.auto()
+
+    def __str__(self):
+        return self.name
+
+
+class StorylineState(enum.Enum):
+    active = enum.auto()
+    paused = enum.auto()
+    completed = enum.auto()
+    failed = enum.auto()
+    abandoned = enum.auto()
+
+    def __str__(self):
+        return self.name
+
+
+class Storyline(Base):
+    """
+    A multi-stage arc (a dig site, an astral rift, a first contact) that groups historical events.
+
+    Its events link back through HistoricalEvent.storyline_id: events with a stage_index are the
+    arc's stages (chapters, steps), an event without one is an arc-level record that the
+    storyline itself summarises (e.g. the first_contact_process span).
+    """
+
+    __tablename__ = "storyline"
+    storyline_id = Column(Integer, primary_key=True)
+
+    storyline_type = Column(Enum(StorylineType), nullable=False, index=True)
+    storyline_id_in_game = Column(Integer, index=True)  # dig site, rift or contact id in the save
+    title = Column(String(80))  # raw key: site type or rift type; rendered by rendered_title
+    state = Column(Enum(StorylineState), nullable=False)
+    outcome = Column(String(80))  # raw key of the final stage, if known
+    start_date_days = Column(Integer, nullable=False, index=True)
+    end_date_days = Column(Integer)
+
+    country_id = Column(ForeignKey(Country.country_id), index=True)
+    target_country_id = Column(ForeignKey(Country.country_id))
+    leader_id = Column(ForeignKey(Leader.leader_id), index=True)  # assigned scientist or envoy
+    system_id = Column(ForeignKey(System.system_id))
+    planet_id = Column(ForeignKey(Planet.planet_id))
+
+    country = relationship(Country, foreign_keys=[country_id])
+    target_country = relationship(Country, foreign_keys=[target_country_id])
+    leader = relationship(Leader)
+    system = relationship(System)
+    planet = relationship(Planet)
+    events = relationship(
+        "HistoricalEvent",
+        back_populates="storyline",
+        order_by="(HistoricalEvent.start_date_days, HistoricalEvent.stage_index)",
+    )
+
+    @property
+    def rendered_title(self) -> str:
+        """The arc's subject: the dig site or rift name, or the contacted country."""
+        if self.storyline_type == StorylineType.dig_site:
+            return game_info.lookup_id_name(self.title or "", remove_prefix="site")
+        elif self.storyline_type == StorylineType.astral_rift:
+            return render_astral_rift_description(self.title or "")
+        elif self.storyline_type == StorylineType.first_contact and self.target_country is not None:
+            return self.target_country.rendered_name
+        return game_info.convert_id_to_name(self.title or str(self.storyline_type))
+
+    @property
+    def stages(self) -> List["HistoricalEvent"]:
+        return [e for e in self.events if e.stage_index is not None]
 
 
 class HistoricalEvent(Base):
@@ -1976,6 +2069,10 @@ class HistoricalEvent(Base):
     target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
     fleet_id = Column(ForeignKey(Fleet.fleet_id), nullable=True)
     end_date_days = Column(Integer)
+    storyline_id = Column(ForeignKey(Storyline.storyline_id), nullable=True)
+    stage_index = Column(Integer)  # 1-based position among the storyline's stages
+    # a named table-level index: a column-level one would be built on alembic's batch temp table
+    __table_args__ = (sqlalchemy.Index("ix_historical_event_storyline_id", "storyline_id"),)
 
     country = relationship(
         Country, back_populates="historical_events", foreign_keys=[country_id]
@@ -1989,6 +2086,7 @@ class HistoricalEvent(Base):
     faction = relationship(PoliticalFaction, back_populates="historical_events")
     fleet = relationship(Fleet)
     db_description = relationship(SharedDescription)
+    storyline = relationship(Storyline, back_populates="events")
 
     def __str__(self):
         start_date = days_to_date(self.start_date_days)
@@ -2094,10 +2192,23 @@ class HistoricalEvent(Base):
             return render_first_contact_description(
                 self.db_description.text if self.db_description else ""
             )
+        elif self.event_type == HistoricalEventType.first_contact_stage and self.db_description:
+            return render_first_contact_stage(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
             return "Unknown Event"
+
+    @property
+    def stage_detail(self) -> Optional[str]:
+        """What a storyline stage adds to its arc: a rift step's name, a first contact stage's role; else None."""
+        text = self.db_description.text if self.db_description else ""
+        if self.event_type == HistoricalEventType.explored_astral_rift:
+            _, event_id = split_packed_description(text)
+            return game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
+        elif self.event_type == HistoricalEventType.first_contact_stage and text:
+            return render_first_contact_stage(text)
+        return None
 
     def involved_countries(self):
         if self.country_id is not None:
