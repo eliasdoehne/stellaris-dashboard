@@ -28,6 +28,7 @@ def test_collect_galaxy_events():
     }
     countries = {
         3: {"type": "awakened_fallen_empire", "last_changed_country_type": "2402.12.22"},
+        5: {"type": "default", "flags": {"declared_crisis": flag(2458, 3), "other": flag(2210)}},
         4: {"type": "awakened_fallen_empire", "last_changed_country_type": "0.01.01"},
         26: {"type": "voidworms"},
         620757096: {"type": "portal_holder"},
@@ -43,6 +44,7 @@ def test_collect_galaxy_events():
         ("war_in_heaven_started", (3, 4)),
         ("fallen_empire_awakened", (3,)),
         ("fallen_empire_awakened", (4,)),
+        ("declared_crisis", (5,)),
     }
     assert events["unbidden_arrived", (671088712,)].date_days == flag_date_days(flag(2452, 6, 25))
     assert events["voidworm_plague_started", (26,)].date_days == 108 * 360
@@ -56,5 +58,5 @@ def test_collect_galaxy_events():
 def test_every_galaxy_event_has_a_ledger_phrase():
     keys = {s.key for s in galaxy_events.SIGNALS}
     keys |= {f"crisis_stage_{n}" for n in galaxy_events.CRISIS_STAGES}
-    keys.add(galaxy_events.FALLEN_EMPIRE_AWAKENED)
+    keys |= {galaxy_events.FALLEN_EMPIRE_AWAKENED, galaxy_events.DECLARED_CRISIS}
     assert keys == set(GALACTIC_CRISIS_PHRASES)

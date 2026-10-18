@@ -35,8 +35,9 @@ SIGNALS = (
     # Prethoryn Scourge, events/crisis_events_1.txt
     GalaxyEventSignal("prethoryn_arrived", "prethoryn_arrival", ("swarm",)),
     GalaxyEventSignal("prethoryn_defeated", "prethoryn_invasion_defeated", ("swarm",)),
-    # Contingency, events/crisis_events_3.txt
-    GalaxyEventSignal("contingency_activated", "ai_invasion_happened", ("ai_empire",)),
+    # Contingency, events/crisis_events_3.txt (ai_invasion_happened marks the hidden ghost signal years earlier;
+    # ai_invasion_ongoing is set on activation and removed on defeat)
+    GalaxyEventSignal("contingency_activated", "ai_invasion_ongoing", ("ai_empire",)),
     GalaxyEventSignal("contingency_defeated", "ai_invasion_defeated", ("ai_empire",)),
     # Cetana / Synth Queen, events/machine_age_crisis_events.txt
     GalaxyEventSignal("synth_queen_arrived", "synth_queen_happened", SYNTH_QUEEN_TYPES),
@@ -51,7 +52,7 @@ SIGNALS = (
     GalaxyEventSignal("voidworm_plague_ended", "voidworms_plague_crisis_ended", ("voidworms", "voidworms_crisis")),
     # Great Khan, events/marauder_events.txt; the horde country is destroyed some months after the Khan dies
     GalaxyEventSignal("great_khan_rose", "marauder_crisis_started", ("awakened_marauders",)),
-    GalaxyEventSignal("great_khan_exiled", "great_khan_defeated_once", ("awakened_marauders",)),
+    GalaxyEventSignal("great_khan_defeated", "great_khan_defeated_once", ("awakened_marauders",)),
     GalaxyEventSignal("great_khan_died", "great_khan_dead", ("awakened_marauders",)),
     # War in Heaven, events/war_in_heaven_events.txt
     GalaxyEventSignal("war_in_heaven_started", "war_in_heaven_started", ("awakened_fallen_empire",), all_countries=True),
@@ -62,6 +63,9 @@ SIGNALS = (
 # it moves up and down with the crisis' share of the galaxy, so only the first time a stage is reached is kept
 CRISIS_STAGES = (2, 3, 4)
 FALLEN_EMPIRE_AWAKENED = "fallen_empire_awakened"
+# country flag of an empire that became the crisis (crisis level 5) or was declared one by the Galactic Community;
+# the empire stays a default country, and the flag is removed if the declaration is repealed
+DECLARED_CRISIS = "declared_crisis"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -123,6 +127,16 @@ def collect_galaxy_events(flags: Any, countries: Any, current_days: int) -> Iter
                 date_days=_event_date(flag_date_days(flags[flag]), current_days),
                 country_types=END_GAME_CRISIS_TYPES,
                 country_ids=matching(END_GAME_CRISIS_TYPES),
+            )
+    for country_id, country in sorted(countries.items()) if isinstance(countries, dict) else ():
+        country_flags = country.get("flags") if isinstance(country, dict) else None
+        if isinstance(country_flags, dict) and DECLARED_CRISIS in country_flags:
+            yield GalaxyEvent(
+                key=DECLARED_CRISIS,
+                date_days=_event_date(flag_date_days(country_flags[DECLARED_CRISIS]), current_days),
+                country_types=(country.get("type"),),
+                country_ids=(country_id,),
+                all_countries=True,
             )
     for country_id in by_type.get("awakened_fallen_empire", []):
         # an awakened empire's type changed last when it awoke

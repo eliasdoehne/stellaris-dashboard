@@ -681,6 +681,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             if isinstance(ship_dict, dict)
         }
         starbase_system_map = dependencies[SystemProcessor.ID]["starbase_system_map"]
+        crisis_fleet_systems = self._crisis_fleet_systems(fleet_owners_dict)
 
         starbase_systems = set()
 
@@ -724,11 +725,37 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 continue
             if system_model.country is None:
                 continue
-            self._update_owner(None, system_model)
+            self._update_owner(
+                None, system_model, destroyed_by=crisis_fleet_systems.get(system_id)
+            )
+
+    def _crisis_fleet_systems(
+        self, fleet_owners_dict: Dict[int, datamodel.Country]
+    ) -> Dict[int, datamodel.Country]:
+        """Systems with a crisis warfleet in them, by in-game system ID."""
+        fleets = self._gamestate_dict.get("fleet")
+        if not isinstance(fleets, dict):
+            return {}
+        result = {}
+        for fleet_id, country in fleet_owners_dict.items():
+            if not country.is_crisis_country():
+                continue
+            fleet = fleets.get(fleet_id)
+            if not isinstance(fleet, dict) or not fleet.get("military_power"):
+                continue
+            coordinate = (fleet.get("movement_manager") or {}).get("coordinate") or {}
+            system_id = coordinate.get("origin")
+            if isinstance(system_id, int):
+                result.setdefault(system_id, country)
+        return result
 
     def _update_owner(
-        self, current_owner: Optional[datamodel.Country], system_model: datamodel.System
+        self,
+        current_owner: Optional[datamodel.Country],
+        system_model: datamodel.System,
+        destroyed_by: Optional[datamodel.Country] = None,
     ):
+        """destroyed_by: the crisis whose fleet is in a system that just lost its starbase."""
         owner_changed = False
         event_type = None
         target_country = None
@@ -740,10 +767,10 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             event_type = datamodel.HistoricalEventType.expanded_to_system
         elif system_model.country != current_owner:
             owner_changed = True
-            # Successor states, liberated empires and rebels take their systems when first seen
+            # Successor states, liberated empires and rebels take their systems when first seen; crises invade
             event_type = (
                 datamodel.HistoricalEventType.founded_with_system
-                if current_owner.founded_in_gamestate
+                if current_owner.founded_in_gamestate and not current_owner.is_crisis_country()
                 else datamodel.HistoricalEventType.conquered_system
             )
 
@@ -764,14 +791,15 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
 
                 target_country = ownership.country
                 if target_country is not None:
+                    taken_by = current_owner or destroyed_by
                     is_visible = target_country.has_met_player() or (
-                        current_owner is not None and current_owner.has_met_player()
+                        taken_by is not None and taken_by.has_met_player()
                     )
                     self._session.add(
                         datamodel.HistoricalEvent(
                             event_type=datamodel.HistoricalEventType.lost_system,
                             country=target_country,
-                            target_country=current_owner,
+                            target_country=taken_by,
                             system=system_model,
                             start_date_days=self._basic_info.date_in_days,
                             event_is_known_to_player=is_visible,
