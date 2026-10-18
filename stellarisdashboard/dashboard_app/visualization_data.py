@@ -117,6 +117,11 @@ def get_current_execution_plot_data(
     return manager
 
 
+def drop_cached_plot_data(game_name: str) -> None:
+    """Forget the game's plot data, so it is reloaded with gamestates inserted before its last known date."""
+    _CURRENT_EXECUTION_PLOT_DATA.pop(game_name, None)
+
+
 def get_color_vals(
     game_id: str, key: Union[str, int], range_min: float = 0.1, range_max: float = 1.0
 ) -> Tuple[float, float, float]:
