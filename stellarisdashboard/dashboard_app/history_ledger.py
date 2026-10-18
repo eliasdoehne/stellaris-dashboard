@@ -301,6 +301,8 @@ class EventTemplateDictBuilder:
                     "awakened_fallen_empire",
                 ]
                 and event.country is not None
+                # primitives' technology ages are shown even though their other events are not
+                and event.event_type != datamodel.HistoricalEventType.pre_ftl_age_change
             ):
                 continue
 

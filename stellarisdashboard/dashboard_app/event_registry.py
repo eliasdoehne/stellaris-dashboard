@@ -82,7 +82,7 @@ _MACROS = """
     {% endif %}
 {%- endmacro %}
 {% macro render_a_an(text) -%}
-    {% if text.startswith(("a", "e", "i", "o", "u")) %} an {% else %} a {% endif %}
+    {% if text.lower().startswith(("a", "e", "i", "o", "u")) %} an {% else %} a {% endif %}
 {%- endmacro %}
 """
 
@@ -107,7 +107,7 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
         '                    {% else %} The\n'
         '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }} war{{ event["description"] }}{% if event["target_country"] %} {{ links[event["target_country"]] | safe}}{% endif %}.\n',
+        '                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }}{% if not event["war"].ingame_name %} war{% endif %} {{ event["description"] }}{% if event["target_country"] %} {{ links[event["target_country"]] | safe}}{% endif %}.\n',
     ),
     "peace": EventDescriptor(
         Category.WARFARE, Tier.HEADLINE, "dove", POINT,
@@ -115,13 +115,13 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
         '                    {% else %} The\n'
         '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} made peace in the {{ links[event["war"]] | safe }} conflict.\n',
+        '                    {{ links[event["country"]] | safe }} made peace in the {{ links[event["war"]] | safe }}{% if not event["war"].ingame_name %} conflict{% endif %}.\n',
     ),
     "conquered_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
         '\n'
         '                    The {{ links[event["country"]] | safe }} conquered the {{ links[event["system"]] | safe }} system from the\n'
-        '                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war"]] | safe }} {% endif %}.\n',
+        '                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war"]] | safe }}{% endif %}.\n',
         li_class="gained_system",
     ),
     "founded_with_system": EventDescriptor(
@@ -402,11 +402,16 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    The {{ links[event["country"]] | safe}} researched the "{{event["description"]}}" technology.\n',
     ),
+    "pre_ftl_age_change": EventDescriptor(
+        Category.SCIENCE, Tier.MAJOR, "flask", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} {{ event["description"] }}.\n',
+    ),
     # ---- Exploration ----------------------------------------------------
     "discovered_anomaly": EventDescriptor(
         Category.EXPLORATION, Tier.ROUTINE, "search", POINT,
         '\n'
-        '                    The {{ links[event["country"]] | safe }} discovered a "{{ event["description"] }}" anomaly on\n'
+        '                    The {{ links[event["country"]] | safe }} discovered the "{{ event["description"] }}" anomaly on\n'
         '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
     ),
     "researched_anomaly": EventDescriptor(

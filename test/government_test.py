@@ -177,3 +177,55 @@ def test_more_than_eight_civics_keeps_first_eight(session):
     (government,) = _governments(session)
     assert government.civics == set(sorted(civics)[:8])
     assert _event_types(session) == []
+
+
+def _primitive_dict(age, **kwargs):
+    return dict(_country_dict(**kwargs), preftl_age=age)
+
+
+@pytest.fixture
+def steam_age_primitive(session):
+    country = datamodel.Country(is_player=False, country_type="primitive")
+    session.add(country)
+    _process_government(session, country, _primitive_dict("steam_age"), 100)
+    assert _event_types(session) == []  # the first age seen is not a change
+    return country
+
+
+def test_pre_ftl_age_change_replaces_rename_and_reform(session, steam_age_primitive):
+    _process_government(
+        session,
+        steam_age_primitive,
+        _primitive_dict("industrial_age", name="New Name", civics=("civic_b",)),
+        date_in_days=130,
+    )
+    assert _event_types(session) == ["pre_ftl_age_change"]
+    event = session.query(datamodel.HistoricalEvent).one()
+    assert event.db_description.text == "steam_age|industrial_age"
+    assert steam_age_primitive.pre_ftl_age == "industrial_age"
+    # the new government is still recorded
+    assert len(_governments(session)) == 2
+
+
+def test_primitive_reform_without_age_change_is_kept(session, steam_age_primitive):
+    _process_government(
+        session,
+        steam_age_primitive,
+        _primitive_dict("steam_age", civics=("civic_b",)),
+        date_in_days=130,
+    )
+    assert _event_types(session) == ["government_reform"]
+
+
+@pytest.mark.parametrize(
+    "description,verb",
+    [
+        ("steam_age|industrial_age", "advanced"),
+        ("atomic_age|stone_age", "fell back"),
+        ("steam_age|modded_age", "advanced"),
+    ],
+)
+def test_pre_ftl_age_description_verb(description, verb):
+    assert datamodel.render_pre_ftl_age_description(description).startswith(
+        f"{verb} from the "
+    )
