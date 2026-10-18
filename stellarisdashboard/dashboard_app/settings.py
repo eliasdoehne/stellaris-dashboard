@@ -101,6 +101,27 @@ def _build_settings_dict():
                 "description": "Number of threads for reading save files.",
             },
         },
+        "Save Copies": {
+            "keep_failed_saves": {
+                "type": t_bool,
+                "value": _bool_to_lowercase(current_values["keep_failed_saves"]),
+                "name": "Keep copies of failed saves",
+                "description": "Copy saves that fail to import (fully or partially) to the failed_saves folder in the output folder, with a record of the error, so they can be imported again after a fix with \"stellarisdashboardcli reprocess-failed-saves\".",
+            },
+            "failed_saves_max_size_mb": {
+                "type": t_int,
+                "value": current_values["failed_saves_max_size_mb"],
+                "min": 1,
+                "name": "Failed saves folder size limit (MB)",
+                "description": "When the failed_saves folder grows beyond this size, the oldest copies are deleted.",
+            },
+            "backup_saves": {
+                "type": t_bool,
+                "value": _bool_to_lowercase(current_values["backup_saves"]),
+                "name": "Back up all saves",
+                "description": "Copy every save file the dashboard reads to the save_backups folder in the output folder, so the full history can be imported again later. WARNING: This folder has no size limit and grows by one save file per autosave.",
+            },
+        },
         "Interface": {
             "check_version": {
                 "type": t_bool,
