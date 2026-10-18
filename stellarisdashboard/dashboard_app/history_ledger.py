@@ -6,7 +6,7 @@ from typing import Dict
 from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
-from stellarisdashboard.dashboard_app import flask_app, utils, event_registry
+from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +278,7 @@ class EventTemplateDictBuilder:
         self._details[key_object] = self._get_details(key_object)
         self._titles[key_object] = self._get_title(key_object)
         self._formatted_urls[key_object] = self._get_url_for(key_object)
+        shown_events = []
         for event in event_list:
             if not self.event_filter.include_event(event):
                 continue
@@ -303,13 +304,16 @@ class EventTemplateDictBuilder:
                 and event.country is not None
             ):
                 continue
+            shown_events.append(event)
 
+        for group in event_grouping.group_envoy_assignments(shown_events):
+            event = group.events[0]
             start = datamodel.days_to_date(event.start_date_days)
             end_date = None
             is_active = True
-            if event.end_date_days is not None:
-                end_date = datamodel.days_to_date(event.end_date_days)
-                is_active = event.end_date_days >= self._most_recent_date
+            if group.end_date_days is not None:
+                end_date = datamodel.days_to_date(group.end_date_days)
+                is_active = group.end_date_days >= self._most_recent_date
             description = event.description
             if type(description) is str:
                 if description.startswith("{"):
@@ -341,9 +345,17 @@ class EventTemplateDictBuilder:
                 event_dict["faction_type"] = event.faction.rendered_type
             if event.combat:
                 event_dict.update(self._combat_dict(event.combat))
+            if event.federation is not None:
+                event_dict.update(self._federation_dict(event))
+            if len(group.events) > 1:
+                event_dict["leaders"] = list(
+                    dict.fromkeys(e.leader for e in group.events if e.leader is not None)
+                )
+                event_dict["assignment_count"] = len(group.events)
 
             self._events[key_object].append(event_dict)
-            self._preformat_urls(event)
+            for grouped_event in group.events:
+                self._preformat_urls(grouped_event)
         if not self._events[key_object] and self.event_filter.is_empty_filter:
             del self._events[key_object]
 
@@ -650,3 +662,41 @@ class EventTemplateDictBuilder:
             attacker_exhaustion=f"{100 * combat.attacker_war_exhaustion:.1f}%",
             defender_exhaustion=f"{100 * combat.defender_war_exhaustion:.1f}%",
         )
+
+    def _federation_dict(self, event: datamodel.HistoricalEvent):
+        federation = event.federation
+        result = dict(federation_name=federation.rendered_name)
+        if event.event_type == datamodel.HistoricalEventType.founded_federation:
+            # co-founders are the other full members since the founding date
+            partners = [
+                m.country
+                for m in federation.memberships
+                if m.start_date_days == federation.start_date_days
+                and not m.is_associate
+                and m.country_id != event.country_id
+            ]
+            links = []
+            for country in sorted(partners, key=lambda c: c.rendered_name):
+                self._formatted_urls[country] = self._get_url_for(country)
+                links.append(self._formatted_urls[country])
+            if links:
+                result["federation_partners"] = (
+                    links[0]
+                    if len(links) == 1
+                    else ", ".join(links[:-1]) + " and " + links[-1]
+                )
+        elif event.event_type == datamodel.HistoricalEventType.joined_federation:
+            membership = next(
+                (
+                    m
+                    for m in federation.memberships
+                    if m.country_id == event.country_id
+                    and m.start_date_days == event.start_date_days
+                ),
+                None,
+            )
+            result["is_associate"] = membership is not None and membership.is_associate
+            result["federation_member_count"] = len(
+                federation.members_at(event.start_date_days)
+            )
+        return result

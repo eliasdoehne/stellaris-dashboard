@@ -70,6 +70,16 @@ _MACROS = """
         {{ fallback }}
     {% endif %}
 {%- endmacro %}
+{% macro render_envoys(event) -%}
+    {% if "leaders" in event %}
+        {% for leader in event["leaders"] %}{{ leader.leader_class.capitalize() }} {{ links[leader] | safe }}{% if loop.revindex == 2 %} and {% elif not loop.last %}, {% endif %}{% endfor %}
+    {% else %}
+        {{ render_leader(event) }}
+    {% endif %}
+{%- endmacro %}
+{% macro render_assignment_count(event) -%}
+    {% if "assignment_count" in event %} ({{ event["assignment_count"] }} assignments){% endif %}
+{%- endmacro %}
 {% macro render_planet_and_class(event, fallback="an unknown planet") -%}
     {% if event["planet"] is not none %}
         {% if event["planet"].planet_class is not none %}
@@ -192,6 +202,29 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} and {{ links[event["target_country"]] | safe }} are now allied in the  "{{ event["description"] }}" federation.\n',
     ),
+    "founded_federation": EventDescriptor(
+        Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} founded the "{{ event["federation_name"] }}" federation'
+        '{% if "federation_partners" in event %} together with the {{ event["federation_partners"] | safe }}{% endif %}.\n',
+    ),
+    "joined_federation": EventDescriptor(
+        Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} joined the "{{ event["federation_name"] }}" federation'
+        '{% if event["is_associate"] %} as an associate member{% endif %}'
+        '{% if event["federation_member_count"] %} ({{ event["federation_member_count"] }} members){% endif %}.\n',
+    ),
+    "left_federation": EventDescriptor(
+        Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} left the "{{ event["federation_name"] }}" federation.\n',
+    ),
+    "dissolved_federation": EventDescriptor(
+        Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
+        '\n'
+        '                    The "{{ event["federation_name"] }}" federation of the {{ links[event["country"]] | safe }} was dissolved.\n',
+    ),
     "defensive_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "shield", SPAN,
         '\n\n'
@@ -271,29 +304,29 @@ REGISTRY: dict[str, EventDescriptor] = {
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
         '\n'
         '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_leader(event) }}\n'
-        '                    to increase their diplomatic weight in the galactic community.\n',
+        '                    {{ render_envoys(event) }}\n'
+        '                    to increase their diplomatic weight in the galactic community{{ render_assignment_count(event) }}.\n',
     ),
     "envoy_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
         '\n'
         '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_leader(event) }}\n'
-        '                    to improve the cohesion of the {{ event["description"] }}.\n',
+        '                    {{ render_envoys(event) }}\n'
+        '                    to improve the cohesion of the {{ event["description"] }}{{ render_assignment_count(event) }}.\n',
     ),
     "envoy_improving_relations": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", SPAN,
         '\n'
         '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_leader(event) }}\n'
-        '                    to improve relations with the {{ links[event["target_country"]] | safe }}.\n',
+        '                    {{ render_envoys(event) }}\n'
+        '                    to improve relations with the {{ links[event["target_country"]] | safe }}{{ render_assignment_count(event) }}.\n',
     ),
     "envoy_harming_relations": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", SPAN,
         '\n'
         '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_leader(event) }}\n'
-        '                    to harm relations with the {{ links[event["target_country"]] | safe }}.\n',
+        '                    {{ render_envoys(event) }}\n'
+        '                    to harm relations with the {{ links[event["target_country"]] | safe }}{{ render_assignment_count(event) }}.\n',
     ),
     # ---- Galaxy ---------------------------------------------------------
     "joined_galactic_community": EventDescriptor(
