@@ -25,6 +25,7 @@ from typing import (
 import rust_parser
 
 from stellarisdashboard import config
+from stellarisdashboard.parsing import save_copies
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +57,12 @@ class SavePathMonitor(abc.ABC):
     @abc.abstractmethod
     def get_gamestates_and_check_for_new_files(
         self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]]]]:
+    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]], pathlib.Path]]:
         """
         Check the save path for new save files and yield results that are ready. Depending on the implementation,
         it files may be skipped if all parser threads are busy. Results are always returned in the correct order.
 
-        :return: Iterator over (game_name, gamestate) pairs
+        :return: Iterator over (game_name, gamestate, save_file) triples, gamestate is None if parsing failed
         """
         pass
 
@@ -158,12 +159,7 @@ class ContinuousSavePathMonitor(SavePathMonitor):
             # results should be returned in order => only yield results from the head of the queue
             if self._pending_results[0][1].ready():
                 fname, result = self._pending_results.popleft()
-                try:
-                    yield fname.parent.stem, result.get()
-                except KeyboardInterrupt:
-                    raise
-                except Exception:
-                    logger.exception(f"Error while reading save file {fname}:")
+                yield fname.parent.stem, _get_parse_result(fname, result.get), fname
             else:
                 break
 
@@ -215,13 +211,16 @@ class BatchSavePathMonitor(SavePathMonitor):
                         executor.submit(parse_save, save_file)
                         for save_file in chunk_files
                     ]
-                    for i, (game_id, future) in enumerate(zip(chunk_game_ids, futures)):
-                        result = future.result()
-                        yield game_id, result
+                    for i, (game_id, save_file, future) in enumerate(
+                        zip(chunk_game_ids, chunk_files, futures)
+                    ):
+                        yield game_id, _get_parse_result(save_file, future.result), save_file
                         futures[i] = None
         else:
             for save_file in new_files:
-                yield save_file.parent.stem, parse_save(save_file)
+                yield save_file.parent.stem, _get_parse_result(
+                    save_file, lambda: parse_save(save_file)
+                ), save_file
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
 
     @staticmethod
@@ -231,6 +230,24 @@ class BatchSavePathMonitor(SavePathMonitor):
             if not chunk:
                 break
             yield chunk
+
+
+def _get_parse_result(save_file: pathlib.Path, get_result) -> Optional[Dict[str, Any]]:
+    """Return the parsed gamestate, or None (after keeping a copy of the save) if parsing failed."""
+    try:
+        return get_result()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        logger.exception(f"Error while reading save file {save_file}:")
+        save_copies.keep_failed_save(
+            save_file,
+            save_file.parent.stem,
+            [save_copies.failure(save_copies.STAGE_PARSE, save_copies.format_exception(e))],
+        )
+        if config.CONFIG.debug_mode:
+            raise
+        return None
 
 
 def parse_save(filename) -> Dict[str, Any]:
