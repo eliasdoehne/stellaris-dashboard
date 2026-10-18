@@ -591,6 +591,71 @@ span.eventtext {
     line-height: 1.5;
 }
 
+/* ---- Ledger: storyline cards --------------------------------------------- */
+details.storyline_card > summary.storyline_summary {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    list-style: none;
+    cursor: pointer;
+}
+
+details.storyline_card > summary.storyline_summary::-webkit-details-marker {
+    display: none;
+}
+
+summary.storyline_summary span.eventtext::before {
+    content: "\25B8";
+    display: inline-block;
+    width: 1.1em;
+    color: var(--amber);
+}
+
+details.storyline_card[open] > summary.storyline_summary span.eventtext::before {
+    content: "\25BE";
+}
+
+summary.storyline_summary:hover span.eventtext::before {
+    color: var(--amber-bright);
+}
+
+ul.storyline_stages {
+    margin: 0.25rem 0 0.5rem 0.5rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--line);
+}
+
+details.storyline_card[open] > ul.storyline_stages {
+    border-left-color: var(--teal);
+}
+
+ul.storyline_stages li.eventitem {
+    color: var(--text-dim);
+}
+
+span.storyline_meta {
+    margin-left: 0.6rem;
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+span.storyline_state {
+    display: inline-block;
+    margin-right: 0.35rem;
+    padding: 0 0.45rem;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+span.storyline_state.state_completed { color: var(--pos); }
+span.storyline_state.state_active { color: var(--teal); }
+span.storyline_state.state_paused { color: var(--warn); }
+span.storyline_state.state_abandoned,
+span.storyline_state.state_failed { color: var(--neg); }
+
 a.textlink {
     color: var(--amber);
     font-size: 14px;
