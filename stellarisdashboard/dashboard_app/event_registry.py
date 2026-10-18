@@ -22,6 +22,7 @@ Event types that the parser doesn't emit yet (and that had no branch) carry
 the old chain's fall-through (no output).
 """
 import enum
+import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -85,6 +86,40 @@ _MACROS = """
     {% if text.startswith(("a", "e", "i", "o", "u")) %} an {% else %} a {% endif %}
 {%- endmacro %}
 """
+
+
+# galactic_crisis event description (see parsing/galaxy_events.py) -> what happened to its country
+GALACTIC_CRISIS_PHRASES = {
+    "unbidden_arrived": "came through a dimensional portal and invaded the galaxy, starting the end-game crisis",
+    "aberrant_arrived": "came through a second dimensional portal",
+    "vehement_arrived": "came through a third dimensional portal",
+    "unbidden_portal_destroyed": "lost their dimensional portal",
+    "aberrant_portal_destroyed": "lost their dimensional portal",
+    "vehement_portal_destroyed": "lost their dimensional portal",
+    "extradimensional_defeated": "were defeated, ending the extradimensional invasion",
+    "prethoryn_arrived": "arrived from beyond the galaxy, starting the end-game crisis",
+    "prethoryn_defeated": "were defeated, ending the Prethoryn invasion",
+    "contingency_activated": "awoke, starting the end-game crisis",
+    "contingency_defeated": "were defeated when their last machine world fell",
+    "synth_queen_arrived": "appeared, starting the end-game crisis",
+    "synth_queen_war": "declared war on the galaxy",
+    "synth_queen_victorious": "prevailed over the galaxy",
+    "synth_queen_defeated": "were defeated, ending the crisis",
+    "gray_tempest_arrived": "emerged as the Gray Tempest",
+    "gray_tempest_defeated": "were defeated, ending the Gray Tempest",
+    "voidworm_plague_started": "spread across the galaxy, starting the Voidworm Plague",
+    "voidworm_plague_ended": "receded, ending the Voidworm Plague",
+    "great_khan_rose": "united under the Great Khan and set out to conquer the galaxy",
+    "great_khan_defeated": "lost the Great Khan's armada in battle; the Khan fled to raise a new one",
+    "great_khan_died": "lost the Great Khan, who died, leaving the horde without its leader",
+    "war_in_heaven_started": "entered the War in Heaven",
+    "war_in_heaven_ended": "saw the War in Heaven end",
+    "crisis_stage_2": "spread, escalating the crisis to stage 2 of 4",
+    "crisis_stage_3": "spread further, escalating the crisis to stage 3 of 4",
+    "crisis_stage_4": "overran the galaxy, escalating the crisis to its final stage",
+    "declared_crisis": "were declared a crisis to the galaxy",
+    "fallen_empire_awakened": "awoke from their long slumber",
+}
 
 
 @dataclass(frozen=True)
@@ -330,6 +365,12 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "voted_for_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "voted_against_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
+    "galactic_crisis": EventDescriptor(
+        Category.GALAXY, Tier.HEADLINE, "crisis", POINT,
+        '\n'
+        '                    {% set phrases = ' + json.dumps(GALACTIC_CRISIS_PHRASES) + ' %}\n'
+        '                    The {{ links[event["country"]] | safe }} {{ phrases.get(event["description"], event["description"]) }}.\n',
+    ),
     # ---- Expansion ------------------------------------------------------
     "megastructure_construction": EventDescriptor(Category.EXPANSION, Tier.HEADLINE, "megastructure"),
     "planet_destroyed": EventDescriptor(

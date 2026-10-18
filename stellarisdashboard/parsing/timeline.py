@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from stellarisdashboard import datamodel, game_info, config
 from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
-from stellarisdashboard.parsing import save_format
+from stellarisdashboard.parsing import galaxy_events, save_format
 
 logger = logging.getLogger(__name__)
 
@@ -354,6 +354,7 @@ class TimelineExtractor:
         yield RelicProcessor()
         yield LeviathanProcessor()
         yield EspionageProcessor()
+        yield GalaxyEventProcessor()
         yield WarProcessor()
         yield TruceProcessor()
         yield PopStatsProcessor()
@@ -654,6 +655,10 @@ class FleetOwnershipProcessor(AbstractGamestateDataProcessor):
                 self.owner_by_fleet_id[fleet_id] = country_model
 
 
+# a crisis claiming a system within this many days of its previous owner losing it is credited with the loss
+CRISIS_CLAIM_WINDOW_DAYS = 2 * 360
+
+
 class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
     ID = "system_owners"
     DEPENDENCIES = [SystemProcessor.ID, CountryProcessor.ID, FleetOwnershipProcessor.ID]
@@ -680,6 +685,7 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             if isinstance(ship_dict, dict)
         }
         starbase_system_map = dependencies[SystemProcessor.ID]["starbase_system_map"]
+        crisis_fleet_systems = self._crisis_fleet_systems(fleet_owners_dict)
 
         starbase_systems = set()
 
@@ -723,11 +729,38 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                 continue
             if system_model.country is None:
                 continue
-            self._update_owner(None, system_model)
+            self._update_owner(
+                None, system_model, destroyed_by=crisis_fleet_systems.get(system_id)
+            )
+
+    def _crisis_fleet_systems(
+        self, fleet_owners_dict: Dict[int, datamodel.Country]
+    ) -> Dict[int, datamodel.Country]:
+        """Systems with a crisis warfleet in them, by in-game system ID."""
+        fleets = self._gamestate_dict.get("fleet")
+        if not isinstance(fleets, dict):
+            return {}
+        result = {}
+        for fleet_id, country in fleet_owners_dict.items():
+            if not country.is_crisis_country():
+                continue
+            fleet = fleets.get(fleet_id)
+            if not isinstance(fleet, dict) or not fleet.get("military_power"):
+                continue
+            movement = fleet.get("movement_manager")
+            coordinate = movement.get("coordinate") if isinstance(movement, dict) else None
+            system_id = coordinate.get("origin") if isinstance(coordinate, dict) else None
+            if isinstance(system_id, int):
+                result.setdefault(system_id, country)
+        return result
 
     def _update_owner(
-        self, current_owner: Optional[datamodel.Country], system_model: datamodel.System
+        self,
+        current_owner: Optional[datamodel.Country],
+        system_model: datamodel.System,
+        destroyed_by: Optional[datamodel.Country] = None,
     ):
+        """destroyed_by: the crisis whose fleet is in a system that just lost its starbase."""
         owner_changed = False
         event_type = None
         target_country = None
@@ -739,10 +772,10 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             event_type = datamodel.HistoricalEventType.expanded_to_system
         elif system_model.country != current_owner:
             owner_changed = True
-            # Successor states, liberated empires and rebels take their systems when first seen
+            # Successor states, liberated empires and rebels take their systems when first seen; crises invade
             event_type = (
                 datamodel.HistoricalEventType.founded_with_system
-                if current_owner.founded_in_gamestate
+                if current_owner.founded_in_gamestate and not current_owner.is_crisis_country()
                 else datamodel.HistoricalEventType.conquered_system
             )
 
@@ -763,19 +796,30 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
 
                 target_country = ownership.country
                 if target_country is not None:
+                    taken_by = current_owner or destroyed_by
                     is_visible = target_country.has_met_player() or (
-                        current_owner is not None and current_owner.has_met_player()
+                        taken_by is not None and taken_by.has_met_player()
                     )
                     self._session.add(
                         datamodel.HistoricalEvent(
                             event_type=datamodel.HistoricalEventType.lost_system,
                             country=target_country,
-                            target_country=current_owner,
+                            target_country=taken_by,
                             system=system_model,
                             start_date_days=self._basic_info.date_in_days,
                             event_is_known_to_player=is_visible,
                         )
                     )
+            elif (
+                ownership is not None
+                and current_owner is not None
+                and current_owner.is_crisis_country()
+            ):
+                target_country = self._credit_crisis_conquest(
+                    ownership, current_owner, system_model
+                )
+                if target_country is not None:
+                    event_type = datamodel.HistoricalEventType.conquered_system
             if current_owner is not None:
                 self._session.add(
                     datamodel.SystemOwnership(
@@ -798,6 +842,39 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=is_visible,
                     )
                 )
+
+    def _credit_crisis_conquest(
+        self,
+        ownership: datamodel.SystemOwnership,
+        crisis_country: datamodel.Country,
+        system_model: datamodel.System,
+    ) -> Optional[datamodel.Country]:
+        """Crises and the Khan destroy starbases and claim the empty system later: credit them with
+        the previous owner's recent loss. Returns the previous owner if credited."""
+        previous_owner = ownership.country
+        if (
+            previous_owner is None
+            or previous_owner == crisis_country
+            or not previous_owner.is_real_country()
+            or self._basic_info.date_in_days - ownership.end_date_days
+            > CRISIS_CLAIM_WINDOW_DAYS
+        ):
+            return None
+        lost_event = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter_by(
+                event_type=datamodel.HistoricalEventType.lost_system,
+                country=previous_owner,
+                system=system_model,
+                target_country_id=None,
+            )
+            .filter(datamodel.HistoricalEvent.start_date_days > ownership.end_date_days)
+            .first()
+        )
+        if lost_event is not None:
+            lost_event.target_country = crisis_country
+            self._session.add(lost_event)
+        return previous_owner
 
 
 class DiplomacyDictProcessor(AbstractGamestateDataProcessor):
@@ -4207,6 +4284,74 @@ class LeviathanProcessor(AbstractGamestateDataProcessor):
                     event_is_known_to_player=country.has_met_player(),
                 )
             )
+
+
+class GalaxyEventProcessor(AbstractGamestateDataProcessor):
+    """Records galaxy-wide crises and events, see galaxy_events."""
+
+    ID = "galaxy_events"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        known_keys = set()
+        known_pairs = set()  # (key, country id) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.galactic_crisis
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.db_description),
+        ):
+            if event.country is not None and event.db_description is not None:
+                known_keys.add(event.db_description.text)
+                known_pairs.add((event.db_description.text, event.country.country_id_in_game))
+
+        for galaxy_event in galaxy_events.collect_galaxy_events(
+            self._gamestate_dict.get("flags"),
+            self._gamestate_dict.get("country"),
+            self._basic_info.date_in_days,
+        ):
+            if galaxy_event.all_countries:
+                targets = [countries.get(cid) for cid in galaxy_event.country_ids]
+            elif galaxy_event.key in known_keys:
+                continue
+            else:
+                targets = [self._find_country(galaxy_event, countries)]
+            for country in targets:
+                if country is None:
+                    continue  # retried with the next save
+                pair = (galaxy_event.key, country.country_id_in_game)
+                if pair in known_pairs:
+                    continue
+                known_keys.add(galaxy_event.key)
+                known_pairs.add(pair)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.galactic_crisis,
+                        country=country,
+                        start_date_days=galaxy_event.date_days,
+                        db_description=self._get_or_add_shared_description(galaxy_event.key),
+                        event_is_known_to_player=True,  # announced to the whole galaxy
+                    )
+                )
+
+    def _find_country(
+        self, galaxy_event: galaxy_events.GalaxyEvent, countries: Dict[int, datamodel.Country]
+    ) -> Optional[datamodel.Country]:
+        for country_id in galaxy_event.country_ids:
+            if country_id in countries:
+                return countries[country_id]
+        # a defeated crisis country is gone from the gamestate but kept in the database
+        known = (
+            self._session.query(datamodel.Country)
+            .filter(
+                datamodel.Country.game == self._db_game,
+                datamodel.Country.country_type.in_(galaxy_event.country_types),
+            )
+            .all()
+        )
+        known.sort(key=lambda c: galaxy_event.country_types.index(c.country_type))
+        return known[0] if known else None
 
 
 class WarProcessor(AbstractGamestateDataProcessor):
