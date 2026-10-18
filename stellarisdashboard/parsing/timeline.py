@@ -2554,6 +2554,8 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
             gov_type = gov_dict.get("type", "other")
             gov_was_reformed = False
             empire_was_renamed = False
+            # a new pre-FTL age rewrites the name, government and civics, so it replaces those events
+            age_changed = self._update_pre_ftl_age(country_model, country_dict)
 
             prev_gov = (
                 self._session.query(datamodel.Government)
@@ -2604,7 +2606,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                 **civics,
             )
             self._session.add(gov)
-            if gov_was_reformed:
+            if gov_was_reformed and not age_changed:
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.government_reform,
@@ -2615,7 +2617,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=country_model.has_met_player(),
                     )
                 )
-            if empire_was_renamed:
+            if empire_was_renamed and not age_changed:
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.empire_renamed,
@@ -2630,6 +2632,32 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=country_model.has_met_player(),
                     )
                 )
+
+    def _update_pre_ftl_age(self, country_model: datamodel.Country, country_dict) -> bool:
+        """Track a primitive country's technology age; returns True if it changed since the last save."""
+        if country_model.country_type != "primitive":
+            return False
+        age = country_dict.get("preftl_age")
+        if not isinstance(age, str) or age == country_model.pre_ftl_age:
+            return False
+        previous_age = country_model.pre_ftl_age
+        country_model.pre_ftl_age = age
+        self._session.add(country_model)
+        if previous_age is None:
+            return False  # first time seen, nothing to compare against
+        self._session.add(
+            datamodel.HistoricalEvent(
+                event_type=datamodel.HistoricalEventType.pre_ftl_age_change,
+                country=country_model,
+                db_description=self._get_or_add_shared_description(
+                    f"{previous_age}|{age}"
+                ),
+                start_date_days=self._basic_info.date_in_days,
+                end_date_days=self._basic_info.date_in_days,
+                event_is_known_to_player=country_model.has_met_player(),
+            )
+        )
+        return True
 
 
 class PolicyProcessor(AbstractGamestateDataProcessor):
@@ -4272,6 +4300,8 @@ class WarProcessor(AbstractGamestateDataProcessor):
         elif war_model.outcome != datamodel.WarOutcome.in_progress:
             # skip already finished wars
             return
+        if isinstance(war_dict.get("name"), dict):
+            war_model.name = dump_name(war_dict["name"])
         war_model.attacker_war_exhaustion = war_dict.get("attacker_war_exhaustion", 0.0)
         war_model.defender_war_exhaustion = war_dict.get("defender_war_exhaustion", 0.0)
         war_model.end_date_days = self._basic_info.date_in_days - 1
@@ -4434,7 +4464,7 @@ class WarProcessor(AbstractGamestateDataProcessor):
                 if war_participant is None:
                     logger.info(
                         f"{self._basic_info.logger_str}     Could not find War participant matching country "
-                        f"{db_country.country_name} and war {war.name}."
+                        f"{db_country.country_name} and war {war.war_id_in_game}."
                     )
                     continue
                 self._session.add(

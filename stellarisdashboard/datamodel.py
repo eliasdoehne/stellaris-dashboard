@@ -307,6 +307,7 @@ class HistoricalEventType(enum.Enum):
     first_contact_process = enum.auto()
     espionage_operation = enum.auto()
     completed_espionage_operation = enum.auto()
+    pre_ftl_age_change = enum.auto()
 
     def __str__(self):
         return self.name
@@ -320,6 +321,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.new_faction,
             HistoricalEventType.government_reform,
             HistoricalEventType.empire_renamed,
+            HistoricalEventType.pre_ftl_age_change,
             HistoricalEventType.species_rights_reform,
             HistoricalEventType.first_contact,
             HistoricalEventType.non_aggression_pact,
@@ -774,6 +776,7 @@ class Country(Base):
     primary_color = Column(String(80))
     secondary_color = Column(String(80))
     origin = Column(String(80))
+    pre_ftl_age = Column(String(40))  # technology age of primitive countries, e.g. "steam_age"
 
     # Not persisted: set by CountryProcessor for countries first seen in the current gamestate
     founded_in_gamestate = False
@@ -1461,8 +1464,18 @@ class War(Base):
     )
 
     @property
+    def ingame_name(self) -> Optional[str]:
+        """The war's name as shown in the game, or None if it is unknown."""
+        if not self.name:
+            return None
+        rendered = game_info.render_name(self.name)
+        if not rendered or rendered == game_info.NameRenderer.default_name:
+            return None
+        return rendered
+
+    @property
     def rendered_name(self):
-        return (
+        return self.ingame_name or (
             ", ".join(a.country.rendered_name for a in self.attackers)
             + " vs "
             + ", ".join(d.country.rendered_name for d in self.defenders)
@@ -1930,6 +1943,35 @@ def render_astral_rift_description(text: str) -> str:
     return f"{name}: {title}" if title and title != name else name
 
 
+# Technology ages of primitive (pre-FTL) countries, oldest first
+PRE_FTL_AGES = (
+    "stone_age",
+    "bronze_age",
+    "iron_age",
+    "late_medieval_age",
+    "renaissance_age",
+    "steam_age",
+    "industrial_age",
+    "machine_age",
+    "atomic_age",
+    "early_space_age",
+)
+
+
+def render_pre_ftl_age_description(text: str) -> str:
+    """Renders an "<old age>|<new age>" description, e.g. "advanced from the Steam Age to the Industrial Age"."""
+    old_age, new_age = split_packed_description(text)
+    regressed = (
+        old_age in PRE_FTL_AGES
+        and new_age in PRE_FTL_AGES
+        and PRE_FTL_AGES.index(new_age) < PRE_FTL_AGES.index(old_age)
+    )
+    verb = "fell back" if regressed else "advanced"
+    old_name = game_info.lookup_id_name(old_age)
+    new_name = game_info.lookup_id_name(new_age)
+    return f"{verb} from the {old_name} to the {new_name}"
+
+
 FIRST_CONTACT_PROCESS_VERBS = {
     "in_progress": "began first contact with",
     "finished": "made first contact with",
@@ -2037,18 +2079,19 @@ class HistoricalEvent(Base):
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type in [HistoricalEventType.war]:
             call_type = self.db_description.text
+            # no leading whitespace: the ledger's localisation lookup strips it
             if call_type == "primary":
-                return " as a primary party"
+                return "as a primary party"
             elif call_type == "overlord":
-                return f" called by their overlord"
+                return "called by their overlord"
             elif call_type == "offensive":
-                return f", attacking on the side of the"
+                return "attacking on the side of the"
             elif call_type == "defensive":
-                return f" due to their defensive pact with the"
+                return "due to their defensive pact with the"
             elif call_type == "alliance":
-                return f" due to their alliance with the"
+                return "due to their alliance with the"
             else:
-                return f" (called as {call_type})"
+                return f"(called as {call_type})"
         elif self.event_type == HistoricalEventType.councilor:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.new_policy:
@@ -2090,6 +2133,8 @@ class HistoricalEvent(Base):
             HistoricalEventType.completed_espionage_operation,
         ):
             return render_espionage_description(self.db_description.text)
+        elif self.event_type == HistoricalEventType.pre_ftl_age_change:
+            return render_pre_ftl_age_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.first_contact_process:
             return render_first_contact_description(
                 self.db_description.text if self.db_description else ""

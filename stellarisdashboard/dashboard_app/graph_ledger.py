@@ -71,6 +71,8 @@ def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     # Fresh axis dicts so we don't mutate the shared DEFAULT_PLOT_LAYOUT.
     layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.x_axis_label)
     layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.y_axis_label)
+    if plot_spec.y_axis_reversed:
+        layout["yaxis"]["autorange"] = "reversed"
     # Width is fluid (autosize); the card/container controls it. Height stays configurable.
     layout["height"] = config.CONFIG.plot_height
     if plot_spec.style == visualization_data.PlotStyle.line:
@@ -86,6 +88,8 @@ def get_compact_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
     layout["xaxis"] = dict(layout["xaxis"], title=None)
     layout["yaxis"] = dict(layout["yaxis"], title=None)
+    if plot_spec.y_axis_reversed:
+        layout["yaxis"]["autorange"] = "reversed"
     layout["height"] = COMPACT_PLOT_HEIGHT
     layout["showlegend"] = False
     layout["margin"] = dict(t=10, b=28, l=44, r=14)

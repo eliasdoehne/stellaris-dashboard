@@ -53,6 +53,7 @@ class PlotSpecification:
 
     x_axis_label: str = "Year"
     y_axis_label: str = ""
+    y_axis_reversed: bool = False  # for rankings, where lower values are better
 
     data_container_factory_kwargs: Dict = dataclasses.field(default_factory=dict)
 
@@ -1421,9 +1422,10 @@ UNITY_BUDGET = PlotSpecification(
 )
 VICTORY_RANK_GRAPH = PlotSpecification(
     plot_id="victory-rank",
-    title="Victory Rank (Lower is better!)",
+    title="Victory Rank",
     data_container_factory=VictoryRankDataContainer,
     style=PlotStyle.line,
+    y_axis_reversed=True,
 )
 VICTORY_SCORE_GRAPH = PlotSpecification(
     plot_id="victory-score",
