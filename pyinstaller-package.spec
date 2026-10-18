@@ -34,9 +34,9 @@ a_main = Analysis(
     noarchive=False
 )
 
-# Single `dashboard` exe. The parse-existing-saves capability lives in
-# `cli.f_parse_saves` (reachable via `stellarisdashboardcli parse-saves`), which
-# this exe already bundles, so it needs no separate entrypoint.
+# Single `dashboard` exe. Existing saves are imported from its import page,
+# through the same `cli.f_parse_saves` as `stellarisdashboardcli parse-saves`,
+# so it needs no separate entrypoint.
 pyz_main = PYZ(a_main.pure, a_main.zipped_data,
                cipher=block_cipher)
 exe_main = EXE(pyz_main,

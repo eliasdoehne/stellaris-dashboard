@@ -20,6 +20,7 @@ from stellarisdashboard.dashboard_app import (
     galaxy_map,
     codex,
     settings,
+    import_page,
 )
 
 

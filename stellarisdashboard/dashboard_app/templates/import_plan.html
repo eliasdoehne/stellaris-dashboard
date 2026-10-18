@@ -1,0 +1,37 @@
+<div class="import-plan">
+{% if error %}
+    <p class="import-error" role="alert">{{ error }}</p>
+{% else %}
+    <h3>{{ plan.empire_name or plan.game_id }}</h3>
+    <p>
+        {{ plan.num_saves }} save{{ "" if plan.num_saves == 1 else "s" }} in the folder,
+        {{ plan.num_imported }} already imported,
+        <strong>{{ plan.to_import|length }} to import</strong>
+        {%- if plan.to_import|length > 1 %} ({{ plan.to_import[0].date_str }} to {{ plan.to_import[-1].date_str }})
+        {%- elif plan.to_import %} ({{ plan.to_import[0].date_str }}){% endif %}.
+    </p>
+    {% if plan.num_filtered_out %}
+        <p class="import-meta">
+            {{ plan.num_filtered_out }} save{{ " is" if plan.num_filtered_out == 1 else "s are" }} left out by the
+            {% if save_name_filter %}save file name filter "{{ save_name_filter }}"{% endif %}
+            {% if save_name_filter and skip_saves %}and the{% endif %}
+            {% if skip_saves %}"skip saves" setting ({{ skip_saves }}){% endif %}
+            in the <a class="textlink" href="/settings/">Settings</a>.
+        </p>
+    {% endif %}
+    {% if plan.num_older_than_imported %}
+        <p class="import-warning">
+            {% if plan.num_older_than_imported == 1 %}1 of these saves is{% else %}{{ plan.num_older_than_imported }} of these saves are{% endif %}
+            older than the newest imported save ({{ plan.newest_imported_date_str }}). Importing a save after newer
+            ones can make some events in the history inaccurate.
+        </p>
+    {% endif %}
+    {% if plan.to_import %}
+        <form action="/import/start" method="POST"
+              hx-post="/import/start" hx-target="#import-status" hx-swap="outerHTML">
+            <input type="hidden" name="game_id" value="{{ plan.game_id }}">
+            <button type="submit" class="button">Import {{ plan.to_import|length }} save{{ "" if plan.to_import|length == 1 else "s" }}</button>
+        </form>
+    {% endif %}
+{% endif %}
+</div>
