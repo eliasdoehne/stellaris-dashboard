@@ -307,6 +307,10 @@ class HistoricalEventType(enum.Enum):
     first_contact_process = enum.auto()
     espionage_operation = enum.auto()
     completed_espionage_operation = enum.auto()
+    founded_federation = enum.auto()
+    joined_federation = enum.auto()
+    left_federation = enum.auto()
+    dissolved_federation = enum.auto()
 
     def __str__(self):
         return self.name
@@ -325,6 +329,10 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.non_aggression_pact,
             HistoricalEventType.defensive_pact,
             HistoricalEventType.formed_federation,
+            HistoricalEventType.founded_federation,
+            HistoricalEventType.joined_federation,
+            HistoricalEventType.left_federation,
+            HistoricalEventType.dissolved_federation,
             HistoricalEventType.migration_treaty,
             HistoricalEventType.research_agreement,
             HistoricalEventType.commercial_pact,
@@ -392,6 +400,15 @@ class HistoricalEventType(enum.Enum):
             return HistoricalEventScope.system
         return HistoricalEventScope.all
 
+
+ENVOY_EVENT_TYPES = frozenset(
+    {
+        HistoricalEventType.envoy_community,
+        HistoricalEventType.envoy_federation,
+        HistoricalEventType.envoy_improving_relations,
+        HistoricalEventType.envoy_harming_relations,
+    }
+)
 
 # Routine events that are not stored for special (non-"real") countries, see drop_special_country_events.
 SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES = frozenset(
@@ -1950,6 +1967,55 @@ def render_espionage_description(text: str) -> str:
     )
 
 
+class Federation(Base):
+    """A federation; the in-game ID is reused after dissolution, so the founding date is part of its identity."""
+
+    __tablename__ = "federation"
+    federation_id = Column(Integer, primary_key=True)
+    federation_id_in_game = Column(Integer, index=True)
+    name = Column(String(500))  # dump_name() of the save's name
+    start_date_days = Column(Integer, index=True)  # founding date from the save
+    end_date_days = Column(Integer)  # dissolution; None while it exists
+
+    memberships = relationship(
+        "FederationMembership",
+        back_populates="federation",
+        cascade="all,delete,delete-orphan",
+        order_by="FederationMembership.start_date_days",
+    )
+
+    @property
+    def rendered_name(self) -> str:
+        return game_info.render_name(self.name)
+
+    def members_at(self, date_days: int, associates: bool = False) -> List["Country"]:
+        """The full members (or associate members) on the given date."""
+        return [
+            m.country
+            for m in self.memberships
+            if m.start_date_days <= date_days
+            and (m.end_date_days is None or m.end_date_days >= date_days)
+            and bool(m.is_associate) == associates
+        ]
+
+
+class FederationMembership(Base):
+    """A country's (full or associate) membership in a federation."""
+
+    __tablename__ = "federation_membership"
+    federation_membership_id = Column(Integer, primary_key=True)
+    federation_id = Column(
+        ForeignKey(Federation.federation_id), nullable=False, index=True
+    )
+    country_id = Column(ForeignKey(Country.country_id), nullable=False, index=True)
+    is_associate = Column(Boolean, nullable=False, default=False)
+    start_date_days = Column(Integer, nullable=False)
+    end_date_days = Column(Integer)
+
+    federation = relationship(Federation, back_populates="memberships")
+    country = relationship(Country)
+
+
 class HistoricalEvent(Base):
     """
     This class represents various historical events used for the text ledger.
@@ -1975,6 +2041,7 @@ class HistoricalEvent(Base):
     description_id = Column(ForeignKey(SharedDescription.description_id), nullable=True)
     target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
     fleet_id = Column(ForeignKey(Fleet.fleet_id), nullable=True)
+    federation_id = Column(ForeignKey(Federation.federation_id), nullable=True)
     end_date_days = Column(Integer)
 
     country = relationship(
@@ -1988,6 +2055,7 @@ class HistoricalEvent(Base):
     planet = relationship(Planet, back_populates="historical_events")
     faction = relationship(PoliticalFaction, back_populates="historical_events")
     fleet = relationship(Fleet)
+    federation = relationship(Federation)
     db_description = relationship(SharedDescription)
 
     def __str__(self):
