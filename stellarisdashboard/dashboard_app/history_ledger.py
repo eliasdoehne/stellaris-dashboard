@@ -301,6 +301,9 @@ class EventTemplateDictBuilder:
                     "awakened_fallen_empire",
                 ]
                 and event.country is not None
+                # crises are special countries, but their events belong in the ledger
+                and not event.country.is_crisis_country()
+                and event.event_type != datamodel.HistoricalEventType.galactic_crisis
             ):
                 continue
 
