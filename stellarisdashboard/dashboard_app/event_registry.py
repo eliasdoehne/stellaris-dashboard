@@ -646,7 +646,7 @@ STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
     ),
     "astral_rift": StorylineDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "compass", "step",
-        'Exploration of the {{ event["title"] }} astral rift'
+        'Exploration of the astral rift "{{ event["title"] }}"'
         + _STORYLINE_SYSTEM + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
         {"active": "exploring", "paused": "paused", "completed": "fully explored"},
     ),
@@ -703,7 +703,7 @@ def _compiled_storyline(storyline_type: str):
         '<span class="dateblock">' + _DATEBLOCKS[SPAN] + "</span>\n"
         + '<span class="eventtext">' + descriptor.sentence
         + '<span class="storyline_meta"> <span class="storyline_state state_{{ event["state"] }}">{{ state_label }}</span>'
-        + '{% if event["stages"] %} {{ event["stages"] | length }} {{ stage_noun }}{% if event["stages"] | length != 1 %}s{% endif %}{% endif %}'
+        + '{% if event["stage_count"] %} {{ event["stage_count"] }} {{ stage_noun }}{% if event["stage_count"] != 1 %}s{% endif %}{% endif %}'
         + "</span></span>\n"
     )
     source = (
@@ -714,7 +714,14 @@ def _compiled_storyline(storyline_type: str):
         + head
         + "</summary>\n"
         + '<ul class="event_list storyline_stages">'
-        + '{% for stage in event["stages"] %}{{ render_event(stage, links) }}{% endfor %}'
+        + '{% for stage in event["stages"] %}'
+        + '<li class="eventitem storyline_stage"><span class="dateblock">{{ stage["start_date"] }}:</span> '
+        + '<span class="eventtext">{{ stage_noun | capitalize }} {{ stage["index"] }}'
+        + '{% if "detail" in stage %}: {{ stage["detail"] }}{% endif %}'
+        + '{% if "country" in stage %} by the {{ links[stage["country"]] | safe }}{% endif %}'
+        + '{% if "leader" in stage %} ({{ render_leader(stage) | trim }}){% endif %}'
+        + "</span></li>"
+        + "{% endfor %}"
         + "</ul></details>\n"
         + "{% else %}"
         + '<div class="eventdescription">\n' + head + "</div>\n"
@@ -740,7 +747,6 @@ def render_storyline(event, links) -> Markup:
             links=links,
             state_label=descriptor.state_labels.get(state, state),
             stage_noun=descriptor.stage_noun,
-            render_event=render_event,
         )
     )
 

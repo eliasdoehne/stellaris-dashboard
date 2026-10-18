@@ -619,8 +619,9 @@ summary.storyline_summary:hover span.eventtext::before {
     color: var(--amber-bright);
 }
 
+/* stages sit under the card's text column: dateblock min-width + margin + row gap */
 ul.storyline_stages {
-    margin: 0.25rem 0 0.5rem 0.5rem;
+    margin: 0.15rem 0 0.4rem calc(250px + 0.5rem);
     padding-left: 0.75rem;
     border-left: 1px solid var(--line);
 }
@@ -630,7 +631,15 @@ details.storyline_card[open] > ul.storyline_stages {
 }
 
 ul.storyline_stages li.eventitem {
+    display: flex;
+    gap: 0.5rem;
     color: var(--text-dim);
+}
+
+ul.storyline_stages span.dateblock {
+    min-width: 0;
+    margin-right: 0;
+    text-align: left;
 }
 
 span.storyline_meta {

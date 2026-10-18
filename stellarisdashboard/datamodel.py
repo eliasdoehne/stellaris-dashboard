@@ -2069,8 +2069,10 @@ class HistoricalEvent(Base):
     target_country_id = Column(ForeignKey(Country.country_id), nullable=True)
     fleet_id = Column(ForeignKey(Fleet.fleet_id), nullable=True)
     end_date_days = Column(Integer)
-    storyline_id = Column(ForeignKey(Storyline.storyline_id), nullable=True, index=True)
+    storyline_id = Column(ForeignKey(Storyline.storyline_id), nullable=True)
     stage_index = Column(Integer)  # 1-based position among the storyline's stages
+    # a named table-level index: a column-level one would be built on alembic's batch temp table
+    __table_args__ = (sqlalchemy.Index("ix_historical_event_storyline_id", "storyline_id"),)
 
     country = relationship(
         Country, back_populates="historical_events", foreign_keys=[country_id]
@@ -2196,6 +2198,17 @@ class HistoricalEvent(Base):
             return game_info.lookup_key(self.db_description.text)
         else:
             return "Unknown Event"
+
+    @property
+    def stage_detail(self) -> Optional[str]:
+        """What a storyline stage adds to its arc: a rift step's name, a first contact stage's role; else None."""
+        text = self.db_description.text if self.db_description else ""
+        if self.event_type == HistoricalEventType.explored_astral_rift:
+            _, event_id = split_packed_description(text)
+            return game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
+        elif self.event_type == HistoricalEventType.first_contact_stage and text:
+            return render_first_contact_stage(text)
+        return None
 
     def involved_countries(self):
         if self.country_id is not None:

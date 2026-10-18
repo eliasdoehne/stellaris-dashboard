@@ -354,13 +354,15 @@ class EventTemplateDictBuilder:
                     self._preformat_storyline_urls(event.storyline)
                 if event.stage_index is not None:
                     sort_key = (event.start_date_days, event.stage_index)
-                    item["stages"].append((sort_key, event_dict))
+                    item["stages"].append((sort_key, self._stage_dict(event, start)))
                 self._preformat_urls(event)
                 continue
             self._events[key_object].append(event_dict)
             self._preformat_urls(event)
         for item in storyline_items.values():
             item["stages"] = [s for _, s in sorted(item["stages"], key=lambda s: s[0])]
+            # the furthest stage reached, which counts stages hidden from the player too
+            item["stage_count"] = max((s["index"] for s in item["stages"]), default=0)
         if not self._events[key_object] and self.event_filter.is_empty_filter:
             del self._events[key_object]
 
@@ -430,6 +432,19 @@ class EventTemplateDictBuilder:
         item = {k: v for (k, v) in item.items() if v is not None}
         item["stages"] = []
         return item
+
+    @staticmethod
+    def _stage_dict(event: datamodel.HistoricalEvent, start_date: str) -> dict:
+        """A compact stage line: country and leader only where they differ from the storyline's."""
+        storyline = event.storyline
+        stage = dict(
+            start_date=start_date,
+            index=event.stage_index,
+            detail=event.stage_detail,
+            country=event.country if event.country is not storyline.country else None,
+            leader=event.leader if event.leader is not storyline.leader else None,
+        )
+        return {k: v for (k, v) in stage.items() if v is not None}
 
     def _get_title(self, key) -> str:
         if isinstance(key, datamodel.Country):
