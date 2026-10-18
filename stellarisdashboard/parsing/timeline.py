@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from stellarisdashboard import datamodel, game_info, config
 from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
-from stellarisdashboard.parsing import save_format
+from stellarisdashboard.parsing import save_copies, save_format
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +139,14 @@ class TimelineExtractor:
         self._gamestate_dict = None
         self.number_of_parsed_saves = 0
         self._other_players = set()
+        # failures of the last processed gamestate, see save_copies.failure
+        self.failures: List[Dict[str, Any]] = []
 
-    def process_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any]):
+    def process_gamestate(
+        self, game_id: str, gamestate_dict: Dict[str, Any], replace_existing: bool = False
+    ):
+        """Import a gamestate. With replace_existing, a gamestate of the same date is deleted and imported again."""
+        self.failures = []
         self._gamestate_dict = gamestate_dict
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
@@ -151,6 +157,8 @@ class TimelineExtractor:
             )
             try:
                 db_game = self._get_or_add_game_to_db(game_id)
+                if replace_existing:
+                    self._delete_existing_gamestate(db_game)
                 if self._check_if_gamestate_exists(db_game):
                     logger.info(
                         f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
@@ -167,6 +175,9 @@ class TimelineExtractor:
                 self.number_of_parsed_saves += 1
             except Exception as e:
                 self._session.rollback()
+                self.failures.append(
+                    save_copies.failure(save_copies.STAGE_IMPORT, save_copies.format_exception(e))
+                )
                 logger.exception(
                     f"{self.basic_info.logger_str} Rolling back changes to database..."
                 )
@@ -175,6 +186,17 @@ class TimelineExtractor:
                 
             # needs to be cleared between processing saves, see more notes at declaration
             _shared_description_cache.clear()
+
+    def _delete_existing_gamestate(self, db_game):
+        existing = (
+            self._session.query(datamodel.GameState)
+            .filter_by(game=db_game, date=self.basic_info.date_in_days)
+            .all()
+        )
+        for gamestate in existing:
+            logger.info(f"{self.basic_info.logger_str} Replacing existing gamestate")
+            self._session.delete(gamestate)
+        self._session.flush()
 
     def _check_if_gamestate_exists(self, db_game):
         # single indexed lookup; loading db_game.game_states would fetch every
@@ -228,10 +250,17 @@ class TimelineExtractor:
                     )
                     data = data_processor.data()
                     self._session.flush()
-                except Exception:
+                except Exception as e:
                     savepoint.rollback()
                     # descriptions created inside the rolled-back savepoint are no longer persisted
                     _shared_description_cache.clear()
+                    self.failures.append(
+                        save_copies.failure(
+                            save_copies.STAGE_PROCESSOR,
+                            save_copies.format_exception(e),
+                            processor=data_processor.ID,
+                        )
+                    )
                     if config.CONFIG.debug_mode:
                         raise
                     logger.exception(
