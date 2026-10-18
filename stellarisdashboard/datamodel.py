@@ -393,6 +393,15 @@ class HistoricalEventType(enum.Enum):
         return HistoricalEventScope.all
 
 
+ENVOY_EVENT_TYPES = frozenset(
+    {
+        HistoricalEventType.envoy_community,
+        HistoricalEventType.envoy_federation,
+        HistoricalEventType.envoy_improving_relations,
+        HistoricalEventType.envoy_harming_relations,
+    }
+)
+
 # Routine events that are not stored for special (non-"real") countries, see drop_special_country_events.
 SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES = frozenset(
     {

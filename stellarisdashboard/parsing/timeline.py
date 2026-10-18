@@ -3460,6 +3460,21 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 )
                 self._session.add(new_assignment_event)
 
+        # dead or dismissed envoys are no longer in the save, so their assignments end here
+        for event in (
+            self._session.query(datamodel.HistoricalEvent)
+            .join(datamodel.HistoricalEvent.leader)
+            .filter(
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+                datamodel.HistoricalEvent.event_type.in_(datamodel.ENVOY_EVENT_TYPES),
+                datamodel.Leader.is_active.is_(False),
+            )
+        ):
+            event.end_date_days = max(
+                event.start_date_days, self._basic_info.date_in_days - 1
+            )
+            self._session.add(event)
+
     def _previous_assignment(
         self, envoy: datamodel.Leader
     ) -> Optional[datamodel.HistoricalEvent]:
@@ -3470,14 +3485,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
             self._session.query(datamodel.HistoricalEvent)
             .filter(datamodel.HistoricalEvent.end_date_days.is_(None))
             .filter(
-                datamodel.HistoricalEvent.event_type.in_(
-                    {
-                        datamodel.HistoricalEventType.envoy_community,
-                        datamodel.HistoricalEventType.envoy_federation,
-                        datamodel.HistoricalEventType.envoy_improving_relations,
-                        datamodel.HistoricalEventType.envoy_harming_relations,
-                    }
-                )
+                datamodel.HistoricalEvent.event_type.in_(datamodel.ENVOY_EVENT_TYPES)
             )
             .filter_by(leader=envoy)
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())
