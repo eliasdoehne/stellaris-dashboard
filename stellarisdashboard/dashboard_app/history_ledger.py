@@ -10,6 +10,9 @@ from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, e
 
 logger = logging.getLogger(__name__)
 
+# A merged envoy entry names this many envoys and counts the rest.
+MAX_NAMED_ENVOYS = 3
+
 # Descriptor-driven event renderer (replaces the old ~50-branch if/elif chain in
 # history_page.html). Exposed to the template as render_event(event, links).
 flask_app.jinja_env.globals["render_event"] = event_registry.render_event
@@ -348,9 +351,12 @@ class EventTemplateDictBuilder:
             if event.federation is not None:
                 event_dict.update(self._federation_dict(event))
             if len(group.events) > 1:
-                event_dict["leaders"] = list(
+                leaders = list(
                     dict.fromkeys(e.leader for e in group.events if e.leader is not None)
                 )
+                if leaders:
+                    event_dict["leaders"] = leaders[:MAX_NAMED_ENVOYS]
+                    event_dict["other_envoy_count"] = len(leaders) - MAX_NAMED_ENVOYS
                 event_dict["assignment_count"] = len(group.events)
 
             self._events[key_object].append(event_dict)
@@ -696,6 +702,12 @@ class EventTemplateDictBuilder:
                 None,
             )
             result["is_associate"] = membership is not None and membership.is_associate
+            # a membership ending the day before means the country switched between full and associate
+            result["changed_role"] = any(
+                m.country_id == event.country_id
+                and m.end_date_days == event.start_date_days - 1
+                for m in federation.memberships
+            )
             result["federation_member_count"] = len(
                 federation.members_at(event.start_date_days)
             )

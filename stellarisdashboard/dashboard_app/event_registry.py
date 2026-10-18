@@ -72,7 +72,9 @@ _MACROS = """
 {%- endmacro %}
 {% macro render_envoys(event) -%}
     {% if "leaders" in event %}
-        {% for leader in event["leaders"] %}{{ leader.leader_class.capitalize() }} {{ links[leader] | safe }}{% if loop.revindex == 2 %} and {% elif not loop.last %}, {% endif %}{% endfor %}
+        {% set others = event["other_envoy_count"] %}
+        {% for leader in event["leaders"] %}{{ leader.leader_class.capitalize() }} {{ links[leader] | safe }}{% if loop.revindex == 2 and others <= 0 %} and {% elif not loop.last %}, {% endif %}{% endfor %}
+        {% if others > 0 %} and {{ others }} other envoy{% if others > 1 %}s{% endif %}{% endif %}
     {% else %}
         {{ render_leader(event) }}
     {% endif %}
@@ -211,8 +213,10 @@ REGISTRY: dict[str, EventDescriptor] = {
     "joined_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
         '\n'
-        '                    The {{ links[event["country"]] | safe }} joined the "{{ event["federation_name"] }}" federation'
-        '{% if event["is_associate"] %} as an associate member{% endif %}'
+        '                    The {{ links[event["country"]] | safe }}'
+        '{% if event["changed_role"] %} became {{ "an associate" if event["is_associate"] else "a full" }} member of'
+        '{% else %} joined{% endif %} the "{{ event["federation_name"] }}" federation'
+        '{% if event["is_associate"] and not event["changed_role"] %} as an associate member{% endif %}'
         '{% if event["federation_member_count"] %} ({{ event["federation_member_count"] }} members){% endif %}.\n',
     ),
     "left_federation": EventDescriptor(
