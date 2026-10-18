@@ -12,7 +12,7 @@ import threading
 
 import click
 
-from stellarisdashboard import config
+from stellarisdashboard import bulk_import, config
 
 from stellarisdashboard.dashboard_app import visualization_data
 from stellarisdashboard.parsing import save_parser, timeline
@@ -81,6 +81,8 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
                 break
             if gamestate_dict is None:
                 continue
+            if bulk_import.defer_to_running_import(game_name):
+                continue
             show_wait_message = True
             nothing_new = False
             tle = timeline.TimelineExtractor()
@@ -109,7 +111,24 @@ def parse_saves(threads, save_path, game_name):
     f_parse_saves(threads, save_path, game_name_prefix=game_name)
 
 
-def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
+def f_parse_saves(
+    threads=None,
+    save_path=None,
+    game_name_prefix="",
+    save_files=None,
+    use_worker_processes=False,
+    stop_event: threading.Event = None,
+    on_save_processed=None,
+) -> None:
+    """
+    Import saves into the database: all saves of the games matching game_name_prefix, or only save_files.
+
+    :param save_files: Import exactly these saves, in this order.
+    :param use_worker_processes: Parse saves in worker processes even with a single thread.
+    :param stop_event: Stop importing once this is set.
+    :param on_save_processed: Called with (game_name, gamestate_dict) after each save; gamestate_dict is None
+        if the save could not be parsed.
+    """
     if threads is not None:
         # since this is usually used when the game is not running, let the user override the thread count
         config.CONFIG.threads = threads
@@ -118,15 +137,20 @@ def f_parse_saves(threads=None, save_path=None, game_name_prefix="") -> None:
     save_reader = save_parser.BatchSavePathMonitor(
         save_path,
         game_name_prefix=game_name_prefix,
+        save_files=save_files,
+        use_worker_processes=use_worker_processes,
     )
     for (
         game_name,
         gamestate_dict,
     ) in save_reader.get_gamestates_and_check_for_new_files():
-        if gamestate_dict is None:
-            continue
-        tle = timeline.TimelineExtractor()
-        tle.process_gamestate(game_name, gamestate_dict)
+        if stop_event is not None and stop_event.is_set():
+            break
+        if gamestate_dict is not None:
+            tle = timeline.TimelineExtractor()
+            tle.process_gamestate(game_name, gamestate_dict)
+        if on_save_processed is not None:
+            on_save_processed(game_name, gamestate_dict)
         del gamestate_dict
 
 

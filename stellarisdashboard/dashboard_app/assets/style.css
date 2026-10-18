@@ -720,3 +720,96 @@ a.titlelink {
     color: var(--text-faint);
     font-style: italic;
 }
+
+/* ---- Import page ---------------------------------------------------------- */
+.import {
+    max-width: 60rem;
+    margin: 0 auto;
+}
+
+.import-intro,
+.import-meta {
+    color: var(--text-dim);
+}
+
+.import code {
+    background: var(--inset);
+    font-family: var(--font-mono);
+    padding: 0.1rem 0.3rem;
+    border-radius: var(--radius-sm);
+    overflow-wrap: anywhere;
+}
+
+.import-status:not(:empty) {
+    margin: 1rem 0 1.5rem;
+}
+
+.import-status h2 {
+    color: var(--amber-bright);
+    font-size: 1.15rem;
+    margin-bottom: 0.25rem;
+}
+
+.import-status progress {
+    width: 100%;
+    accent-color: var(--amber);
+}
+
+.import-error,
+.import-warning {
+    border-left: 3px solid var(--amber);
+    background: var(--panel);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+}
+
+.import-error {
+    border-left-color: var(--neg);
+}
+
+.import-errors ul {
+    padding-left: 1.25rem;
+    max-height: 16rem;
+    overflow-y: auto;
+}
+
+.import-games {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.import-games th {
+    color: var(--text-dim);
+    font-weight: normal;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    padding: 0.35rem 0.5rem;
+}
+
+.import-games td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--line-soft);
+}
+
+.import-games td:last-child {
+    text-align: right;
+}
+
+.import-games .import-plan-row td {
+    padding: 0;
+    border-bottom: none;
+    text-align: left;
+}
+
+.import-plan {
+    background: var(--panel);
+    border-left: 2px solid var(--amber);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem 0.75rem;
+    margin: 0.5rem 0 1rem;
+}
+
+.import-plan h3 {
+    color: var(--amber-bright);
+    margin: 0.25rem 0;
+}

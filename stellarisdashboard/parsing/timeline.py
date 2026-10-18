@@ -6,6 +6,7 @@ import itertools
 import json
 import logging
 import random
+import threading
 import time
 import zlib
 from typing import Dict, Any, Set, Iterable, Optional, Union, List, Tuple, Collection
@@ -58,6 +59,8 @@ def _extract_id(val, default: int = -1) -> int:
 # it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
 # the built-in @cache decorator was leaking memory, hanging on to references of processor instances
 _shared_description_cache: dict[str, datamodel.SharedDescription] = {}
+# module-level caches like the one above are not thread-safe: one save is processed at a time per process
+_process_gamestate_lock = threading.Lock()
 
 _BIOSHIP_FAMILY_HULLS = {
     "mauler": "corvette",
@@ -145,7 +148,7 @@ class TimelineExtractor:
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.process_time()
-        with datamodel.get_db_session(game_id=game_id, write=True) as self._session:
+        with _process_gamestate_lock, datamodel.get_db_session(game_id=game_id, write=True) as self._session:
             sqlalchemy.event.listen(
                 self._session, "before_flush", datamodel.drop_special_country_events
             )

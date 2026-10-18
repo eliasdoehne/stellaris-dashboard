@@ -1,0 +1,51 @@
+{# Polls itself while an import runs; the finished state renders without the trigger, which stops polling. #}
+<div id="import-status" class="import-status"
+     {% if job and job.is_active %}hx-get="/import/status" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+    {% if error %}
+        <p class="import-error" role="alert">{{ error }}</p>
+    {% endif %}
+    {% if job %}
+        <h2>
+            {% if job.status == "running" %}Importing
+            {% elif job.status == "cancelling" %}Cancelling import of
+            {% elif job.status == "finished" %}Finished importing
+            {% elif job.status == "cancelled" %}Cancelled import of
+            {% else %}Import failed:
+            {% endif %}
+            {{ job.empire_name or job.game_id }}
+        </h2>
+        <p class="import-meta">{{ job.game_id }}</p>
+        <progress max="{{ job.total }}" value="{{ job.done }}"></progress>
+        <p>
+            {{ job.done }} / {{ job.total }} saves
+            {% if job.current_date %}· current date {{ job.current_date }}{% endif %}
+            · {{ job.num_errors }} error{{ "" if job.num_errors == 1 else "s" }}
+            · {{ "%d:%02d"|format(job.elapsed_seconds // 60, job.elapsed_seconds % 60) }}
+        </p>
+        {% if job.num_deferred_by_watcher and job.status in ("running", "cancelling") %}
+            <p class="import-meta">New saves of this game written during the import are imported after the others.</p>
+        {% endif %}
+        {% if job.status == "cancelled" %}
+            <p class="import-meta">Already imported saves are kept. Start the import again to continue.</p>
+        {% endif %}
+        {% if job.errors %}
+            <details class="import-errors" {% if not job.is_active %}open{% endif %}>
+                <summary>Errors{% if job.num_errors > job.errors|length %} (first {{ job.errors|length }} of {{ job.num_errors }}){% endif %}</summary>
+                <ul>
+                    {% for e in job.errors %}<li><code>{{ e }}</code></li>{% endfor %}
+                </ul>
+                <p class="import-meta">Saves with errors are skipped or imported partially. The log file has the details.</p>
+            </details>
+        {% endif %}
+        {% if job.is_active %}
+            <form action="/import/cancel" method="POST" hx-post="/import/cancel" hx-target="#import-status" hx-swap="outerHTML">
+                <button type="submit" class="button" {% if job.status == "cancelling" %}disabled{% endif %}>Cancel</button>
+            </form>
+        {% else %}
+            <p>
+                <a class="button" href="{{ url_for('/timeline/', game_name=job.game_id) }}">Timeline Graphs</a>
+                <a class="button" href="{{ url_for('history_page', game_id=job.game_id) }}">Event Ledger</a>
+            </p>
+        {% endif %}
+    {% endif %}
+</div>
