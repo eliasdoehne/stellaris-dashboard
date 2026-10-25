@@ -2,13 +2,14 @@
 {% set busy = job and job.is_active %}
 <div id="failed-saves" class="failed-saves"
      hx-get="/import/failed" hx-swap="outerHTML"
-     hx-trigger="reprocess-started from:body{% if busy and job.is_reprocess %}, every 2s{% endif %}">
+     hx-trigger="reprocess-started from:body{% if busy %}, every 2s{% endif %}">
     {% if copies %}
         <h2>Failed saves</h2>
         <p class="import-intro">
             Saves that could not be parsed or imported completely are kept in the output folder.
             Reprocessing imports them again, e.g. after updating the dashboard: data stored for the same in-game date is
             replaced, copies that import cleanly are deleted and the others stay listed.
+            Reprocessing a save older than the newest imported one can make some events in the history inaccurate.
         </p>
         {% set games = copies|map(attribute="game_id")|unique|list %}
         <form action="/import/reprocess" method="POST" hx-post="/import/reprocess" hx-target="#import-status" hx-swap="outerHTML">

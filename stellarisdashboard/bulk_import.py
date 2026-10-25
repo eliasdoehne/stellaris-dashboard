@@ -305,7 +305,8 @@ class ImportJob:
         logging.getLogger().addHandler(error_handler)
         status = ImportJob.FINISHED
         try:
-            logger.info(f"Importing {self.total} saves of game {self.game_id}")
+            action = "Reprocessing" if self.is_reprocess else "Importing"
+            logger.info(f"{action} {self.total} saves of {self.game_id}")
             if self.is_reprocess:
                 cli.f_parse_saves(
                     save_path=self.save_path,
@@ -315,18 +316,19 @@ class ImportJob:
                     stop_event=self._stop_event,
                     on_save_processed=self._on_save_processed,
                 )
-            while self._batch and not self.is_reprocess:
-                cli.f_parse_saves(
-                    save_path=self.save_path,
-                    save_files=self._batch,
-                    use_worker_processes=True,
-                    stop_event=self._stop_event,
-                    on_save_processed=self._on_save_processed,
-                )
-                if self._stop_event.is_set():
-                    break
-                self._batch = self._next_batch()
-                self._batch_index = 0
+            else:
+                while self._batch:
+                    cli.f_parse_saves(
+                        save_path=self.save_path,
+                        save_files=self._batch,
+                        use_worker_processes=True,
+                        stop_event=self._stop_event,
+                        on_save_processed=self._on_save_processed,
+                    )
+                    if self._stop_event.is_set():
+                        break
+                    self._batch = self._next_batch()
+                    self._batch_index = 0
         except Exception:
             logger.exception(f"Import of game {self.game_id} failed")
             status = ImportJob.FAILED
@@ -402,10 +404,17 @@ def start_reprocess(game_id: Optional[str] = None) -> ImportJob:
     copies = save_copies.list_kept_copies(game_id)
     if not copies:
         raise ImportRefused("There are no kept copies of failed saves to reprocess.")
-    game_ids = sorted({c.game_id for c in copies})
-    infos = [read_save_info(c.path) for c in copies]
+    infos = []
+    for c in copies:
+        try:
+            infos.append(read_save_info(c.path))
+        except OSError:
+            logger.warning(f"Kept copy {c.path} disappeared, skipping it")
+    if not infos:
+        raise ImportRefused("There are no kept copies of failed saves to reprocess.")
+    game_ids = sorted({i.path.parent.name for i in infos})
     plan = ImportPlan(
-        game_id=game_id or "all games",
+        game_id=game_id or (game_ids[0] if len(game_ids) == 1 else "all games"),
         empire_name="",
         saves=infos,
         num_imported=0,

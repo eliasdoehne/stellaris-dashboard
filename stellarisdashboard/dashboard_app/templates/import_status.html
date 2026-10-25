@@ -7,9 +7,10 @@
     {% if job %}
         <h2>
             {% set what = "reprocessing" if job.is_reprocess else "import" %}
+            {% set doing = "reprocessing" if job.is_reprocess else "importing" %}
             {% if job.status == "running" %}{{ "Reprocessing" if job.is_reprocess else "Importing" }}
             {% elif job.status == "cancelling" %}Cancelling {{ what }} of
-            {% elif job.status == "finished" %}Finished {{ what }}
+            {% elif job.status == "finished" %}Finished {{ doing }}
             {% elif job.status == "cancelled" %}Cancelled {{ what }} of
             {% else %}{{ what|capitalize }} failed:
             {% endif %}

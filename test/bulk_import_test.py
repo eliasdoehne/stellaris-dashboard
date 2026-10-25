@@ -678,3 +678,78 @@ def test_failed_saves_page(monkeypatch, dropped_caches):
     assert resp.headers["HX-Trigger"] == "reprocess-started"
     assert "eprocessing" in resp.get_data(as_text=True)  # "Reprocessing" or, if already done, "Finished reprocessing"
     bulk_import.get_current_job()._thread.join(timeout=10)
+
+
+def test_list_kept_copies_ignores_glob_and_traversal_in_game_id():
+    _keep("gameA", "a.sav", "2200.01.01")
+    outside = make_save(save_copies.failed_saves_path().parent / "outside", "x.sav", "2200.01.01")
+    assert outside.exists()
+    for bad in ("../outside", "*", "game[A]", "gam?A", ".."):
+        assert save_copies.list_kept_copies(bad) == []
+        with pytest.raises(bulk_import.ImportRefused):
+            bulk_import.start_reprocess(bad)
+    assert bulk_import.get_current_job() is None
+
+
+def test_reprocess_all_with_a_single_game_targets_that_game(monkeypatch, dropped_caches):
+    from stellarisdashboard.dashboard_app import flask_app, import_page
+
+    _keep("gameA", "a.sav", "2200.01.01")
+    _fake_parse(monkeypatch)
+    job = bulk_import.start_reprocess()
+    job._thread.join(timeout=10)
+    assert job.game_id == "gameA"
+    with flask_app.test_request_context("/import/status"):
+        html = import_page.import_status()
+    assert "Finished reprocessing" in html and "game_name=gameA" in html.replace("?", "&").replace("/timeline/&", "")
+
+
+def test_reprocess_of_several_games_has_no_game_links(monkeypatch, dropped_caches):
+    from stellarisdashboard.dashboard_app import flask_app, import_page
+
+    _keep("gameA", "a.sav", "2200.01.01")
+    _keep("gameB", "b.sav", "2200.01.01")
+    _fake_parse(monkeypatch)
+    job = bulk_import.start_reprocess()
+    job._thread.join(timeout=10)
+    with flask_app.test_request_context("/import/status"):
+        html = import_page.import_status()
+    assert "Timeline Graphs" not in html
+
+
+def test_finished_bulk_import_wording(tmp_path, monkeypatch, dropped_caches):
+    from stellarisdashboard.dashboard_app import flask_app, import_page
+
+    _three_saves(tmp_path)
+    _fake_parse(monkeypatch)
+    job = bulk_import.start_import("gameA")
+    job._thread.join(timeout=10)
+    with flask_app.test_request_context("/import/status"):
+        assert "Finished importing" in import_page.import_status()
+
+
+def test_reprocess_skips_copy_that_disappeared(monkeypatch, dropped_caches):
+    gone = _keep("gameA", "gone.sav", "2200.01.01")
+    kept = _keep("gameA", "kept.sav", "2200.02.01")
+    real = bulk_import.read_save_info
+
+    def read(path):
+        if path == gone:
+            raise FileNotFoundError(path)
+        return real(path)
+
+    monkeypatch.setattr(bulk_import, "read_save_info", read)
+    calls = []
+    _fake_parse(monkeypatch, calls=calls)
+    job = bulk_import.start_reprocess()
+    job._thread.join(timeout=10)
+    assert calls == [[kept]] and job.total == 1
+
+
+def test_copy_that_fails_again_stays_listed_with_refreshed_record(monkeypatch):
+    kept = _keep("gameA", "a.sav", "2200.01.01", error="old\nValueError: old")
+    save_copies.keep_failed_save(
+        kept, "gameA", [save_copies.failure(save_copies.STAGE_IMPORT, "new\nKeyError: new")], "2200.01.01"
+    )
+    (copy,) = save_copies.list_kept_copies()
+    assert copy.path == kept and copy.reasons == ["import: KeyError: new"]

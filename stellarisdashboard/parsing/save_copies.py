@@ -181,9 +181,11 @@ def _summarize_failure(f: Dict[str, Any]) -> str:
 def list_kept_copies(game_id: Optional[str] = None) -> List[KeptCopy]:
     """The kept copies of failed saves (of one game, by default all), oldest in-game date first per game."""
     base_dir = failed_saves_path()
-    pattern = f"{game_id}/*.sav" if game_id else "*/*.sav"
     copies = []
-    for path in base_dir.glob(pattern) if base_dir.is_dir() else []:
+    # game_id is only compared, never used in a glob pattern
+    for path in base_dir.glob("*/*.sav") if base_dir.is_dir() else []:
+        if game_id is not None and path.parent.name != game_id:
+            continue
         record = _read_record(record_path(path))
         copies.append(
             KeptCopy(

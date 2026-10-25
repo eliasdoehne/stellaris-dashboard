@@ -11,6 +11,14 @@ from stellarisdashboard.parsing import save_copies
 logger = logging.getLogger(__name__)
 
 
+def _started_response(error: str):
+    response = flask_app.make_response(_status_fragment(error))
+    if not error:
+        # makes the failed saves list start polling, so it follows the job
+        response.headers["HX-Trigger"] = "reprocess-started"
+    return response
+
+
 def _failed_saves_fragment():
     return render_template(
         "import_failed_saves.html",
@@ -61,7 +69,7 @@ def start_import():
     except bulk_import.ImportRefused as e:
         error = str(e)
     if request.headers.get("HX-Request"):
-        return _status_fragment(error)
+        return _started_response(error)
     return redirect("/import/")
 
 
@@ -91,9 +99,5 @@ def start_reprocess():
     except bulk_import.ImportRefused as e:
         error = str(e)
     if request.headers.get("HX-Request"):
-        response = flask_app.make_response(_status_fragment(error))
-        if not error:
-            # makes the failed saves list start polling
-            response.headers["HX-Trigger"] = "reprocess-started"
-        return response
+        return _started_response(error)
     return redirect("/import/")
