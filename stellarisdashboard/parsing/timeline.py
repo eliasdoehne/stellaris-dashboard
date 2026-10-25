@@ -70,7 +70,9 @@ _BIOSHIP_FAMILY_HULLS = {
 }
 # Fallen empire and NPC warship sizes, mapped by the hull class of their design (the
 # reactor/thruster components in the 4.0.1 test save, or the hull named in the key).
-# Space fauna, crystals, and other unique guardians are left out on purpose.
+# Crystal ships and voidworms are mapped by size_multiplier/fleet_slot_size (5/1, 10/2, 20/4, 40/8, 80/16).
+# Space fauna (size varies with age) and unique guardians such as npc_warship_01 (size_multiplier 250)
+# are left out on purpose.
 _NPC_HULLS = {
     "small_ship_fallen_empire": "destroyer",
     "large_ship_fallen_empire": "battleship",
@@ -87,7 +89,20 @@ _NPC_HULLS = {
     "marauder_galleon": "battleship",
     "caravaneer_destroyer_01": "destroyer",
     "caravaneer_cruiser_01": "cruiser",
+    "crystal_splitter_ship_large_blue": "cruiser",
+    "voidworms_small": "corvette",
+    "voidworms_medium": "destroyer",
+    "voidworms_large": "battleship",
+    "voidworms_titan": "titan",
 }
+_NPC_HULLS.update(
+    {
+        f"crystal_ship_{size}_{color}{elite}": hull
+        for size, hull in (("small", "corvette"), ("medium", "destroyer"), ("large", "cruiser"))
+        for color in ("blue", "green", "yellow", "red")
+        for elite in ("", "_elite")
+    }
+)
 _FLEET_COMPOSITION_HULLS = {
     "frigate",
     "corvette",
