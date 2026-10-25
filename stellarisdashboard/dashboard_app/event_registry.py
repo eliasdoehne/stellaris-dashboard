@@ -141,7 +141,7 @@ GALACTIC_CRISIS_PHRASES = {
     "war_in_heaven_ruled_out": "awoke without an ancient rival, so no War in Heaven will follow",
     "war_in_heaven_rival_chosen": "were chosen as the ancient rival of the awakened empire, fated to wake and contest it",
     "ancient_rival_woke": "awoke as the ancient rival of the awakened empire, setting the War in Heaven in motion",
-    "nonaligned_league_formed": "formed the League of Non-Aligned Powers by renaming their federation, to stay out of the War in Heaven",
+    "nonaligned_league_formed": "founded the League of Non-Aligned Powers, to stay out of the War in Heaven",
     "nonaligned_league_war": "led the League of Non-Aligned Powers into war against the awakened empires",
     "fallen_empire_lost_war": "lost a war, shattering the myth of Fallen Empire invincibility",
 }
@@ -376,7 +376,7 @@ REGISTRY: dict[str, EventDescriptor] = {
     "federation_renamed": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
         '\n'
-        '                    The "{{ event["old_federation_name"] }}" federation of the {{ links[event["country"]] | safe }}'
+        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the "{{ event["old_federation_name"] }}" federation'
         ' was renamed "{{ event["federation_name"] }}".\n',
     ),
     "envoy_community": EventDescriptor(

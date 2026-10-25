@@ -165,7 +165,7 @@ def test_diplomacy_processor_no_longer_logs_formed_federation():
     assert _events(session, ET.formed_federation) == []
 
 
-def test_rename_records_an_event_per_member_with_the_old_name():
+def test_rename_records_one_event_on_the_president_with_the_old_name():
     session, game, countries = _setup()
     start = "2300.03.01"
     old, new = {"key": "NAME_Mutual_Assistance_Pact"}, {"key": "NAME_League_of_Non-Aligned_Powers"}
@@ -175,7 +175,7 @@ def test_rename_records_an_event_per_member_with_the_old_name():
     assert _events(session, ET.federation_renamed) == []
     _save(session, game, countries, "2300.06.01", {0: {**_fed([1, 2], start, [3]), "name": new}})
     day = D("2300.06.01")
-    assert _events(session, ET.federation_renamed) == [(1, day), (2, day), (3, day)]
+    assert _events(session, ET.federation_renamed) == [(1, day)]  # one event, on the president
     fed = session.query(datamodel.Federation).one()
     assert fed.name == timeline.dump_name(new)
     renamed = session.query(datamodel.HistoricalEvent).filter_by(event_type=ET.federation_renamed)

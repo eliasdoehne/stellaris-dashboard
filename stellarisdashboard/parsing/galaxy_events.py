@@ -20,7 +20,8 @@ class GalaxyEventSignal:
     flag: str  # the global flag marking the event
     country_types: Tuple[str, ...]  # the event is attached to a country of these types
     all_countries: bool = False  # attach to every matching country instead of the first
-    # attach to the countries carrying this country flag (or UPSTART_AWAKENER) when there are any, else by type
+    # attach to the one country carrying this country flag (or UPSTART_AWAKENER) whose date is closest to the
+    # global flag's, and to none if there is no carrier
     target: Optional[str] = None
 
 
@@ -28,7 +29,7 @@ class GalaxyEventSignal:
 UPSTART_AWAKENER = "upstart_awakener"
 FIRST_SLEEPER = "sleepers_awake_first_sleeper"  # country flag of every empire that woke first (upstart or Guardian)
 ANCIENT_RIVAL = "sleepers_awake_ancient_rival"  # country flag of the Fallen Empire chosen to be the awakener's rival
-FORMED_LEAGUE = "formed_nonaligned_league"  # country flag of the founder of the League of Non-Aligned Powers
+LEAGUE_LEADER = "war_in_heaven_league_leader"  # country flag of the leader of the League of Non-Aligned Powers
 FALLEN_EMPIRE_TYPES = ("awakened_fallen_empire", "fallen_empire")
 
 # Global flags set once by the game's event chains; none of these is removed again.
@@ -69,11 +70,12 @@ SIGNALS = (
     # the rival roll of an upstart awakening, events/fallen_empire_awakening_events.txt and war_in_heaven_events.txt
     GalaxyEventSignal("war_in_heaven_ruled_out", "no_war_in_heaven", FALLEN_EMPIRE_TYPES, target=UPSTART_AWAKENER, all_countries=True),
     GalaxyEventSignal("ancient_rival_woke", "sleepers_awake_rival_waking", ("awakened_fallen_empire",), target=ANCIENT_RIVAL, all_countries=True),
-    # the League of Non-Aligned Powers is an existing federation that the game renames (see FederationProcessor)
-    GalaxyEventSignal("nonaligned_league_formed", "war_in_heaven_nonaligned_league", (), target=FORMED_LEAGUE, all_countries=True),
-    GalaxyEventSignal("nonaligned_league_war", "war_in_heaven_nonaligned_league_war", (), target=FORMED_LEAGUE, all_countries=True),
-    # events/fallen_empire_events.txt; the first Fallen Empire to lose a war
-    GalaxyEventSignal("fallen_empire_lost_war", "fallen_empire_lost_war", FALLEN_EMPIRE_TYPES, target="fallen_empire_lost_war", all_countries=True),
+    # the League of Non-Aligned Powers is a federation that the game founds or renames (see FederationProcessor)
+    GalaxyEventSignal("nonaligned_league_formed", "war_in_heaven_nonaligned_league", (), target=LEAGUE_LEADER, all_countries=True),
+    GalaxyEventSignal("nonaligned_league_war", "war_in_heaven_nonaligned_league_war", (), target=LEAGUE_LEADER, all_countries=True),
+    # events/fallen_empire_events.txt; the global flag marks the first Fallen Empire to lose a war, while the country
+    # flag is set on every one that lost planets
+    GalaxyEventSignal("fallen_empire_lost_war", "fallen_empire_lost_war", (), target="fallen_empire_lost_war", all_countries=True),
 )
 
 # crisis_stage_N is a generic global flag of the end-game crises (stage 1 is their arrival);
@@ -84,6 +86,9 @@ FALLEN_EMPIRE_AWAKENED = "fallen_empire_awakened"
 FALLEN_EMPIRE_AWAKENED_UPSTART = "fallen_empire_awakened_upstart"
 FALLEN_EMPIRE_AWAKENED_GUARDIAN = "fallen_empire_awakened_guardian"
 TYPED_AWAKENINGS = (FALLEN_EMPIRE_AWAKENED_UPSTART, FALLEN_EMPIRE_AWAKENED_GUARDIAN)
+AWAKENING_KEYS = (FALLEN_EMPIRE_AWAKENED,) + TYPED_AWAKENINGS
+# the rival roll happens in hidden events, so these show only with show_everything
+HIDDEN_KEYS = ("war_in_heaven_rival_chosen", "war_in_heaven_ruled_out")
 # country flags that mark an event on the country, dated from the flag itself
 COUNTRY_FLAG_EVENTS = (("war_in_heaven_rival_chosen", ANCIENT_RIVAL),)
 # country flag of an empire that became the crisis (crisis level 5) or was declared one by the Galactic Community;
@@ -98,6 +103,7 @@ class GalaxyEvent:
     country_types: Tuple[str, ...]
     country_ids: Tuple[int, ...]  # matching countries in the gamestate, in country_types order
     all_countries: bool = False
+    once: bool = False  # recorded once, on whichever country carried it first
 
 
 def flag_date_days(value: Any) -> Optional[int]:
@@ -133,28 +139,40 @@ def collect_galaxy_events(flags: Any, countries: Any, current_days: int) -> Iter
     def matching(types):
         return tuple(cid for t in types for cid in by_type.get(t, []))
 
-    def targeted(target):
-        if target == UPSTART_AWAKENER:
-            return _upstart_awakeners(by_type, countries, flags)
-        return tuple(
-            cid
-            for cid, country in sorted(countries.items() if isinstance(countries, dict) else ())
-            if isinstance(country, dict)
-            and isinstance(country.get("flags"), dict)
-            and target in country["flags"]
-        )
+    def carrier(target, global_days):
+        """The carrier of the target whose date is closest to the global flag's, as a tuple of at most one id."""
+        carriers = []  # (distance, id)
+        for cid, country in sorted(countries.items() if isinstance(countries, dict) else ()):
+            if not isinstance(country, dict):
+                continue
+            country_flags = country.get("flags") if isinstance(country.get("flags"), dict) else {}
+            if target == UPSTART_AWAKENER:
+                if country.get("type") != "awakened_fallen_empire":
+                    continue
+                key, days = _classify_awakening(country, flags)
+                if key != FALLEN_EMPIRE_AWAKENED_UPSTART:
+                    continue
+            elif target in country_flags:
+                days = flag_date_days(country_flags[target])
+            else:
+                continue
+            distance = abs(days - global_days) if days is not None and global_days is not None else float("inf")
+            carriers.append((distance, cid))
+        return (min(carriers)[1],) if carriers else ()
 
     for signal in SIGNALS:
         if signal.flag in flags:
-            ids = targeted(signal.target) if signal.target else ()
+            global_days = flag_date_days(flags[signal.flag])
+            ids = carrier(signal.target, global_days) if signal.target else matching(signal.country_types)
             if signal.target and not ids:
-                ids = matching(signal.country_types)[:1]  # no carrier of the flag: the first matching empire
+                continue  # the carrier is gone from the gamestate; an event on another country would be wrong
             yield GalaxyEvent(
                 key=signal.key,
-                date_days=_event_date(flag_date_days(flags[signal.flag]), current_days),
+                date_days=_event_date(global_days, current_days),
                 country_types=signal.country_types,
-                country_ids=ids or matching(signal.country_types),
+                country_ids=ids,
                 all_countries=signal.all_countries,
+                once=bool(signal.target),
             )
     for stage in CRISIS_STAGES:
         flag = f"crisis_stage_{stage}"
@@ -196,18 +214,12 @@ def _classify_awakening(country: dict, flags: dict) -> Tuple[Optional[str], Opti
     country_flags = country.get("flags") if isinstance(country.get("flags"), dict) else {}
     if FIRST_SLEEPER in country_flags:
         own = flag_date_days(country_flags[FIRST_SLEEPER])
-        upstart = flag_date_days(flags.get("sleepers_awake_happened"))
+        upstart = flag_date_days(flags.get("sleepers_awake_happened"))  # dates an upstart without its own flag date
         guardian = flag_date_days(flags.get("guardians_of_the_galaxy_happened"))
-        # both can happen in one game; the country's flag was set together with its own global flag
-        candidates = [
-            (key, date) for key, date in ((FALLEN_EMPIRE_AWAKENED_UPSTART, upstart), (FALLEN_EMPIRE_AWAKENED_GUARDIAN, guardian))
-            if date is not None
-        ]
-        if candidates and own is not None:
-            return min(candidates, key=lambda c: abs(c[1] - own))[0], own
-        if candidates:
-            return candidates[0][0], candidates[0][1]
-        return FALLEN_EMPIRE_AWAKENED, own
+        # both can happen in one game; a Guardian's flag is set together with the global Guardian flag
+        if own is not None and guardian is not None and abs(own - guardian) <= 1:
+            return FALLEN_EMPIRE_AWAKENED_GUARDIAN, own
+        return FALLEN_EMPIRE_AWAKENED_UPSTART, own if own is not None else upstart
     if ANCIENT_RIVAL in country_flags and "sleepers_awake_rival_waking" in flags:
         return None, None
     # an awakened empire's type changed last when it awoke
@@ -218,9 +230,3 @@ def _classify_awakening(country: dict, flags: dict) -> Tuple[Optional[str], Opti
     return FALLEN_EMPIRE_AWAKENED, date_days
 
 
-def _upstart_awakeners(by_type: dict, countries: dict, flags: dict) -> Tuple[int, ...]:
-    return tuple(
-        cid
-        for cid in by_type.get("awakened_fallen_empire", [])
-        if _classify_awakening(countries[cid], flags)[0] == FALLEN_EMPIRE_AWAKENED_UPSTART
-    )

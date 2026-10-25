@@ -3240,6 +3240,7 @@ class FederationProcessor(AbstractGamestateDataProcessor):
         if not isinstance(save_federations, dict):
             save_federations = {}
         current = {}  # in-game id -> (name, start, {country id: is_associate})
+        leaders = {}  # in-game id -> country id of the president
         for f_id, fdict in save_federations.items():
             if not isinstance(fdict, dict):
                 continue
@@ -3255,6 +3256,7 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                     country = countries.get(c_id)
                     if country is not None and country.is_real_country():
                         roles[c_id] = is_associate
+            leaders[f_id] = _extract_id(fdict.get("leader"))
             current[f_id] = (
                 dump_name(fdict.get("name", "Unnamed Federation")),
                 start,
@@ -3313,7 +3315,10 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                 continue
 
             if federation.name and federation.name != name:
-                self._record_rename(federation, name, [countries[c_id] for c_id in sorted(roles)], today)
+                president = countries.get(leaders.get(f_id)) or next(
+                    (countries[c_id] for c_id in sorted(roles)), None
+                )
+                self._record_rename(federation, name, president, today)
             federation.name = name
             self._federations[f_id] = federation
             open_memberships = {
@@ -3345,22 +3350,20 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                     today,
                 )
 
-    def _record_rename(self, federation, new_name, members, today):
-        """One event per current member; the description holds the old name, the federation gets the new one."""
-        if game_info.render_name(federation.name) == game_info.render_name(new_name):
+    def _record_rename(self, federation, new_name, president, today):
+        """One event on the president; the description holds the old name, the federation gets the new one."""
+        if president is None or game_info.render_name(federation.name) == game_info.render_name(new_name):
             return
-        description = self._get_or_add_shared_description(federation.name)
-        for country in members:
-            self._session.add(
-                datamodel.HistoricalEvent(
-                    event_type=datamodel.HistoricalEventType.federation_renamed,
-                    country=country,
-                    federation=federation,
-                    start_date_days=today,
-                    db_description=description,
-                    event_is_known_to_player=country.has_met_player(),
-                )
+        self._session.add(
+            datamodel.HistoricalEvent(
+                event_type=datamodel.HistoricalEventType.federation_renamed,
+                country=president,
+                federation=federation,
+                start_date_days=today,
+                db_description=self._get_or_add_shared_description(federation.name),
+                event_is_known_to_player=president.has_met_player(),
             )
+        )
 
     @staticmethod
     def _open_memberships(federation: datamodel.Federation):
@@ -5175,6 +5178,8 @@ class GalaxyEventProcessor(AbstractGamestateDataProcessor):
             self._gamestate_dict.get("country"),
             self._basic_info.date_in_days,
         ):
+            if galaxy_event.once and galaxy_event.key in known_keys:
+                continue  # the carrier may differ later; the event stays where it was recorded
             if galaxy_event.all_countries:
                 targets = [countries.get(cid) for cid in galaxy_event.country_ids]
             elif galaxy_event.key in known_keys:
@@ -5187,11 +5192,10 @@ class GalaxyEventProcessor(AbstractGamestateDataProcessor):
                 pair = (galaxy_event.key, country.country_id_in_game)
                 if pair in known_pairs:
                     continue
-                if (
-                    galaxy_event.key in galaxy_events.TYPED_AWAKENINGS
-                    and (galaxy_events.FALLEN_EMPIRE_AWAKENED, country.country_id_in_game) in known_pairs
+                if galaxy_event.key in galaxy_events.AWAKENING_KEYS and any(
+                    (key, country.country_id_in_game) in known_pairs for key in galaxy_events.AWAKENING_KEYS
                 ):
-                    continue  # stored before the awakening type was told apart
+                    continue  # one awakening per country, whatever it was classified as
                 known_keys.add(galaxy_event.key)
                 known_pairs.add(pair)
                 self._session.add(
@@ -5200,7 +5204,8 @@ class GalaxyEventProcessor(AbstractGamestateDataProcessor):
                         country=country,
                         start_date_days=galaxy_event.date_days,
                         db_description=self._get_or_add_shared_description(galaxy_event.key),
-                        event_is_known_to_player=True,  # announced to the whole galaxy
+                        # announced to the whole galaxy, except for the hidden rival roll
+                        event_is_known_to_player=galaxy_event.key not in galaxy_events.HIDDEN_KEYS,
                     )
                 )
 

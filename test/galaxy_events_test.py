@@ -1,5 +1,8 @@
 from stellarisdashboard.dashboard_app.event_registry import GALACTIC_CRISIS_PHRASES
-from stellarisdashboard.parsing import galaxy_events
+import sqlalchemy
+
+from stellarisdashboard import datamodel
+from stellarisdashboard.parsing import galaxy_events, timeline
 from stellarisdashboard.parsing.galaxy_events import collect_galaxy_events, flag_date_days
 
 
@@ -63,7 +66,7 @@ def test_every_galaxy_event_has_a_ledger_phrase():
     assert keys == set(GALACTIC_CRISIS_PHRASES)
 
 
-def _keys(flags, countries, now=300 * 360):
+def _keys(flags, countries, now=400 * 360):
     return {(e.key, e.country_ids): e for e in collect_galaxy_events(flags, countries, now)}
 
 
@@ -74,11 +77,21 @@ def test_upstart_and_guardian_awakenings_are_told_apart():
         2: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2502, 8)}},
         3: {"type": "awakened_fallen_empire", "last_changed_country_type": "2420.01.01"},
     }
-    events = _keys(flags, countries, now=400 * 360)
+    events = _keys(flags, countries, now=500 * 360)
     assert events["fallen_empire_awakened_upstart", (1,)].date_days == flag_date_days(flag(2403))
     assert events["fallen_empire_awakened_guardian", (2,)].date_days == flag_date_days(flag(2502, 8))
     assert ("fallen_empire_awakened", (3,)) in events
-    assert not any(k == "fallen_empire_awakened" and ids != (3,) for k, ids in events)
+    assert len(events) == 3
+
+
+def test_a_second_upstart_is_not_a_guardian():
+    flags = {"sleepers_awake_happened": flag(2403), "guardians_of_the_galaxy_happened": flag(2502, 8)}
+    countries = {
+        1: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2403)}},
+        2: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2450)}},
+    }
+    events = _keys(flags, countries, now=500 * 360)
+    assert {k for k, _ in events} == {"fallen_empire_awakened_upstart"}
 
 
 def test_rival_roll_events():
@@ -103,22 +116,107 @@ def test_rival_roll_events():
     assert events["ancient_rival_woke", (2,)].date_days == flag_date_days(flag(2348, 8))
 
 
-def test_league_and_fallen_empire_loss_events():
+def test_events_without_a_carrier_are_dropped():
+    flags = {
+        "no_war_in_heaven": flag(2340, 11),
+        "sleepers_awake_rival_waking": flag(2348, 8),
+        "war_in_heaven_nonaligned_league": flag(2351, 7),
+        "fallen_empire_lost_war": flag(2502, 8),
+    }
+    countries = {1: {"type": "awakened_fallen_empire"}, 2: {"type": "fallen_empire"}}
+    assert {k for k, _ in _keys(flags, countries)} == {"fallen_empire_awakened"}  # only the generic awakening
+
+
+def test_one_carrier_is_picked_by_the_closest_date():
+    flags = {"no_war_in_heaven": flag(2340, 11), "fallen_empire_lost_war": flag(2450, 3)}
+    countries = {
+        1: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2380)}},
+        2: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2340, 11)}},
+        5: {"type": "fallen_empire", "flags": {"fallen_empire_lost_war": flag(2455)}},
+        6: {"type": "fallen_empire", "flags": {"fallen_empire_lost_war": flag(2450, 3)}},
+        7: {"type": "fallen_empire", "flags": {"fallen_empire_lost_war": flag(2470)}},
+    }
+    events = _keys(flags, countries)
+    assert ("war_in_heaven_ruled_out", (2,)) in events
+    assert ("fallen_empire_lost_war", (6,)) in events
+    assert len([k for k, _ in events if k in ("war_in_heaven_ruled_out", "fallen_empire_lost_war")]) == 2
+
+
+def test_league_events_go_to_the_league_leader():
     flags = {
         "war_in_heaven_nonaligned_league": flag(2351, 7),
         "war_in_heaven_nonaligned_league_war": flag(2352, 5),
-        "fallen_empire_lost_war": flag(2502, 8),
     }
     countries = {
-        7: {"type": "default", "flags": {"formed_nonaligned_league": flag(2351, 7)}},
-        8: {"type": "default"},
-        9: {"type": "fallen_empire"},
+        7: {"type": "default", "flags": {"war_in_heaven_league_leader": flag(2351, 7)}},
+        8: {"type": "default", "flags": {"formed_nonaligned_league": flag(2351, 8)}},
     }
     events = _keys(flags, countries)
-    assert set(events) == {
-        ("nonaligned_league_formed", (7,)),
-        ("nonaligned_league_war", (7,)),
-        ("fallen_empire_lost_war", (9,)),
-    }
+    assert set(events) == {("nonaligned_league_formed", (7,)), ("nonaligned_league_war", (7,))}
     assert all(e.all_countries for e in events.values())
     assert events["nonaligned_league_war", (7,)].date_days == flag_date_days(flag(2352, 5))
+
+
+def _processor_run(session, game, countries, gamestate_dict, date):
+    days = datamodel.date_to_days(date)
+    gamestate = datamodel.GameState(game=game, date=days)
+    session.add(gamestate)
+    session.flush()
+    processor = timeline.GalaxyEventProcessor()
+    info = timeline.BasicGameInfo(
+        game_id="g", date_in_days=days, player_country_id=None, other_players=set(), number_of_parsed_saves=0
+    )
+    processor.initialize(game, gamestate_dict, gamestate, info, session)
+    processor.extract_data_from_gamestate({timeline.CountryProcessor.ID: countries})
+    session.flush()
+
+
+def _stored(session):
+    events = session.query(datamodel.HistoricalEvent).filter_by(
+        event_type=datamodel.HistoricalEventType.galactic_crisis
+    )
+    return sorted((e.db_description.text, e.country.country_id_in_game, e.event_is_known_to_player) for e in events)
+
+
+def test_processor_keeps_one_awakening_per_country_and_hides_the_rival_roll():
+    engine = sqlalchemy.create_engine("sqlite://")
+    datamodel.Base.metadata.create_all(engine)
+    session = sqlalchemy.orm.sessionmaker(bind=engine)()
+    game = datamodel.Game(game_name="g")
+    db_countries = {
+        i: datamodel.Country(
+            game=game, country_id_in_game=i, country_type="awakened_fallen_empire", country_name=f"c{i}", is_player=False
+        )
+        for i in (1, 2)
+    }
+    session.add_all([game, *db_countries.values()])
+    session.flush()
+    # an older database stored the awakening without its kind
+    session.add(
+        datamodel.HistoricalEvent(
+            event_type=datamodel.HistoricalEventType.galactic_crisis,
+            country=db_countries[2],
+            start_date_days=1,
+            event_is_known_to_player=True,
+            db_description=datamodel.SharedDescription(text="fallen_empire_awakened"),
+        )
+    )
+    flags = {"sleepers_awake_happened": flag(2340, 11), "no_war_in_heaven": flag(2340, 11)}
+    gamestate = {
+        "flags": flags,
+        "country": {
+            1: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2340, 11)}},
+            2: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2340, 11)}},
+        },
+    }
+    _processor_run(session, game, db_countries, gamestate, "2341.01.01")
+    stored = _stored(session)
+    assert [row for row in stored if row[1] == 2 and row[0].startswith("fallen_empire_awakened")] == [
+        ("fallen_empire_awakened", 2, True)
+    ]
+    assert ("fallen_empire_awakened_upstart", 1, True) in stored
+    assert ("war_in_heaven_ruled_out", 1, False) in stored
+    # the carrier disappears: nothing moves to another country and nothing is added
+    gamestate["country"] = {2: gamestate["country"][2]}
+    _processor_run(session, game, db_countries, gamestate, "2341.02.01")
+    assert _stored(session) == stored
