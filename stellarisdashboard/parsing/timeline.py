@@ -3557,19 +3557,33 @@ class FederationProgressProcessor(AbstractGamestateDataProcessor):
                 event.end_date_days = max(end, event.start_date_days)
 
 
-def reached_crisis_levels(country_dict: Any) -> List[str]:
-    """The crisis level keys a country has unlocked, in order; empty without a crisis path."""
+def reached_crisis_levels(country_dict: Any) -> Optional[List[str]]:
+    """The crisis level keys a country has unlocked, in order; None without a crisis path block."""
     progression = country_dict.get("crisis_progression") if isinstance(country_dict, dict) else None
     if not isinstance(progression, dict):
-        return []
+        return None
     levels = progression.get("level")  # a repeated key: a string for one level, a list for more
     if isinstance(levels, str):
         levels = [levels]
     return [level for level in levels if isinstance(level, str)] if isinstance(levels, list) else []
 
 
+def new_crisis_levels(stored: Optional[int], levels: Optional[List[str]]) -> Tuple[List[str], Optional[int]]:
+    """The newly unlocked levels to record and the level count to store, given the stored count.
+
+    A country first seen with levels gets no events for them: the first level comes with the perk
+    and the others can't be dated. A path block still without levels (hyperthermia needs a flag for
+    level 1) stores 0, so its first level is recorded later.
+    """
+    if levels is None:
+        return [], stored
+    if stored is None:
+        return [], len(levels)
+    return levels[stored:], max(stored, len(levels))
+
+
 class CrisisProgressProcessor(AbstractGamestateDataProcessor):
-    """Records the crisis levels ("Become the Crisis", any path) countries unlock."""
+    """Records the crisis path levels (Become the Crisis, Defender of the Galaxy, ...) countries unlock."""
 
     ID = "crisis_progress"
     DEPENDENCIES = [CountryProcessor.ID]
@@ -3580,21 +3594,17 @@ class CrisisProgressProcessor(AbstractGamestateDataProcessor):
             return
         for country_id, country in dependencies[CountryProcessor.ID].items():
             levels = reached_crisis_levels(save_countries.get(country_id))
-            if not levels:
-                continue
-            # a country first seen with several levels gives no dates for its earlier ones
-            known = country.crisis_level if country.crisis_level is not None else len(levels)
-            if len(levels) > known:
+            new_levels, country.crisis_level = new_crisis_levels(country.crisis_level, levels)
+            for level in new_levels:
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.crisis_level_up,
                         country=country,
                         start_date_days=self._basic_info.date_in_days,
-                        db_description=self._get_or_add_shared_description(levels[-1]),
-                        event_is_known_to_player=True,  # the crisis is visible galaxy-wide
+                        db_description=self._get_or_add_shared_description(level),
+                        event_is_known_to_player=country.has_met_player(),
                     )
                 )
-            country.crisis_level = len(levels)
 
 
 @dataclasses.dataclass(frozen=True)

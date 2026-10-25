@@ -574,7 +574,7 @@ REGISTRY: dict[str, EventDescriptor] = {
     "crisis_level_up": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
         '\n'
-        '                    The {{ links[event["country"]] | safe }} grew into a "{{ event["description"] }}"-level threat to the galaxy.\n',
+        '                    The {{ links[event["country"]] | safe }} became a {{ event["description"] }}.\n',
     ),
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,

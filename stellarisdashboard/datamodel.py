@@ -323,7 +323,7 @@ class HistoricalEventType(enum.Enum):
     country_destroyed = enum.auto()
     federation_president = enum.auto()
     federation_level_up = enum.auto()
-    crisis_level_up = enum.auto()  # "Become the Crisis" progression, any crisis path
+    crisis_level_up = enum.auto()  # crisis path levels (Become the Crisis, Defender of the Galaxy, ...)
 
     def __str__(self):
         return self.name
@@ -2104,9 +2104,12 @@ def render_megastructure_description(text: str) -> str:
 
 
 def render_crisis_level(level_key: str) -> str:
-    """Renders a crisis level key as its name, e.g. "crisis_level_2" -> "Risk"."""
+    """Renders a crisis level key as a phrase, e.g. "crisis_level_2" -> '"Risk"-level threat to the galaxy'."""
     name = game_info.lookup_key_if_known(level_key) or game_info.convert_id_to_name(level_key, remove_prefix="crisis")
-    return _strip_colour_codes(name)
+    name = _strip_colour_codes(name)
+    if level_key.startswith("crisis_defender_"):
+        return f'"{name}"-rank Defender of the Galaxy'
+    return f'"{name}"-level threat to the galaxy'
 
 
 def render_espionage_description(text: str) -> str:
