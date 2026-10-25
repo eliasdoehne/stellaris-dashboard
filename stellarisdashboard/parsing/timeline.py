@@ -1547,12 +1547,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
 
     def get_leader_name(self, leader_dict):
         name_dict = leader_dict.get("name", {})
-        # Look for "first_name" then "full_names" (3.6+)
-        first_name = dump_name(
-            name_dict.get("first_name", name_dict.get("full_names", "Unknown Leader"))
-        )
-        last_name = dump_name(name_dict.get("second_name", ""))
-        return first_name, last_name
+        # leaders only have a full name, no separate second name
+        return dump_name(name_dict.get("full_names", "Unknown Leader")), ""
 
     def _update_leader_attributes(self, country: datamodel.Country, leader: datamodel.Leader, leader_dict):
         leader_class = leader_dict.get("class", "unknown class")
@@ -6038,8 +6034,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["happiness"] /= stats["pop_count"]
                 stats["power"] /= stats["pop_count"]
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
-                # recent versions (at least 3.12+) store the support fraction as "support_percent"
-                stats["support"] = faction_dict.get("support_percent", faction_dict.get("support", 0.0))
+                stats["support"] = faction_dict.get("support_percent", 0.0)
 
                 self._session.add(
                     datamodel.PopStatsByFaction(
