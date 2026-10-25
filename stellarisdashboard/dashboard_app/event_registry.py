@@ -571,6 +571,11 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    The {{ links[event["country"]] | safe }} destroyed a leviathan{% if "target_country" in event %} guarded by the {{ links[event["target_country"]] | safe }}{% endif %}.\n',
     ),
     # ---- Statecraft -----------------------------------------------------
+    "crisis_level_up": EventDescriptor(
+        Category.STATECRAFT, Tier.MAJOR, "star", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} became a {{ event["description"] }}.\n',
+    ),
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
         '\n'

@@ -323,6 +323,7 @@ class HistoricalEventType(enum.Enum):
     country_destroyed = enum.auto()
     federation_president = enum.auto()
     federation_level_up = enum.auto()
+    crisis_level_up = enum.auto()  # crisis path levels (Become the Crisis, Defender of the Galaxy, ...)
 
     def __str__(self):
         return self.name
@@ -407,6 +408,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.espionage_operation,
             HistoricalEventType.completed_espionage_operation,
             HistoricalEventType.first_contact_stage,
+            HistoricalEventType.crisis_level_up,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -832,6 +834,7 @@ class Country(Base):
     secondary_color = Column(String(80))
     origin = Column(String(80))
     pre_ftl_age = Column(String(40))  # technology age of primitive countries, e.g. "steam_age"
+    crisis_level = Column(Integer)  # number of crisis levels reached in the latest save; None until seen
 
     # Not persisted: set by CountryProcessor for countries first seen in the current gamestate
     founded_in_gamestate = False
@@ -2100,6 +2103,15 @@ def render_megastructure_description(text: str) -> str:
     )
 
 
+def render_crisis_level(level_key: str) -> str:
+    """Renders a crisis level key as a phrase, e.g. "crisis_level_2" -> '"Risk"-level threat to the galaxy'."""
+    name = game_info.lookup_key_if_known(level_key) or game_info.convert_id_to_name(level_key, remove_prefix="crisis")
+    name = _strip_colour_codes(name)
+    if level_key.startswith("crisis_defender_"):
+        return f'"{name}"-rank Defender of the Galaxy'
+    return f'"{name}"-level threat to the galaxy'
+
+
 def render_espionage_description(text: str) -> str:
     """Renders an operation type, optionally packed as "<type>|<operation id>", e.g. "Steal Technology"."""
     operation_type, _ = split_packed_description(text)
@@ -2414,6 +2426,8 @@ class HistoricalEvent(Base):
             return self.db_description.text if self.db_description else ""
         elif self.event_type == HistoricalEventType.federation_president:
             return ""
+        elif self.event_type == HistoricalEventType.crisis_level_up:
+            return render_crisis_level(self.db_description.text)
         elif self.event_type == HistoricalEventType.megastructure_construction:
             return render_megastructure_description(self.db_description.text)
         elif self.db_description:
