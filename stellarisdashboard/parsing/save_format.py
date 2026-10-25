@@ -247,7 +247,7 @@ def get_ship_size(gamestate: Dict[str, Any], ship_dict: Dict[str, Any]) -> Optio
         return None
     stages = [s for s in _as_list(design.get("growth_stages")) if isinstance(s, dict)]
     if not stages:
-        return design.get("ship_size")
+        return None
     stage_index = implementation.get("growth_stage", 0)
     if not isinstance(stage_index, int):
         stage_index = 0

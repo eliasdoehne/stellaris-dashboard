@@ -536,7 +536,6 @@ def get_country_color(
 def start_dash_app(host, port):
     timeline_app.css.config.serve_locally = True
     timeline_app.scripts.config.serve_locally = True
-    timeline_app.layout = get_layout()
     if config.CONFIG.production:
         from waitress import serve
 
@@ -685,3 +684,7 @@ def get_layout():
             modal,
         ],
     )
+
+
+# a callable layout is built per page load and set at import, so a test client works without start_dash_app
+timeline_app.layout = get_layout
