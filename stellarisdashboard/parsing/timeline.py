@@ -70,7 +70,7 @@ _BIOSHIP_FAMILY_HULLS = {
 }
 # Fallen empire and NPC warship sizes, mapped by the hull class of their design (the
 # reactor/thruster components in the 4.0.1 test save, or the hull named in the key).
-# Crystal ships and voidworms are mapped by size_multiplier/fleet_slot_size (5/1, 10/2, 20/4, 40/8, 80/16).
+# Crystal ships and voidworms are mapped by size_multiplier (5/10/20/40/80, as the standard hulls).
 # Space fauna (size varies with age) and unique guardians such as npc_warship_01 (size_multiplier 250)
 # are left out on purpose.
 _NPC_HULLS = {
