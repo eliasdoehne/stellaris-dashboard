@@ -136,6 +136,14 @@ GALACTIC_CRISIS_PHRASES = {
     "crisis_stage_4": "overran the galaxy, escalating the crisis to its final stage",
     "declared_crisis": "were declared a crisis to the galaxy",
     "fallen_empire_awakened": "awoke from their long slumber",
+    "fallen_empire_awakened_upstart": "awoke from their long slumber, alarmed by the rise of the younger empires",
+    "fallen_empire_awakened_guardian": "awoke from their long slumber to guard the galaxy against the end-game crisis",
+    "war_in_heaven_ruled_out": "awoke without an ancient rival, so no War in Heaven will follow",
+    "war_in_heaven_rival_chosen": "were chosen as the ancient rival of the awakened empire, fated to wake and contest it",
+    "ancient_rival_woke": "awoke as the ancient rival of the awakened empire, setting the War in Heaven in motion",
+    "nonaligned_league_formed": "founded the League of Non-Aligned Powers, to stay out of the War in Heaven",
+    "nonaligned_league_war": "led the League of Non-Aligned Powers into war against the awakened empires",
+    "fallen_empire_lost_war": "lost a war, shattering the myth of Fallen Empire invincibility",
 }
 
 
@@ -364,6 +372,12 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    Under the presidency of the {{ links[event["country"]] | safe }}, the {{ event["federation_title"] }}'
         ' reached level {{ event["description"] }}.\n',
+    ),
+    "federation_renamed": EventDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
+        '\n'
+        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the "{{ event["old_federation_name"] }}" federation'
+        ' was renamed "{{ event["federation_name"] }}".\n',
     ),
     "envoy_community": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,

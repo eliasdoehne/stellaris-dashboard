@@ -26,3 +26,11 @@ def test_war_without_name_lists_participants():
     assert war.ingame_name is None
     assert war.rendered_name.startswith("Attacker")
     assert "vs Defender" in war.rendered_name
+
+
+def test_war_in_heaven_names_are_disambiguated_by_main_parties():
+    war = _war(name=json.dumps({"key": "NAME_The_War_in_Heaven"}))
+    assert war.name_is_shared
+    # the localised name depends on the game files, so only the appended main parties are checked
+    assert war.rendered_name.startswith(f"{war.ingame_name} (Attacker") and " vs Defender" in war.rendered_name
+    assert not _war(name=json.dumps({"key": "Great War", "literal": "yes"})).name_is_shared

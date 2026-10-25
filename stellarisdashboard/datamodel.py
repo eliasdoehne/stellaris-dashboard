@@ -1,6 +1,7 @@
 import contextlib
 import enum
 import itertools
+import json
 import logging
 import pathlib
 import re
@@ -324,6 +325,7 @@ class HistoricalEventType(enum.Enum):
     federation_president = enum.auto()
     federation_level_up = enum.auto()
     crisis_level_up = enum.auto()  # crisis path levels (Become the Crisis, Defender of the Galaxy, ...)
+    federation_renamed = enum.auto()  # description: the old name; the federation holds the new one
 
     def __str__(self):
         return self.name
@@ -374,6 +376,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.country_destroyed,
             HistoricalEventType.federation_president,
             HistoricalEventType.federation_level_up,
+            HistoricalEventType.federation_renamed,
         }:
             return HistoricalEventScope.galaxy
         elif self in {
@@ -1499,6 +1502,10 @@ class PoliticalFaction(Base):
         return game_info.render_name_or_prettify(self.faction_name)
 
 
+# war names that the game gives to several simultaneous wars
+SHARED_WAR_NAME_KEYS = ("NAME_The_War_in_Heaven",)
+
+
 class War(Base):
     """Wars are represented by a list of participants and a list of combat events."""
 
@@ -1536,11 +1543,30 @@ class War(Base):
 
     @property
     def rendered_name(self):
-        return self.ingame_name or (
+        name = self.ingame_name
+        if name and self.name_is_shared:
+            return f"{name} ({self._main_party_name(True)} vs {self._main_party_name(False)})"
+        return name or (
             ", ".join(a.country.rendered_name for a in self.attackers)
             + " vs "
             + ", ".join(d.country.rendered_name for d in self.defenders)
         )
+
+    @property
+    def name_is_shared(self) -> bool:
+        """True for names that several wars bear at once, like the three wars of the War in Heaven."""
+        try:
+            return json.loads(self.name).get("key") in SHARED_WAR_NAME_KEYS
+        except (TypeError, ValueError, AttributeError):
+            return False
+
+    def _main_party_name(self, attackers: bool) -> str:
+        """The primary participant of a side (the first one if none is marked primary)."""
+        side = sorted(
+            (p for p in self.participants if bool(p.is_attacker) == attackers),
+            key=lambda p: (p.call_type != "primary", p.warparticipant_id or 0),
+        )
+        return side[0].country.rendered_name if side else "?"
 
     @property
     def attackers(self) -> Iterable["WarParticipant"]:
@@ -2424,6 +2450,8 @@ class HistoricalEvent(Base):
             return ""
         elif self.event_type == HistoricalEventType.federation_level_up:
             return self.db_description.text if self.db_description else ""
+        elif self.event_type == HistoricalEventType.federation_renamed:
+            return game_info.render_name(self.db_description.text) if self.db_description else ""
         elif self.event_type == HistoricalEventType.federation_president:
             return ""
         elif self.event_type == HistoricalEventType.crisis_level_up:
