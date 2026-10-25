@@ -55,7 +55,9 @@ def galaxy_page(game_id=""):
         country=country,
         current_date=datamodel.days_to_date(max_date),
         max_date=max_date,
-        webp_supported=features.check("webp_anim"),
+        # Pillow 13 dropped the "webp_anim" feature flag: animated WebP is
+        # always available when WebP support is compiled in.
+        webp_supported=features.check("webp"),
         timelapse_defaults={
             "start": TIMELAPSE_DEFAULT_START,
             "end": datamodel.days_to_date(max_date),
