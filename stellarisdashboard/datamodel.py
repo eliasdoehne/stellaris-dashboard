@@ -313,6 +313,7 @@ class HistoricalEventType(enum.Enum):
     joined_federation = enum.auto()
     left_federation = enum.auto()
     dissolved_federation = enum.auto()
+    galactic_crisis = enum.auto()  # end-game crises, Great Khan, Voidworm Plague, Fallen Empire awakenings
 
     def __str__(self):
         return self.name
@@ -356,6 +357,7 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.envoy_improving_relations,
             HistoricalEventType.envoy_harming_relations,
             HistoricalEventType.embassy,
+            HistoricalEventType.galactic_crisis,
         }:
             return HistoricalEventScope.galaxy
         elif self in {
@@ -778,6 +780,25 @@ class GameState(Base):
         return f"Gamestate of {self.game.game_name} @ {days_to_date(self.date)}"
 
 
+# Countries of the galaxy-wide crises: special countries without routine data whose events and
+# conquests are still shown in the ledger.
+CRISIS_COUNTRY_TYPES = frozenset(
+    {
+        "extradimensional",
+        "extradimensional_2",
+        "extradimensional_3",
+        "swarm",
+        "ai_empire",
+        "synth_queen_storm",
+        "synth_queen",
+        "awakened_synth_queen",
+        "gray_goo",
+        "voidworms_crisis",
+        "awakened_marauders",
+    }
+)
+
+
 class Country(Base):
     __tablename__ = "country"
     country_id = Column(Integer, primary_key=True)
@@ -887,7 +908,10 @@ class Country(Base):
             or self.country_type == "fallen_empire"
             or self.country_type == "awakened_fallen_empire"
         )
-    
+
+    def is_crisis_country(self):
+        return self.country_type in CRISIS_COUNTRY_TYPES
+
     def is_hidden_country(self):
         if self.is_other_player and config.CONFIG.hide_other_players:
             return True

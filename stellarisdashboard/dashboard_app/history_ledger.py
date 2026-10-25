@@ -308,6 +308,9 @@ class EventTemplateDictBuilder:
                 and event.country is not None
                 # primitives' technology ages are shown even though their other events are not
                 and event.event_type != datamodel.HistoricalEventType.pre_ftl_age_change
+                # crises are special countries, but their events belong in the ledger
+                and not event.country.is_crisis_country()
+                and event.event_type != datamodel.HistoricalEventType.galactic_crisis
             ):
                 continue
             shown_events.append(event)
