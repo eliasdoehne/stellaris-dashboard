@@ -59,4 +59,66 @@ def test_every_galaxy_event_has_a_ledger_phrase():
     keys = {s.key for s in galaxy_events.SIGNALS}
     keys |= {f"crisis_stage_{n}" for n in galaxy_events.CRISIS_STAGES}
     keys |= {galaxy_events.FALLEN_EMPIRE_AWAKENED, galaxy_events.DECLARED_CRISIS}
+    keys |= set(galaxy_events.TYPED_AWAKENINGS) | {key for key, _ in galaxy_events.COUNTRY_FLAG_EVENTS}
     assert keys == set(GALACTIC_CRISIS_PHRASES)
+
+
+def _keys(flags, countries, now=300 * 360):
+    return {(e.key, e.country_ids): e for e in collect_galaxy_events(flags, countries, now)}
+
+
+def test_upstart_and_guardian_awakenings_are_told_apart():
+    flags = {"sleepers_awake_happened": flag(2403), "guardians_of_the_galaxy_happened": flag(2502, 8)}
+    countries = {
+        1: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2403)}},
+        2: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2502, 8)}},
+        3: {"type": "awakened_fallen_empire", "last_changed_country_type": "2420.01.01"},
+    }
+    events = _keys(flags, countries, now=400 * 360)
+    assert events["fallen_empire_awakened_upstart", (1,)].date_days == flag_date_days(flag(2403))
+    assert events["fallen_empire_awakened_guardian", (2,)].date_days == flag_date_days(flag(2502, 8))
+    assert ("fallen_empire_awakened", (3,)) in events
+    assert not any(k == "fallen_empire_awakened" and ids != (3,) for k, ids in events)
+
+
+def test_rival_roll_events():
+    flags = {
+        "sleepers_awake_happened": flag(2340, 11),
+        "no_war_in_heaven": flag(2340, 11),
+        "sleepers_awake_rival_waking": flag(2348, 8),
+    }
+    countries = {
+        1: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_first_sleeper": flag(2340, 11)}},
+        2: {"type": "awakened_fallen_empire", "flags": {"sleepers_awake_ancient_rival": flag(2341, 3)}},
+        3: {"type": "fallen_empire"},
+    }
+    events = _keys(flags, countries)
+    assert set(events) == {
+        ("fallen_empire_awakened_upstart", (1,)),
+        ("war_in_heaven_ruled_out", (1,)),
+        ("war_in_heaven_rival_chosen", (2,)),
+        ("ancient_rival_woke", (2,)),
+    }
+    assert events["war_in_heaven_rival_chosen", (2,)].date_days == flag_date_days(flag(2341, 3))
+    assert events["ancient_rival_woke", (2,)].date_days == flag_date_days(flag(2348, 8))
+
+
+def test_league_and_fallen_empire_loss_events():
+    flags = {
+        "war_in_heaven_nonaligned_league": flag(2351, 7),
+        "war_in_heaven_nonaligned_league_war": flag(2352, 5),
+        "fallen_empire_lost_war": flag(2502, 8),
+    }
+    countries = {
+        7: {"type": "default", "flags": {"formed_nonaligned_league": flag(2351, 7)}},
+        8: {"type": "default"},
+        9: {"type": "fallen_empire"},
+    }
+    events = _keys(flags, countries)
+    assert set(events) == {
+        ("nonaligned_league_formed", (7,)),
+        ("nonaligned_league_war", (7,)),
+        ("fallen_empire_lost_war", (9,)),
+    }
+    assert all(e.all_countries for e in events.values())
+    assert events["nonaligned_league_war", (7,)].date_days == flag_date_days(flag(2352, 5))

@@ -3312,6 +3312,8 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                         )
                 continue
 
+            if federation.name and federation.name != name:
+                self._record_rename(federation, name, [countries[c_id] for c_id in sorted(roles)], today)
             federation.name = name
             self._federations[f_id] = federation
             open_memberships = {
@@ -3342,6 +3344,23 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                     federation,
                     today,
                 )
+
+    def _record_rename(self, federation, new_name, members, today):
+        """One event per current member; the description holds the old name, the federation gets the new one."""
+        if game_info.render_name(federation.name) == game_info.render_name(new_name):
+            return
+        description = self._get_or_add_shared_description(federation.name)
+        for country in members:
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.federation_renamed,
+                    country=country,
+                    federation=federation,
+                    start_date_days=today,
+                    db_description=description,
+                    event_is_known_to_player=country.has_met_player(),
+                )
+            )
 
     @staticmethod
     def _open_memberships(federation: datamodel.Federation):
@@ -5168,6 +5187,11 @@ class GalaxyEventProcessor(AbstractGamestateDataProcessor):
                 pair = (galaxy_event.key, country.country_id_in_game)
                 if pair in known_pairs:
                     continue
+                if (
+                    galaxy_event.key in galaxy_events.TYPED_AWAKENINGS
+                    and (galaxy_events.FALLEN_EMPIRE_AWAKENED, country.country_id_in_game) in known_pairs
+                ):
+                    continue  # stored before the awakening type was told apart
                 known_keys.add(galaxy_event.key)
                 known_pairs.add(pair)
                 self._session.add(

@@ -20,7 +20,16 @@ class GalaxyEventSignal:
     flag: str  # the global flag marking the event
     country_types: Tuple[str, ...]  # the event is attached to a country of these types
     all_countries: bool = False  # attach to every matching country instead of the first
+    # attach to the countries carrying this country flag (or UPSTART_AWAKENER) when there are any, else by type
+    target: Optional[str] = None
 
+
+# pseudo target: the countries that woke as an upstart, see _classify_awakening
+UPSTART_AWAKENER = "upstart_awakener"
+FIRST_SLEEPER = "sleepers_awake_first_sleeper"  # country flag of every empire that woke first (upstart or Guardian)
+ANCIENT_RIVAL = "sleepers_awake_ancient_rival"  # country flag of the Fallen Empire chosen to be the awakener's rival
+FORMED_LEAGUE = "formed_nonaligned_league"  # country flag of the founder of the League of Non-Aligned Powers
+FALLEN_EMPIRE_TYPES = ("awakened_fallen_empire", "fallen_empire")
 
 # Global flags set once by the game's event chains; none of these is removed again.
 SIGNALS = (
@@ -57,12 +66,26 @@ SIGNALS = (
     # War in Heaven, events/war_in_heaven_events.txt
     GalaxyEventSignal("war_in_heaven_started", "war_in_heaven_started", ("awakened_fallen_empire",), all_countries=True),
     GalaxyEventSignal("war_in_heaven_ended", "war_in_heaven_ended", ("awakened_fallen_empire",), all_countries=True),
+    # the rival roll of an upstart awakening, events/fallen_empire_awakening_events.txt and war_in_heaven_events.txt
+    GalaxyEventSignal("war_in_heaven_ruled_out", "no_war_in_heaven", FALLEN_EMPIRE_TYPES, target=UPSTART_AWAKENER, all_countries=True),
+    GalaxyEventSignal("ancient_rival_woke", "sleepers_awake_rival_waking", ("awakened_fallen_empire",), target=ANCIENT_RIVAL, all_countries=True),
+    # the League of Non-Aligned Powers is an existing federation that the game renames (see FederationProcessor)
+    GalaxyEventSignal("nonaligned_league_formed", "war_in_heaven_nonaligned_league", (), target=FORMED_LEAGUE, all_countries=True),
+    GalaxyEventSignal("nonaligned_league_war", "war_in_heaven_nonaligned_league_war", (), target=FORMED_LEAGUE, all_countries=True),
+    # events/fallen_empire_events.txt; the first Fallen Empire to lose a war
+    GalaxyEventSignal("fallen_empire_lost_war", "fallen_empire_lost_war", FALLEN_EMPIRE_TYPES, target="fallen_empire_lost_war", all_countries=True),
 )
 
 # crisis_stage_N is a generic global flag of the end-game crises (stage 1 is their arrival);
 # it moves up and down with the crisis' share of the galaxy, so only the first time a stage is reached is kept
 CRISIS_STAGES = (2, 3, 4)
+# awakened empires: the upstart that woke first, a Guardian that woke against an end-game crisis, or one of unknown kind
 FALLEN_EMPIRE_AWAKENED = "fallen_empire_awakened"
+FALLEN_EMPIRE_AWAKENED_UPSTART = "fallen_empire_awakened_upstart"
+FALLEN_EMPIRE_AWAKENED_GUARDIAN = "fallen_empire_awakened_guardian"
+TYPED_AWAKENINGS = (FALLEN_EMPIRE_AWAKENED_UPSTART, FALLEN_EMPIRE_AWAKENED_GUARDIAN)
+# country flags that mark an event on the country, dated from the flag itself
+COUNTRY_FLAG_EVENTS = (("war_in_heaven_rival_chosen", ANCIENT_RIVAL),)
 # country flag of an empire that became the crisis (crisis level 5) or was declared one by the Galactic Community;
 # the empire stays a default country, and the flag is removed if the declaration is repealed
 DECLARED_CRISIS = "declared_crisis"
@@ -110,13 +133,27 @@ def collect_galaxy_events(flags: Any, countries: Any, current_days: int) -> Iter
     def matching(types):
         return tuple(cid for t in types for cid in by_type.get(t, []))
 
+    def targeted(target):
+        if target == UPSTART_AWAKENER:
+            return _upstart_awakeners(by_type, countries, flags)
+        return tuple(
+            cid
+            for cid, country in sorted(countries.items() if isinstance(countries, dict) else ())
+            if isinstance(country, dict)
+            and isinstance(country.get("flags"), dict)
+            and target in country["flags"]
+        )
+
     for signal in SIGNALS:
         if signal.flag in flags:
+            ids = targeted(signal.target) if signal.target else ()
+            if signal.target and not ids:
+                ids = matching(signal.country_types)[:1]  # no carrier of the flag: the first matching empire
             yield GalaxyEvent(
                 key=signal.key,
                 date_days=_event_date(flag_date_days(flags[signal.flag]), current_days),
                 country_types=signal.country_types,
-                country_ids=matching(signal.country_types),
+                country_ids=ids or matching(signal.country_types),
                 all_countries=signal.all_countries,
             )
     for stage in CRISIS_STAGES:
@@ -130,25 +167,60 @@ def collect_galaxy_events(flags: Any, countries: Any, current_days: int) -> Iter
             )
     for country_id, country in sorted(countries.items()) if isinstance(countries, dict) else ():
         country_flags = country.get("flags") if isinstance(country, dict) else None
-        if isinstance(country_flags, dict) and DECLARED_CRISIS in country_flags:
-            yield GalaxyEvent(
-                key=DECLARED_CRISIS,
-                date_days=_event_date(flag_date_days(country_flags[DECLARED_CRISIS]), current_days),
-                country_types=(country.get("type"),),
-                country_ids=(country_id,),
-                all_countries=True,
-            )
+        if not isinstance(country_flags, dict):
+            continue
+        for key, country_flag in ((DECLARED_CRISIS, DECLARED_CRISIS),) + COUNTRY_FLAG_EVENTS:
+            if country_flag in country_flags:
+                yield GalaxyEvent(
+                    key=key,
+                    date_days=_event_date(flag_date_days(country_flags[country_flag]), current_days),
+                    country_types=(country.get("type"),),
+                    country_ids=(country_id,),
+                    all_countries=True,
+                )
     for country_id in by_type.get("awakened_fallen_empire", []):
-        # an awakened empire's type changed last when it awoke
-        changed = countries[country_id].get("last_changed_country_type")
-        try:
-            date_days = datamodel.date_to_days(changed)
-        except (AttributeError, ValueError):
-            date_days = None
+        key, date_days = _classify_awakening(countries[country_id], flags)
+        if key is None:
+            continue
         yield GalaxyEvent(
-            key=FALLEN_EMPIRE_AWAKENED,
+            key=key,
             date_days=_event_date(date_days, current_days),
             country_types=("awakened_fallen_empire",),
             country_ids=(country_id,),
             all_countries=True,
         )
+
+
+def _classify_awakening(country: dict, flags: dict) -> Tuple[Optional[str], Optional[int]]:
+    """The event key and date of an awakened empire's awakening; None if the rival's waking event covers it."""
+    country_flags = country.get("flags") if isinstance(country.get("flags"), dict) else {}
+    if FIRST_SLEEPER in country_flags:
+        own = flag_date_days(country_flags[FIRST_SLEEPER])
+        upstart = flag_date_days(flags.get("sleepers_awake_happened"))
+        guardian = flag_date_days(flags.get("guardians_of_the_galaxy_happened"))
+        # both can happen in one game; the country's flag was set together with its own global flag
+        candidates = [
+            (key, date) for key, date in ((FALLEN_EMPIRE_AWAKENED_UPSTART, upstart), (FALLEN_EMPIRE_AWAKENED_GUARDIAN, guardian))
+            if date is not None
+        ]
+        if candidates and own is not None:
+            return min(candidates, key=lambda c: abs(c[1] - own))[0], own
+        if candidates:
+            return candidates[0][0], candidates[0][1]
+        return FALLEN_EMPIRE_AWAKENED, own
+    if ANCIENT_RIVAL in country_flags and "sleepers_awake_rival_waking" in flags:
+        return None, None
+    # an awakened empire's type changed last when it awoke
+    try:
+        date_days = datamodel.date_to_days(country.get("last_changed_country_type"))
+    except (AttributeError, ValueError):
+        date_days = None
+    return FALLEN_EMPIRE_AWAKENED, date_days
+
+
+def _upstart_awakeners(by_type: dict, countries: dict, flags: dict) -> Tuple[int, ...]:
+    return tuple(
+        cid
+        for cid in by_type.get("awakened_fallen_empire", [])
+        if _classify_awakening(countries[cid], flags)[0] == FALLEN_EMPIRE_AWAKENED_UPSTART
+    )
