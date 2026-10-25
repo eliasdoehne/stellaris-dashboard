@@ -344,6 +344,7 @@ class TimelineExtractor:
         yield FactionProcessor()
         yield FirstContactProcessor()
         yield DiplomacyUpdatesProcessor()
+        yield FederationProcessor()
         yield GalacticCommunityProcessor()
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
@@ -2925,6 +2926,7 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
         self._ruler_dict = dependencies[RulerEventProcessor.ID]
         self._outgoing_relations = dependencies[DiplomaticRelationsProcessor.ID]
 
+        federation_type = datamodel.HistoricalEventType.formed_federation
         diplo_relations = [
             (
                 datamodel.HistoricalEventType.sent_rivalry,
@@ -2937,7 +2939,8 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                 "closed_borders",
             ),
             (datamodel.HistoricalEventType.defensive_pact, None, "defensive_pacts"),
-            (datamodel.HistoricalEventType.formed_federation, None, "federations"),
+            # the flag is still toggled and old formed_federation spans closed; FederationProcessor records memberships
+            (federation_type, None, "federations"),
             (
                 datamodel.HistoricalEventType.non_aggression_pact,
                 None,
@@ -3015,7 +3018,7 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                     )
 
                     if is_now_active:  # Create new historical event entry
-                        if covered_by_process:
+                        if covered_by_process or event_type == federation_type:
                             continue
                         for (et, c_model, tc_model, c_ruler) in country_tuples:
                             matching_event = datamodel.HistoricalEvent(
@@ -3025,9 +3028,6 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                 leader=c_ruler,
                                 start_date_days=self._basic_info.date_in_days,
                                 event_is_known_to_player=is_known_to_player,
-                                db_description=self._get_event_description(
-                                    et, c_model, tc_model
-                                ),
                             )
                             self._session.add(matching_event)
                     elif was_active:  # Set end date of existing historical event entry
@@ -3043,7 +3043,7 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                                     is_known_to_player
                                 )
                                 self._session.add(matching_event)
-                            elif not covered_by_process:
+                            elif not covered_by_process and event_type != federation_type:
                                 logger.warning(
                                     f"Could not find event matching {relation}, {diplo_dict_key}"
                                 )
@@ -3065,28 +3065,6 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
         )
         return query.first() is not None
 
-    def _get_event_description(self, event_type, country_model, target_country_model):
-        if country_model is None or target_country_model is None:
-            return None
-        if event_type == datamodel.HistoricalEventType.formed_federation:
-            federations = self._gamestate_dict.get("federation", {})
-            if not isinstance(federations, dict):
-                return None
-            for f_id, fed_dict in federations.items():
-                if not isinstance(fed_dict, dict):
-                    continue
-                members = fed_dict.get("members", [])
-                if not isinstance(members, list):
-                    continue
-                if (
-                    country_model.country_id_in_game in members
-                    and target_country_model.country_id_in_game in members
-                ):
-                    return self._get_or_add_shared_description(
-                        dump_name(fed_dict.get("name", "Unnamed Federation"))
-                    )
-        return None
-
     def _query_event(
         self,
         event_type: datamodel.HistoricalEventType,
@@ -3102,6 +3080,153 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
             )
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())
             .first()
+        )
+
+
+class FederationProcessor(AbstractGamestateDataProcessor):
+    """Records federations, their membership spans and the founding, joining, leaving and dissolution events."""
+
+    ID = "federations"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        today = self._basic_info.date_in_days
+        yesterday = today - 1
+        previous_date = (
+            self._session.query(sqlalchemy.func.max(datamodel.GameState.date))
+            .filter(datamodel.GameState.date < today)
+            .scalar()
+        )
+
+        save_federations = self._gamestate_dict.get("federation")
+        if not isinstance(save_federations, dict):
+            save_federations = {}
+        current = {}  # in-game id -> (name, start, {country id: is_associate})
+        for f_id, fdict in save_federations.items():
+            if not isinstance(fdict, dict):
+                continue
+            start = None  # unknown without a valid start_date
+            try:
+                start = datamodel.date_to_days(fdict.get("start_date"))
+            except (AttributeError, ValueError):
+                pass
+            roles = {}
+            for key, is_associate in (("associates", True), ("members", False)):
+                ids = fdict.get(key)
+                for c_id in ids if isinstance(ids, list) else []:
+                    country = countries.get(c_id)
+                    if country is not None and country.is_real_country():
+                        roles[c_id] = is_associate
+            current[f_id] = (
+                dump_name(fdict.get("name", "Unnamed Federation")),
+                start,
+                roles,
+            )
+
+        active = {
+            f.federation_id_in_game: f
+            for f in self._session.query(datamodel.Federation).filter(
+                datamodel.Federation.end_date_days.is_(None)
+            )
+        }
+        for f_id in sorted(active):
+            federation = active[f_id]
+            if f_id in current and current[f_id][1] in (None, federation.start_date_days):
+                continue
+            federation.end_date_days = max(federation.start_date_days, yesterday)
+            for membership in self._open_memberships(federation):
+                membership.end_date_days = max(membership.start_date_days, yesterday)
+                self._add_event(
+                    datamodel.HistoricalEventType.dissolved_federation,
+                    membership.country,
+                    federation,
+                    today,
+                )
+            del active[f_id]
+
+        for f_id in sorted(current):
+            name, start, roles = current[f_id]
+            federation = active.get(f_id)
+            if federation is None:
+                if start is None:
+                    start = today
+                federation = datamodel.Federation(
+                    federation_id_in_game=f_id, name=name, start_date_days=start
+                )
+                self._session.add(federation)
+                # without an earlier save the founding and joining dates are unknown
+                founded = previous_date is not None and start > previous_date
+                for c_id in sorted(roles):
+                    is_associate = roles[c_id]
+                    country = countries[c_id]
+                    self._open_membership(
+                        federation, country, is_associate, start if founded else today
+                    )
+                    if founded:
+                        self._add_event(
+                            datamodel.HistoricalEventType.joined_federation
+                            if is_associate
+                            else datamodel.HistoricalEventType.founded_federation,
+                            country,
+                            federation,
+                            start,
+                        )
+                continue
+
+            federation.name = name
+            open_memberships = {
+                m.country.country_id_in_game: m
+                for m in self._open_memberships(federation)
+            }
+            for c_id in sorted(open_memberships):
+                membership = open_memberships[c_id]
+                if c_id not in roles:
+                    membership.end_date_days = max(membership.start_date_days, yesterday)
+                    self._add_event(
+                        datamodel.HistoricalEventType.left_federation,
+                        membership.country,
+                        federation,
+                        today,
+                    )
+            for c_id in sorted(roles):
+                membership = open_memberships.get(c_id)
+                if membership is not None:
+                    if bool(membership.is_associate) == roles[c_id]:
+                        continue
+                    membership.end_date_days = max(membership.start_date_days, yesterday)
+                country = countries[c_id]
+                self._open_membership(federation, country, roles[c_id], today)
+                self._add_event(
+                    datamodel.HistoricalEventType.joined_federation,
+                    country,
+                    federation,
+                    today,
+                )
+
+    @staticmethod
+    def _open_memberships(federation: datamodel.Federation):
+        return [m for m in federation.memberships if m.end_date_days is None]
+
+    def _open_membership(self, federation, country, is_associate, start_date_days):
+        self._session.add(
+            datamodel.FederationMembership(
+                federation=federation,
+                country=country,
+                is_associate=is_associate,
+                start_date_days=start_date_days,
+            )
+        )
+
+    def _add_event(self, event_type, country, federation, date_days):
+        self._session.add(
+            datamodel.HistoricalEvent(
+                event_type=event_type,
+                country=country,
+                federation=federation,
+                start_date_days=date_days,
+                event_is_known_to_player=country.has_met_player(),
+            )
         )
 
 
@@ -3488,6 +3613,21 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 )
                 self._session.add(new_assignment_event)
 
+        # dead or dismissed envoys are no longer in the save, so their assignments end here
+        for event in (
+            self._session.query(datamodel.HistoricalEvent)
+            .join(datamodel.HistoricalEvent.leader)
+            .filter(
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+                datamodel.HistoricalEvent.event_type.in_(datamodel.ENVOY_EVENT_TYPES),
+                datamodel.Leader.is_active.is_(False),
+            )
+        ):
+            event.end_date_days = max(
+                event.start_date_days, self._basic_info.date_in_days - 1
+            )
+            self._session.add(event)
+
     def _previous_assignment(
         self, envoy: datamodel.Leader
     ) -> Optional[datamodel.HistoricalEvent]:
@@ -3498,14 +3638,7 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
             self._session.query(datamodel.HistoricalEvent)
             .filter(datamodel.HistoricalEvent.end_date_days.is_(None))
             .filter(
-                datamodel.HistoricalEvent.event_type.in_(
-                    {
-                        datamodel.HistoricalEventType.envoy_community,
-                        datamodel.HistoricalEventType.envoy_federation,
-                        datamodel.HistoricalEventType.envoy_improving_relations,
-                        datamodel.HistoricalEventType.envoy_harming_relations,
-                    }
-                )
+                datamodel.HistoricalEvent.event_type.in_(datamodel.ENVOY_EVENT_TYPES)
             )
             .filter_by(leader=envoy)
             .order_by(datamodel.HistoricalEvent.start_date_days.desc())

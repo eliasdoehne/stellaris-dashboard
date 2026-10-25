@@ -6,9 +6,12 @@ from typing import Dict
 from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
-from stellarisdashboard.dashboard_app import flask_app, utils, event_registry
+from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping
 
 logger = logging.getLogger(__name__)
+
+# A merged envoy entry names this many envoys and counts the rest.
+MAX_NAMED_ENVOYS = 3
 
 # Descriptor-driven event renderer (replaces the old ~50-branch if/elif chain in
 # history_page.html). Exposed to the template as render_event(event, links).
@@ -278,6 +281,7 @@ class EventTemplateDictBuilder:
         self._details[key_object] = self._get_details(key_object)
         self._titles[key_object] = self._get_title(key_object)
         self._formatted_urls[key_object] = self._get_url_for(key_object)
+        shown_events = []
         storyline_items = {}  # storyline_id -> item dict, per section
         for event in event_list:
             if not self.event_filter.include_event(event):
@@ -306,13 +310,16 @@ class EventTemplateDictBuilder:
                 and event.event_type != datamodel.HistoricalEventType.pre_ftl_age_change
             ):
                 continue
+            shown_events.append(event)
 
+        for group in event_grouping.group_envoy_assignments(shown_events):
+            event = group.events[0]
             start = datamodel.days_to_date(event.start_date_days)
             end_date = None
             is_active = True
-            if event.end_date_days is not None:
-                end_date = datamodel.days_to_date(event.end_date_days)
-                is_active = event.end_date_days >= self._most_recent_date
+            if group.end_date_days is not None:
+                end_date = datamodel.days_to_date(group.end_date_days)
+                is_active = group.end_date_days >= self._most_recent_date
             description = event.description
             if type(description) is str:
                 if description.startswith("{"):
@@ -344,6 +351,16 @@ class EventTemplateDictBuilder:
                 event_dict["faction_type"] = event.faction.rendered_type
             if event.combat:
                 event_dict.update(self._combat_dict(event.combat))
+            if event.federation is not None:
+                event_dict.update(self._federation_dict(event))
+            if len(group.events) > 1:
+                leaders = list(
+                    dict.fromkeys(e.leader for e in group.events if e.leader is not None)
+                )
+                if leaders:
+                    event_dict["leaders"] = leaders[:MAX_NAMED_ENVOYS]
+                    event_dict["other_envoy_count"] = len(leaders) - MAX_NAMED_ENVOYS
+                event_dict["assignment_count"] = len(group.events)
 
             if event.storyline_id is not None:
                 # members fold into one card per storyline, placed at its first visible member
@@ -360,7 +377,8 @@ class EventTemplateDictBuilder:
                 self._preformat_urls(event)
                 continue
             self._events[key_object].append(event_dict)
-            self._preformat_urls(event)
+            for grouped_event in group.events:
+                self._preformat_urls(grouped_event)
         for item in storyline_items.values():
             item["stages"] = [s for _, s in sorted(item["stages"], key=lambda s: s[0])]
             # the furthest stage reached, which counts stages hidden from the player too
@@ -717,3 +735,47 @@ class EventTemplateDictBuilder:
             attacker_exhaustion=f"{100 * combat.attacker_war_exhaustion:.1f}%",
             defender_exhaustion=f"{100 * combat.defender_war_exhaustion:.1f}%",
         )
+
+    def _federation_dict(self, event: datamodel.HistoricalEvent):
+        federation = event.federation
+        result = dict(federation_name=federation.rendered_name)
+        if event.event_type == datamodel.HistoricalEventType.founded_federation:
+            # co-founders are the other full members since the founding date
+            partners = [
+                m.country
+                for m in federation.memberships
+                if m.start_date_days == federation.start_date_days
+                and not m.is_associate
+                and m.country_id != event.country_id
+            ]
+            links = []
+            for country in sorted(partners, key=lambda c: c.rendered_name):
+                self._formatted_urls[country] = self._get_url_for(country)
+                links.append(self._formatted_urls[country])
+            if links:
+                result["federation_partners"] = (
+                    links[0]
+                    if len(links) == 1
+                    else ", ".join(links[:-1]) + " and " + links[-1]
+                )
+        elif event.event_type == datamodel.HistoricalEventType.joined_federation:
+            membership = next(
+                (
+                    m
+                    for m in federation.memberships
+                    if m.country_id == event.country_id
+                    and m.start_date_days == event.start_date_days
+                ),
+                None,
+            )
+            result["is_associate"] = membership is not None and membership.is_associate
+            # a membership ending the day before means the country switched between full and associate
+            result["changed_role"] = any(
+                m.country_id == event.country_id
+                and m.end_date_days == event.start_date_days - 1
+                for m in federation.memberships
+            )
+            result["federation_member_count"] = len(
+                federation.members_at(event.start_date_days)
+            )
+        return result
