@@ -67,11 +67,13 @@ class SavePathMonitor(abc.ABC):
         pass
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
-        """Get a list of all new, unfiltered save files."""
-        new_files = self._valid_save_files()
-        new_files = self._apply_filename_filter(new_files)
-        new_files = self._apply_skip_savefiles_filter(new_files)
-        return new_files
+        """Get a list of all new save files, filtered by the save_name_filter and skip_saves settings."""
+        return self.apply_save_filters(self._valid_save_files())
+
+    def apply_save_filters(self, save_files: List[pathlib.Path]) -> List[pathlib.Path]:
+        """Apply the save_name_filter and skip_saves settings to the given save files."""
+        save_files = self._apply_filename_filter(save_files)
+        return self._apply_skip_savefiles_filter(save_files)
 
     @staticmethod
     def _apply_filename_filter(new_files: List[pathlib.Path]) -> List[pathlib.Path]:
@@ -181,13 +183,34 @@ class ContinuousSavePathMonitor(SavePathMonitor):
 class BatchSavePathMonitor(SavePathMonitor):
     """
     SavePathMonitor implementation for parsing large numbers of saves with
-    the CLI command `stellarisdashboardcli --parse-saves`.
+    the CLI command `stellarisdashboardcli --parse-saves` or the import page.
+
+    :param save_files: Parse exactly these files, in this order, instead of searching the save path.
+    :param use_worker_processes: Parse in worker processes even with a single thread; by default
+        this happens only if more than one thread is configured.
     """
+
+    def __init__(
+        self,
+        save_parent_dir,
+        game_name_prefix: str = "",
+        save_files: Optional[List[pathlib.Path]] = None,
+        use_worker_processes: bool = False,
+    ):
+        super().__init__(save_parent_dir, game_name_prefix)
+        self._save_files = save_files
+        self._use_worker_processes = use_worker_processes
+
+    def get_new_savefiles(self) -> List[pathlib.Path]:
+        if self._save_files is not None:
+            return list(self._save_files)
+        return super().get_new_savefiles()
 
     def get_gamestates_and_check_for_new_files(self):
         """
         Check the save directory for new files. If any are found, parse them and
-        return the results as gamestate dictionaries as they come in.
+        return the results as gamestate dictionaries as they come in. A save that
+        cannot be parsed is logged, kept as a failed save and yielded with a gamestate of None.
 
         Files are processed in chunks to avoid holding too many gamestate dicts in
         memory at a time.
@@ -195,14 +218,15 @@ class BatchSavePathMonitor(SavePathMonitor):
         :return:
         """
         new_files = self.get_new_savefiles()
-        if config.CONFIG.threads > 1 and len(new_files) > 1:
+        if self._use_worker_processes or (config.CONFIG.threads > 1 and len(new_files) > 1):
             all_game_ids = [f.parent.stem for f in new_files]
             chunksize = min(16, int(2 * config.CONFIG.threads))
             # one pool for the whole batch; submitting in chunks still bounds
             # how many parsed gamestate dicts are held in memory at a time
-            with concurrent.futures.ProcessPoolExecutor(
+            executor = concurrent.futures.ProcessPoolExecutor(
                 max_workers=config.CONFIG.threads
-            ) as executor:
+            )
+            try:
                 for chunk in BatchSavePathMonitor.split_into_chunks(
                     zip(all_game_ids, new_files), chunksize
                 ):
@@ -211,11 +235,13 @@ class BatchSavePathMonitor(SavePathMonitor):
                         executor.submit(parse_save, save_file)
                         for save_file in chunk_files
                     ]
-                    for i, (game_id, save_file, future) in enumerate(
-                        zip(chunk_game_ids, chunk_files, futures)
-                    ):
-                        yield game_id, _get_parse_result(save_file, future.result), save_file
+                    for i, (game_id, save_file) in enumerate(zip(chunk_game_ids, chunk_files)):
+                        result = _get_parse_result(save_file, futures[i].result)
                         futures[i] = None
+                        yield game_id, result, save_file
+            finally:
+                # also runs when the caller stops early: drop the queued parses
+                executor.shutdown(wait=True, cancel_futures=True)
         else:
             for save_file in new_files:
                 yield save_file.parent.stem, _get_parse_result(

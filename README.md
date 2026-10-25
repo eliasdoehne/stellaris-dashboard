@@ -32,9 +32,13 @@ You can also access the dashboard by opening [http://localhost:28053](http://loc
 2. Extract the zip archive to a location of your choice.
 3. Run the `stellarisdashboard` application. (recommended to run from a terminal in Linux and macOs to see the dashboard output)
 
-The packaged app tracks new saves as they appear while it runs. Bulk-importing
-save files that already exist on disk is currently only available from a source
-checkout (`uv run stellarisdashboardcli parse-saves`).
+The packaged app tracks new saves as they appear while it runs. To import the saves
+a game already has, open the **Import Saves** page, select the game and start the
+import. It runs in the background, shows its progress and errors, can be cancelled,
+and skips saves that are already imported. New saves of the same game written
+during the import are imported after the others. The "Save file name filter" and
+"Skip saves" settings apply to the import as well. From a source checkout, the same
+import is available as `uv run stellarisdashboardcli parse-saves`.
 
 ### Building from source (developer setup)
 
