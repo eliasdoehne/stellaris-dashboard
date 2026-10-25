@@ -3,6 +3,7 @@ import enum
 import itertools
 import logging
 import pathlib
+import re
 import threading
 import time
 from typing import Dict, List, Union, Optional, Iterable, Collection, Tuple
@@ -315,6 +316,14 @@ class HistoricalEventType(enum.Enum):
     dissolved_federation = enum.auto()
     galactic_crisis = enum.auto()  # end-game crises, Great Khan, Voidworm Plague, Fallen Empire awakenings
 
+    # diplomacy and politics state:
+    galactic_resolution_passed = enum.auto()
+    galactic_custodian = enum.auto()
+    became_subject = enum.auto()
+    country_destroyed = enum.auto()
+    federation_president = enum.auto()
+    federation_level_up = enum.auto()
+
     def __str__(self):
         return self.name
 
@@ -358,6 +367,12 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.envoy_harming_relations,
             HistoricalEventType.embassy,
             HistoricalEventType.galactic_crisis,
+            HistoricalEventType.galactic_resolution_passed,
+            HistoricalEventType.galactic_custodian,
+            HistoricalEventType.became_subject,
+            HistoricalEventType.country_destroyed,
+            HistoricalEventType.federation_president,
+            HistoricalEventType.federation_level_up,
         }:
             return HistoricalEventScope.galaxy
         elif self in {
@@ -2045,6 +2060,69 @@ def render_first_contact_stage(stage: str) -> str:
     return f"{label} ({approach})" if approach else label
 
 
+def _strip_colour_codes(text: str) -> str:
+    """Removes the game's text colour codes, e.g. "§RRepeal X§!" -> "Repeal X"."""
+    return re.sub(r"§.", "", text)
+
+
+def render_resolution_description(resolution_type: str) -> str:
+    """Renders a resolution type as its quoted name, e.g. '"The Readied Shield"'."""
+    name = game_info.lookup_key_if_known(resolution_type) or game_info.convert_id_to_name(
+        resolution_type, remove_prefix="resolution"
+    )
+    return f'"{_strip_colour_codes(name)}"'
+
+
+SUBJECT_PRESET_VARIANT_RE = re.compile(r"_(oppressive|balanced|benevolent|mean_\d+|nice_\d+)(_ai)?$")
+
+
+def render_subject_type(preset: str) -> str:
+    """Renders an agreement preset as its subject type, e.g. "preset_vassal_mean_02" -> "Vassal"."""
+    if not preset:
+        return "subject"
+    for key in (preset, SUBJECT_PRESET_VARIANT_RE.sub("", preset)):
+        name = game_info.lookup_key_if_known(key)
+        if name:
+            return name
+    return game_info.convert_id_to_name(SUBJECT_PRESET_VARIANT_RE.sub("", preset), remove_prefix="preset")
+
+
+def split_federation_description(text: str) -> Tuple[str, str, str, str]:
+    """Splits a "<federation id>|<value>|<federation type>|<name>" description."""
+    federation_id, value, federation_type, name = (text.split("|", 3) + ["", "", ""])[:4]
+    return federation_id, value, federation_type, name
+
+
+def render_federation_name(federation_type: str, name: str) -> str:
+    """Renders a federation as '<type> "<name>"', e.g. 'Martial Alliance "Star Security Organization"'."""
+    rendered_type = game_info.lookup_key_if_known(federation_type) if federation_type else None
+    rendered_name = game_info.render_name(name) if name else ""
+    if rendered_type and rendered_name:
+        return f'{rendered_type} "{rendered_name}"'
+    return f'"{rendered_name}"' if rendered_name else (rendered_type or "federation")
+
+
+def render_federation_description(event_type: "HistoricalEventType", text: str) -> str:
+    _, value, federation_type, name = split_federation_description(text)
+    federation = render_federation_name(federation_type, name)
+    if event_type == HistoricalEventType.federation_level_up:
+        return f"{federation} reached level {value}"
+    return federation
+
+
+# family final keys whose own loc key is not the structure's name -> id to render instead
+MEGASTRUCTURE_DISPLAY_IDS = {"dyson_gun_3": "dyson_gun_0", "ring_world_3_intermediate": "ring_world"}
+
+
+def render_megastructure_description(text: str) -> str:
+    """Renders a "<megastructure type>|<megastructure id>" description, e.g. "Dyson Sphere"."""
+    megastructure_type, _ = split_packed_description(text)
+    megastructure_type = MEGASTRUCTURE_DISPLAY_IDS.get(megastructure_type, megastructure_type)
+    return game_info.lookup_key_if_known(megastructure_type) or game_info.convert_id_to_name(
+        megastructure_type
+    )
+
+
 def render_espionage_description(text: str) -> str:
     """Renders an operation type, optionally packed as "<type>|<operation id>", e.g. "Steal Technology"."""
     operation_type, _ = split_packed_description(text)
@@ -2331,6 +2409,27 @@ class HistoricalEvent(Base):
             )
         elif self.event_type == HistoricalEventType.first_contact_stage and self.db_description:
             return render_first_contact_stage(self.db_description.text)
+        elif self.event_type == HistoricalEventType.galactic_resolution_passed:
+            return render_resolution_description(self.db_description.text)
+        elif self.event_type == HistoricalEventType.galactic_custodian:
+            role = self.db_description.text if self.db_description else "custodian"
+            return game_info.lookup_key(f"galactic_{role}")
+        elif self.event_type == HistoricalEventType.became_subject:
+            return render_subject_type(self.db_description.text if self.db_description else "")
+        elif self.event_type == HistoricalEventType.country_destroyed:
+            cause = self.db_description.text if self.db_description else ""
+            if cause == "war":
+                return "after losing a war against the"
+            elif cause == "subject":
+                return "after being integrated by the"
+            return ""
+        elif self.event_type in (
+            HistoricalEventType.federation_president,
+            HistoricalEventType.federation_level_up,
+        ):
+            return render_federation_description(self.event_type, self.db_description.text)
+        elif self.event_type == HistoricalEventType.megastructure_construction:
+            return render_megastructure_description(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:

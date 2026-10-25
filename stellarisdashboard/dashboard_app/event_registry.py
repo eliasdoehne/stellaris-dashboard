@@ -349,6 +349,21 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} received a rivalry declaration from the {{ links[event["target_country"]] | safe }}.\n',
     ),
+    "became_subject": EventDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "chain", SPAN,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} became a {{ event["description"] }} of the {{ links[event["target_country"]] | safe }}.\n',
+    ),
+    "federation_president": EventDescriptor(
+        Category.DIPLOMACY, Tier.ROUTINE, "federation", SPAN,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} held the presidency of the {{ event["description"] }}.\n',
+    ),
+    "federation_level_up": EventDescriptor(
+        Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
+        '\n'
+        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the {{ event["description"] }}.\n',
+    ),
     "envoy_community": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
         '\n'
@@ -410,6 +425,23 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% endif %}\n'
         '                    {{ links[event["country"]] | safe }} left the Galactic Council.\n',
     ),
+    "galactic_resolution_passed": EventDescriptor(
+        Category.GALAXY, Tier.MAJOR, "ballot", POINT,
+        '\n'
+        '                    The Galactic Community passed the resolution {{ event["description"] }}, proposed by the {{ links[event["country"]] | safe }}'
+        '{% if "target_country" in event %}, concerning the {{ links[event["target_country"]] | safe }}{% endif %}.\n',
+    ),
+    "galactic_custodian": EventDescriptor(
+        Category.GALAXY, Tier.HEADLINE, "crown", SPAN,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} held the office of {{ event["description"] }}.\n',
+    ),
+    "country_destroyed": EventDescriptor(
+        Category.GALAXY, Tier.HEADLINE, "skull", POINT,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} ceased to exist{% if event["description"] %} {{ event["description"] }}{% endif %}'
+        '{% if "target_country" in event %} {{ links[event["target_country"]] | safe }}{% endif %}.\n',
+    ),
     "voted_for_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "voted_against_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "galactic_crisis": EventDescriptor(
@@ -419,7 +451,12 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    The {{ links[event["country"]] | safe }} {{ phrases.get(event["description"], event["description"]) }}.\n',
     ),
     # ---- Expansion ------------------------------------------------------
-    "megastructure_construction": EventDescriptor(Category.EXPANSION, Tier.HEADLINE, "megastructure"),
+    "megastructure_construction": EventDescriptor(
+        Category.EXPANSION, Tier.MAJOR, "megastructure", SPAN,
+        '\n'
+        '                    The {{ links[event["country"]] | safe }} {% if event["end_date"] %}built{% else %}began building{% endif %}'
+        ' the {{ event["description"] }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+    ),
     "planet_destroyed": EventDescriptor(
         Category.EXPANSION, Tier.HEADLINE, "explosion", POINT,
         '\n'
