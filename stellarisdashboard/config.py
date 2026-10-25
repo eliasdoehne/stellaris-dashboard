@@ -215,6 +215,9 @@ DEFAULT_SETTINGS = dict(
     tab_layout=DEFAULT_TAB_LAYOUT,
     market_resources=DEFAULT_MARKET_RESOURCES,
     market_fee=DEFAULT_MARKET_FEE,
+    keep_failed_saves=True,
+    failed_saves_max_size_mb=1000,
+    backup_saves=False,
     production=False,
 )
 
@@ -277,10 +280,13 @@ class Config:
     hide_other_players: bool = None
     show_all_country_types: bool = None
     include_id_in_names: bool = None
+    keep_failed_saves: bool = None
+    backup_saves: bool = None
 
     save_name_filter: str = None
     skip_saves: int = None
     plot_time_resolution: int = None
+    failed_saves_max_size_mb: int = None
 
     log_to_file: bool = False
     debug_mode: bool = False
@@ -313,6 +319,8 @@ class Config:
         "show_all_country_types",
         "log_to_file",
         "include_id_in_names",
+        "keep_failed_saves",
+        "backup_saves",
         "production",
     }
     INT_KEYS = {
@@ -322,6 +330,7 @@ class Config:
         "threads",
         "plot_width",
         "plot_height",
+        "failed_saves_max_size_mb",
     }
     FLOAT_KEYS = {
         "polling_interval",

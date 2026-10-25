@@ -59,6 +59,14 @@ If the dashboard is not showing any data, first make sure that you play the game
 
 Check that the save file location is correctly configured in the dashboard settings page, when you go to that path you should see one folder for each of your Stellaris games. By default, the dashboard assumes the values described [in the Stellaris wiki](https://stellaris.paradoxwikis.com/Save-game_editing#Location_.28Steam_Version.29). If you have enabled Steam cloud sync for your save files, you may need to change this location.
 
+## Failed Saves and Backups
+
+Stellaris deletes old autosaves, so a save that the dashboard cannot read is normally lost for good. When the `Keep copies of failed saves` setting is enabled (the default), the dashboard copies such saves to `failed_saves/<game>/` in the output folder, next to a `.json` record of the error. This covers saves that cannot be parsed, saves whose import fails, and saves where a single part of the import failed while the rest was stored. When the folder grows beyond `Failed saves folder size limit (MB)` (default 1000), the oldest copies are deleted.
+
+After updating the dashboard, import the kept copies again from a source checkout with `uv run stellarisdashboardcli reprocess-failed-saves` (optionally with `--game-name`). Data already stored for the same in-game date is replaced, copies that now import cleanly are deleted, and the records of the others are updated. Run it while the dashboard is closed, and restart the dashboard afterwards to see the new data.
+
+The `Back up all saves` setting (off by default) copies every save the dashboard reads to `save_backups/<game>/` in the output folder. This folder has no size limit. To rebuild a game's history from it, delete that game's database from the `db/` folder and run `uv run stellarisdashboardcli parse-saves --save-path <output folder>/save_backups`.
+
 ## Visibility Settings
 
 For balance and immersion, only some information about other empires is shown by default. You can enable some settings to show everything:
