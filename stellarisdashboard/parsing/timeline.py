@@ -70,7 +70,9 @@ _BIOSHIP_FAMILY_HULLS = {
 }
 # Fallen empire and NPC warship sizes, mapped by the hull class of their design (the
 # reactor/thruster components in the 4.0.1 test save, or the hull named in the key).
-# Space fauna, crystals, and other unique guardians are left out on purpose.
+# Crystal ships and voidworms are mapped by size_multiplier (5/10/20/40/80, as the standard hulls).
+# Space fauna (size varies with age) and unique guardians such as npc_warship_01 (size_multiplier 250)
+# are left out on purpose.
 _NPC_HULLS = {
     "small_ship_fallen_empire": "destroyer",
     "large_ship_fallen_empire": "battleship",
@@ -87,7 +89,20 @@ _NPC_HULLS = {
     "marauder_galleon": "battleship",
     "caravaneer_destroyer_01": "destroyer",
     "caravaneer_cruiser_01": "cruiser",
+    "crystal_splitter_ship_large_blue": "cruiser",
+    "voidworms_small": "corvette",
+    "voidworms_medium": "destroyer",
+    "voidworms_large": "battleship",
+    "voidworms_titan": "titan",
 }
+_NPC_HULLS.update(
+    {
+        f"crystal_ship_{size}_{color}{elite}": hull
+        for size, hull in (("small", "corvette"), ("medium", "destroyer"), ("large", "cruiser"))
+        for color in ("blue", "green", "yellow", "red")
+        for elite in ("", "_elite")
+    }
+)
 _FLEET_COMPOSITION_HULLS = {
     "frigate",
     "corvette",
@@ -1533,12 +1548,8 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
 
     def get_leader_name(self, leader_dict):
         name_dict = leader_dict.get("name", {})
-        # Look for "first_name" then "full_names" (3.6+)
-        first_name = dump_name(
-            name_dict.get("first_name", name_dict.get("full_names", "Unknown Leader"))
-        )
-        last_name = dump_name(name_dict.get("second_name", ""))
-        return first_name, last_name
+        # leaders only have a full name, no separate second name
+        return dump_name(name_dict.get("full_names", "Unknown Leader")), ""
 
     def _update_leader_attributes(self, country: datamodel.Country, leader: datamodel.Leader, leader_dict):
         leader_class = leader_dict.get("class", "unknown class")
@@ -6074,8 +6085,7 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["happiness"] /= stats["pop_count"]
                 stats["power"] /= stats["pop_count"]
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
-                # recent versions (at least 3.12+) store the support fraction as "support_percent"
-                stats["support"] = faction_dict.get("support_percent", faction_dict.get("support", 0.0))
+                stats["support"] = faction_dict.get("support_percent", 0.0)
 
                 self._session.add(
                     datamodel.PopStatsByFaction(
