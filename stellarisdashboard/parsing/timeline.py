@@ -394,6 +394,7 @@ class TimelineExtractor:
         yield FederationProcessor()
         yield GalacticCommunityProcessor()
         yield FederationProgressProcessor()
+        yield CrisisProgressProcessor()
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
@@ -3565,6 +3566,56 @@ class FederationProgressProcessor(AbstractGamestateDataProcessor):
             if event.federation.end_date_days is not None or event.federation.federation_id_in_game not in federations:
                 end = event.federation.end_date_days if event.federation.end_date_days is not None else today
                 event.end_date_days = max(end, event.start_date_days)
+
+
+def reached_crisis_levels(country_dict: Any) -> Optional[List[str]]:
+    """The crisis level keys a country has unlocked, in order; None without a crisis path block."""
+    progression = country_dict.get("crisis_progression") if isinstance(country_dict, dict) else None
+    if not isinstance(progression, dict):
+        return None
+    levels = progression.get("level")  # a repeated key: a string for one level, a list for more
+    if isinstance(levels, str):
+        levels = [levels]
+    return [level for level in levels if isinstance(level, str)] if isinstance(levels, list) else []
+
+
+def new_crisis_levels(stored: Optional[int], levels: Optional[List[str]]) -> Tuple[List[str], Optional[int]]:
+    """The newly unlocked levels to record and the level count to store, given the stored count.
+
+    A country first seen with levels gets no events for them: the first level comes with the perk
+    and the others can't be dated. A path block still without levels (hyperthermia needs a flag for
+    level 1) stores 0, so its first level is recorded later.
+    """
+    if levels is None:
+        return [], stored
+    if stored is None:
+        return [], len(levels)
+    return levels[stored:], max(stored, len(levels))
+
+
+class CrisisProgressProcessor(AbstractGamestateDataProcessor):
+    """Records the crisis path levels (Become the Crisis, Defender of the Galaxy, ...) countries unlock."""
+
+    ID = "crisis_progress"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        save_countries = self._gamestate_dict.get("country")
+        if not isinstance(save_countries, dict):
+            return
+        for country_id, country in dependencies[CountryProcessor.ID].items():
+            levels = reached_crisis_levels(save_countries.get(country_id))
+            new_levels, country.crisis_level = new_crisis_levels(country.crisis_level, levels)
+            for level in new_levels:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.crisis_level_up,
+                        country=country,
+                        start_date_days=self._basic_info.date_in_days,
+                        db_description=self._get_or_add_shared_description(level),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
 
 
 @dataclasses.dataclass(frozen=True)
