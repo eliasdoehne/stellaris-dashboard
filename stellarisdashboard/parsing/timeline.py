@@ -461,28 +461,17 @@ class SystemProcessor(AbstractGamestateDataProcessor):
     def __init__(self):
         super().__init__()
         self.systems_by_ingame_id = None
-        self.starbase_systems = None
 
     def data(self) -> Dict[str, Any]:
-        return {
-            "systems_by_ingame_id": self.systems_by_ingame_id,
-            "starbase_system_map": self.starbase_systems,
-        }
+        return {"systems_by_ingame_id": self.systems_by_ingame_id}
 
     def extract_data_from_gamestate(self, dependencies):
         self.systems_by_ingame_id = {
             s.system_id_in_game: s for s in self._session.query(datamodel.System)
         }
-        self.starbase_systems = {}
         for ingame_id, system_data in sorted(
             self._gamestate_dict["galactic_object"].items()
         ):
-            if "starbases" in system_data:
-                starbases = system_data["starbases"]
-                if len(starbases) > 1:
-                    logger.debug(f"Found multiple starbases in system {ingame_id}")
-                for starbase in starbases:
-                    self.starbase_systems[starbase] = ingame_id
             if ingame_id in self.systems_by_ingame_id:
                 self._update_system(
                     system_model=self.systems_by_ingame_id[ingame_id],
@@ -696,6 +685,40 @@ class FleetOwnershipProcessor(AbstractGamestateDataProcessor):
 # a crisis claiming a system within this many days of its previous owner losing it is credited with the loss
 CRISIS_CLAIM_WINDOW_DAYS = 2 * 360
 
+# Nomad waystations share a system with the real starbase and don't confer ownership
+NON_OWNING_STARBASE_LEVEL_PREFIXES = ("starbase_level_waystation",)
+# Deep-space citadels and orbital rings need a host starbase and keep their owner when it changes hands
+SECONDARY_STARBASE_LEVEL_PREFIXES = (
+    "starbase_level_deep_space_citadel",
+    "starbase_level_orbital_ring",
+)
+
+
+def choose_system_owner(
+    starbases: List[Tuple[str, Optional[int]]], previous_owner: Optional[int]
+) -> Optional[int]:
+    """Owner country ID of a system, from its (level, owner ID) starbases in galactic_object order."""
+    candidates = [
+        (level, owner)
+        for level, owner in starbases
+        if owner is not None and not level.startswith(NON_OWNING_STARBASE_LEVEL_PREFIXES)
+    ]
+    main_owners = [
+        owner
+        for level, owner in candidates
+        if not level.startswith(SECONDARY_STARBASE_LEVEL_PREFIXES)
+    ]
+    # a system with only secondary starbases goes to the first of them
+    owners = main_owners or [owner for _, owner in candidates]
+    if not owners:
+        return None
+    # the game sets previous_owner on each ownership change, so a remaining conflict goes to the newer owner
+    if len(set(owners)) > 1:
+        for owner in owners:
+            if owner != previous_owner:
+                return owner
+    return owners[0]
+
 
 class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
     ID = "system_owners"
@@ -722,35 +745,38 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             for ship_id, ship_dict in self._gamestate_dict["ships"].items()
             if isinstance(ship_dict, dict)
         }
-        starbase_system_map = dependencies[SystemProcessor.ID]["starbase_system_map"]
         crisis_fleet_systems = self._crisis_fleet_systems(fleet_owners_dict)
 
         starbase_systems = set()
 
-        for starbase_id, starbase_dict in starbases.items():
-            if not isinstance(starbase_dict, dict):
-                continue
-            # Nomad waystations share a system with the real starbase and don't confer ownership
-            if str(starbase_dict.get("level", "")).startswith(
-                "starbase_level_waystation"
-            ):
-                continue
-            system_id_in_game = starbase_system_map.get(starbase_id)
-            country_model = fleet_owners_dict.get(
-                ship_to_fleet_id_dict.get(starbase_dict.get("station"))
-            )
+        # galactic_object keeps each system's starbases in a stable order; starbase_mgr's order is random per parse
+        for system_id_in_game, system_dict in sorted(
+            self._gamestate_dict["galactic_object"].items()
+        ):
             system_model = systems_dict.get(system_id_in_game)
-
-            if country_model is None or system_model is None:
-                # This is no longer an unexpected situation because some megastructures count as starbases since Overlord
-                logger.debug(
-                    f"{self._basic_info.logger_str} Cannot establish ownership for system {system_id_in_game}"
+            if system_model is None or not isinstance(system_dict, dict):
+                continue
+            countries_by_id = {}
+            system_starbases = []
+            for starbase_id in system_dict.get("starbases", []):
+                starbase_dict = starbases.get(starbase_id)
+                if not isinstance(starbase_dict, dict):
+                    continue
+                country_model = fleet_owners_dict.get(
+                    ship_to_fleet_id_dict.get(starbase_dict.get("station"))
                 )
-                continue
+                owner_id = None
+                if country_model is not None:
+                    owner_id = country_model.country_id_in_game
+                    countries_by_id[owner_id] = country_model
+                system_starbases.append((str(starbase_dict.get("level", "")), owner_id))
 
-            if system_id_in_game in starbase_systems:
-                # Only one starbase per system determines its owner
+            owner_id = choose_system_owner(
+                system_starbases, system_dict.get("previous_owner")
+            )
+            if owner_id is None:
                 continue
+            country_model = countries_by_id[owner_id]
             starbase_systems.add(system_id_in_game)
 
             self.systems_by_owner_country_id[country_model.country_id_in_game].add(
