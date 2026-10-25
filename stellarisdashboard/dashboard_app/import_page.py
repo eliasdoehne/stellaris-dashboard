@@ -6,8 +6,17 @@ from flask import render_template, request, redirect
 
 from stellarisdashboard import bulk_import, config
 from stellarisdashboard.dashboard_app import flask_app
+from stellarisdashboard.parsing import save_copies
 
 logger = logging.getLogger(__name__)
+
+
+def _failed_saves_fragment():
+    return render_template(
+        "import_failed_saves.html",
+        copies=save_copies.list_kept_copies(),
+        job=bulk_import.get_current_job(),
+    )
 
 
 def _status_fragment(error: str = ""):
@@ -25,6 +34,7 @@ def import_page():
         games=bulk_import.list_save_games(),
         job=bulk_import.get_current_job(),
         error="",
+        failed_saves=_failed_saves_fragment(),
     )
 
 
@@ -66,3 +76,24 @@ def cancel_import():
 @flask_app.route("/import/status")
 def import_status():
     return _status_fragment()
+
+
+@flask_app.route("/import/failed")
+def import_failed_saves():
+    return _failed_saves_fragment()
+
+
+@flask_app.route("/import/reprocess", methods=["POST"])
+def start_reprocess():
+    error = ""
+    try:
+        bulk_import.start_reprocess(request.form.get("game_id") or None)
+    except bulk_import.ImportRefused as e:
+        error = str(e)
+    if request.headers.get("HX-Request"):
+        response = flask_app.make_response(_status_fragment(error))
+        if not error:
+            # makes the failed saves list start polling
+            response.headers["HX-Trigger"] = "reprocess-started"
+        return response
+    return redirect("/import/")

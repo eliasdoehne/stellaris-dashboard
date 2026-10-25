@@ -4,8 +4,8 @@ Copies of save files kept in the output folder, so they can be imported again la
 - Failed saves: saves that failed to parse or import, or where a single data processor
   failed, are copied to <base_output_path>/failed_saves/<game_id>/ together with a JSON
   record of the errors. Oldest copies are deleted once the folder exceeds
-  failed_saves_max_size_mb. `stellarisdashboardcli reprocess-failed-saves` imports
-  them again and deletes the copies that now import cleanly.
+  failed_saves_max_size_mb. The import page (or `stellarisdashboardcli
+  reprocess-failed-saves`) imports them again and deletes the copies that now import cleanly.
 - Backups: with backup_saves enabled, every save read by the dashboard is copied to
   <base_output_path>/save_backups/<game_id>/ (no size limit).
 
@@ -13,6 +13,7 @@ Both folders use the same layout as the Stellaris save folder, so they can be pa
 `stellarisdashboardcli parse-saves --save-path`.
 """
 
+import dataclasses
 import datetime
 import json
 import logging
@@ -22,7 +23,7 @@ import shutil
 import time
 import traceback
 import zipfile
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from stellarisdashboard import config
 
@@ -160,6 +161,47 @@ def remove_kept_copy(copy_path: pathlib.Path) -> None:
         logger.info(f"Reprocessed {copy_path.name}, removed the kept copy")
     except Exception:
         logger.exception(f"Could not remove kept copy {copy_path}")
+
+
+@dataclasses.dataclass(frozen=True)
+class KeptCopy:
+    path: pathlib.Path
+    game_id: str
+    game_date: Optional[str]
+    failed_at: str
+    reasons: List[str]  # one line per failure, e.g. "import: ValueError: ..."
+
+
+def _summarize_failure(f: Dict[str, Any]) -> str:
+    lines = [line.strip() for line in str(f.get("error", "")).splitlines() if line.strip()]
+    prefix = f["stage"] + (f" ({f['processor']})" if f.get("processor") else "")
+    return f"{prefix}: {lines[-1][:300] if lines else 'unknown error'}"
+
+
+def list_kept_copies(game_id: Optional[str] = None) -> List[KeptCopy]:
+    """The kept copies of failed saves (of one game, by default all), oldest in-game date first per game."""
+    base_dir = failed_saves_path()
+    pattern = f"{game_id}/*.sav" if game_id else "*/*.sav"
+    copies = []
+    for path in base_dir.glob(pattern) if base_dir.is_dir() else []:
+        record = _read_record(record_path(path))
+        copies.append(
+            KeptCopy(
+                path=path,
+                game_id=path.parent.name,
+                game_date=record.get("game_date") or read_save_date(path),
+                failed_at=str(record.get("failed_at", "")),
+                reasons=[_summarize_failure(f) for f in record.get("failures", [])],
+            )
+        )
+    return sorted(copies, key=lambda c: (c.game_id, _date_key(c.game_date), c.path.name))
+
+
+def _date_key(game_date: Optional[str]) -> Tuple[int, ...]:
+    try:
+        return tuple(int(x) for x in game_date.split("."))
+    except (AttributeError, ValueError):
+        return (10**9,)
 
 
 def back_up_save(

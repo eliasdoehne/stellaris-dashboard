@@ -5,6 +5,9 @@ The import runs through the same code path as the `parse-saves` CLI command (cli
 Only one import runs at a time. While it runs, the save watcher leaves new saves of the same game
 to the import, which picks them up after the saves it started with, so the game's saves are
 written to the database by one importer in order.
+
+Reprocessing the kept copies of failed saves (save_copies) is a job of the same kind: it uses the
+same single job slot, import path and process-wide lock, so it never runs alongside another import.
 """
 
 import dataclasses
@@ -17,7 +20,7 @@ import zipfile
 from typing import Dict, List, Optional, Set, Tuple
 
 from stellarisdashboard import config, datamodel
-from stellarisdashboard.parsing import save_parser
+from stellarisdashboard.parsing import save_copies, save_parser
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +207,14 @@ class ImportJob:
     CANCELLED = "cancelled"
     FAILED = "failed"
 
-    def __init__(self, plan: ImportPlan, save_path: pathlib.Path):
+    def __init__(
+        self,
+        plan: ImportPlan,
+        save_path: pathlib.Path,
+        reprocess_game_ids: Optional[List[str]] = None,
+    ):
+        """:param reprocess_game_ids: Reprocess the kept copies of these games (the plan's saves) instead of importing."""
+        self.reprocess_game_ids = reprocess_game_ids
         self.game_id = plan.game_id
         self.empire_name = plan.empire_name
         self.save_path = save_path
@@ -222,11 +232,16 @@ class ImportJob:
         self._batch_index = 0
         self._seen: Set[pathlib.Path] = {s.path for s in plan.saves}
         self._save_filter = save_parser.BatchSavePathMonitor(save_path)
-        self._accepts_deferred_saves = True  # guarded by _jobs_lock
+        # a reprocessing job runs alongside the watcher, which is serialized by the process-wide lock
+        self._accepts_deferred_saves = not self.is_reprocess  # guarded by _jobs_lock
         self._has_deferred_saves = False  # guarded by _jobs_lock
         self._thread = threading.Thread(
             target=self._run, name=f"bulk-import-{self.game_id}", daemon=True
         )
+
+    @property
+    def is_reprocess(self) -> bool:
+        return self.reprocess_game_ids is not None
 
     @property
     def is_active(self) -> bool:
@@ -285,12 +300,22 @@ class ImportJob:
         from stellarisdashboard import cli  # cli imports this module
         from stellarisdashboard.dashboard_app import visualization_data
 
+        game_ids = self.reprocess_game_ids if self.is_reprocess else [self.game_id]
         error_handler = _ErrorCollector(self)
         logging.getLogger().addHandler(error_handler)
         status = ImportJob.FINISHED
         try:
             logger.info(f"Importing {self.total} saves of game {self.game_id}")
-            while self._batch:
+            if self.is_reprocess:
+                cli.f_parse_saves(
+                    save_path=self.save_path,
+                    save_files=self._batch,
+                    replace_existing=True,
+                    use_worker_processes=True,
+                    stop_event=self._stop_event,
+                    on_save_processed=self._on_save_processed,
+                )
+            while self._batch and not self.is_reprocess:
                 cli.f_parse_saves(
                     save_path=self.save_path,
                     save_files=self._batch,
@@ -308,7 +333,8 @@ class ImportJob:
         finally:
             logging.getLogger().removeHandler(error_handler)
             # older saves are not picked up by the incremental plot data update
-            visualization_data.drop_cached_plot_data(self.game_id)
+            for game_id in game_ids:
+                visualization_data.drop_cached_plot_data(game_id)
             if status == ImportJob.FINISHED and self._stop_event.is_set():
                 status = ImportJob.CANCELLED
             with _jobs_lock:
@@ -361,6 +387,35 @@ def start_import(game_id: str) -> ImportJob:
     with _jobs_lock:
         _refuse_if_running()
         _current_job = ImportJob(plan, save_path)
+        _current_job._thread.start()
+    return _current_job
+
+
+def start_reprocess(game_id: Optional[str] = None) -> ImportJob:
+    """
+    Start importing the kept copies of failed saves again in the background (of one game, by default
+    all), or raise ImportRefused. Gamestates of the same date are replaced, copies that import
+    cleanly are deleted and the records of the others are updated.
+    """
+    global _current_job
+    _refuse_if_running()
+    copies = save_copies.list_kept_copies(game_id)
+    if not copies:
+        raise ImportRefused("There are no kept copies of failed saves to reprocess.")
+    game_ids = sorted({c.game_id for c in copies})
+    infos = [read_save_info(c.path) for c in copies]
+    plan = ImportPlan(
+        game_id=game_id or "all games",
+        empire_name="",
+        saves=infos,
+        num_imported=0,
+        num_filtered_out=0,
+        to_import=infos,
+        newest_imported_date=None,
+    )
+    with _jobs_lock:
+        _refuse_if_running()
+        _current_job = ImportJob(plan, save_copies.failed_saves_path(), reprocess_game_ids=game_ids)
         _current_job._thread.start()
     return _current_job
 

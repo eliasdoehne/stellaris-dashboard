@@ -1,4 +1,5 @@
 import contextlib
+import json
 import logging
 import os
 import threading
@@ -550,3 +551,130 @@ def test_f_parse_saves_stop_event_already_set(tmp_path, fake_pipeline):
     stop.set()
     cli.f_parse_saves(save_path=tmp_path, stop_event=stop)
     assert _FakeExtractor.processed == []
+
+
+# --- reprocessing kept copies of failed saves ---
+
+
+def _keep(game, name, date, error="Traceback...\nValueError: bad value"):
+    """Create a kept copy of a failed save together with its record."""
+    path = make_save(save_copies.failed_saves_path() / game, name, date)
+    failures = [save_copies.failure(save_copies.STAGE_IMPORT, error)]
+    save_copies.record_path(path).write_text(
+        json.dumps(dict(game_id=game, game_date=date, failed_at="2300-01-02T03:04:05", failures=failures))
+    )
+    return path
+
+
+def test_list_kept_copies():
+    _keep("gameB", "b.sav", "2200.01.01")
+    _keep("gameA", "late.sav", "2210.01.01")
+    early = _keep("gameA", "early.sav", "2205.05.05")
+    save_copies.record_path(early).unlink()  # a copy without a record is still listed
+    copies = save_copies.list_kept_copies()
+    assert [(c.game_id, c.path.name) for c in copies] == [
+        ("gameA", "early.sav"),
+        ("gameA", "late.sav"),
+        ("gameB", "b.sav"),
+    ]
+    assert copies[0].game_date == "2205.05.05" and copies[0].reasons == []
+    assert copies[1].reasons == ["import: ValueError: bad value"]
+    assert copies[1].failed_at == "2300-01-02T03:04:05"
+    assert [c.path for c in save_copies.list_kept_copies("gameB")] == [copies[2].path]
+
+
+def test_list_kept_copies_without_folder():
+    assert save_copies.list_kept_copies() == []
+
+
+def test_start_reprocess_refuses_without_copies():
+    with pytest.raises(bulk_import.ImportRefused, match="no kept copies"):
+        bulk_import.start_reprocess()
+    assert bulk_import.get_current_job() is None
+
+
+def test_reprocess_all_games(monkeypatch, dropped_caches):
+    kept = [
+        _keep("gameB", "b.sav", "2200.01.01"),
+        _keep("gameA", "a2.sav", "2201.01.01"),
+        _keep("gameA", "a1.sav", "2200.06.01"),
+    ]
+    calls = []
+    _fake_parse(monkeypatch, calls=calls)
+    job = bulk_import.start_reprocess()
+    job._thread.join(timeout=10)
+    assert job.status == bulk_import.ImportJob.FINISHED
+    assert job.is_reprocess and job.total == 3 and job.done == 3
+    # one pass over all games, in order of game and date
+    assert calls == [[kept[2], kept[1], kept[0]]]
+    assert sorted(dropped_caches) == ["gameA", "gameB"]
+
+
+def test_reprocess_one_game_replaces_existing(monkeypatch, dropped_caches):
+    _keep("gameA", "a.sav", "2200.01.01")
+    kept_b = _keep("gameB", "b.sav", "2200.01.01")
+    seen = {}
+
+    def fake(save_files=None, on_save_processed=None, **kw):
+        seen.update(kw, files=list(save_files))
+        for f in save_files:
+            on_save_processed(f.parent.stem, {"date": "2200.01.01"})
+
+    monkeypatch.setattr(cli, "f_parse_saves", fake)
+    job = bulk_import.start_reprocess("gameB")
+    job._thread.join(timeout=10)
+    assert seen["files"] == [kept_b]
+    assert seen["replace_existing"] is True
+    assert seen["save_path"] == save_copies.failed_saves_path()
+    assert dropped_caches == ["gameB"]
+
+
+def test_reprocess_reports_errors_and_refuses_second_job(monkeypatch, dropped_caches):
+    _keep("gameA", "a1.sav", "2200.01.01")
+    _keep("gameA", "a2.sav", "2200.02.01")
+    gate = threading.Event()
+    _fake_parse(monkeypatch, fail_name="a2.sav", gate=gate)
+    job = bulk_import.start_reprocess("gameA")
+    with pytest.raises(bulk_import.ImportRefused, match="already running"):
+        bulk_import.start_reprocess()
+    gate.set()
+    job._thread.join(timeout=10)
+    assert job.num_errors == 1 and "a2.sav" in job.errors[0]
+
+
+def test_reprocess_does_not_defer_the_watcher(monkeypatch, dropped_caches):
+    _keep("gameA", "a.sav", "2200.01.01")
+    gate = threading.Event()
+    _fake_parse(monkeypatch, gate=gate)
+    job = bulk_import.start_reprocess("gameA")
+    assert not bulk_import.defer_to_running_import("gameA")
+    gate.set()
+    job._thread.join(timeout=10)
+
+
+def test_clean_import_of_kept_copy_removes_it(monkeypatch):
+    kept = _keep("gameA", "a.sav", "2200.01.01")
+    monkeypatch.setattr(timeline, "TimelineExtractor", _FakeExtractor)
+    _FakeExtractor.processed = []
+    cli.f_import_gamestate("gameA", {"date": "2200.01.01"}, kept, replace_existing=True)
+    assert not kept.exists() and not save_copies.record_path(kept).exists()
+    assert _FakeExtractor.processed == [("gameA", {"date": "2200.01.01"})]
+
+
+def test_failed_saves_page(monkeypatch, dropped_caches):
+    from stellarisdashboard.dashboard_app import flask_app, import_page
+
+    _keep("gameA", "a.sav", "2200.01.01", error="x\nKeyError: 'boom'")
+    # the views are called directly: the app's before-request hooks need the whole Dash layout
+    with flask_app.test_request_context("/import/failed"):
+        html = import_page.import_failed_saves()
+    assert "a.sav" in html and "KeyError: &#39;boom&#39;" in html
+    assert "Reprocess all 1 failed save" in html
+    _fake_parse(monkeypatch)
+    with flask_app.test_request_context(
+        "/import/reprocess", method="POST", headers={"HX-Request": "true"}
+    ):
+        resp = import_page.start_reprocess()
+    assert resp.headers["HX-Trigger"] == "reprocess-started"
+    assert "eprocessing" in resp.get_data(as_text=True)  # "Reprocessing" or, if already done, "Finished reprocessing"
+    bulk_import.get_current_job()._thread.join(timeout=10)

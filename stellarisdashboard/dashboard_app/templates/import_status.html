@@ -6,11 +6,12 @@
     {% endif %}
     {% if job %}
         <h2>
-            {% if job.status == "running" %}Importing
-            {% elif job.status == "cancelling" %}Cancelling import of
-            {% elif job.status == "finished" %}Finished importing
-            {% elif job.status == "cancelled" %}Cancelled import of
-            {% else %}Import failed:
+            {% set what = "reprocessing" if job.is_reprocess else "import" %}
+            {% if job.status == "running" %}{{ "Reprocessing" if job.is_reprocess else "Importing" }}
+            {% elif job.status == "cancelling" %}Cancelling {{ what }} of
+            {% elif job.status == "finished" %}Finished {{ what }}
+            {% elif job.status == "cancelled" %}Cancelled {{ what }} of
+            {% else %}{{ what|capitalize }} failed:
             {% endif %}
             {{ job.empire_name or job.game_id }}
         </h2>
@@ -26,7 +27,10 @@
             <p class="import-meta">New saves of this game written during the import are imported after the others.</p>
         {% endif %}
         {% if job.status == "cancelled" %}
-            <p class="import-meta">Already imported saves are kept. Start the import again to continue.</p>
+            <p class="import-meta">Already processed saves are kept. Start the {{ "reprocessing" if job.is_reprocess else "import" }} again to continue.</p>
+        {% endif %}
+        {% if job.is_reprocess and not job.is_active %}
+            <p class="import-meta">Copies that imported cleanly were deleted; the others are still listed below. Plots show the new data without restarting the dashboard.</p>
         {% endif %}
         {% if job.errors %}
             <details class="import-errors" {% if not job.is_active %}open{% endif %}>
@@ -41,7 +45,7 @@
             <form action="/import/cancel" method="POST" hx-post="/import/cancel" hx-target="#import-status" hx-swap="outerHTML">
                 <button type="submit" class="button" {% if job.status == "cancelling" %}disabled{% endif %}>Cancel</button>
             </form>
-        {% else %}
+        {% elif not job.is_reprocess or job.reprocess_game_ids|length == 1 %}
             <p>
                 <a class="button" href="{{ url_for('/timeline/', game_name=job.game_id) }}">Timeline Graphs</a>
                 <a class="button" href="{{ url_for('history_page', game_id=job.game_id) }}">Event Ledger</a>

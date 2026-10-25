@@ -1,0 +1,45 @@
+{# Polls itself while a reprocessing job runs, so the list shrinks as copies import cleanly. #}
+{% set busy = job and job.is_active %}
+<div id="failed-saves" class="failed-saves"
+     hx-get="/import/failed" hx-swap="outerHTML"
+     hx-trigger="reprocess-started from:body{% if busy and job.is_reprocess %}, every 2s{% endif %}">
+    {% if copies %}
+        <h2>Failed saves</h2>
+        <p class="import-intro">
+            Saves that could not be parsed or imported completely are kept in the output folder.
+            Reprocessing imports them again, e.g. after updating the dashboard: data stored for the same in-game date is
+            replaced, copies that import cleanly are deleted and the others stay listed.
+        </p>
+        {% set games = copies|map(attribute="game_id")|unique|list %}
+        <form action="/import/reprocess" method="POST" hx-post="/import/reprocess" hx-target="#import-status" hx-swap="outerHTML">
+            <button type="submit" class="button" {% if busy %}disabled{% endif %}>
+                Reprocess all {{ copies|length }} failed save{{ "" if copies|length == 1 else "s" }}
+            </button>
+        </form>
+        {% for game_id in games %}
+            {% set game_copies = copies|selectattr("game_id", "equalto", game_id)|list %}
+            <h3><code>{{ game_id }}</code></h3>
+            {% if games|length > 1 %}
+                <form action="/import/reprocess" method="POST" hx-post="/import/reprocess" hx-target="#import-status" hx-swap="outerHTML">
+                    <input type="hidden" name="game_id" value="{{ game_id }}">
+                    <button type="submit" class="button" {% if busy %}disabled{% endif %}>
+                        Reprocess {{ game_copies|length }} save{{ "" if game_copies|length == 1 else "s" }} of this game
+                    </button>
+                </form>
+            {% endif %}
+            <table class="import-games">
+                <thead><tr><th>File</th><th>In-game date</th><th>Failed at</th><th>Reason</th></tr></thead>
+                <tbody>
+                {% for c in game_copies %}
+                    <tr>
+                        <td><code>{{ c.path.name }}</code></td>
+                        <td>{{ c.game_date or "?" }}</td>
+                        <td>{{ c.failed_at.replace("T", " ") or "?" }}</td>
+                        <td>{% for r in c.reasons %}<code>{{ r }}</code><br>{% else %}no record{% endfor %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+    {% endif %}
+</div>
