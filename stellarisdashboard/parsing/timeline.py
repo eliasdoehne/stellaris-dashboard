@@ -3203,6 +3203,17 @@ class FederationProcessor(AbstractGamestateDataProcessor):
     ID = "federations"
     DEPENDENCIES = [CountryProcessor.ID]
 
+    def __init__(self):
+        super().__init__()
+        self._federations: Dict[int, datamodel.Federation] = None
+
+    def initialize_data(self):
+        self._federations = {}
+
+    def data(self) -> Dict[int, datamodel.Federation]:
+        """The federations of this save by in-game id."""
+        return self._federations
+
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         countries = dependencies[CountryProcessor.ID]
         today = self._basic_info.date_in_days
@@ -3269,6 +3280,7 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                     federation_id_in_game=f_id, name=name, start_date_days=start
                 )
                 self._session.add(federation)
+                self._federations[f_id] = federation
                 # without an earlier save the founding and joining dates are unknown
                 founded = previous_date is not None and start > previous_date
                 for c_id in sorted(roles):
@@ -3289,6 +3301,7 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                 continue
 
             federation.name = name
+            self._federations[f_id] = federation
             open_memberships = {
                 m.country.country_id_in_game: m
                 for m in self._open_memberships(federation)
@@ -3437,26 +3450,6 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
                 )
 
 
-def federation_id_of_description(text: Optional[str]) -> Optional[int]:
-    """The federation id packed into a federation event description, if any."""
-    if not text:
-        return None
-    try:
-        return int(datamodel.split_federation_description(text)[0])
-    except ValueError:
-        return None
-
-
-def federation_level_of_description(text: Optional[str]) -> Optional[int]:
-    """The level packed into a federation level-up description, if any."""
-    if not text:
-        return None
-    try:
-        return int(datamodel.split_federation_description(text)[1])
-    except ValueError:
-        return None
-
-
 def president_start_date(
     last_succession_date: Any, previous_start_days: Optional[int], current_days: int
 ) -> int:
@@ -3470,124 +3463,97 @@ def president_start_date(
 
 
 class FederationProgressProcessor(AbstractGamestateDataProcessor):
-    """Records federation presidencies (spans) and level-ups, found by diffing the federations between saves."""
+    """Records federation presidencies (spans) and level-ups, and keeps each federation's type and level."""
 
     ID = "federation_progress"
-    DEPENDENCIES = [CountryProcessor.ID]
+    DEPENDENCIES = [CountryProcessor.ID, FederationProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         countries = dependencies[CountryProcessor.ID]
+        federations = dependencies[FederationProcessor.ID]
         today = self._basic_info.date_in_days
-        federations = self._gamestate_dict.get("federation")
-        if not isinstance(federations, dict):
-            federations = {}
+        save_federations = self._gamestate_dict.get("federation")
+        if not isinstance(save_federations, dict):
+            save_federations = {}
 
         previous_date = (
             self._session.query(sqlalchemy.func.max(datamodel.GameState.date))
             .filter(datamodel.GameState.game == self._db_game, datamodel.GameState.date < today)
             .scalar()
         )
-        open_presidents: Dict[int, datamodel.HistoricalEvent] = {}
-        levels: Dict[int, List[Tuple[int, int]]] = {}  # federation id -> [(date, level)]
-        for event in (
-            self._session.query(datamodel.HistoricalEvent)
+        open_presidents: Dict[int, datamodel.HistoricalEvent] = {
+            event.federation_id: event
+            for event in self._session.query(datamodel.HistoricalEvent)
             .filter(
-                sqlalchemy.or_(
-                    sqlalchemy.and_(
-                        datamodel.HistoricalEvent.event_type
-                        == datamodel.HistoricalEventType.federation_president,
-                        datamodel.HistoricalEvent.end_date_days.is_(None),
-                    ),
-                    datamodel.HistoricalEvent.event_type
-                    == datamodel.HistoricalEventType.federation_level_up,
-                )
+                datamodel.HistoricalEvent.event_type == datamodel.HistoricalEventType.federation_president,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+                datamodel.HistoricalEvent.federation_id.isnot(None),
             )
             .options(
                 joinedload(datamodel.HistoricalEvent.country),
-                joinedload(datamodel.HistoricalEvent.db_description),
+                joinedload(datamodel.HistoricalEvent.federation),
             )
-        ):
-            text = event.db_description.text if event.db_description is not None else None
-            federation_id = federation_id_of_description(text)
-            if federation_id is None:
-                continue
-            if event.event_type == datamodel.HistoricalEventType.federation_president:
-                open_presidents[federation_id] = event
-            else:
-                level = federation_level_of_description(text)
-                if level is not None:
-                    levels.setdefault(federation_id, []).append((event.start_date_days, level))
+        }
 
-        for federation_id, federation in sorted(
-            (k, v) for k, v in federations.items() if isinstance(k, int) and isinstance(v, dict)
-        ):
-            president = countries.get(_as_game_id(federation.get("leader")))
-            progression = federation.get("federation_progression")
+        for f_id, federation in sorted(federations.items()):
+            # rows added in this save have no id yet, and no presidency
+            current = open_presidents.pop(federation.federation_id, None) if federation.federation_id else None
+            fdict = save_federations.get(f_id)
+            progression = fdict.get("federation_progression") if isinstance(fdict, dict) else None
+            president = countries.get(_as_game_id(fdict.get("leader"))) if isinstance(fdict, dict) else None
             if president is None or not isinstance(progression, dict):
+                if current is not None:
+                    open_presidents[federation.federation_id] = current
                 continue
-            federation_type = progression.get("federation_type") or ""
-            name = federation.get("name")
-            name_text = dump_name(name) if isinstance(name, dict) else ""
-            # in-game ids are reused after a dissolution; older events belong to the previous federation
-            founded = _date_to_days_or_none(federation.get("start_date"))
-            if founded is None or founded > today:
-                founded = today
-
-            current = open_presidents.get(federation_id)
-            if current is not None and current.start_date_days < founded:
-                current.end_date_days = max(founded - 1, current.start_date_days)
-                self._session.add(current)
-                current = None
-            seen_before = current is not None
+            federation_type = progression.get("federation_type")
+            if isinstance(federation_type, str) and federation_type:
+                federation.federation_type = federation_type
             # a federation founded after the previous save has a full history here
-            newly_founded = previous_date is not None and founded > previous_date
-            level = progression.get("levels")
-            # the presidency stores the level it began at, the baseline for a federation first seen at a higher level
-            baseline = federation_level_of_description(current.db_description.text) if current else None
-            known = max(
-                [lvl for date, lvl in levels.get(federation_id, []) if date >= founded] + [baseline or 1]
-            )
+            newly_founded = previous_date is not None and federation.start_date_days > previous_date
+
             if current is None or current.country is not president:
                 start = president_start_date(
                     progression.get("last_succession_date"),
                     current.start_date_days if current is not None else None,
                     today,
                 )
-                if not seen_before and newly_founded and start == today:
-                    start = founded  # the founder presides until the first succession
+                if current is None and newly_founded and start == today:
+                    start = federation.start_date_days  # the founder presides until the first succession
                 if current is not None:
                     current.end_date_days = max(start, current.start_date_days)
-                    self._session.add(current)
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.federation_president,
                         country=president,
+                        federation=federation,
                         start_date_days=start,
-                        db_description=self._get_or_add_shared_description(
-                            f"{federation_id}|{level if isinstance(level, int) else ''}|{federation_type}|{name_text}"
-                        ),
                         event_is_known_to_player=president.has_met_player(),
                     )
                 )
 
+            level = progression.get("levels")
+            if not isinstance(level, int):
+                continue
             # a federation first seen at a higher level gives no date for its earlier level-ups
-            if isinstance(level, int) and level > known and (seen_before or newly_founded):
+            known = federation.level if federation.level is not None else (1 if newly_founded else None)
+            if known is not None and level > known:
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.federation_level_up,
                         country=president,
+                        federation=federation,
                         start_date_days=today,
-                        db_description=self._get_or_add_shared_description(
-                            f"{federation_id}|{level}|{federation_type}|{name_text}"
-                        ),
+                        db_description=self._get_or_add_shared_description(str(level)),
                         event_is_known_to_player=president.has_met_player(),
                     )
                 )
+            federation.level = level
 
-        for federation_id, event in open_presidents.items():
-            if not isinstance(federations.get(federation_id), dict):
-                event.end_date_days = max(today, event.start_date_days)
-                self._session.add(event)
+        # presidencies of dissolved federations end with them
+        for event in open_presidents.values():
+            if event.federation.end_date_days is not None or event.federation.federation_id_in_game not in federations:
+                end = event.federation.end_date_days if event.federation.end_date_days is not None else today
+                event.end_date_days = max(end, event.start_date_days)
 
 
 @dataclasses.dataclass(frozen=True)

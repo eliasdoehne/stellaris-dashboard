@@ -357,12 +357,13 @@ REGISTRY: dict[str, EventDescriptor] = {
     "federation_president": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "federation", SPAN,
         '\n'
-        '                    The {{ links[event["country"]] | safe }} held the presidency of the {{ event["description"] }}.\n',
+        '                    The {{ links[event["country"]] | safe }} held the presidency of the {{ event["federation_title"] }}.\n',
     ),
     "federation_level_up": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
         '\n'
-        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the {{ event["description"] }}.\n',
+        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the {{ event["federation_title"] }}'
+        ' reached level {{ event["description"] }}.\n',
     ),
     "envoy_community": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,

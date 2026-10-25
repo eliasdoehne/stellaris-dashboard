@@ -2087,29 +2087,6 @@ def render_subject_type(preset: str) -> str:
     return game_info.convert_id_to_name(SUBJECT_PRESET_VARIANT_RE.sub("", preset), remove_prefix="preset")
 
 
-def split_federation_description(text: str) -> Tuple[str, str, str, str]:
-    """Splits a "<federation id>|<value>|<federation type>|<name>" description."""
-    federation_id, value, federation_type, name = (text.split("|", 3) + ["", "", ""])[:4]
-    return federation_id, value, federation_type, name
-
-
-def render_federation_name(federation_type: str, name: str) -> str:
-    """Renders a federation as '<type> "<name>"', e.g. 'Martial Alliance "Star Security Organization"'."""
-    rendered_type = game_info.lookup_key_if_known(federation_type) if federation_type else None
-    rendered_name = game_info.render_name(name) if name else ""
-    if rendered_type and rendered_name:
-        return f'{rendered_type} "{rendered_name}"'
-    return f'"{rendered_name}"' if rendered_name else (rendered_type or "federation")
-
-
-def render_federation_description(event_type: "HistoricalEventType", text: str) -> str:
-    _, value, federation_type, name = split_federation_description(text)
-    federation = render_federation_name(federation_type, name)
-    if event_type == HistoricalEventType.federation_level_up:
-        return f"{federation} reached level {value}"
-    return federation
-
-
 # family final keys whose own loc key is not the structure's name -> id to render instead
 MEGASTRUCTURE_DISPLAY_IDS = {"dyson_gun_3": "dyson_gun_0", "ring_world_3_intermediate": "ring_world"}
 
@@ -2213,6 +2190,8 @@ class Federation(Base):
     name = Column(String(500))  # dump_name() of the save's name
     start_date_days = Column(Integer, index=True)  # founding date from the save
     end_date_days = Column(Integer)  # dissolution; None while it exists
+    federation_type = Column(String(80))  # e.g. "military_federation"; None until seen
+    level = Column(Integer)  # level in the latest save; None until seen
 
     memberships = relationship(
         "FederationMembership",
@@ -2224,6 +2203,14 @@ class Federation(Base):
     @property
     def rendered_name(self) -> str:
         return game_info.render_name(self.name)
+
+    @property
+    def rendered_title(self) -> str:
+        """The type and name, e.g. 'Martial Alliance "Star Security Organization"'."""
+        rendered_type = game_info.lookup_key_if_known(self.federation_type) if self.federation_type else None
+        if rendered_type:
+            return f'{rendered_type} "{self.rendered_name}"'
+        return f'"{self.rendered_name}" federation'
 
     def members_at(self, date_days: int, associates: bool = False) -> List["Country"]:
         """The full members (or associate members) on the given date."""
@@ -2423,11 +2410,10 @@ class HistoricalEvent(Base):
             elif cause == "subject":
                 return "after being integrated by the"
             return ""
-        elif self.event_type in (
-            HistoricalEventType.federation_president,
-            HistoricalEventType.federation_level_up,
-        ):
-            return render_federation_description(self.event_type, self.db_description.text)
+        elif self.event_type == HistoricalEventType.federation_level_up:
+            return self.db_description.text if self.db_description else ""
+        elif self.event_type == HistoricalEventType.federation_president:
+            return ""
         elif self.event_type == HistoricalEventType.megastructure_construction:
             return render_megastructure_description(self.db_description.text)
         elif self.db_description:

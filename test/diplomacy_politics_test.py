@@ -1,10 +1,8 @@
-from stellarisdashboard.datamodel import SUBJECT_PRESET_VARIANT_RE, date_to_days, split_federation_description
+from stellarisdashboard.datamodel import SUBJECT_PRESET_VARIANT_RE, date_to_days
 from stellarisdashboard.parsing.timeline import (
     MEGASTRUCTURE_STAGES,
     PassedResolution,
     custodian_role_and_start,
-    federation_id_of_description,
-    federation_level_of_description,
     is_finished_megastructure,
     megastructure_final_type,
     passed_resolutions,
@@ -59,17 +57,6 @@ def test_imperium_proclamation_makes_the_leader_emperor_until_a_new_nomination()
 def test_subject_preset_variants_reduce_to_the_base_preset():
     for preset in ("preset_vassal_mean_02", "preset_vassal_oppressive_ai", "preset_vassal_balanced", "preset_vassal"):
         assert SUBJECT_PRESET_VARIANT_RE.sub("", preset) == "preset_vassal"
-
-
-def test_federation_descriptions():
-    text = '16777217|3|military_federation|{"key": "a|b"}'
-    assert split_federation_description(text) == ("16777217", "3", "military_federation", '{"key": "a|b"}')
-    assert split_federation_description("3") == ("3", "", "", "")
-    assert federation_id_of_description(text) == 16777217
-    assert federation_level_of_description(text) == 3
-    assert federation_level_of_description('0||default_federation|{"key": "x"}') is None
-    for junk in (None, "", "abc|1|t|n"):
-        assert federation_id_of_description(junk) is None
 
 
 def test_president_start_date_uses_exact_date_only_when_plausible():
