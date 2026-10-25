@@ -3789,20 +3789,84 @@ def _as_dict_list(value: Any) -> List[Dict[str, Any]]:
     return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
 
 
+def dig_site_state(
+    chapters_done: int, stage_count: Optional[int], excavating: bool
+) -> datamodel.StorylineState:
+    """Completed once all chapters are done, else active while a fleet excavates, else paused."""
+    if stage_count and chapters_done >= stage_count:
+        return datamodel.StorylineState.completed
+    return datamodel.StorylineState.active if excavating else datamodel.StorylineState.paused
+
+
+def astral_rift_state(status: Any) -> datamodel.StorylineState:
+    """The storyline state of an astral rift from its save status."""
+    if status == "in_progress":
+        return datamodel.StorylineState.active
+    if status == "finished":
+        return datamodel.StorylineState.completed
+    return datamodel.StorylineState.paused
+
+
+FIRST_CONTACT_STORYLINE_STATES = {
+    "in_progress": datamodel.StorylineState.active,
+    "finished": datamodel.StorylineState.completed,
+    "aborted": datamodel.StorylineState.abandoned,
+}
+
+
+def _storylines_by_game_id(
+    session, storyline_type: datamodel.StorylineType
+) -> Dict[int, datamodel.Storyline]:
+    """The stored storylines of a type by in-game id; the newest wins if an id was reused."""
+    storylines = {}
+    for storyline in (
+        session.query(datamodel.Storyline)
+        .filter_by(storyline_type=storyline_type)
+        .order_by(datamodel.Storyline.storyline_id)
+    ):
+        storylines[storyline.storyline_id_in_game] = storyline
+    return storylines
+
+
+def _set_if_changed(obj: Any, **values: Any) -> bool:
+    """Sets the attributes that differ, so that unchanged rows cause no UPDATE; True if any did."""
+    changed = False
+    for name, value in values.items():
+        if getattr(obj, name) is not value and getattr(obj, name) != value:
+            setattr(obj, name, value)
+            changed = True
+    return changed
+
+
+def _fleet_leader(
+    gamestate_dict: Dict[str, Any], fleet_id: Any, leaders: Dict[int, datamodel.Leader]
+) -> Optional[datamodel.Leader]:
+    """The leader of the first ship of a fleet that has one."""
+    fleet_dict = gamestate_dict["fleet"].get(fleet_id)
+    ships = fleet_dict.get("ships") if isinstance(fleet_dict, dict) else None
+    for ship_id in ships if isinstance(ships, list) else []:
+        ship_dict = gamestate_dict["ships"].get(ship_id)
+        leader = leaders.get(ship_dict.get("leader")) if isinstance(ship_dict, dict) else None
+        if leader is not None:
+            return leader
+    return None
+
+
 class ArchaeologyProcessor(AbstractGamestateDataProcessor):
-    """Records each completed chapter of an archaeological dig site."""
+    """Records each completed chapter of an archaeological dig site, and groups them as a storyline."""
 
     ID = "archaeology"
-    DEPENDENCIES = [CountryProcessor.ID, PlanetProcessor.ID]
+    DEPENDENCIES = [CountryProcessor.ID, PlanetProcessor.ID, LeaderProcessor.ID]
 
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         countries = dependencies[CountryProcessor.ID]
         planets = dependencies[PlanetProcessor.ID]
+        leaders = dependencies[LeaderProcessor.ID]
         sites = (self._gamestate_dict.get("archaeological_sites") or {}).get("sites")
         if not isinstance(sites, dict):
             return
 
-        known = set()  # (planet id, chapter) of the stored events
+        known = {}  # (planet id, chapter) -> stored event
         for event in self._session.query(datamodel.HistoricalEvent).filter_by(
             event_type=datamodel.HistoricalEventType.excavated_dig_site
         ).options(
@@ -3811,7 +3875,8 @@ class ArchaeologyProcessor(AbstractGamestateDataProcessor):
         ):
             if event.planet is not None and event.db_description is not None:
                 _, chapter = datamodel.split_packed_description(event.db_description.text)
-                known.add((event.planet.planet_id_in_game, chapter))
+                known[(event.planet.planet_id_in_game, chapter)] = event
+        storylines = _storylines_by_game_id(self._session, datamodel.StorylineType.dig_site)
 
         for site_id, site in sorted(sites.items()):
             if not isinstance(site, dict) or not isinstance(site.get("type"), str):
@@ -3820,21 +3885,53 @@ class ArchaeologyProcessor(AbstractGamestateDataProcessor):
             planet = planets.get(_as_game_id(location.get("id")) if isinstance(location, dict) else None)
             if planet is None:
                 continue
-            for chapter, entry in enumerate(_as_dict_list(site.get("completed")), start=1):
+            entries = _as_dict_list(site.get("completed"))
+            chapters = []  # (chapter, country, start day) of the valid entries
+            for chapter, entry in enumerate(entries, start=1):
                 country = countries.get(_as_game_id(entry.get("country")))
                 date = entry.get("date")
-                key = (planet.planet_id_in_game, str(chapter))
-                if country is None or not isinstance(date, str) or key in known:
+                if country is None or not isinstance(date, str):
                     continue
                 try:
-                    start_date = datamodel.date_to_days(date)
+                    chapters.append((chapter, country, datamodel.date_to_days(date)))
                 except ValueError:
                     continue
-                known.add(key)
-                self._session.add(
-                    datamodel.HistoricalEvent(
+            if not chapters:
+                continue
+
+            fleet_id = _as_game_id(site.get("excavator_fleet"))
+            excavating = fleet_id is not None and fleet_id in self._gamestate_dict["fleet"]
+            excavator = _fleet_leader(self._gamestate_dict, fleet_id, leaders) if excavating else None
+            state = dig_site_state(len(entries), game_info.dig_site_stage_count(site["type"]), excavating)
+            storyline = storylines.get(int(site_id))
+            if storyline is None or storyline.planet is not planet:
+                storyline = storylines[int(site_id)] = datamodel.Storyline(
+                    storyline_type=datamodel.StorylineType.dig_site,
+                    storyline_id_in_game=int(site_id),
+                    title=site["type"],
+                    planet=planet,
+                    system=planet.system,
+                    start_date_days=chapters[0][2],
+                    state=state,
+                )
+            _set_if_changed(
+                storyline,
+                start_date_days=min(day for _, _, day in chapters),
+                country=chapters[-1][1],
+                leader=excavator or storyline.leader,
+                state=state,
+                end_date_days=chapters[-1][2] if state == datamodel.StorylineState.completed else None,
+            )
+            self._session.add(storyline)
+
+            for chapter, country, start_date in chapters:
+                key = (planet.planet_id_in_game, str(chapter))
+                event = known.get(key)
+                if event is None:
+                    known[key] = event = datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.excavated_dig_site,
                         country=country,
+                        leader=excavator,
                         planet=planet,
                         system=planet.system,
                         start_date_days=start_date,
@@ -3843,11 +3940,13 @@ class ArchaeologyProcessor(AbstractGamestateDataProcessor):
                         ),
                         event_is_known_to_player=country.has_met_player(),
                     )
-                )
+                    self._session.add(event)
+                if _set_if_changed(event, storyline=storyline, stage_index=chapter):
+                    self._session.add(event)
 
 
 class AstralRiftProcessor(AbstractGamestateDataProcessor):
-    """Records each completed exploration step of an astral rift."""
+    """Records each completed exploration step of an astral rift, and groups them as a storyline."""
 
     ID = "astral_rifts"
     DEPENDENCIES = [CountryProcessor.ID, SystemProcessor.ID, LeaderProcessor.ID]
@@ -3860,7 +3959,7 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
         if not isinstance(rifts, dict):
             return
 
-        known = set()  # (system id, step event id, date) of the stored events
+        known = {}  # (system id, step event id, date) -> stored event
         for event in self._session.query(datamodel.HistoricalEvent).filter_by(
             event_type=datamodel.HistoricalEventType.explored_astral_rift
         ).options(
@@ -3869,7 +3968,8 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
         ):
             if event.system is not None and event.db_description is not None:
                 _, event_id = datamodel.split_packed_description(event.db_description.text)
-                known.add((event.system.system_id_in_game, event_id, event.start_date_days))
+                known[(event.system.system_id_in_game, event_id, event.start_date_days)] = event
+        storylines = _storylines_by_game_id(self._session, datamodel.StorylineType.astral_rift)
 
         for rift_id, rift in sorted(rifts.items()):
             if not isinstance(rift, dict) or not isinstance(rift.get("type"), str):
@@ -3881,22 +3981,46 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
             if country is None or system is None:
                 continue
             leader = leaders.get(_as_game_id(rift.get("leader")))
-            for entry in _as_dict_list(rift.get("completed")):
+            steps = []  # (position, event id, start day) of the valid entries
+            for position, entry in enumerate(_as_dict_list(rift.get("completed")), start=1):
                 event_id = entry.get("event_id")
                 event_id = event_id if isinstance(event_id, str) else ""
                 date = entry.get("date")
                 if not isinstance(date, str):
                     continue
                 try:
-                    start_date = datamodel.date_to_days(date)
+                    steps.append((position, event_id, datamodel.date_to_days(date)))
                 except ValueError:
                     continue
+            if not steps:
+                continue
+
+            state = astral_rift_state(rift.get("status"))
+            storyline = storylines.get(int(rift_id))
+            if storyline is None or storyline.system is not system:
+                storyline = storylines[int(rift_id)] = datamodel.Storyline(
+                    storyline_type=datamodel.StorylineType.astral_rift,
+                    storyline_id_in_game=int(rift_id),
+                    title=rift["type"],
+                    system=system,
+                    start_date_days=steps[0][2],
+                    state=state,
+                )
+            _set_if_changed(
+                storyline,
+                start_date_days=steps[0][2],
+                country=country,
+                leader=leader or storyline.leader,
+                state=state,
+                end_date_days=steps[-1][2] if state == datamodel.StorylineState.completed else None,
+            )
+            self._session.add(storyline)
+
+            for position, event_id, start_date in steps:
                 key = (system_id, event_id, start_date)
-                if key in known:
-                    continue
-                known.add(key)
-                self._session.add(
-                    datamodel.HistoricalEvent(
+                event = known.get(key)
+                if event is None:
+                    known[key] = event = datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.explored_astral_rift,
                         country=country,
                         leader=leader,
@@ -3907,7 +4031,9 @@ class AstralRiftProcessor(AbstractGamestateDataProcessor):
                         ),
                         event_is_known_to_player=country.has_met_player(),
                     )
-                )
+                    self._session.add(event)
+                if _set_if_changed(event, storyline=storyline, stage_index=position):
+                    self._session.add(event)
 
 
 FIRST_CONTACT_STATUSES = ("in_progress", "finished", "aborted")
@@ -3964,6 +4090,15 @@ class FirstContactProcessor(AbstractGamestateDataProcessor):
                     )
                 ] = event
 
+        known_stages = set(
+            self._session.query(
+                datamodel.HistoricalEvent.storyline_id, datamodel.HistoricalEvent.stage_index
+            ).filter(
+                datamodel.HistoricalEvent.event_type == datamodel.HistoricalEventType.first_contact_stage
+            )
+        )
+        storylines = _storylines_by_game_id(self._session, datamodel.StorylineType.first_contact)
+
         for contact_id, contact in sorted(contacts.items()):
             if not isinstance(contact, dict) or contact.get("status") not in FIRST_CONTACT_STATUSES:
                 continue
@@ -4002,19 +4137,74 @@ class FirstContactProcessor(AbstractGamestateDataProcessor):
                     event_is_known_to_player=owner.has_met_player(),
                 )
                 self._session.add(event)
-                continue
-            changed = False
-            if was_open and end_day is not None:
-                event.end_date_days = end_day
-                changed = True
-            if event.db_description is None or event.db_description.text != status:
-                event.db_description = self._get_or_add_shared_description(status)
-                changed = True
-            if event.leader is None and leader is not None:
-                event.leader = leader
-                changed = True
-            if changed:
+            else:
+                changed = False
+                if was_open and end_day is not None:
+                    event.end_date_days = end_day
+                    changed = True
+                if event.db_description is None or event.db_description.text != status:
+                    event.db_description = self._get_or_add_shared_description(status)
+                    changed = True
+                if event.leader is None and leader is not None:
+                    event.leader = leader
+                    changed = True
+                if changed:
+                    self._session.add(event)
+
+            system = systems.get(_as_game_id(contact.get("location")))
+            storyline = storylines.get(int(contact_id))
+            if (
+                storyline is None
+                or storyline.country is not owner
+                or storyline.target_country is not target
+                or storyline.start_date_days != start_day
+            ):
+                storyline = storylines[int(contact_id)] = datamodel.Storyline(
+                    storyline_type=datamodel.StorylineType.first_contact,
+                    storyline_id_in_game=int(contact_id),
+                    country=owner,
+                    target_country=target,
+                    start_date_days=start_day,
+                    state=FIRST_CONTACT_STORYLINE_STATES[status],
+                )
+            outcome = contact.get("stage")
+            _set_if_changed(
+                storyline,
+                leader=leader or storyline.leader,
+                system=system or storyline.system,
+                end_date_days=event.end_date_days,
+                state=FIRST_CONTACT_STORYLINE_STATES[status],
+                outcome=outcome if status != "in_progress" and isinstance(outcome, str) else None,
+            )
+            self._session.add(storyline)
+            if _set_if_changed(event, storyline=storyline, stage_index=None):
                 self._session.add(event)
+
+            for index, entry in enumerate(_as_dict_list(contact.get("completed")), start=1):
+                stage = entry.get("stage")
+                stage_date = entry.get("date")
+                if not isinstance(stage, str) or not isinstance(stage_date, str):
+                    continue
+                if storyline.storyline_id is not None and (storyline.storyline_id, index) in known_stages:
+                    continue
+                try:
+                    stage_day = datamodel.date_to_days(stage_date)
+                except ValueError:
+                    continue
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.first_contact_stage,
+                        country=owner,
+                        target_country=target,
+                        leader=leader or storyline.leader,
+                        system=system,
+                        start_date_days=stage_day,
+                        db_description=self._get_or_add_shared_description(stage),
+                        storyline=storyline,
+                        stage_index=index,
+                        event_is_known_to_player=owner.has_met_player(),
+                    )
+                )
 
 
 # operations that restart after completing; others end when they reach full progress
