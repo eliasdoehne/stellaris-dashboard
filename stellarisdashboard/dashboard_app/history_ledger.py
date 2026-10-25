@@ -741,7 +741,7 @@ class EventTemplateDictBuilder:
 
     def _federation_dict(self, event: datamodel.HistoricalEvent):
         federation = event.federation
-        result = dict(federation_name=federation.rendered_name)
+        result = dict(federation_name=federation.rendered_name, federation_title=federation.rendered_title)
         if event.event_type == datamodel.HistoricalEventType.founded_federation:
             # co-founders are the other full members since the founding date
             partners = [

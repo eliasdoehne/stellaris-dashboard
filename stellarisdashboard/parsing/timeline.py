@@ -378,6 +378,7 @@ class TimelineExtractor:
         yield DiplomacyUpdatesProcessor()
         yield FederationProcessor()
         yield GalacticCommunityProcessor()
+        yield FederationProgressProcessor()
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
@@ -386,10 +387,14 @@ class TimelineExtractor:
         yield AstralRiftProcessor()
         yield RelicProcessor()
         yield LeviathanProcessor()
+        yield MegastructureProcessor()
         yield EspionageProcessor()
         yield GalaxyEventProcessor()
         yield WarProcessor()
         yield TruceProcessor()
+        # before SubjectProcessor, which closes the relations of destroyed subjects
+        yield CountryDestroyedProcessor()
+        yield SubjectProcessor()
         yield PopStatsProcessor()
 
 
@@ -3198,6 +3203,17 @@ class FederationProcessor(AbstractGamestateDataProcessor):
     ID = "federations"
     DEPENDENCIES = [CountryProcessor.ID]
 
+    def __init__(self):
+        super().__init__()
+        self._federations: Dict[int, datamodel.Federation] = None
+
+    def initialize_data(self):
+        self._federations = {}
+
+    def data(self) -> Dict[int, datamodel.Federation]:
+        """The federations of this save by in-game id."""
+        return self._federations
+
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         countries = dependencies[CountryProcessor.ID]
         today = self._basic_info.date_in_days
@@ -3264,6 +3280,7 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                     federation_id_in_game=f_id, name=name, start_date_days=start
                 )
                 self._session.add(federation)
+                self._federations[f_id] = federation
                 # without an earlier save the founding and joining dates are unknown
                 founded = previous_date is not None and start > previous_date
                 for c_id in sorted(roles):
@@ -3284,6 +3301,7 @@ class FederationProcessor(AbstractGamestateDataProcessor):
                 continue
 
             federation.name = name
+            self._federations[f_id] = federation
             open_memberships = {
                 m.country.country_id_in_game: m
                 for m in self._open_memberships(federation)
@@ -3432,6 +3450,170 @@ class InternalMarketProcessor(AbstractGamestateDataProcessor):
                 )
 
 
+def president_start_date(
+    last_succession_date: Any, previous_start_days: Optional[int], current_days: int
+) -> int:
+    """Uses the exact succession date only if it falls after the previous term began and not in the future."""
+    exact = _date_to_days_or_none(last_succession_date)
+    if exact is None or exact > current_days:
+        return current_days
+    if previous_start_days is not None and exact <= previous_start_days:
+        return current_days
+    return exact
+
+
+class FederationProgressProcessor(AbstractGamestateDataProcessor):
+    """Records federation presidencies (spans) and level-ups, and keeps each federation's type and level."""
+
+    ID = "federation_progress"
+    DEPENDENCIES = [CountryProcessor.ID, FederationProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        federations = dependencies[FederationProcessor.ID]
+        today = self._basic_info.date_in_days
+        save_federations = self._gamestate_dict.get("federation")
+        if not isinstance(save_federations, dict):
+            save_federations = {}
+
+        previous_date = (
+            self._session.query(sqlalchemy.func.max(datamodel.GameState.date))
+            .filter(datamodel.GameState.game == self._db_game, datamodel.GameState.date < today)
+            .scalar()
+        )
+        open_presidents: Dict[int, datamodel.HistoricalEvent] = {
+            event.federation_id: event
+            for event in self._session.query(datamodel.HistoricalEvent)
+            .filter(
+                datamodel.HistoricalEvent.event_type == datamodel.HistoricalEventType.federation_president,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+                datamodel.HistoricalEvent.federation_id.isnot(None),
+            )
+            .options(
+                joinedload(datamodel.HistoricalEvent.country),
+                joinedload(datamodel.HistoricalEvent.federation),
+            )
+        }
+
+        for f_id, federation in sorted(federations.items()):
+            # rows added in this save have no id yet, and no presidency
+            current = open_presidents.pop(federation.federation_id, None) if federation.federation_id else None
+            fdict = save_federations.get(f_id)
+            progression = fdict.get("federation_progression") if isinstance(fdict, dict) else None
+            president = countries.get(_as_game_id(fdict.get("leader"))) if isinstance(fdict, dict) else None
+            if president is None or not isinstance(progression, dict):
+                if current is not None:
+                    open_presidents[federation.federation_id] = current
+                continue
+            federation_type = progression.get("federation_type")
+            if isinstance(federation_type, str) and federation_type:
+                federation.federation_type = federation_type
+            # a federation founded after the previous save has a full history here
+            newly_founded = previous_date is not None and federation.start_date_days > previous_date
+
+            if current is None or current.country is not president:
+                start = president_start_date(
+                    progression.get("last_succession_date"),
+                    current.start_date_days if current is not None else None,
+                    today,
+                )
+                if current is None and newly_founded and start == today:
+                    start = federation.start_date_days  # the founder presides until the first succession
+                if current is not None:
+                    current.end_date_days = max(start, current.start_date_days)
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.federation_president,
+                        country=president,
+                        federation=federation,
+                        start_date_days=start,
+                        event_is_known_to_player=president.has_met_player(),
+                    )
+                )
+
+            level = progression.get("levels")
+            if not isinstance(level, int):
+                continue
+            # a federation first seen at a higher level gives no date for its earlier level-ups
+            known = federation.level if federation.level is not None else (1 if newly_founded else None)
+            if known is not None and level > known:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.federation_level_up,
+                        country=president,
+                        federation=federation,
+                        start_date_days=today,
+                        db_description=self._get_or_add_shared_description(str(level)),
+                        event_is_known_to_player=president.has_met_player(),
+                    )
+                )
+            federation.level = level
+
+        # presidencies of dissolved federations end with them
+        for event in open_presidents.values():
+            if event.federation.end_date_days is not None or event.federation.federation_id_in_game not in federations:
+                end = event.federation.end_date_days if event.federation.end_date_days is not None else today
+                event.end_date_days = max(end, event.start_date_days)
+
+
+@dataclasses.dataclass(frozen=True)
+class PassedResolution:
+    type: str
+    date_days: int
+    proposer: Optional[int]
+    target: Optional[int]
+
+
+CUSTODIAN_NOMINATION = "resolution_galacticreforms_nominate_custodian"
+# the custodian, or an awakened empire controlling the Contingency, proclaims the Imperium
+IMPERIUM_PROCLAMATIONS = frozenset(
+    {"resolution_custodian_form_empire", "resolution_awakened_galactic_empire"}
+)
+CUSTODIAN_ENDINGS = frozenset(
+    {"resolution_galacticreforms_unseat_custodian", "resolution_custodian_end_custodianship"}
+)
+
+
+def passed_resolutions(resolutions: Any) -> List[PassedResolution]:
+    """All resolutions that ever passed, by pass date; the save keeps them after they are repealed or cancelled."""
+    if not isinstance(resolutions, dict):
+        return []
+    passed = []
+    for resolution in resolutions.values():
+        if not isinstance(resolution, dict):
+            continue
+        resolution_type = resolution.get("type")
+        date_days = _date_to_days_or_none(resolution.get("pass_date"))
+        if not isinstance(resolution_type, str) or date_days is None:
+            continue
+        passed.append(
+            PassedResolution(
+                type=resolution_type,
+                date_days=date_days,
+                proposer=_as_game_id(resolution.get("country")),
+                target=_as_game_id(resolution.get("target")),
+            )
+        )
+    return sorted(passed, key=lambda r: (r.date_days, r.type))
+
+
+def custodian_role_and_start(
+    passed: List[PassedResolution], country_id: Optional[int], current_days: int
+) -> Tuple[str, int]:
+    """The office ("custodian" or "emperor") the Galactic Community leader holds, and when it began.
+
+    The leader is emperor if the Imperium was proclaimed after the latest custodian nomination;
+    a custodian's term starts with the nomination targeting them, or the current date if none matches.
+    """
+    passed = [r for r in passed if r.date_days <= current_days]
+    proclamation = max((r.date_days for r in passed if r.type in IMPERIUM_PROCLAMATIONS), default=None)
+    nominations = [r for r in passed if r.type == CUSTODIAN_NOMINATION]
+    if proclamation is not None and proclamation >= max((r.date_days for r in nominations), default=proclamation):
+        return "emperor", proclamation
+    own = [r.date_days for r in nominations if r.target == country_id]
+    return "custodian", max(own, default=current_days)
+
+
 class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
     ID = "galactic_community"
     DEPENDENCIES = [CountryProcessor.ID, RulerEventProcessor.ID]
@@ -3448,10 +3630,107 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
         community_dict = self._gamestate_dict.get("galactic_community")
         if not isinstance(community_dict, dict):
             return
-        self._update_community_members(community_dict)
-        self._update_council_members(community_dict)
+        previous_date = (
+            self._session.query(sqlalchemy.func.max(datamodel.GameState.date))
+            .filter(
+                datamodel.GameState.game == self._db_game,
+                datamodel.GameState.date < self._basic_info.date_in_days,
+            )
+            .scalar()
+        )
+        self._update_community_members(
+            community_dict, self._founding_date(community_dict.get("community_formed"), previous_date)
+        )
+        self._update_council_members(
+            community_dict, self._founding_date(community_dict.get("council_established"), previous_date)
+        )
+        resolutions = self._gamestate_dict.get("resolution")
+        if not isinstance(resolutions, dict):
+            resolutions = {}
+        passed = passed_resolutions(resolutions)
+        self._add_passed_resolutions(passed)
+        self._update_custodian(community_dict, passed)
 
-    def _update_community_members(self, community_dict):
+    def _add_passed_resolutions(self, passed: List["PassedResolution"]):
+        event_type = datamodel.HistoricalEventType.galactic_resolution_passed
+        known = set()  # (resolution type, pass date) of the stored events
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=event_type
+        ).options(joinedload(datamodel.HistoricalEvent.db_description)):
+            if event.db_description is not None:
+                known.add((event.db_description.text, event.start_date_days))
+        for resolution in passed:
+            if (resolution.type, resolution.date_days) in known:
+                continue
+            proposer = self._countries_dict.get(resolution.proposer)
+            target = self._countries_dict.get(resolution.target)
+            # the save drops the proposer once it no longer exists; the ledger lists events by country
+            if proposer is None or resolution.date_days > self._basic_info.date_in_days:
+                continue
+            known.add((resolution.type, resolution.date_days))
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=event_type,
+                    country=proposer,
+                    target_country=target if target is not proposer else None,
+                    start_date_days=resolution.date_days,
+                    db_description=self._get_or_add_shared_description(resolution.type),
+                    event_is_known_to_player=proposer.has_met_player(),
+                )
+            )
+
+    def _update_custodian(self, community_dict, passed: List["PassedResolution"]):
+        event_type = datamodel.HistoricalEventType.galactic_custodian
+        now = self._basic_info.date_in_days
+        current = self._countries_dict.get(_as_game_id(community_dict.get("leader")))
+        role, start = custodian_role_and_start(
+            passed, current.country_id_in_game if current else None, now
+        )
+        open_event = (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter_by(event_type=event_type, end_date_days=None)
+            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .first()
+        )
+        if open_event is not None:
+            open_role = open_event.db_description.text if open_event.db_description else None
+            if current is not None and open_event.country == current and open_role == role:
+                return
+            start = max(start, open_event.start_date_days)
+            if current is None:
+                # a custodianship ended by resolution ends on its pass date, otherwise (term expiry) now
+                start = max(
+                    (
+                        r.date_days
+                        for r in passed
+                        if r.type in CUSTODIAN_ENDINGS
+                        and open_event.start_date_days <= r.date_days <= now
+                    ),
+                    default=now,
+                )
+            open_event.end_date_days = start
+            self._session.add(open_event)
+        if current is None:
+            return
+        self._session.add(
+            datamodel.HistoricalEvent(
+                event_type=event_type,
+                country=current,
+                start_date_days=start,
+                db_description=self._get_or_add_shared_description(role),
+                event_is_known_to_player=current.has_met_player(),
+            )
+        )
+
+    def _founding_date(self, founded: Any, previous_date: Optional[int]) -> int:
+        """The founding date if it lies after the previous save (the members seen now are the founders), else today."""
+        today = self._basic_info.date_in_days
+        founded = _date_to_days_or_none(founded)
+        if previous_date is not None and founded is not None and previous_date < founded <= today:
+            return founded
+        return today
+
+    def _update_community_members(self, community_dict, join_date: int):
         members = community_dict.get("members", [])
         if not isinstance(members, list):
             return
@@ -3462,13 +3741,13 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
         )
         new_event_type = datamodel.HistoricalEventType.joined_galactic_community
         for c_id in members:
-            self._update_membership_events(c_id, matching_event_types, new_event_type)
+            self._update_membership_events(c_id, matching_event_types, new_event_type, join_date)
 
         new_event_type = datamodel.HistoricalEventType.left_galactic_community
         for c_id in non_members:
             self._update_membership_events(c_id, matching_event_types, new_event_type)
 
-    def _update_council_members(self, community_dict):
+    def _update_council_members(self, community_dict, join_date: int):
         members = community_dict.get("council", [])
         if not isinstance(members, list):
             return
@@ -3479,13 +3758,13 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
         )
         new_event_type = datamodel.HistoricalEventType.joined_galactic_council
         for c_id in members:
-            self._update_membership_events(c_id, matching_event_types, new_event_type)
+            self._update_membership_events(c_id, matching_event_types, new_event_type, join_date)
 
         new_event_type = datamodel.HistoricalEventType.left_galactic_council
         for c_id in non_members:
             self._update_membership_events(c_id, matching_event_types, new_event_type)
 
-    def _update_membership_events(self, c_id, matching_event_types, new_event_type):
+    def _update_membership_events(self, c_id, matching_event_types, new_event_type, start_date_days=None):
         country = self._countries_dict.get(c_id)
         if not country:
             logger.warning(
@@ -3520,7 +3799,7 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
                     event_type=new_event_type,
                     leader=self._ruler_dict.get(c_id),
                     country=country,
-                    start_date_days=self._basic_info.date_in_days,
+                    start_date_days=start_date_days if start_date_days is not None else self._basic_info.date_in_days,
                     event_is_known_to_player=event_is_known,
                 )
             )
@@ -4629,6 +4908,127 @@ class RelicProcessor(AbstractGamestateDataProcessor):
                 )
 
 
+RING_WORLD_FAMILY = "ring_world_3_intermediate"
+# family final key -> (stage keys in build order, index of the first finished stage), from common/megastructures
+_MEGASTRUCTURE_FAMILIES: Dict[str, Tuple[Tuple[str, ...], int]] = {
+    "dyson_sphere_5": (tuple(f"dyson_sphere_{i}" for i in range(6)), 5),
+    RING_WORLD_FAMILY: (
+        ("ring_world_1", "ring_world_2_intermediate", "ring_world_2", "ring_world_3_intermediate"),
+        3,
+    ),
+    "think_tank_3": (tuple(f"think_tank_{i}" for i in range(5)), 3),  # _4 is the Groik Nexus upgrade
+    "spy_orb_4": (tuple(f"spy_orb_{i}" for i in range(5)), 4),
+    "matter_decompressor_4": (tuple(f"matter_decompressor_{i}" for i in range(5)), 4),
+    "mega_art_installation_3": (tuple(f"mega_art_installation_{i}" for i in range(5)), 3),
+    "interstellar_assembly_4": (tuple(f"interstellar_assembly_{i}" for i in range(5)), 4),
+    "quantum_catapult_3": (tuple(f"quantum_catapult_{i}" for i in range(4)), 3),
+    "strategic_coordination_center_3": (
+        tuple(f"strategic_coordination_center_{i}" for i in range(4)),
+        3,
+    ),
+    "mega_shipyard_3": (tuple(f"mega_shipyard_{i}" for i in range(4)), 3),
+    "dyson_gun_3": (tuple(f"dyson_gun_{i}" for i in range(4)), 3),
+    "galactic_crucible_4": (tuple(f"galactic_crucible_{i}" for i in range(6)), 4),
+    "crisis_sphere_4": (tuple(f"crisis_sphere_{i}" for i in range(5)), 4),
+}
+# stage key -> (family final key, stage index, index of the first finished stage)
+MEGASTRUCTURE_STAGES: Dict[str, Tuple[str, int, int]] = {
+    stage: (final, index, finished_index)
+    for final, (stages, finished_index) in _MEGASTRUCTURE_FAMILIES.items()
+    for index, stage in enumerate(stages)
+}
+MEGASTRUCTURE_START_EVENTS = ("timeline_megastructure", "timeline_first_megastructure")
+
+
+def megastructure_final_type(ms_type: Any) -> Optional[str]:
+    """The finished stage's key of a tracked megastructure's family; None if not tracked."""
+    stage = MEGASTRUCTURE_STAGES.get(ms_type) if isinstance(ms_type, str) else None
+    return stage[0] if stage else None
+
+
+def is_finished_megastructure(ms_type: Any) -> bool:
+    stage = MEGASTRUCTURE_STAGES.get(ms_type) if isinstance(ms_type, str) else None
+    return stage is not None and stage[1] >= stage[2]
+
+
+def collect_megastructure_starts(countries: Any) -> Dict[int, Tuple[int, int]]:
+    """Collect megastructure id -> (builder country id, earliest date_days) from the timelines."""
+    starts: Dict[int, Tuple[int, int]] = {}
+    for _, data, date_days in iter_timeline_events(countries, MEGASTRUCTURE_START_EVENTS):
+        if len(data) < 2:
+            continue
+        builder_id, megastructure_id = _as_game_id(data[0]), _as_game_id(data[1])
+        if builder_id is None or megastructure_id is None:
+            continue
+        known = starts.get(megastructure_id)
+        if known is None or date_days < known[1]:
+            starts[megastructure_id] = (builder_id, date_days)
+    return starts
+
+
+class MegastructureProcessor(AbstractGamestateDataProcessor):
+    """Records megastructure constructions, from the site's creation until a finished stage."""
+
+    ID = "megastructures"
+    DEPENDENCIES = [CountryProcessor.ID, SystemProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        systems = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        megastructures = self._gamestate_dict.get("megastructures")
+        if not isinstance(megastructures, dict):
+            return
+
+        stored = {}  # megastructure id -> event
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=datamodel.HistoricalEventType.megastructure_construction
+        ).options(joinedload(datamodel.HistoricalEvent.db_description)):
+            if event.db_description is not None:
+                _, ms_id = datamodel.split_packed_description(event.db_description.text)
+                if ms_id.isdigit():
+                    stored[int(ms_id)] = event
+
+        starts = collect_megastructure_starts(self._gamestate_dict.get("country"))
+        for ms_id, (builder_id, date_days) in sorted(
+            starts.items(), key=lambda item: (item[1][1], item[0])
+        ):
+            megastructure = megastructures.get(ms_id)
+            if ms_id in stored or not isinstance(megastructure, dict):
+                continue
+            ms_type = megastructure.get("type")
+            final_type = megastructure_final_type(ms_type)
+            builder = countries.get(builder_id)
+            if final_type is None or builder is None:
+                continue
+            coordinate = megastructure.get("coordinate")
+            origin = coordinate.get("origin") if isinstance(coordinate, dict) else None
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.megastructure_construction,
+                    country=builder,
+                    system=systems.get(origin),
+                    start_date_days=date_days,
+                    end_date_days=date_days if is_finished_megastructure(ms_type) else None,
+                    db_description=self._get_or_add_shared_description(f"{final_type}|{ms_id}"),
+                    event_is_known_to_player=builder.has_met_player(),
+                )
+            )
+
+        for ms_id, event in stored.items():
+            if event.end_date_days is not None:
+                continue
+            megastructure = megastructures.get(ms_id)
+            if isinstance(megastructure, dict):
+                finished = is_finished_megastructure(megastructure.get("type"))
+            else:
+                # completing a ring world frame replaces it with new section megastructures
+                family, _ = datamodel.split_packed_description(event.db_description.text)
+                finished = family == RING_WORLD_FAMILY
+            if finished:
+                event.end_date_days = max(self._basic_info.date_in_days, event.start_date_days)
+                self._session.add(event)
+
+
 class LeviathanProcessor(AbstractGamestateDataProcessor):
     """Records the destruction of leviathans, as reported by the countries' timeline events."""
 
@@ -4735,6 +5135,181 @@ class GalaxyEventProcessor(AbstractGamestateDataProcessor):
         )
         known.sort(key=lambda c: galaxy_event.country_types.index(c.country_type))
         return known[0] if known else None
+
+
+def collect_subject_relations(countries: Any) -> Dict[int, Tuple[int, Optional[int]]]:
+    """Map each subject to (overlord, date_days the relation began) from the countries' overlord fields."""
+    relations = {}
+    if not isinstance(countries, dict):
+        return relations
+    for country_id, country in countries.items():
+        if not isinstance(country, dict):
+            continue
+        overlord = _as_game_id(country.get("overlord"))
+        if overlord is None or overlord == country_id:
+            continue
+        relations[country_id] = (overlord, _date_to_days_or_none(country.get("subject_date")))
+    return relations
+
+
+def collect_agreement_presets(agreements: Any) -> Dict[Tuple[int, int], str]:
+    """Map (overlord, subject) to the agreement preset of their subject agreement."""
+    presets = {}
+    agreements = agreements.get("agreements") if isinstance(agreements, dict) else None
+    if not isinstance(agreements, dict):
+        return presets
+    for agreement in agreements.values():
+        if not isinstance(agreement, dict):
+            continue
+        owner, target = _as_game_id(agreement.get("owner")), _as_game_id(agreement.get("target"))
+        term_data = agreement.get("term_data")
+        preset = term_data.get("agreement_preset") if isinstance(term_data, dict) else None
+        if owner is not None and target is not None and isinstance(preset, str):
+            presets[(owner, target)] = preset
+    return presets
+
+
+class CountryDestroyedProcessor(AbstractGamestateDataProcessor):
+    """Records the end of empires: a country that was in the previous save and is gone from this one.
+
+    Dated by the war it lost if that ended after the previous save, otherwise by the save date.
+    """
+
+    ID = "country_destroyed"
+    DEPENDENCIES = [CountryProcessor.ID]
+    # a war lost this long before the previous save still explains the country's end
+    WAR_LOOKBACK_DAYS = 360
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        destroyed_type = datamodel.HistoricalEventType.country_destroyed
+        already_destroyed = {
+            country_id
+            for (country_id,) in self._session.query(datamodel.HistoricalEvent.country_id).filter_by(
+                event_type=destroyed_type
+            )
+        }
+        now = self._basic_info.date_in_days
+        previous_date = (
+            self._session.query(sqlalchemy.func.max(datamodel.GameState.date))
+            .filter(
+                datamodel.GameState.game == self._db_game,
+                datamodel.GameState.date < now,
+            )
+            .scalar()
+        )
+        if previous_date is None:
+            return
+        # only countries of the previous save, so countries that ended before tracking get no event
+        previous_countries = (
+            self._session.query(datamodel.Country)
+            .join(datamodel.CountryData, datamodel.CountryData.country_id == datamodel.Country.country_id)
+            .filter(datamodel.Country.game == self._db_game, datamodel.CountryData.date == previous_date)
+            .all()
+        )
+        gone = [
+            country
+            for country in previous_countries
+            if country.country_id_in_game not in countries
+            and country.country_id not in already_destroyed
+            and country.is_real_country()
+        ]
+        if not gone:
+            return
+
+        lost_wars = collect_war_results(self._gamestate_dict.get("country"))
+        for country in gone:
+            date_days, cause, target = now, "", None
+            defeats = [
+                (date, winner)
+                for (winner, loser, date) in lost_wars
+                if loser == country.country_id_in_game
+                and previous_date - self.WAR_LOOKBACK_DAYS <= date <= now
+            ]
+            overlord_event = (
+                self._session.query(datamodel.HistoricalEvent)
+                .filter_by(
+                    event_type=datamodel.HistoricalEventType.became_subject,
+                    country=country,
+                    end_date_days=None,
+                )
+                .first()
+            )
+            if defeats:
+                war_date, winner = max(defeats)
+                cause, target = "war", countries.get(winner)
+                if war_date > previous_date:
+                    date_days = war_date
+            elif overlord_event is not None:
+                cause, target = "subject", overlord_event.target_country
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=destroyed_type,
+                    country=country,
+                    target_country=target,
+                    start_date_days=date_days,
+                    db_description=self._get_or_add_shared_description(cause) if cause else None,
+                    event_is_known_to_player=country.has_met_player(),
+                )
+            )
+
+
+class SubjectProcessor(AbstractGamestateDataProcessor):
+    """Records subject relations between empires as spans from the exact start date until they end."""
+
+    ID = "subjects"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        event_type = datamodel.HistoricalEventType.became_subject
+        now = self._basic_info.date_in_days
+        relations = collect_subject_relations(self._gamestate_dict.get("country"))
+        presets = collect_agreement_presets(self._gamestate_dict.get("agreements"))
+
+        open_events = {}
+        for event in self._session.query(datamodel.HistoricalEvent).filter_by(
+            event_type=event_type, end_date_days=None
+        ).options(
+            joinedload(datamodel.HistoricalEvent.country),
+            joinedload(datamodel.HistoricalEvent.target_country),
+        ):
+            open_events[event.country.country_id_in_game] = event
+
+        for subject_id, (overlord_id, start_days) in sorted(relations.items()):
+            subject, overlord = countries.get(subject_id), countries.get(overlord_id)
+            if (
+                subject is None
+                or overlord is None
+                or not subject.is_real_country()
+                or not overlord.is_real_country()
+            ):
+                continue
+            event = open_events.pop(subject_id, None)
+            if event is not None and event.target_country == overlord:
+                continue
+            if start_days is None or start_days > now:
+                start_days = now
+            if event is not None:
+                start_days = max(start_days, event.start_date_days)
+                event.end_date_days = start_days
+                self._session.add(event)
+            preset = presets.get((overlord_id, subject_id))
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=event_type,
+                    country=subject,
+                    target_country=overlord,
+                    start_date_days=start_days,
+                    db_description=self._get_or_add_shared_description(preset) if preset else None,
+                    event_is_known_to_player=subject.has_met_player() and overlord.has_met_player(),
+                )
+            )
+
+        # relations that ended: released, integrated, or one side no longer exists
+        for event in open_events.values():
+            event.end_date_days = now
+            self._session.add(event)
 
 
 class WarProcessor(AbstractGamestateDataProcessor):
