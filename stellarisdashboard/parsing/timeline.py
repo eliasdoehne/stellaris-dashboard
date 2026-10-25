@@ -379,6 +379,7 @@ class TimelineExtractor:
         yield FederationProcessor()
         yield GalacticCommunityProcessor()
         yield FederationProgressProcessor()
+        yield CrisisProgressProcessor()
         yield ScientistEventProcessor()
         yield EnvoyEventProcessor()
         yield FleetInfoProcessor()
@@ -3554,6 +3555,46 @@ class FederationProgressProcessor(AbstractGamestateDataProcessor):
             if event.federation.end_date_days is not None or event.federation.federation_id_in_game not in federations:
                 end = event.federation.end_date_days if event.federation.end_date_days is not None else today
                 event.end_date_days = max(end, event.start_date_days)
+
+
+def reached_crisis_levels(country_dict: Any) -> List[str]:
+    """The crisis level keys a country has unlocked, in order; empty without a crisis path."""
+    progression = country_dict.get("crisis_progression") if isinstance(country_dict, dict) else None
+    if not isinstance(progression, dict):
+        return []
+    levels = progression.get("level")  # a repeated key: a string for one level, a list for more
+    if isinstance(levels, str):
+        levels = [levels]
+    return [level for level in levels if isinstance(level, str)] if isinstance(levels, list) else []
+
+
+class CrisisProgressProcessor(AbstractGamestateDataProcessor):
+    """Records the crisis levels ("Become the Crisis", any path) countries unlock."""
+
+    ID = "crisis_progress"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        save_countries = self._gamestate_dict.get("country")
+        if not isinstance(save_countries, dict):
+            return
+        for country_id, country in dependencies[CountryProcessor.ID].items():
+            levels = reached_crisis_levels(save_countries.get(country_id))
+            if not levels:
+                continue
+            # a country first seen with several levels gives no dates for its earlier ones
+            known = country.crisis_level if country.crisis_level is not None else len(levels)
+            if len(levels) > known:
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.crisis_level_up,
+                        country=country,
+                        start_date_days=self._basic_info.date_in_days,
+                        db_description=self._get_or_add_shared_description(levels[-1]),
+                        event_is_known_to_player=True,  # the crisis is visible galaxy-wide
+                    )
+                )
+            country.crisis_level = len(levels)
 
 
 @dataclasses.dataclass(frozen=True)
