@@ -132,12 +132,18 @@ jobs:
           mkdir release_files
           find artifacts -name "*.zip" -exec cp {} release_files/ \;
           ls -la release_files/
-      - name: Create Release Draft
+      - name: Create Release Draft or upload to existing release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # gh needs to know the target repo; the release job has no checkout,
           # so without this gh fails with "fatal: not a git repository".
           GH_REPO: ${{ github.repository }}
+        # A tag created by publishing a release in the GitHub web UI already has
+        # a release; attach the builds to it instead of failing on create.
         run: |
-          gh release create ${{ github.ref_name }} release_files/* --draft --generate-notes
+          if gh release view ${{ github.ref_name }} > /dev/null 2>&1; then
+            gh release upload ${{ github.ref_name }} release_files/* --clobber
+          else
+            gh release create ${{ github.ref_name }} release_files/* --draft --generate-notes
+          fi
 
