@@ -40,7 +40,13 @@ stellarisdashboard = "stellarisdashboard.__main__:main"
 stellarisdashboardcli = "stellarisdashboard.cli:cli"
 
 [dependency-groups]
-dev = ["pytest", "pyinstaller", "black", "maturin"]
+dev = [
+    "pytest",
+    "pyinstaller",
+    "black",
+    "maturin",
+    "babel>=2.18.0",
+]
 
 [tool.uv.workspace]
 members = ["stellarisdashboard/parsing/rust_parser"]

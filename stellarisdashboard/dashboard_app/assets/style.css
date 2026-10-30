@@ -508,7 +508,8 @@ span.settinginput {
     flex: 1 0 40%;
 }
 
-span.settinginput input:not([type=checkbox]) {
+span.settinginput input:not([type=checkbox]),
+span.settinginput select {
     box-sizing: border-box;
     width: 100%;
 }

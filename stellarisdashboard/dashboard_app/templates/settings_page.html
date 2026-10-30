@@ -31,6 +31,13 @@
                     {% if setting["type"] == "str" %}
                     <input id="{{key}}" type="text" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
                     {% endif %}
+                    {% if setting["type"] == "select" %}
+                    <select id="{{key}}" title="{{ setting['description'] }}" name={{key}}>
+                        {% for option_value, option_name in setting["options"].items() %}
+                        <option value="{{ option_value }}" {% if option_value == setting["value"] %} selected {% endif %}>{{ option_name }}</option>
+                        {% endfor %}
+                    </select> <br>
+                    {% endif %}
                     {% if setting["type"] == "float" %}
                     <input id="{{key}}" type="number" step="0.01" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
                     {% endif %}

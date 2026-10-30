@@ -2,7 +2,7 @@ import logging
 
 from flask import render_template, request, redirect
 
-from stellarisdashboard import config
+from stellarisdashboard import config, i18n
 from stellarisdashboard.dashboard_app import flask_app
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,7 @@ def _build_settings_dict():
     t_int = "int"
     t_bool = "bool"
     t_str = "str"
+    t_select = "select"
 
     current_values = config.CONFIG.get_adjustable_settings_dict()
     return {
@@ -134,6 +135,16 @@ def _build_settings_dict():
                 "value": current_values["stellaris_language"],
                 "name": "Stellaris language *",
                 "description": "The language to use for localizing Stellaris text. In the format l_<language> (for example, l_english)"
+            },
+            "dashboard_language": {
+                "type": t_select,
+                "value": current_values["dashboard_language"],
+                "options": {
+                    i18n.AUTO: "Same as Stellaris language",
+                    **i18n.LANGUAGE_NAMES,
+                },
+                "name": "Dashboard language",
+                "description": "The language of the dashboard's own text. By default, the same language as the game.",
             },
             "plot_width": {
                 "type": t_int,

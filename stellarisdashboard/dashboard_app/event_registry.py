@@ -873,6 +873,19 @@ def _compiled_storyline(storyline_type: str):
     return template
 
 
+def jinja_sources():
+    """(name, source) of every Jinja template kept in this module, for extracting
+    their translatable messages (see stellarisdashboard/i18n/extract.py)."""
+    yield "_MACROS", _MACROS
+    for name, source in _DATEBLOCKS.items():
+        yield f"_DATEBLOCKS[{name}]", source
+    for event_type, descriptor in REGISTRY.items():
+        if descriptor.sentence is not None:
+            yield f"REGISTRY[{event_type}]", descriptor.sentence
+    for storyline_type, descriptor in STORYLINE_REGISTRY.items():
+        yield f"STORYLINE_REGISTRY[{storyline_type}]", descriptor.sentence
+
+
 def render_storyline(event, links) -> Markup:
     """Render one storyline item as a ``<li>`` card that expands to its stages."""
     storyline_type = event.get("storyline_type")

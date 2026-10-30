@@ -193,6 +193,7 @@ DEFAULT_SETTINGS = dict(
     stellaris_install_path=_get_default_stellaris_install_path(),
     stellaris_user_data_path=_get_default_stellaris_user_data_path(),
     stellaris_language="l_english",
+    dashboard_language="auto",
     mp_username="",
     hide_other_players=True,
     base_output_path=_get_default_base_output_path(),
@@ -262,6 +263,8 @@ class Config:
     stellaris_install_path: pathlib.Path = None
     stellaris_user_data_path: pathlib.Path = None
     stellaris_language: str = None
+    # locale of the dashboard's own text; "auto" follows stellaris_language
+    dashboard_language: str = None
     mp_username: str = None
     base_output_path: pathlib.Path = None
     threads: int = None
@@ -341,6 +344,7 @@ class Config:
         "save_name_filter",
         "log_level",
         "stellaris_language",
+        "dashboard_language",
     }
     DICT_KEYS = {
         "tab_layout",

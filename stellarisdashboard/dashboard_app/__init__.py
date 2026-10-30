@@ -5,13 +5,14 @@ import threading
 
 import flask
 
-from stellarisdashboard import config, datamodel, game_info
+from stellarisdashboard import config, datamodel, game_info, i18n
 
 logger = logging.getLogger(__name__)
 
 # Initialize Flask, requests to /timeline/... are handled by the dash framework, all others via the flask routes defined below.
 flask_app = flask.Flask(__name__, static_folder="assets")
 flask_app.logger.setLevel(logging.DEBUG)
+i18n.install_jinja(flask_app.jinja_env)
 
 from stellarisdashboard.dashboard_app import (
     history_ledger,
