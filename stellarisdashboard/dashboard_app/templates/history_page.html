@@ -4,14 +4,14 @@
 {% if not is_filtered_page %}
 <div class="ledgerbox">
     {% if wars %}
-    <a href="#wars">War logs</a>
+    <a href="#wars">{% trans %}War logs{% endtrans %}</a>
     <ul>
         {% for war in wars %}
         <li class="toc-item"> {{ war.start_date }}{% if war.end_date %} - {{ war.end_date }}{% endif %}: {{ links[war] | safe }}</li>
         {% endfor %}
     </ul>
     {% endif %}
-    <a href="#events">Country Logs</a>
+    <a href="#events">{% trans %}Country Logs{% endtrans %}</a>
     <ul>
         {% for country in events %}
         <li class="toc-item">{{ links[country] | safe }}</li>
@@ -34,24 +34,25 @@
         {% for (itemname, value) in details[object].items() %}
         <li class="eventitem">
             <div class="objectdetails">
-                <span class="objectdetailskey">{{itemname}}:</span> <span class="objectdetailsvalue">{{value|safe}}</span>
+                {# Translators: label of a line in the box of details on top of a section, e.g. "Star Class:". %(name)s is the label (already translated). #}
+                <span class="objectdetailskey">{{ _("%(name)s:", name=itemname) }}</span> <span class="objectdetailsvalue">{{value|safe}}</span>
             </div>
         </li>
         {% endfor %}
     </ul>
 
     <div style="text-align: center;"><div><span>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('researched_technology');">Technologies</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('edict');">Edicts</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('policy');">Policies</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('tradition');">Traditions</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('colonization');">Colonizations</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('army_combat');">Army Combat</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('fleet_combat');">Fleet Combat</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('expanded_to_system');">Outposts</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('leader_recruited');">Leader Recruitment</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('level_up');">Leader Promotion</a>
-            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="show_all_ledgeritems();">Show all events</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('researched_technology');">{% trans %}Technologies{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('edict');">{% trans %}Edicts{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('policy');">{% trans %}Policies{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('tradition');">{% trans %}Traditions{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('colonization');">{% trans %}Colonizations{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('army_combat');">{% trans %}Army Combat{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('fleet_combat');">{% trans %}Fleet Combat{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('expanded_to_system');">{% trans %}Outposts{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('leader_recruited');">{% trans %}Leader Recruitment{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="toggle_visibility('level_up');">{% trans %}Leader Promotion{% endtrans %}</a>
+            <a class="button vis_toggle" href={{"#country_{}".format(object.country_id)}} onclick="show_all_ledgeritems();">{% trans %}Show all events{% endtrans %}</a>
         </span></div>
     </div>
 
@@ -64,9 +65,9 @@
 </div>
 
 <center>
-    <a class="button" href="#index">Return to Top</a>
+    <a class="button" href="#index">{% trans %}Return to Top{% endtrans %}</a>
     {% if is_filtered_page %}
-    <a class="button" href={{url_for("history_page", game_id=game_name)}}>Clear event filters</a>
+    <a class="button" href={{url_for("history_page", game_id=game_name)}}>{% trans %}Clear event filters{% endtrans %}</a>
     {% endif %}
 </center>
 {% endfor %}

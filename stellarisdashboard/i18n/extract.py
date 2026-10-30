@@ -83,7 +83,7 @@ def build_template_catalog() -> Catalog:
 def _extract_jinja_string(source: str):
     import io
 
-    for lineno, _funcname, message, comments, context in extract(
+    for lineno, message, comments, context in extract(
         "jinja2.ext:babel_extract",
         io.BytesIO(source.encode("utf-8")),
         keywords=KEYWORDS,

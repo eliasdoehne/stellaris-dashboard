@@ -1,7 +1,9 @@
+import re
+
+from stellarisdashboard.dashboard_app.event_registry import render_event
 from stellarisdashboard.datamodel import (
     date_to_days,
     render_espionage_description,
-    render_first_contact_description,
 )
 from stellarisdashboard.parsing.timeline import (
     espionage_completion_days,
@@ -32,11 +34,25 @@ def test_first_contact_end_day_falls_back_to_start():
         assert first_contact_end_day("finished", completed, START) == START
 
 
-def test_render_first_contact_description():
-    assert render_first_contact_description("finished") == "made first contact with"
-    assert render_first_contact_description("in_progress") == "began first contact with"
-    assert render_first_contact_description("aborted") == "abandoned first contact with"
-    assert render_first_contact_description("") == "made contact with"
+def test_first_contact_process_sentence_depends_on_status():
+    class Named:
+        def __init__(self, name):
+            self.name = name
+
+    country, target = Named("Alpha"), Named("Beta")
+    links = {country: "Alpha", target: "Beta"}
+
+    def sentence(status):
+        event = dict(
+            event_type="first_contact_process", country=country, target_country=target,
+            start_date="2243.05.16", end_date=None, is_active=True, contact_status=status,
+        )
+        return " ".join(re.sub(r"<[^>]+>", "", str(render_event(event, links))).split())
+
+    assert sentence("finished").endswith("The Alpha made first contact with the Beta.")
+    assert sentence("in_progress").endswith("The Alpha began first contact with the Beta.")
+    assert sentence("aborted").endswith("The Alpha abandoned first contact with the Beta.")
+    assert sentence("").endswith("The Alpha made first contact with the Beta.")
 
 
 def log(*entries):

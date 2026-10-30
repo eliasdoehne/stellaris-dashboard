@@ -7,6 +7,8 @@ from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
 from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping
+from stellarisdashboard.datamodel import join_and, join_comma
+from stellarisdashboard.i18n import gettext as _, pgettext
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +230,41 @@ class EventFilter:
             self.scope_threshold = datamodel.HistoricalEventScope.all
 
 
+def _name_and_count(name: str, count) -> str:
+    # Translators: something and how many there are, e.g. "Mining Station: 3"
+    return _("%(name)s: %(count)s", name=name, count=count)
+
+
+def diplo_relation_label(key: str) -> str:
+    """Label of a kind of diplomatic relation in the detail box of a country."""
+    labels = {
+        "rivalries": pgettext("diplomatic relation", "Rivalries"),
+        "defensive_pacts": pgettext("diplomatic relation", "Defensive Pacts"),
+        "federations": pgettext("diplomatic relation", "Federations"),
+        "non_aggression_pacts": pgettext("diplomatic relation", "Non Aggression Pacts"),
+        "closed_borders": pgettext("diplomatic relation", "Closed Borders"),
+        "communations": pgettext("diplomatic relation", "Communications"),
+        "migration_treaties": pgettext("diplomatic relation", "Migration Treaties"),
+        "commercial_pacts": pgettext("diplomatic relation", "Commercial Pacts"),
+        "neighbors": pgettext("diplomatic relation", "Neighbors"),
+        "research_agreements": pgettext("diplomatic relation", "Research Agreements"),
+        "embassies": pgettext("diplomatic relation", "Embassies"),
+    }
+    return labels.get(key) or game_info.convert_id_to_name(key)
+
+
+def war_call_type_label(call_type: str) -> str:
+    """How a country entered a war (the participant's call type), for the detail box of a war."""
+    labels = {
+        "primary": pgettext("war call type", "primary"),
+        "overlord": pgettext("war call type", "overlord"),
+        "offensive": pgettext("war call type", "offensive"),
+        "defensive": pgettext("war call type", "defensive"),
+        "alliance": pgettext("war call type", "alliance"),
+    }
+    return labels.get(call_type) or str(call_type)
+
+
 class EventTemplateDictBuilder:
     def __init__(self, db_session, game_id, event_filter=None):
         if event_filter is None:
@@ -345,6 +382,9 @@ class EventTemplateDictBuilder:
                 fleet=event.fleet,
             )
             event_dict = {k: v for (k, v) in event_dict.items() if v is not None}
+            # the untranslated key of the description and its parts, for sentences that depend on them
+            event_dict["description_key"] = event.db_description.text if event.db_description else ""
+            event_dict.update(event.description_fields)
 
             if "planet" in event_dict and "system" not in event_dict:
                 # planets carried by ships (nomad arkships) have no system
@@ -473,13 +513,15 @@ class EventTemplateDictBuilder:
         if isinstance(key, datamodel.Country):
             return self._get_url_for(key, a_class="titlelink")
         elif isinstance(key, datamodel.System):
-            return f"{key.rendered_name} System"
+            # Translators: title of the page of a star system; %(system)s is its name
+            return _("%(system)s System", system=key.rendered_name)
         elif isinstance(key, datamodel.Leader):
             return key.rendered_name
         elif isinstance(key, datamodel.War):
             return key.rendered_name
         elif isinstance(key, datamodel.Planet):
-            return f"Planet {key.rendered_name}"
+            # Translators: title of the page of a planet; %(planet)s is its name
+            return _("Planet %(planet)s", planet=key.rendered_name)
         else:
             return ""
 
@@ -527,12 +569,12 @@ class EventTemplateDictBuilder:
             system_model.star_class, remove_prefix="sc"
         )
         details = {
-            "Star Class": star_class,
+            pgettext("ledger detail", "Star Class"): star_class,
         }
         hyperlane_targets = sorted(
             system_model.neighbors, key=lambda s: s.rendered_name
         )
-        details["Hyperlanes"] = ", ".join(
+        details[pgettext("ledger detail", "Hyperlanes")] = join_comma(
             self._get_url_for(s) for s in hyperlane_targets
         )
 
@@ -546,18 +588,18 @@ class EventTemplateDictBuilder:
                     .filter_by(network_id=bp.network_id)
                     .all()
                 )
-                details[bp.name] = ", ".join(
+                details[bp.name] = join_comma(
                     self._get_url_for(t.system) for t in targets if t != bp
                 )
             else:
                 bypasses.append(bp.name)
         if bypasses:
-            details["Unknown Bypasses"] = ", ".join(bypasses)
+            details[pgettext("ledger detail", "Unknown Bypasses")] = join_comma(bypasses)
 
         if system_model.country is not None and not system_model.country.is_hidden_country():
-            details["Owner"] = self._get_url_for(system_model.country)
+            details[pgettext("ledger detail", "Owner")] = self._get_url_for(system_model.country)
 
-        details["Planets"] = ", ".join(
+        details[pgettext("ledger detail", "Planets")] = join_comma(
             self._get_url_for(p) for p in system_model.planets
         )
 
@@ -567,78 +609,93 @@ class EventTemplateDictBuilder:
                 if d.is_resource_deposit:
                     deposits[d.name] += d.count
 
-        details["Resource Deposits"] = ", ".join(
-            f"{key}: {val}" for key, val in sorted(deposits.items())
+        details[pgettext("ledger detail", "Resource Deposits")] = join_comma(
+            _name_and_count(key, val) for key, val in sorted(deposits.items())
         )
         return details
 
     def leader_details(self, leader_model: datamodel.Leader) -> Dict[str, str]:
         country_url = self._get_url_for(leader_model.country)
+        # the stored subclass may be unknown to the game's localisation
+        subclass = game_info.lookup_key(leader_model.subclass)
+        # Translators: class of a leader and the empire they serve, e.g. "Scientist in the United Nations of Earth".
+        # %(leader_class)s is the leader class, %(country)s is the name of the empire (a link)
+        class_and_country = _(
+            "%(leader_class)s in the %(country)s",
+            leader_class=event_registry.leader_class_label(leader_model.leader_class),
+            country=country_url,
+        )
         details = {
-            "Leader Name": leader_model.rendered_name,
-            "Class": f"{game_info.convert_id_to_name(leader_model.leader_class)} in the {country_url}",
-            "Subclass": f"{game_info.lookup_key(leader_model.subclass)}" or "None",
-            "Traits": ", ".join(leader_model.rendered_traits),
-            "Species": leader_model.species.rendered_name,
-            "Gender": game_info.convert_id_to_name(leader_model.gender),
-            "Ethic": game_info.lookup_key(leader_model.ethic),
-            "Previous Position": game_info.lookup_key(f"job_{leader_model.job}")
-            if leader_model.job is not None else "None",
-            "Home Planet": self._get_url_for(leader_model.planet),
-            "Country of Origin": self._get_url_for(leader_model.creator),
-            "Born": datamodel.days_to_date(leader_model.date_born),
-            "Hired": datamodel.days_to_date(leader_model.date_hired),
-            "Last active": datamodel.days_to_date(
+            pgettext("ledger detail", "Leader Name"): leader_model.rendered_name,
+            pgettext("ledger detail", "Class"): class_and_country,
+            pgettext("ledger detail", "Subclass"): subclass or _("None"),
+            pgettext("ledger detail", "Traits"): join_comma(leader_model.rendered_traits),
+            pgettext("ledger detail", "Species"): leader_model.species.rendered_name,
+            pgettext("ledger detail", "Gender"): game_info.convert_id_to_name(leader_model.gender),
+            pgettext("ledger detail", "Ethic"): game_info.lookup_key(leader_model.ethic),
+            pgettext("ledger detail", "Previous Position"): game_info.lookup_key(f"job_{leader_model.job}")
+            if leader_model.job is not None else _("None"),
+            pgettext("ledger detail", "Home Planet"): self._get_url_for(leader_model.planet),
+            pgettext("ledger detail", "Country of Origin"): self._get_url_for(leader_model.creator),
+            pgettext("ledger detail", "Born"): datamodel.days_to_date(leader_model.date_born),
+            pgettext("ledger detail", "Hired"): datamodel.days_to_date(leader_model.date_hired),
+            pgettext("ledger detail", "Last active"): datamodel.days_to_date(
                 utils.get_most_recent_date(self._session)
                 if leader_model.is_active
                 else leader_model.last_date
             ),
-            "Status": "Active" if leader_model.is_active else "Dead or retired",
+            pgettext("ledger detail", "Status"): _("Active") if leader_model.is_active else _("Dead or retired"),
         }
         return details
 
     def country_details(self, country_model: datamodel.Country) -> Dict[str, str]:
         details = {
-            "Country Type": game_info.convert_id_to_name(country_model.country_type),
+            pgettext("ledger detail", "Country Type"): game_info.convert_id_to_name(country_model.country_type),
         }
         gov = country_model.get_current_government()
         if gov is not None:
             details.update(
                 {
-                    "Personality": game_info.convert_id_to_name(gov.personality),
-                    "Government Type": game_info.lookup_key(gov.gov_type),
-                    "Authority": game_info.lookup_key(gov.authority),
-                    "Ethics": ", ".join(
+                    pgettext("ledger detail", "Personality"): game_info.convert_id_to_name(gov.personality),
+                    pgettext("ledger detail", "Government Type"): game_info.lookup_key(gov.gov_type),
+                    pgettext("ledger detail", "Authority"): game_info.lookup_key(gov.authority),
+                    pgettext("ledger detail", "Ethics"): join_comma(
                         [game_info.lookup_key(e) for e in sorted(gov.ethics)]
                     ),
-                    "Civics": ", ".join(
+                    pgettext("ledger detail", "Civics"): join_comma(
                         [game_info.lookup_key(c) for c in sorted(gov.civics)]
                     ),
-                    "Origin": game_info.lookup_key(country_model.origin or "UNKNOWN"),
-                    "Ruler": self._get_url_for(country_model.ruler),
+                    pgettext("ledger detail", "Origin"): game_info.lookup_key(country_model.origin or "UNKNOWN"),
+                    pgettext("ledger detail", "Ruler"): self._get_url_for(country_model.ruler),
                 }
             )
         active_councilor_events = (
             self._session.query(datamodel.HistoricalEvent)
             .filter_by(country=country_model, event_type=datamodel.HistoricalEventType.councilor, end_date_days=None)
         )
-        details["Council"] = ", ".join(
+        details[pgettext("ledger detail", "Council")] = join_comma(
             # if leader name is the same as council position, only show the link
             # this is the case in hive minds, which have eg leader "Growth Node" serving as council position "Growth Node"
             self._get_url_for(event.leader)
             if event.description == event.leader.rendered_name
-            else f"{event.description} {self._get_url_for(event.leader)}"
+            # Translators: a council position and the leader holding it, e.g. "Chancellor <leader name>".
+            # %(position)s is the position, %(leader)s is the name of the leader (a link)
+            else _(
+                "%(position)s %(leader)s",
+                position=event.description,
+                leader=self._get_url_for(event.leader),
+            )
             for event in active_councilor_events
         )
         for key, countries in country_model.diplo_relation_details().items():
-            relation_type = game_info.convert_id_to_name(key)
+            relation_type = diplo_relation_label(key)
             relations_to_display = [
                 self._get_url_for(c)
                 for c in sorted(countries, key=lambda c: c.country_name)
                 if not c.is_hidden_country()
             ]
             if relations_to_display:
-                details[relation_type] = ", ".join(relations_to_display)
+                details[relation_type] = join_comma(relations_to_display)
 
         return details
 
@@ -646,20 +703,25 @@ class EventTemplateDictBuilder:
         details = {}
 
         if planet_model.planet_class is None:
-            details["Planet Class"] = "Destroyed (no trace remains)"
+            details[pgettext("ledger detail", "Planet Class")] = _("Destroyed (no trace remains)")
         else:
-            details["Planet Class"] = game_info.convert_id_to_name(
+            details[pgettext("ledger detail", "Planet Class")] = game_info.convert_id_to_name(
                 planet_model.planet_class, remove_prefix="pc"
             )
         modifiers = []
         for modifier in planet_model.modifiers:
             if modifier.expiry_date is not None:
-                m = f"{modifier.name} (expires {datamodel.days_to_date(modifier.expiry_date)})"
+                # Translators: a planet modifier that runs out; %(modifier)s is its name, %(date)s the date it expires
+                m = _(
+                    "%(modifier)s (expires %(date)s)",
+                    modifier=modifier.name,
+                    date=datamodel.days_to_date(modifier.expiry_date),
+                )
             else:
                 m = modifier.name
             modifiers.append(m)
         if modifiers:
-            details["Modifiers"] = ", ".join(sorted(modifiers))
+            details[pgettext("ledger detail", "Modifiers")] = join_comma(sorted(modifiers))
 
         resource_deposits = []
         other_deposits = []
@@ -669,28 +731,24 @@ class EventTemplateDictBuilder:
             else:
                 other_deposits.append(d.name)
         if resource_deposits:
-            details["Resource Deposits"] = ", ".join(
-                f"{d}" for d in sorted(resource_deposits)
-            )
+            details[pgettext("ledger detail", "Resource Deposits")] = join_comma(sorted(resource_deposits))
         if other_deposits:
-            details["Blockers and Features"] = ", ".join(
-                f"{d}" for d in sorted(other_deposits)
-            )
+            details[pgettext("ledger detail", "Blockers and Features")] = join_comma(sorted(other_deposits))
 
         districts = collections.Counter()
         for district in planet_model.districts:
             districts[district.name] += district.count
         if districts:
-            details["Districts"] = ", ".join(
-                f"{k}: {v}" for k, v in sorted(districts.items())
+            details[pgettext("ledger detail", "Districts")] = join_comma(
+                _name_and_count(k, v) for k, v in sorted(districts.items())
             )
 
         buildings = collections.Counter()
         for building in planet_model.buildings:
             buildings[building.name] += building.count
         if buildings:
-            details["Buildings"] = ", ".join(
-                f"{k}: {v}" for k, v in sorted(buildings.items()) if v > 0
+            details[pgettext("ledger detail", "Buildings")] = join_comma(
+                _name_and_count(k, v) for k, v in sorted(buildings.items()) if v > 0
             )
 
         return details
@@ -701,27 +759,34 @@ class EventTemplateDictBuilder:
         attacker = next(war.attackers, None)
         defender = next(war.defenders, None)
         details = {
-            "Start date": start,
-            "End date": "-",
-            "Attackers": ", ".join(
-                f"{self._get_url_for(wp.country)} ({wp.call_type})"
-                for wp in war.attackers
+            pgettext("ledger detail", "Start date"): start,
+            pgettext("ledger detail", "End date"): "-",
+            pgettext("ledger detail", "Attackers"): join_comma(
+                self._participant_with_call_type(wp) for wp in war.attackers
             ),
-            "Attacker War Goal": attacker.get_war_goal() if attacker is not None else "Unknown",
-            "Defenders": ", ".join(
-                f"{self._get_url_for(wp.country)} ({wp.call_type})"
-                for wp in war.defenders
+            pgettext("ledger detail", "Attacker War Goal"): attacker.get_war_goal() if attacker is not None else _("Unknown"),
+            pgettext("ledger detail", "Defenders"): join_comma(
+                self._participant_with_call_type(wp) for wp in war.defenders
             ),
-            "Defender War Goal": defender.get_war_goal() if defender is not None else "Unknown",
-            "Outcome": war.outcome,
+            pgettext("ledger detail", "Defender War Goal"): defender.get_war_goal() if defender is not None else _("Unknown"),
+            pgettext("ledger detail", "Outcome"): war.outcome,
         }
         if war.attacker_war_exhaustion or war.defender_war_exhaustion:
-            details["Attacker exhaustion"] = war.attacker_war_exhaustion
-            details["Defender exhaustion"] = war.defender_war_exhaustion
+            details[pgettext("ledger detail", "Attacker exhaustion")] = war.attacker_war_exhaustion
+            details[pgettext("ledger detail", "Defender exhaustion")] = war.defender_war_exhaustion
         if war.end_date_days:
-            details["End date"] = datamodel.days_to_date(war.end_date_days)
+            details[pgettext("ledger detail", "End date")] = datamodel.days_to_date(war.end_date_days)
 
         return details
+
+    def _participant_with_call_type(self, participant: datamodel.WarParticipant) -> str:
+        # Translators: an empire in a war and how it joined, e.g. "United Nations of Earth (primary)".
+        # %(country)s is the name of the empire (a link), %(call_type)s how it entered the war
+        return _(
+            "%(country)s (%(call_type)s)",
+            country=self._get_url_for(participant.country),
+            call_type=war_call_type_label(participant.call_type),
+        )
 
     def _combat_dict(self, combat: datamodel.Combat):
         attackers = ", ".join(
@@ -758,11 +823,7 @@ class EventTemplateDictBuilder:
                 self._formatted_urls[country] = self._get_url_for(country)
                 links.append(self._formatted_urls[country])
             if links:
-                result["federation_partners"] = (
-                    links[0]
-                    if len(links) == 1
-                    else ", ".join(links[:-1]) + " and " + links[-1]
-                )
+                result["federation_partners"] = join_and(links)
         elif event.event_type == datamodel.HistoricalEventType.joined_federation:
             membership = next(
                 (
