@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-30 23:47+0000\n"
+"POT-Creation-Date: 2026-10-30 23:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ko\n"
@@ -374,52 +374,6 @@ msgstr "%(leader)s의 통치 아래 %(country)s은(는) \"%(agenda)s\" 의제를
 #, python-format
 msgid "The %(country)s launched the agenda \"%(agenda)s\"."
 msgstr "%(country)s은(는) \"%(agenda)s\" 의제를 개시했다."
-
-#. marks an event or period that is still going on, shown before its start date
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[agenda_preparation]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[became_subject]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[closed_borders]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[colonization]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[commercial_pact]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[councilor]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[defensive_pact]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[edict]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[embassy]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[envoy_harming_relations]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[envoy_improving_relations]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[espionage_operation]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[faction_leader]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[federation_president]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[first_contact_process]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[fleet_command]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[formed_federation]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[galactic_custodian]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[governed_planet]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[governed_sector]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[joined_galactic_community]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[joined_galactic_council]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[left_galactic_community]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[left_galactic_council]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[megastructure_construction]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[migration_treaty]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[non_aggression_pact]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[received_closed_borders]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[received_rivalry]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[research_agreement]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[researched_technology]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[ruled_empire]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[sent_rivalry]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[terraforming]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[astral_rift]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[astral_rift]:42
-#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[dig_site]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[dig_site]:62
-#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[first_contact]:4
-#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[first_contact]:33
-#: stellarisdashboard/dashboard_app/event_registry.py:_DATEBLOCKS[span]:2
-msgctxt "ongoing event marker"
-msgid "(A)"
-msgstr "(진행)"
 
 #. %(leader)s: class and name of a leader (a link), e.g. "Scientist Jane Doe". %(country)s: name of an
 #. empire (a link), usually reads like "United Nations of Earth"
@@ -1979,6 +1933,52 @@ msgstr "%(index)s번째 국면 (%(country)s)"
 msgid "Stage %(index)s"
 msgstr "%(index)s번째 국면"
 
+#. marks an event or period that is still going on, shown before its start date
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[agenda_preparation]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[became_subject]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[closed_borders]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[colonization]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[commercial_pact]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[councilor]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[defensive_pact]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[edict]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[embassy]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[envoy_harming_relations]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[envoy_improving_relations]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[espionage_operation]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[faction_leader]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[federation_president]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[first_contact_process]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[fleet_command]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[formed_federation]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[galactic_custodian]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[governed_planet]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[governed_sector]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[joined_galactic_community]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[joined_galactic_council]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[left_galactic_community]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[left_galactic_council]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[megastructure_construction]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[migration_treaty]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[non_aggression_pact]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[received_closed_borders]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[received_rivalry]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[research_agreement]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[researched_technology]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[ruled_empire]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[sent_rivalry]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[terraforming]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[astral_rift]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[astral_rift]:42
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[dig_site]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[dig_site]:62
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[first_contact]:4
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[first_contact]:33
+#: stellarisdashboard/dashboard_app/event_registry.py:_DATEBLOCKS[span]:2
+msgctxt "ongoing event marker"
+msgid "(A)"
+msgstr "(진행)"
+
 #: stellarisdashboard/dashboard_app/galaxy_map.py:234
 msgid "Step size must be a whole number."
 msgstr "단계 크기는 정수여야 합니다."
@@ -2495,11 +2495,6 @@ msgstr "공격측"
 msgctxt "ledger detail"
 msgid "Attacker War Goal"
 msgstr "공격측 전쟁 목표"
-
-#: stellarisdashboard/dashboard_app/history_ledger.py:767
-#: stellarisdashboard/dashboard_app/history_ledger.py:771 stellarisdashboard/datamodel.py:1663
-msgid "Unknown"
-msgstr "알 수 없음"
 
 #: stellarisdashboard/dashboard_app/history_ledger.py:768
 msgctxt "ledger detail"
@@ -3834,6 +3829,11 @@ msgstr "%(name)s (%(attackers)s 대 %(defenders)s)"
 #, python-format
 msgid "%(attackers)s vs %(defenders)s"
 msgstr "%(attackers)s 대 %(defenders)s"
+
+#: stellarisdashboard/dashboard_app/history_ledger.py:767
+#: stellarisdashboard/dashboard_app/history_ledger.py:771 stellarisdashboard/datamodel.py:1663
+msgid "Unknown"
+msgstr "알 수 없음"
 
 #. a dig site and the chapter of its excavation, e.g. "Under the Ice (chapter 3)"
 #: stellarisdashboard/datamodel.py:2067

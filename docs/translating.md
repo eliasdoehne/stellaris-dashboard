@@ -24,6 +24,10 @@ setting. It applies immediately, without a restart.
 
 ## Translating
 
+The translations shipped so far were machine-generated and have not been
+reviewed by native speakers. Corrections are very welcome, especially where the
+dashboard's wording differs from the official terms of the game in your language.
+
 1. Open `stellarisdashboard/i18n/locales/<locale>.po`.
 2. Fill in the `msgstr` of each entry. An empty `msgstr` shows the English text.
 3. Entries marked `#, fuzzy` are guesses made when the English text changed. They

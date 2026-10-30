@@ -10,7 +10,9 @@ slightly are added as fuzzy (ignored until a translator confirms them), and
 removed messages are dropped.
 """
 import importlib
+import io
 import pathlib
+import re
 import sys
 
 from babel.messages.catalog import Catalog
@@ -81,8 +83,6 @@ def build_template_catalog() -> Catalog:
 
 
 def _extract_jinja_string(source: str):
-    import io
-
     for lineno, message, comments, context in extract(
         "jinja2.ext:babel_extract",
         io.BytesIO(source.encode("utf-8")),
@@ -92,6 +92,22 @@ def _extract_jinja_string(source: str):
         strip_comment_tags=True,
     ):
         yield lineno, message, comments, context
+
+
+_CREATION_DATE_RE = re.compile(rb'^"POT-Creation-Date: .*\n', re.MULTILINE)
+
+
+def _write_if_changed(path: pathlib.Path, catalog: Catalog, **kwargs):
+    """Write the catalog, unless the file differs only in its creation date (which
+    changes on every run and would make every file show up as modified)."""
+    buffer = io.BytesIO()
+    write_po(buffer, catalog, width=100, sort_by_file=True, **kwargs)
+    content = buffer.getvalue()
+    if path.exists():
+        old = path.read_bytes()
+        if _CREATION_DATE_RE.sub(b"", old) == _CREATION_DATE_RE.sub(b"", content):
+            return
+    path.write_bytes(content)
 
 
 def message_keys(catalog: Catalog):
@@ -109,16 +125,14 @@ def update_locale_catalogs(template: Catalog):
         else:
             catalog = Catalog(locale=locale, project=template.project, fuzzy=False)
         catalog.update(template, update_header_comment=False)
-        with open(po_path, "wb") as f:
-            write_po(f, catalog, width=100, ignore_obsolete=True, sort_by_file=True)
+        _write_if_changed(po_path, catalog, ignore_obsolete=True)
         translated = sum(1 for m in catalog if m.id and m.string and (not m.pluralizable or all(m.string)) and not m.fuzzy)
         print(f"{po_path.name}: {translated}/{len(message_keys(catalog))} translated")
 
 
 def main():
     template = build_template_catalog()
-    with open(POT_PATH, "wb") as f:
-        write_po(f, template, width=100, sort_by_file=True, omit_header=False)
+    _write_if_changed(POT_PATH, template)
     print(f"Wrote {len(message_keys(template))} messages to {POT_PATH}")
     if "--pot-only" not in sys.argv:
         update_locale_catalogs(template)
