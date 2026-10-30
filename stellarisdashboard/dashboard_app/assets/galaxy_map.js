@@ -12,6 +12,23 @@
   if (!root || !window.deck) return;
 
   const cfg = JSON.parse(root.dataset.galaxyConfig);
+
+  // Translated texts from galaxy_map.html, with English fallbacks.
+  const labels = Object.assign(
+    {
+      selectedSystem: "Selected system: %(system)s (%(owner)s)",
+      unclaimed: "Unclaimed",
+      loadFailed: "Failed to load galaxy map.",
+    },
+    cfg.labels || {}
+  );
+
+  // Fill the %(name)s placeholders of a translated message.
+  function format(message, values) {
+    return message.replace(/%\((\w+)\)s/g, (match, name) =>
+      name in values ? values[name] : match
+    );
+  }
   const {
     Deck,
     OrthographicView,
@@ -258,14 +275,15 @@
     if (!system) return;
     const owner = owners[system.id];
     const sysHref = `${cfg.historyUrl}?system=${system.system_id}`;
-    let html = `Selected system: <a class="textlink" href="${sysHref}">${system.name}</a>`;
+    let ownerHtml = labels.unclaimed;
     if (owner) {
       const ownerHref = `${cfg.historyUrl}?country=${owner.country_id}`;
-      html += ` (<a class="textlink" href="${ownerHref}">${owner.country_name}</a>)`;
-    } else {
-      html += " (Unclaimed)";
+      ownerHtml = `<a class="textlink" href="${ownerHref}">${owner.country_name}</a>`;
     }
-    selectionEl.innerHTML = html;
+    selectionEl.innerHTML = format(labels.selectedSystem, {
+      system: `<a class="textlink" href="${sysHref}">${system.name}</a>`,
+      owner: ownerHtml,
+    });
   }
 
   async function fetchData(days) {
@@ -315,7 +333,7 @@
         if (!layer || layer.id !== "systems" || !object) return null;
         const owner = owners[object.id];
         return {
-          text: `${object.name}\n${owner ? owner.country_name : "Unclaimed"}`,
+          text: `${object.name}\n${owner ? owner.country_name : labels.unclaimed}`,
         };
       },
       onClick: (info) => {
@@ -346,6 +364,6 @@
 
   init().catch((err) => {
     console.error("Galaxy map failed to load", err);
-    if (loadingEl) loadingEl.textContent = "Failed to load galaxy map.";
+    if (loadingEl) loadingEl.textContent = labels.loadFailed;
   });
 })();

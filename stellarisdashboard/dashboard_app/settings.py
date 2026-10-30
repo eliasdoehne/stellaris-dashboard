@@ -1,8 +1,10 @@
 import logging
 
 from flask import render_template, request, redirect
+from markupsafe import escape
 
 from stellarisdashboard import config, i18n
+from stellarisdashboard.i18n import gettext as _
 from stellarisdashboard.dashboard_app import flask_app
 
 logger = logging.getLogger(__name__)
@@ -19,148 +21,151 @@ def _build_settings_dict():
 
     current_values = config.CONFIG.get_adjustable_settings_dict()
     return {
-        "File Locations": {
+        _("File Locations"): {
             "save_file_path": {
                 "type": t_str,
                 "value": current_values["save_file_path"],
-                "name": "Save files folder *",
-                "description": "Where the dashboard will look for new Stellaris save files. Should contain a folder for each game, and each of those folder should contain one or .sav files. Leave blank to reset to default.",
+                # Translators: a trailing "*" marks settings that only apply after restarting the dashboard; keep it.
+                "name": _("Save files folder *"),
+                "description": _("Where the dashboard will look for new Stellaris save files. Should contain a folder for each game, and each of those folder should contain one or .sav files. Leave blank to reset to default."),
             },
             "stellaris_user_data_path": {
                 "type": t_str,
                 "value": current_values["stellaris_user_data_path"],
-                "name": "Stellaris user data folder *",
-                "description": "Where the dashboard will look for user data such as enabled mods. It should contain the dlc_load.json file. Leave blank to reset to default.",
+                "name": _("Stellaris user data folder *"),
+                "description": _("Where the dashboard will look for user data such as enabled mods. It should contain the dlc_load.json file. Leave blank to reset to default."),
             },
             "stellaris_install_path": {
                 "type": t_str,
                 "value": current_values["stellaris_install_path"],
-                "name": "Stellaris install folder *",
-                "description": "Where the dashboard will look for Stellaris game data. Leave blank to reset to default.",
+                "name": _("Stellaris install folder *"),
+                "description": _("Where the dashboard will look for Stellaris game data. Leave blank to reset to default."),
             },
         },
-        "Data Visibility": {
+        _("Data Visibility"): {
             "show_everything": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["show_everything"]),
-                "name": "Show information for all countries",
-                "description": "Show information for all countries, including unknown ones.",
+                "name": _("Show information for all countries"),
+                "description": _("Show information for all countries, including unknown ones."),
             },
             "show_all_country_types": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["show_all_country_types"]),
-                "name": "Show all country types",
-                "description": "Check to include special countries like enclaves, leviathans or the shroud.",
+                "name": _("Show all country types"),
+                "description": _("Check to include special countries like enclaves, leviathans or the shroud."),
             },
             "filter_events_by_type": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["filter_events_by_type"]),
-                "name": "Filter history ledger by event type",
-                "description": "If enabled, only a selection of relevant historical events are shown in the event ledger, depending on the page.",
+                "name": _("Filter history ledger by event type"),
+                "description": _("If enabled, only a selection of relevant historical events are shown in the event ledger, depending on the page."),
             },
             "mp_username": {
                 "type": t_str,
                 "value": current_values["mp_username"],
-                "name": "Your multiplayer username",
-                "description": "By default, data for countries controlled by players with any other username are hidden (see below setting). This setting does not affect single-player games.",
+                "name": _("Your multiplayer username"),
+                "description": _("By default, data for countries controlled by players with any other username are hidden (see below setting). This setting does not affect single-player games."),
             },
             "hide_other_players": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["hide_other_players"]),
-                "name": "Hide other players",
-                "description": "If enabled, hides information for countries controlled by players that do not match the above multiplayer Username",
+                "name": _("Hide other players"),
+                "description": _("If enabled, hides information for countries controlled by players that do not match the above multiplayer Username"),
             },
         },
-        "Performance": {
+        _("Performance"): {
             "save_name_filter": {
                 "type": t_str,
                 "value": current_values["save_name_filter"],
-                "name": "Save file name filter",
-                "description": "Only save files whose file names contain this string are processed. For example, you could use \".01.01\" so only saves from the start of the year are processed. Alternatively, use \"Skip saves after processing\" below",
+                "name": _("Save file name filter"),
+                # Translators: "Skip saves after processing" must match the name of that setting.
+                "description": _("Only save files whose file names contain this string are processed. For example, you could use \".01.01\" so only saves from the start of the year are processed. Alternatively, use \"Skip saves after processing\" below"),
             },
             "skip_saves": {
                 "type": t_int,
                 "value": current_values["skip_saves"],
                 "min": 0,
                 "max": 100,
-                "name": "Skip saves after processing",
-                "description": "After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up with autosaves. Alternatively, use the \"Save name filter\" above.",
+                "name": _("Skip saves after processing"),
+                # Translators: "Save name filter" refers to the setting "Save file name filter".
+                "description": _("After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up with autosaves. Alternatively, use the \"Save name filter\" above."),
             },
             "plot_time_resolution": {
                 "type": t_int,
                 "value": current_values["plot_time_resolution"],
                 "min": 0,
                 "max": 10000,
-                "name": "Initial graph resolution",
-                "description": "Number of points used when first loading the graphs. Set to 0 to load full data.",
+                "name": _("Initial graph resolution"),
+                "description": _("Number of points used when first loading the graphs. Set to 0 to load full data."),
             },
             "threads": {
                 "type": t_int,
                 "value": current_values["threads"],
                 "min": 1,
-                "name": "Number of threads *",
-                "description": "Number of threads for reading save files.",
+                "name": _("Number of threads *"),
+                "description": _("Number of threads for reading save files."),
             },
         },
-        "Save Copies": {
+        _("Save Copies"): {
             "keep_failed_saves": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["keep_failed_saves"]),
-                "name": "Keep copies of failed saves",
-                "description": "Copy saves that fail to import (fully or partially) to the failed_saves folder in the output folder, with a record of the error, so they can be imported again after a fix with \"stellarisdashboardcli reprocess-failed-saves\".",
+                "name": _("Keep copies of failed saves"),
+                "description": _("Copy saves that fail to import (fully or partially) to the failed_saves folder in the output folder, with a record of the error, so they can be imported again after a fix with \"stellarisdashboardcli reprocess-failed-saves\"."),
             },
             "failed_saves_max_size_mb": {
                 "type": t_int,
                 "value": current_values["failed_saves_max_size_mb"],
                 "min": 1,
-                "name": "Failed saves folder size limit (MB)",
-                "description": "When the failed_saves folder grows beyond this size, the oldest copies are deleted.",
+                "name": _("Failed saves folder size limit (MB)"),
+                "description": _("When the failed_saves folder grows beyond this size, the oldest copies are deleted."),
             },
             "backup_saves": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["backup_saves"]),
-                "name": "Back up all saves",
-                "description": "Copy every save file the dashboard reads to the save_backups folder in the output folder, so the full history can be imported again later. WARNING: This folder has no size limit and grows by one save file per autosave.",
+                "name": _("Back up all saves"),
+                "description": _("Copy every save file the dashboard reads to the save_backups folder in the output folder, so the full history can be imported again later. WARNING: This folder has no size limit and grows by one save file per autosave."),
             },
         },
-        "Interface": {
+        _("Interface"): {
             "check_version": {
                 "type": t_bool,
                 "value": _bool_to_lowercase(current_values["check_version"]),
-                "name": "Check for new versions",
-                "description": "When using the Workshop mod for in-game access, a message will be displayed if a newer version of the separate dashboard app is available.",
+                "name": _("Check for new versions"),
+                "description": _("When using the Workshop mod for in-game access, a message will be displayed if a newer version of the separate dashboard app is available."),
             },
             "stellaris_language": {
                 "type": t_str,
                 "value": current_values["stellaris_language"],
-                "name": "Stellaris language *",
-                "description": "The language to use for localizing Stellaris text. In the format l_<language> (for example, l_english)"
+                "name": _("Stellaris language *"),
+                "description": _("The language to use for localizing Stellaris text. In the format l_<language> (for example, l_english)")
             },
             "dashboard_language": {
                 "type": t_select,
                 "value": current_values["dashboard_language"],
                 "options": {
-                    i18n.AUTO: "Same as Stellaris language",
+                    i18n.AUTO: _("Same as Stellaris language"),
                     **i18n.LANGUAGE_NAMES,
                 },
-                "name": "Dashboard language",
-                "description": "The language of the dashboard's own text. By default, the same language as the game.",
+                "name": _("Dashboard language"),
+                "description": _("The language of the dashboard's own text. By default, the same language as the game."),
             },
             "plot_width": {
                 "type": t_int,
                 "value": current_values["plot_width"],
                 "min": 300,
                 "max": 2000,
-                "name": "Graph width",
-                "description": "Width of graphs in pixels.",
+                "name": _("Graph width"),
+                "description": _("Width of graphs in pixels."),
             },
             "plot_height": {
                 "type": t_int,
                 "value": current_values["plot_height"],
                 "min": 300,
                 "max": 2000,
-                "name": "Graph height",
-                "description": "Height of graphs in pixels.",
+                "name": _("Graph height"),
+                "description": _("Height of graphs in pixels."),
             },
         },
     }
@@ -205,7 +210,7 @@ def apply_settings():
         # the form itself is left untouched (hx-swap="none").
         return (
             '<div id="toast-slot" hx-swap-oob="innerHTML">'
-            '<div class="toast toast--success" role="status">Settings applied.</div>'
+            f'<div class="toast toast--success" role="status">{escape(_("Settings applied."))}</div>'
             "</div>"
         )
     return redirect("/settings/")

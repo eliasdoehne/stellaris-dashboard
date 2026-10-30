@@ -1,10 +1,10 @@
 {% extends "layout.html" %}
 {% block body %}
 <div class="import">
-    <h1>Import Saves</h1>
+    <h1>{{ _("Import Saves") }}</h1>
     <p class="import-intro">
-        The dashboard picks up new saves while it runs. Here you can import the saves a game already has
-        in the save files folder <code>{{ save_path }}</code>. Saves that are already imported are skipped.
+        {% trans trimmed %}The dashboard picks up new saves while it runs. Here you can import the saves a game already has
+        in the save files folder <code>{{ save_path }}</code>. Saves that are already imported are skipped.{% endtrans %}
     </p>
 
     {% include "import_status.html" %}
@@ -12,7 +12,7 @@
     {% if games %}
         <table class="import-games">
             <thead>
-                <tr><th>Game</th><th>Saves</th><th>Imported</th><th></th></tr>
+                <tr><th>{{ _("Game") }}</th><th>{{ _("Saves") }}</th><th>{{ _("Imported") }}</th><th></th></tr>
             </thead>
             <tbody>
             {% for game in games %}
@@ -21,9 +21,10 @@
                     <td>{{ game.num_saves }}</td>
                     <td>{{ game.num_imported }}</td>
                     <td>
+                        {# Translators: button to choose a game whose saves are then shown for import #}
                         <a class="button" href="{{ url_for('import_plan', game_id=game.game_id) }}"
                            hx-get="{{ url_for('import_plan', game_id=game.game_id) }}"
-                           hx-target="#plan-{{ loop.index }}">Select</a>
+                           hx-target="#plan-{{ loop.index }}">{{ pgettext("import page button", "Select") }}</a>
                     </td>
                 </tr>
                 <tr class="import-plan-row"><td colspan="4" id="plan-{{ loop.index }}"></td></tr>
@@ -33,9 +34,9 @@
     {% else %}
         <ul class="notifications">
             <li class="warning">
-                <h2>No saves found</h2>
-                <p>The save files folder should contain a folder for each game, which each contain <code>.sav</code> files.</p>
-                <p><a href="/settings">Check the save files folder in the Settings.</a></p>
+                <h2>{{ _("No saves found") }}</h2>
+                <p>{% trans trimmed %}The save files folder should contain a folder for each game, which each contain <code>.sav</code> files.{% endtrans %}</p>
+                <p><a href="/settings">{{ _("Check the save files folder in the Settings.") }}</a></p>
             </li>
         </ul>
     {% endif %}

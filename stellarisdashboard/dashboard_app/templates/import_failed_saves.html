@@ -4,17 +4,17 @@
      hx-get="/import/failed" hx-swap="outerHTML"
      hx-trigger="reprocess-started from:body{% if busy %}, every 2s{% endif %}">
     {% if copies %}
-        <h2>Failed saves</h2>
+        <h2>{{ _("Failed saves") }}</h2>
         <p class="import-intro">
-            Saves that could not be parsed or imported completely are kept in the output folder.
+            {% trans trimmed %}Saves that could not be parsed or imported completely are kept in the output folder.
             Reprocessing imports them again, e.g. after updating the dashboard: data stored for the same in-game date is
             replaced, copies that import cleanly are deleted and the others stay listed.
-            Reprocessing a save older than the newest imported one can make some events in the history inaccurate.
+            Reprocessing a save older than the newest imported one can make some events in the history inaccurate.{% endtrans %}
         </p>
         {% set games = copies|map(attribute="game_id")|unique|list %}
         <form action="/import/reprocess" method="POST" hx-post="/import/reprocess" hx-target="#import-status" hx-swap="outerHTML">
             <button type="submit" class="button" {% if busy %}disabled{% endif %}>
-                Reprocess all {{ copies|length }} failed save{{ "" if copies|length == 1 else "s" }}
+                {{ ngettext("Reprocess all %(num)s failed save", "Reprocess all %(num)s failed saves", copies|length) }}
             </button>
         </form>
         {% for game_id in games %}
@@ -24,19 +24,19 @@
                 <form action="/import/reprocess" method="POST" hx-post="/import/reprocess" hx-target="#import-status" hx-swap="outerHTML">
                     <input type="hidden" name="game_id" value="{{ game_id }}">
                     <button type="submit" class="button" {% if busy %}disabled{% endif %}>
-                        Reprocess {{ game_copies|length }} save{{ "" if game_copies|length == 1 else "s" }} of this game
+                        {{ ngettext("Reprocess %(num)s save of this game", "Reprocess %(num)s saves of this game", game_copies|length) }}
                     </button>
                 </form>
             {% endif %}
             <table class="import-games">
-                <thead><tr><th>File</th><th>In-game date</th><th>Failed at</th><th>Reason</th></tr></thead>
+                <thead><tr><th>{{ _("File") }}</th><th>{{ _("In-game date") }}</th><th>{{ _("Failed at") }}</th><th>{{ _("Reason") }}</th></tr></thead>
                 <tbody>
                 {% for c in game_copies %}
                     <tr>
                         <td><code>{{ c.path.name }}</code></td>
                         <td>{{ c.game_date or "?" }}</td>
                         <td>{{ c.failed_at.replace("T", " ") or "?" }}</td>
-                        <td>{% for r in c.reasons %}<code>{{ r }}</code><br>{% else %}no record{% endfor %}</td>
+                        <td>{% for r in c.reasons %}<code>{{ r }}</code><br>{% else %}{{ _("no record") }}{% endfor %}</td>
                     </tr>
                 {% endfor %}
                 </tbody>

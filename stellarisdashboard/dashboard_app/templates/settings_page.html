@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<h1>Settings</h1>
+<h1>{{ _("Settings") }}</h1>
 
 <!-- htmx: save in place and confirm via an out-of-band toast (apply_settings
      returns just the #toast-slot fragment on HX-Request, leaving this form as-is).
@@ -11,7 +11,7 @@
     <div class="settings">
         <dl>
             <dt>*</dt>
-            <dl>applies after restart</dl>
+            <dl>{{ _("applies after restart") }}</dl>
         </dl>
         {% for category, settings in current_settings.items() %}
             <h2>{{ category }}</h2>
@@ -48,8 +48,8 @@
     </div>
 
     <div class="settingsbuttons">
-        <button type="submit" class="button">Apply Settings</button>
-        <button type="reset" class="button">Reset Values</button>
+        <button type="submit" class="button">{{ _("Apply Settings") }}</button>
+        <button type="reset" class="button">{{ _("Reset Values") }}</button>
     </div>
 </form>
 {% endblock %}

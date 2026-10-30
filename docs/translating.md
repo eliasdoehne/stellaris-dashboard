@@ -81,8 +81,8 @@ Rules:
 - Do not translate: names from the game, identifiers stored in the database or in
   `config.yml` (only their display), log messages and exceptions meant for
   developers, and command line output.
-- A message with placeholders is %-formatted, so a literal `%` in it must be
-  written `%%`. A message without placeholders is used as is.
+- Messages in templates are always %-formatted, so a literal `%` in them must be
+  written `%%`. In Python, only messages with placeholders are formatted.
 
 After changing messages, update the catalogs (needs the dev dependencies):
 

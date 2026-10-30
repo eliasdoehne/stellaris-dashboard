@@ -9,6 +9,7 @@ all ownership/date logic still lives in ``visualization_data.GalaxyMapData``.
 import logging
 
 from flask import render_template, request, jsonify, redirect, url_for
+from markupsafe import escape
 from PIL import features
 
 from stellarisdashboard import config, datamodel
@@ -18,6 +19,7 @@ from stellarisdashboard.dashboard_app import (
     visualization_data,
     timelapse_exporter,
 )
+from stellarisdashboard.i18n import gettext as _, N_
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +179,7 @@ def _timelapse_toast(message, game_id, kind):
     if request.headers.get("HX-Request"):
         return (
             '<div id="toast-slot" hx-swap-oob="innerHTML">'
-            f'<div class="toast toast--{kind}" role="status">{message}</div>'
+            f'<div class="toast toast--{kind}" role="status">{escape(message)}</div>'
             "</div>"
         )
     return redirect(url_for("galaxy_page", game_id=game_id))
@@ -187,15 +189,17 @@ class _TimelapseFormError(Exception):
     """A user-facing validation error in the timelapse export form."""
 
 
-def _positive_int(raw, default, field_label):
+def _positive_int(raw, default, not_a_number_message, too_small_message):
+    """Parse a positive integer form field. The messages are marked with N_ and
+    translated here, so each is a complete sentence."""
     if raw is None or raw == "":
         return default
     try:
         value = int(raw)
     except (TypeError, ValueError):
-        raise _TimelapseFormError(f"{field_label} must be a whole number.")
+        raise _TimelapseFormError(_(not_a_number_message))
     if value < 1:
-        raise _TimelapseFormError(f"{field_label} must be at least 1.")
+        raise _TimelapseFormError(_(too_small_message))
     return value
 
 
@@ -224,25 +228,39 @@ def galaxy_timelapse(game_id):
     square_aspect_ratio = "square_aspect_ratio" in form
 
     try:
-        step_days = _positive_int(form.get("step"), TIMELAPSE_DEFAULT_STEP, "Step size")
-        frame_time_ms = _positive_int(
-            form.get("frame_time"), TIMELAPSE_DEFAULT_FRAME_TIME, "Frame time"
+        step_days = _positive_int(
+            form.get("step"),
+            TIMELAPSE_DEFAULT_STEP,
+            N_("Step size must be a whole number."),
+            N_("Step size must be at least 1."),
         )
-        dpi = _positive_int(form.get("dpi"), TIMELAPSE_DEFAULT_DPI, "DPI")
+        frame_time_ms = _positive_int(
+            form.get("frame_time"),
+            TIMELAPSE_DEFAULT_FRAME_TIME,
+            N_("Frame time must be a whole number."),
+            N_("Frame time must be at least 1."),
+        )
+        dpi = _positive_int(
+            form.get("dpi"),
+            TIMELAPSE_DEFAULT_DPI,
+            N_("DPI must be a whole number."),
+            N_("DPI must be at least 1."),
+        )
         try:
             tl_start_days = datamodel.date_to_days(start_date)
             tl_end_days = datamodel.date_to_days(end_date)
         except ValueError:
-            raise _TimelapseFormError("Invalid date(s). Use YYYY.MM.DD format.")
+            # Translators: YYYY.MM.DD is the date format the dashboard expects (year.month.day)
+            raise _TimelapseFormError(_("Invalid date(s). Use YYYY.MM.DD format."))
         if tl_start_days >= tl_end_days:
-            raise _TimelapseFormError("Start date must be before end date.")
+            raise _TimelapseFormError(_("Start date must be before end date."))
     except _TimelapseFormError as e:
         logger.error(f"Rejected timelapse export for {game_id}: {e}")
         return _timelapse_toast(str(e), game_id, "error")
 
     if not (export_gif or export_webp or export_frames):
         return _timelapse_toast(
-            "Select at least one export format (gif, webp, or frames).",
+            _("Select at least one export format (gif, webp, or frames)."),
             game_id,
             "error",
         )
@@ -266,13 +284,13 @@ def galaxy_timelapse(game_id):
     logger.info(f"Queued timelapse export for {game_id} ({ahead} ahead in queue)")
 
     if ahead:
-        message = (
-            f"Timelapse export queued ({ahead} already in progress). "
-            "It will run in the background; check your output folder when done."
+        # Translators: %(num)s is the number of exports ahead of this one in the queue
+        message = _(
+            "Timelapse export queued (%(num)s already in progress). It will run in the background; check your output folder when done.",
+            num=ahead,
         )
     else:
-        message = (
-            "Timelapse export started in the background. "
-            "Check your output folder when it finishes."
+        message = _(
+            "Timelapse export started in the background. Check your output folder when it finishes."
         )
     return _timelapse_toast(message, game_id, "success")

@@ -21,9 +21,9 @@
         <div class="sidebar-identity">
             {% if country %}
                 <span class="identity-empire" title="{{ country }}">{{ country }}</span>
-                <span class="identity-status"><span class="status-dot"></span>synced</span>
+                <span class="identity-status"><span class="status-dot"></span>{# Translators: short status next to the empire name in the sidebar: the displayed data is up to date with the game #}{{ pgettext("sidebar status", "synced") }}</span>
             {% else %}
-                <span class="identity-empire identity-empire--none">No game selected</span>
+                <span class="identity-empire identity-empire--none">{{ _("No game selected") }}</span>
             {% endif %}
         </div>
 
@@ -32,16 +32,16 @@
              separate Dash app, so it opts out; the Wiki link (target=_blank) is
              skipped by hx-boost automatically. -->
         <nav class="sidebar-nav" hx-boost="true">
-            <a class="nav-link{% if request.endpoint == 'index_page' %} is-active{% endif %}" href="/">Game Selection</a>
+            <a class="nav-link{% if request.endpoint == 'index_page' %} is-active{% endif %}" href="/">{{ _("Game Selection") }}</a>
             {% if game_name %}
-            <a class="nav-link" hx-boost="false" href="{{ url_for('/timeline/', game_name=game_name) }}">Graphs</a>
-            <a class="nav-link{% if request.endpoint == 'galaxy_page' %} is-active{% endif %}" hx-boost="false" href="{{ url_for('galaxy_page', game_id=game_name) }}">Galaxy Map</a>
-            <a class="nav-link{% if request.endpoint == 'history_page' %} is-active{% endif %}" href="{{ url_for('history_page', game_id=game_name) }}">Event Ledger</a>
-            <a class="nav-link{% if request.endpoint == 'codex_page' %} is-active{% endif %}" href="{{ url_for('codex_page', game_id=game_name) }}">Codex</a>
+            <a class="nav-link" hx-boost="false" href="{{ url_for('/timeline/', game_name=game_name) }}">{{ _("Graphs") }}</a>
+            <a class="nav-link{% if request.endpoint == 'galaxy_page' %} is-active{% endif %}" hx-boost="false" href="{{ url_for('galaxy_page', game_id=game_name) }}">{{ _("Galaxy Map") }}</a>
+            <a class="nav-link{% if request.endpoint == 'history_page' %} is-active{% endif %}" href="{{ url_for('history_page', game_id=game_name) }}">{{ _("Event Ledger") }}</a>
+            <a class="nav-link{% if request.endpoint == 'codex_page' %} is-active{% endif %}" href="{{ url_for('codex_page', game_id=game_name) }}">{{ _("Codex") }}</a>
             {% endif %}
-            <a class="nav-link{% if request.endpoint == 'import_page' %} is-active{% endif %}" href="/import/">Import Saves</a>
-            <a class="nav-link{% if request.endpoint == 'settings_page' %} is-active{% endif %}" href="/settings/">Settings</a>
-            <a class="nav-link nav-link--ext" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki" target="_blank" rel="noopener">Stellaris Wiki ↗</a>
+            <a class="nav-link{% if request.endpoint == 'import_page' %} is-active{% endif %}" href="/import/">{{ _("Import Saves") }}</a>
+            <a class="nav-link{% if request.endpoint == 'settings_page' %} is-active{% endif %}" href="/settings/">{{ _("Settings") }}</a>
+            <a class="nav-link nav-link--ext" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki" target="_blank" rel="noopener">{{ _("Stellaris Wiki") }} ↗</a>
         </nav>
     </aside>
 
@@ -49,23 +49,23 @@
         <header class="topbar">
             <div class="breadcrumb">
                 {% if request.endpoint == 'settings_page' %}
-                    <span class="crumb crumb--current">Settings</span>
+                    <span class="crumb crumb--current">{{ _("Settings") }}</span>
                 {% elif request.endpoint == 'import_page' %}
-                    <span class="crumb crumb--current">Import Saves</span>
+                    <span class="crumb crumb--current">{{ _("Import Saves") }}</span>
                 {% elif request.endpoint == 'galaxy_page' %}
-                    {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">Galaxy Map</span>
+                    {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">{{ _("Galaxy Map") }}</span>
                 {% elif request.endpoint == 'codex_page' %}
-                    {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">Codex</span>
+                    {% if country %}<span class="crumb">{{ country }}</span><span class="crumb-sep">›</span>{% endif %}<span class="crumb crumb--current">{{ _("Codex") }}</span>
                 {% elif country %}
-                    <span class="crumb">{{ country }}</span><span class="crumb-sep">›</span><span class="crumb crumb--current">Event Ledger</span>
+                    <span class="crumb">{{ country }}</span><span class="crumb-sep">›</span><span class="crumb crumb--current">{{ _("Event Ledger") }}</span>
                 {% elif request.endpoint == 'history_page' %}
-                    <span class="crumb crumb--current">Event Ledger</span>
+                    <span class="crumb crumb--current">{{ _("Event Ledger") }}</span>
                 {% else %}
-                    <span class="crumb crumb--current">Game Selection</span>
+                    <span class="crumb crumb--current">{{ _("Game Selection") }}</span>
                 {% endif %}
             </div>
             <div class="topbar-meta">
-                {% if current_date %}<span class="stardate">STARDATE&nbsp;<strong>{{ current_date }}</strong></span>{% endif %}
+                {% if current_date %}<span class="stardate">{{ _("STARDATE") }}&nbsp;<strong>{{ current_date }}</strong></span>{% endif %}
             </div>
         </header>
 
@@ -73,9 +73,9 @@
             <a id="index"></a>
             {% if show_old_version_notice %}
             <div class="version-notice">
-                <p>You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
-                   You can get the current version <a href="https://github.com/eliasdoehne/stellaris-dashboard" class="textlink">on Github.</a></p>
-                <p>This update notice can be disabled in the <a href="/settings/" class="textlink">Settings</a>.</p>
+                <p>{% trans trimmed version=version, update_version_id=update_version_id %}You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
+                   You can get the current version <a href="https://github.com/eliasdoehne/stellaris-dashboard" class="textlink">on Github.</a>{% endtrans %}</p>
+                <p>{% trans trimmed %}This update notice can be disabled in the <a href="/settings/" class="textlink">Settings</a>.{% endtrans %}</p>
             </div>
             {% endif %}
             {% block body %}{% endblock %}

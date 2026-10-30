@@ -20,6 +20,7 @@ import zipfile
 from typing import Dict, List, Optional, Set, Tuple
 
 from stellarisdashboard import config, datamodel
+from stellarisdashboard.i18n import gettext as _
 from stellarisdashboard.parsing import save_copies, save_parser
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,9 @@ _META_NAME_RE = re.compile(r'^name="(.*)"', re.MULTILINE)
 _FILENAME_DATE_RE = re.compile(r"(\d{4}\.\d{2}\.\d{2})")
 
 _MAX_LISTED_ERRORS = 50
+
+# game_id of a job that reprocesses the kept copies of several games; shown as "all games"
+_ALL_GAMES_ID = "all games"
 
 
 class ImportRefused(Exception):
@@ -168,7 +172,9 @@ def get_import_plan(
     save_path = save_path or config.CONFIG.save_file_path
     files = _save_files_by_game(save_path).get(game_id) if save_path else None
     if not files:
-        raise ImportRefused(f"No save files found for game {game_id} in {save_path}.")
+        raise ImportRefused(
+            _("No save files found for game %(game_id)s in %(save_path)s.", game_id=game_id, save_path=save_path)
+        )
     saves = sorted(
         (read_save_info(f) for f in files if not exclude or f not in exclude),
         key=lambda s: (s.date if s.date is not None else float("inf"), s.path),
@@ -238,6 +244,13 @@ class ImportJob:
         self._thread = threading.Thread(
             target=self._run, name=f"bulk-import-{self.game_id}", daemon=True
         )
+
+    @property
+    def game_label(self) -> str:
+        """The game ID as shown on the import page."""
+        if self.game_id == _ALL_GAMES_ID and self.is_reprocess:
+            return _("all games")
+        return self.game_id
 
     @property
     def is_reprocess(self) -> bool:
@@ -381,11 +394,13 @@ def start_import(game_id: str) -> ImportJob:
     global _current_job
     save_path = config.CONFIG.save_file_path
     if save_path is None or not save_path.is_dir():
-        raise ImportRefused(f"The save files folder {save_path} does not exist. Check the settings.")
+        raise ImportRefused(
+            _("The save files folder %(save_path)s does not exist. Check the settings.", save_path=save_path)
+        )
     _refuse_if_running()
     plan = get_import_plan(game_id, save_path)
     if not plan.to_import:
-        raise ImportRefused(f"All saves of {game_id} are already imported.")
+        raise ImportRefused(_("All saves of %(game_id)s are already imported.", game_id=game_id))
     with _jobs_lock:
         _refuse_if_running()
         _current_job = ImportJob(plan, save_path)
@@ -403,7 +418,7 @@ def start_reprocess(game_id: Optional[str] = None) -> ImportJob:
     _refuse_if_running()
     copies = save_copies.list_kept_copies(game_id)
     if not copies:
-        raise ImportRefused("There are no kept copies of failed saves to reprocess.")
+        raise ImportRefused(_("There are no kept copies of failed saves to reprocess."))
     infos = []
     for c in copies:
         try:
@@ -411,10 +426,10 @@ def start_reprocess(game_id: Optional[str] = None) -> ImportJob:
         except OSError:
             logger.warning(f"Kept copy {c.path} disappeared, skipping it")
     if not infos:
-        raise ImportRefused("There are no kept copies of failed saves to reprocess.")
+        raise ImportRefused(_("There are no kept copies of failed saves to reprocess."))
     game_ids = sorted({i.path.parent.name for i in infos})
     plan = ImportPlan(
-        game_id=game_id or (game_ids[0] if len(game_ids) == 1 else "all games"),
+        game_id=game_id or (game_ids[0] if len(game_ids) == 1 else _ALL_GAMES_ID),
         empire_name="",
         saves=infos,
         num_imported=0,
@@ -433,7 +448,10 @@ def _refuse_if_running() -> None:
     job = _current_job
     if job is not None and job.is_active:
         raise ImportRefused(
-            f"An import of {job.game_id} is already running. Wait for it to finish or cancel it."
+            _(
+                "An import of %(game_id)s is already running. Wait for it to finish or cancel it.",
+                game_id=job.game_label,
+            )
         )
 
 
