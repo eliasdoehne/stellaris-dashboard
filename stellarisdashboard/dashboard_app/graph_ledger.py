@@ -9,6 +9,7 @@ import plotly.graph_objs as go
 from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
 
 from stellarisdashboard import config, datamodel
+from stellarisdashboard.i18n import gettext as _, pgettext
 from stellarisdashboard.dashboard_app import (
     utils,
     flask_app,
@@ -69,8 +70,8 @@ timeline_app = Dash(
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
     # Fresh axis dicts so we don't mutate the shared DEFAULT_PLOT_LAYOUT.
-    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.x_axis_label)
-    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.y_axis_label)
+    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.display_x_axis_label())
+    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.display_y_axis_label())
     if plot_spec.y_axis_reversed:
         layout["yaxis"]["autorange"] = "reversed"
     # Width is fluid (autosize); the card/container controls it. Height stays configurable.
@@ -161,9 +162,9 @@ def _plot_grid_card(plot_spec, compact_figure):
                 className="tl-plot-card__header",
                 id={"type": "expand-plot", "index": plot_spec.plot_id},
                 n_clicks=0,
-                title="Click to enlarge",
+                title=_("Click to enlarge"),
                 children=[
-                    html.Span(plot_spec.title, className="tl-plot-card__title"),
+                    html.Span(plot_spec.display_title(), className="tl-plot-card__title"),
                     html.Span("⤢", className="tl-expand-icon"),
                 ],
             ),
@@ -184,7 +185,7 @@ def update_game_header(search):
     game_id, matches = _get_game_ids_matching_url(search)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
-        return "Unknown Game"
+        return _("Unknown Game")
     game_id = matches[0]
     games_dict = datamodel.get_available_games_dict()
     country = games_dict[game_id]["country_name"]
@@ -193,7 +194,7 @@ def update_game_header(search):
 
 @timeline_app.callback(Output("ledger-link", "href"), [Input("url", "search")])
 def update_ledger_link(search):
-    game_id, _ = _get_game_ids_matching_url(search)
+    game_id, _matches = _get_game_ids_matching_url(search)
     if game_id:
         return f"/history/{game_id}"
     return "/history"
@@ -201,7 +202,7 @@ def update_ledger_link(search):
 
 @timeline_app.callback(Output("galaxy-link", "href"), [Input("url", "search")])
 def update_galaxy_link(search):
-    game_id, _ = _get_game_ids_matching_url(search)
+    game_id, _matches = _get_game_ids_matching_url(search)
     if game_id:
         return f"/galaxy/{game_id}"
     return "/galaxy"
@@ -211,14 +212,15 @@ def update_galaxy_link(search):
     Output("country-perspective-dropdown", "options"), [Input("url", "search")]
 )
 def update_country_select_options(search):
-    game_id, _ = _get_game_ids_matching_url(search)
+    game_id, _matches = _get_game_ids_matching_url(search)
     games_dict = datamodel.get_available_games_dict()
 
     if game_id not in games_dict:
         logger.warning(f"Game ID {game_id} does not match any known game!")
         return []
 
-    options = [{"label": "None", "value": None}]
+    # Translators: entry of the country perspective dropdown that selects no country
+    options = [{"label": pgettext("country perspective", "None"), "value": None}]
     with datamodel.get_db_session(game_id) as session:
         for c in session.query(datamodel.Country):
             if (
@@ -251,9 +253,9 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
         # up as its source text; return a component instead.
         return html.Div(
             [
-                html.H2("Game not found"),
-                html.P(f'No game matches "{game_id}".'),
-                html.A("Back to game selection", href="/"),
+                html.H2(_("Game not found")),
+                html.P(_('No game matches "%(game)s".', game=game_id)),
+                html.A(_("Return to Game Selection"), href="/"),
             ],
             className="tl-content",
         )
@@ -297,7 +299,7 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
 
         full_layout = get_figure_layout(plot_spec)
         full_layout["title"] = dict(
-            text=plot_spec.title,
+            text=plot_spec.display_title(),
             font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
             x=0.5,
             xanchor="center",
@@ -494,13 +496,14 @@ def _get_raw_data_for_stacked_and_budget_plots(
 
     if lines and plot_spec.style == visualization_data.PlotStyle.budget:
         # Add net value over time
-        name = "Net result"
+        # Translators: legend label of the line showing the sum of all budget items
+        name = _("Net result")
         line = dict(
             x=lines[0]["x"],
             y=net_gain,
             name=name,
             line=dict(color="rgba(255,255,255,1)"),
-            text=get_plot_value_labels(lines[0]["x"], net_gain, "Net result"),
+            text=get_plot_value_labels(lines[0]["x"], net_gain, name),
             hoverinfo="text",
         )
         lines.append(line)
@@ -515,8 +518,15 @@ def dict_key_to_legend_label(key: str):
 
 
 def get_plot_value_labels(x_values, y_values, label):
+    legend_label = dict_key_to_legend_label(label)
     return [
-        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(label)}"
+        # Translators: hover text of a point in a graph. Placeholders: the in-game date, the value and the name of the plotted item
+        _(
+            "%(date)s: %(value)s - %(label)s",
+            date=datamodel.days_to_date(360 * x),
+            value=f"{y:.2f}",
+            label=legend_label,
+        )
         if (y and y == y)
         else ""
         for (x, y) in zip(x_values, y_values)
@@ -544,8 +554,28 @@ def start_dash_app(host, port):
         timeline_app.run(host=host, port=port)
 
 
+def _get_tab_labels() -> Dict[str, str]:
+    """Display names of the default tabs in the current dashboard language.
+
+    The tab names are the keys of the tab layout setting and identify the tabs, so they
+    stay English. Customised tabs that are not listed here are displayed as they are."""
+    return {
+        config.MARKET_TAB: pgettext("graph tab", "Markets"),
+        "Budget": pgettext("graph tab", "Budget"),
+        "Economy": pgettext("graph tab", "Economy"),
+        "Demographics": pgettext("graph tab", "Demographics"),
+        # Translators: name of a tab with graphs about the pops (population units)
+        "Pops": pgettext("graph tab", "Pops"),
+        "Planets": pgettext("graph tab", "Planets"),
+        "Science": pgettext("graph tab", "Science"),
+        "Military": pgettext("graph tab", "Military"),
+        "Victory": pgettext("graph tab", "Victory"),
+    }
+
+
 def get_layout():
     tab_names = list(config.CONFIG.tab_layout)
+    tab_labels = _get_tab_labels()
 
     brand = html.Div(
         className="tl-brand",
@@ -558,12 +588,12 @@ def get_layout():
     nav = html.Nav(
         className="tl-nav",
         children=[
-            html.A("◂  Game Selection", className="tl-nav-link", id="index-link", href="/"),
-            html.A("Settings", className="tl-nav-link", id="settings-link", href="/settings/"),
-            html.A("Galaxy Map", className="tl-nav-link", id="galaxy-link", href="/galaxy"),
-            html.A("Event Ledger", className="tl-nav-link", id="ledger-link", href="/history"),
+            html.A("◂  " + _("Game Selection"), className="tl-nav-link", id="index-link", href="/"),
+            html.A(_("Settings"), className="tl-nav-link", id="settings-link", href="/settings/"),
+            html.A(_("Galaxy Map"), className="tl-nav-link", id="galaxy-link", href="/galaxy"),
+            html.A(_("Event Ledger"), className="tl-nav-link", id="ledger-link", href="/history"),
             html.A(
-                "Stellaris Wiki  ↗",
+                _("Stellaris Wiki") + "  ↗",
                 className="tl-nav-link tl-nav-link--ext",
                 id="wiki-link",
                 href="https://stellaris.paradoxwikis.com/Stellaris_Wiki",
@@ -575,7 +605,7 @@ def get_layout():
         className="tl-control-group",
         children=[
             html.Label(
-                "Country perspective",
+                _("Country perspective"),
                 className="tl-control-label",
                 htmlFor="country-perspective-dropdown",
             ),
@@ -583,7 +613,8 @@ def get_layout():
                 id="country-perspective-dropdown",
                 className="tl-dropdown",
                 options=[],
-                placeholder="Galaxy default",
+                # Translators: shown in the country perspective dropdown when no country is selected, the graphs then show the default view of the whole galaxy
+                placeholder=_("Galaxy default"),
                 value=None,
             ),
             dcc.Checklist(
@@ -591,7 +622,7 @@ def get_layout():
                 className="tl-checklist",
                 options=[
                     {
-                        "label": "Normalize stacked plots",
+                        "label": _("Normalize stacked plots"),
                         "value": "normalize_stacked_plots",
                     },
                 ],
@@ -607,7 +638,7 @@ def get_layout():
         children=[
             dcc.Tab(
                 id=tab_label,
-                label=tab_label,
+                label=tab_labels.get(tab_label, tab_label),
                 value=tab_label,
                 className="tl-tab",
                 selected_className="tl-tab--selected",
@@ -621,7 +652,7 @@ def get_layout():
         className="tl-sidebar",
         children=[
             brand,
-            html.H1("Unknown Game", id="game-name-header", className="tl-game-name"),
+            html.H1(_("Unknown Game"), id="game-name-header", className="tl-game-name"),
             nav,
             global_graph_controls,
         ],
@@ -653,7 +684,7 @@ def get_layout():
                                 "✕",
                                 id="modal-close",
                                 className="tl-modal__close",
-                                title="Close",
+                                title=_("Close"),
                                 n_clicks=0,
                             ),
                         ],
