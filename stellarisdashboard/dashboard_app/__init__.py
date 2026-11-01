@@ -22,6 +22,7 @@ from stellarisdashboard.dashboard_app import (
     settings,
     import_page,
     shell,
+    ledger_search,
 )
 
 

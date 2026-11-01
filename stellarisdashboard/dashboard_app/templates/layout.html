@@ -13,6 +13,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='ledger.css') }}">
     <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
     <script src="{{ url_for('static', filename='shell.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='search.js') }}" defer></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -99,6 +100,23 @@
                 <span class="crumb-sep">›</span><span class="crumb crumb--current">Filtered</span>
                 {% endif %}
             </div>
+            {% if game_name %}
+            {# results come from ledger_search.py; assets/search.js drives the box #}
+            <div class="topsearch" data-search-url="{{ url_for('ledger_search', game_id=game_name) }}"
+                 {% if active == "graphs" %}data-search-boost="false"{% endif %}>
+                <button type="button" class="icon-button topsearch-open" data-search-open aria-label="Search this game" title="Search (/)">{{ icon("search") }}</button>
+                <div class="topsearch-box">
+                    {{ icon("search") }}
+                    <input type="search" class="topsearch-input" placeholder="Find an empire, leader, war, system…"
+                           autocomplete="off" spellcheck="false" enterkeyhint="go"
+                           role="combobox" aria-label="Search this game" aria-autocomplete="list"
+                           aria-controls="topsearch-results" aria-expanded="false">
+                    <kbd class="topsearch-key" title="Press / to search">/</kbd>
+                    <button type="button" class="icon-button topsearch-close" data-search-close aria-label="Close search">{{ icon("close") }}</button>
+                </div>
+                <div class="topsearch-results" id="topsearch-results" role="listbox" aria-label="Search results" hidden></div>
+            </div>
+            {% endif %}
             <div class="topbar-meta">
                 {% if current_date %}<span class="stardate" title="Date of the latest save">{{ current_date }}</span>{% endif %}
             </div>
