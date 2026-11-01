@@ -43,10 +43,41 @@ def history_page(game_id="", version=None):
         items = builder.build_items(query.events(years))
         by_year = collections.OrderedDict((y, []) for y in years)
         # storylines sit at their first member in page order, but are dated by their start
-        items.sort(key=lambda i: i["start_date_days"], reverse=params.newest_first)
+        # (or, if that is before these years, by their first event in them)
+        items.sort(
+            key=lambda i: i["start_date_days"] if _year(i["start_date_days"]) in by_year else i["placed_days"],
+            reverse=params.newest_first,
+        )
         for item in items:
-            year = max(int(item["start_date_days"] // 360) + 2200, 2200)
-            by_year.setdefault(year, []).append(_ledger_row(item))
+            year = _year(item["start_date_days"])
+            if year not in by_year:
+                # a storyline that started outside these years sits at its first event in them
+                year = _year(item["placed_days"])
+            by_year[year].append(_ledger_row(item, year))
+        last_year = years[-1] if years else None
+        remaining = [y for y in year_counts if (y < last_year if params.newest_first else y > last_year)] if last_year else []
+        timeline = dict(
+            params=params,
+            by_year=by_year,
+            hidden_counts=query.hidden_counts(year_counts),
+            next_level=query.next_level(),
+            remaining=len(remaining),
+            last_year=last_year,
+            links=builder._formatted_urls,
+        )
+        # htmx fragments: one year expanded or collapsed in place, or the next page appended
+        if params.part == "year" and params.year is not None:
+            new_keys = set()
+            if params.level != params.base_level:
+                # highlight what this level added to the one before it
+                seen = query.row_keys(years, query.previous_level())
+                new_keys = {row["key"] for row in by_year[params.year]} - seen
+            return render_template(
+                "_ledger_year.html", year=params.year, rows=by_year[params.year], new_keys=new_keys, **timeline
+            )
+        if params.part == "page":
+            return render_template("_ledger_years.html", **timeline)
+
         focus = None
         if query.focus is not None:
             builder._formatted_urls[query.focus] = builder._get_url_for(query.focus)
@@ -56,41 +87,42 @@ def history_page(game_id="", version=None):
                 is_player=getattr(query.focus, "is_player", False),
                 details=builder._get_details(query.focus),
             )
-        last_year = years[-1] if years else None
-        remaining = [y for y in year_counts if (y < last_year if params.newest_first else y > last_year)] if last_year else []
         current_date = datamodel.days_to_date(utils.get_most_recent_date(session))
         page = render_template(
             "ledger_page.html",
             game_name=game_id,
             country=country,
             current_date=current_date,
-            params=params,
             levels=ledger_timeline.LEVELS,
             categories=list(event_registry.Category),
             category_counts=query.category_counts(),
-            by_year=by_year,
             decades=query.decades(year_counts),
-            hidden_counts=query.hidden_counts(year_counts),
-            next_level=query.next_level(),
-            remaining=len(remaining),
-            last_year=last_year,
-            links=builder._formatted_urls,
             focus=focus,
             show_old_version_notice=show_old_version_notice,
             version=utils.VERSION,
             update_version_id=version,
+            **timeline,
         )
     return page
 
 
-def _ledger_row(item) -> dict:
+def _year(days) -> int:
+    # events from before the game started (leaders hired earlier) count as its first year
+    return max(int(days // 360) + 2200, 2200)
+
+
+def _ledger_row(item, year: int) -> dict:
     category, tier = event_registry.describe(item)
+    start_year, _, month_day = item["start_date"].partition(".")
     row = dict(
         item=item,
+        key=item.get("key"),
         category=category.name.lower() if category else "other",
         category_label=category.value if category else "",
         tier=int(tier) if tier else 2,
-        date=item["start_date"][5:],
+        date=month_day,
+        # only for rows dated outside the year they're listed in
+        date_year=start_year if int(start_year) != year else None,
         end_date=item.get("end_date") if event_registry.is_span(item) else None,
     )
     if item.get("event_type") == "storyline":
@@ -431,6 +463,7 @@ class EventTemplateDictBuilder:
                     item = event_grouping.find_contact_partner(contact_items, storyline)
                     if item is None:
                         item = self._storyline_dict(storyline)
+                        item["placed_days"] = event.start_date_days
                         items.append(item)
                         if "sides" in item:
                             contact_items[event_grouping.contact_pair(storyline)].append(item)
@@ -443,7 +476,8 @@ class EventTemplateDictBuilder:
                     item["stages"].append((sort_key, self._stage_dict(event, start), event.country))
                 self._preformat_urls(event)
                 continue
-            event_dict["start_date_days"] = event.start_date_days
+            event_dict["start_date_days"] = event_dict["placed_days"] = event.start_date_days
+            event_dict["key"] = ledger_timeline.row_key(event.historical_event_id, None)
             items.append(event_dict)
             for grouped_event in group.events:
                 self._preformat_urls(grouped_event)
@@ -579,6 +613,7 @@ class EventTemplateDictBuilder:
             planet=storyline.planet,
         )
         item = {k: v for (k, v) in item.items() if v is not None}
+        item["key"] = ledger_timeline.row_key(None, storyline.storyline_id)
         item["stages"] = []
         if storyline.storyline_type == datamodel.StorylineType.first_contact:
             item["sides"] = [storyline]  # each empire's own process; build_items merges the pair

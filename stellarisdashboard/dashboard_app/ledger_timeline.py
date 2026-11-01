@@ -56,6 +56,9 @@ class LedgerParams:
     before: Optional[int] = None  # newest first: show years < before
     after: Optional[int] = None  # oldest first: show years > after
     year: Optional[int] = None  # a single year
+    # htmx fragments: "year" is one year's section, "page" the next page's sections
+    part: Optional[str] = None
+    base: Optional[str] = None  # the level of the page a year section was expanded from
     focus_kind: Optional[str] = None
     focus_id: Optional[int] = None
     focus_player: bool = False
@@ -76,6 +79,9 @@ class LedgerParams:
         params.before = _int_arg("before")
         params.after = _int_arg("after")
         params.year = _int_arg("year")
+        if args.get("part") in ("year", "page"):
+            params.part = args["part"]
+        params.base = args.get("base") if args.get("base") in _LEVEL_TIERS else None
         for kind in FOCUS_KINDS:
             focus_id = _int_arg(kind)
             if focus_id is not None:
@@ -93,6 +99,10 @@ class LedgerParams:
     def tier(self) -> Tier:
         return _LEVEL_TIERS[self.level]
 
+    @property
+    def base_level(self) -> str:
+        return self.base or self.level
+
     def url(self, **changes) -> str:
         """The ledger URL for these params with some changed; paging resets unless given."""
         values = dict(level=self.level, categories=self.categories, newest_first=self.newest_first,
@@ -109,7 +119,7 @@ class LedgerParams:
             args["cat"] = sorted(c.name.lower() for c in values["categories"])
         if not values["newest_first"]:
             args["order"] = "oldest"
-        for key in ("before", "after", "year"):
+        for key in ("before", "after", "year", "part", "base"):
             if values.get(key) is not None:
                 args[key] = values[key]
         return url_for("history_page", game_id=self.game_id, **args)
@@ -238,7 +248,29 @@ class LedgerQuery:
             counts[year // 10 * 10] += n
         return sorted(counts.items(), reverse=self.params.newest_first)
 
+    def row_keys(self, years: list, level: str) -> set:
+        """The keys of the rows the given level shows in these years (see row_key)."""
+        lo, hi = min(years), max(years)
+        rows = (
+            self.session.query(HE.historical_event_id, HE.storyline_id)
+            .filter(self._clause(self.params.categories, _LEVEL_TIERS[level]))
+            .filter(HE.start_date_days >= (_days(lo) if lo > 2200 else -10 ** 9), HE.start_date_days < _days(hi + 1))
+        )
+        return {row_key(event_id, storyline_id) for event_id, storyline_id in rows}
+
     def next_level(self) -> Optional[str]:
-        keys = [key for key, _, _ in LEVELS]
-        i = keys.index(self.params.level)
-        return keys[i + 1] if i + 1 < len(keys) else None
+        return _step_level(self.params.level, 1)
+
+    def previous_level(self) -> Optional[str]:
+        return _step_level(self.params.level, -1)
+
+
+def _step_level(level: str, step: int) -> Optional[str]:
+    keys = [key for key, _, _ in LEVELS]
+    i = keys.index(level) + step
+    return keys[i] if 0 <= i < len(keys) else None
+
+
+def row_key(event_id: int, storyline_id: Optional[int]) -> str:
+    """Identifies a ledger row across levels: its storyline, or its (first) event."""
+    return f"s{storyline_id}" if storyline_id is not None else f"e{event_id}"

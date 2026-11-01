@@ -1,0 +1,50 @@
+{# One year of the ledger timeline: on the page, and as the htmx fragment that expands or collapses it in place. #}
+{% set base = params.base_level %}
+{% set hidden = hidden_counts.get(year, 0) %}
+<section class="ledger-year" id="y{{ year }}">
+    <h2 class="ledger-year-head"><span class="ledger-year-num">{{ year }}</span>
+        <span class="ledger-year-count">{{ rows|length }} event{{ "s" if rows|length != 1 }}</span></h2>
+    <ol class="ledger-list">
+        {% for row in rows %}
+        {% set item = row.item %}
+        <li class="ledger-item cat-{{ row.category }} tier-{{ row.tier }}{% if new_keys and row.key in new_keys %} is-new{% endif %}">
+            <time class="ledger-date">{% if row.date_year %}<span class="ledger-date-year">{{ row.date_year }}.</span>{% endif %}{{ row.date }}</time>
+            <span class="cat-dot" title="{{ row.category_label }}"></span>
+            {% if row.stage_noun is defined %}
+            <details class="ledger-story">
+                <summary>
+                    <span class="ledger-text">{{ render_sentence(item, links) }}</span>
+                    <span class="ledger-meta">
+                        <span class="story-state state-{{ item.state }}">{{ row.state_label }}</span>
+                        {% if item.stage_count %}{{ item.stage_count }} {{ row.stage_noun }}{{ "s" if item.stage_count != 1 }}{% endif %}
+                    </span>
+                </summary>
+                <ol class="story-stages">
+                    {% for stage in item.stages %}
+                    <li><time class="ledger-date">{{ stage.start_date }}</time>
+                        <span>{{ row.stage_noun | capitalize }} {{ stage.index }}{% if stage.detail %}: {{ stage.detail }}{% endif %}{% if stage.country %} by the {{ links[stage.country] | safe }}{% endif %}</span></li>
+                    {% endfor %}
+                </ol>
+            </details>
+            {% else %}
+            <span class="ledger-text">{{ render_sentence(item, links) }}{% if row.end_date %}<span class="ledger-span">until {{ row.end_date }}</span>{% endif %}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+    {% if (hidden > 0 and next_level) or params.level != base %}
+    {# without htmx the links open that year as its own page #}
+    <div class="ledger-year-foot">
+        {% if hidden > 0 and next_level %}
+        <a class="ledger-more" id="y{{ year }}-more" href="{{ params.url(level=next_level, year=year) }}"
+           hx-get="{{ params.url(level=next_level, year=year, part='year', base=base) }}"
+           hx-target="closest .ledger-year" hx-swap="outerHTML">+ {{ hidden }} more in {{ year }}</a>
+        {% endif %}
+        {% if params.level != base %}
+        <a class="ledger-fewer" id="y{{ year }}-fewer" href="{{ params.url(level=base, year=year) }}"
+           hx-get="{{ params.url(level=base, year=year, part='year') }}"
+           hx-target="closest .ledger-year" hx-swap="outerHTML" data-keep-in-view>Show fewer</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>

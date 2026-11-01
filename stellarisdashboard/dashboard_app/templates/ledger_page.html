@@ -1,9 +1,5 @@
 {% extends "layout.html" %}
 
-{% macro row_date(row) -%}
-<time class="ledger-date">{{ row.date }}</time>
-{%- endmacro %}
-
 {% block body %}
 <div class="ledger">
     <div class="page-head ledger-head">
@@ -66,51 +62,7 @@
             {% if not by_year %}
             <p class="ledger-empty">No events match these filters.</p>
             {% endif %}
-            {% for year, rows in by_year.items() %}
-            <section class="ledger-year" id="y{{ year }}">
-                <h2 class="ledger-year-head"><span class="ledger-year-num">{{ year }}</span>
-                    <span class="ledger-year-count">{{ rows|length }} event{{ "s" if rows|length != 1 }}</span></h2>
-                <ol class="ledger-list">
-                    {% for row in rows %}
-                    {% set item = row.item %}
-                    <li class="ledger-item cat-{{ row.category }} tier-{{ row.tier }}">
-                        {{ row_date(row) }}
-                        <span class="cat-dot" title="{{ row.category_label }}"></span>
-                        {% if row.stage_noun is defined %}
-                        <details class="ledger-story">
-                            <summary>
-                                <span class="ledger-text">{{ render_sentence(item, links) }}</span>
-                                <span class="ledger-meta">
-                                    <span class="story-state state-{{ item.state }}">{{ row.state_label }}</span>
-                                    {% if item.stage_count %}{{ item.stage_count }} {{ row.stage_noun }}{{ "s" if item.stage_count != 1 }}{% endif %}
-                                </span>
-                            </summary>
-                            <ol class="story-stages">
-                                {% for stage in item.stages %}
-                                <li><time class="ledger-date">{{ stage.start_date }}</time>
-                                    <span>{{ row.stage_noun | capitalize }} {{ stage.index }}{% if stage.detail %}: {{ stage.detail }}{% endif %}{% if stage.country %} by the {{ links[stage.country] | safe }}{% endif %}</span></li>
-                                {% endfor %}
-                            </ol>
-                        </details>
-                        {% else %}
-                        <span class="ledger-text">{{ render_sentence(item, links) }}{% if row.end_date %}<span class="ledger-span">until {{ row.end_date }}</span>{% endif %}</span>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ol>
-                {% set hidden = hidden_counts.get(year, 0) %}
-                {% if hidden > 0 and next_level %}
-                <a class="ledger-more" href="{{ params.url(level=next_level, year=year) }}">+ {{ hidden }} more in {{ year }}</a>
-                {% endif %}
-            </section>
-            {% endfor %}
-
-            {% if params.year %}
-            <a class="button ledger-pager" href="{{ params.url() }}">Back to all years</a>
-            {% elif remaining %}
-            <a class="button ledger-pager" href="{{ params.url(before=last_year) if params.newest_first else params.url(after=last_year) }}">
-                {{ "Earlier years" if params.newest_first else "Later years" }} ({{ remaining }} more)</a>
-            {% endif %}
+            {% include "_ledger_years.html" %}
         </div>
 
         {% if decades %}

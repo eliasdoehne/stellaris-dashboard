@@ -172,6 +172,7 @@
 .ledger-item:hover { background: rgba(43, 59, 52, 0.55); }
 .ledger-item > .cat-dot { align-self: start; margin-top: 0.55em; }
 .ledger-date { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-faint); }
+.ledger-date-year { display: block; font-size: 0.7rem; }
 .ledger-text, .ledger-text span { font-size: 0.93rem; color: var(--text); }
 .ledger-text a.textlink,
 .story-stages a.textlink {
@@ -228,11 +229,26 @@
 .story-stages li { display: flex; gap: 0.6rem; padding: 0.15rem 0; font-size: 0.86rem; color: var(--text-dim); }
 .story-stages li span { font-size: inherit; color: inherit; }
 
-.ledger-more {
-    display: inline-block;
+/* A year's "+ N more" / "Show fewer", which expand and collapse it in place */
+.ledger-year-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.25rem;
     margin: 0.4rem 0 0 4.3rem;
-    font-size: 0.82rem;
-    color: var(--text-dim);
+}
+.ledger-more, .ledger-fewer { font-size: 0.82rem; color: var(--text-dim); }
+.ledger-more.htmx-request, .ledger-fewer.htmx-request, .ledger-pager.htmx-request { opacity: 0.55; cursor: progress; }
+
+/* Rows an in-place expansion added: a highlight that fades out */
+.ledger-item.is-new { animation: ledger-new 2.6s ease-out 0.3s backwards; }
+@keyframes ledger-new {
+    from {
+        background-color: rgba(195, 133, 33, 0.16);  /* --amber */
+        box-shadow: inset 2px 0 0 var(--amber-bright);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ledger-item.is-new { animation: none; box-shadow: inset 2px 0 0 var(--amber-deep); }
 }
 .ledger-pager { margin: 0.5rem 0 2rem; }
 
@@ -269,5 +285,5 @@
     .ledger-toolbar::-webkit-scrollbar { display: none; }
     .ledger-cats { flex-wrap: nowrap; }
     .ledger-item { grid-template-columns: 2.9rem 0.5rem minmax(0, 1fr); padding-left: 0.25rem; padding-right: 0.25rem; }
-    .ledger-more { margin-left: 3.6rem; }
+    .ledger-year-foot { margin-left: 3.6rem; }
 }
