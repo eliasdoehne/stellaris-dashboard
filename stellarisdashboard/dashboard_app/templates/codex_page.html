@@ -1,10 +1,13 @@
 {% extends "layout.html" %}
 
 {% block body %}
-<div class="codex">
-    <p class="codex-intro">
-        A browsable index of this game's entities. Select one to open its event ledger.
-    </p>
+<div class="codex page page--narrow">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Codex</h1>
+            <p class="page-subtitle">A browsable index of this game's entities. Select one to open its event ledger.</p>
+        </div>
+    </div>
 
     <section class="codex-section">
         <h2 class="codex-heading">Empires <span class="codex-count">({{ empires | length }})</span></h2>
