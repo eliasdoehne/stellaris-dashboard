@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-30 23:56+0000\n"
+"POT-Creation-Date: 2026-11-01 11:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ko\n"
@@ -2748,7 +2748,7 @@ msgstr "그래프 높이"
 msgid "Height of graphs in pixels."
 msgstr "그래프의 높이(픽셀)입니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:213
+#: stellarisdashboard/dashboard_app/settings.py:217
 msgid "Settings applied."
 msgstr "설정이 적용되었습니다."
 

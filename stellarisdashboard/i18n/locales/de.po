@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-30 23:56+0000\n"
+"POT-Creation-Date: 2026-11-01 11:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -2862,7 +2862,7 @@ msgstr "Diagrammhöhe"
 msgid "Height of graphs in pixels."
 msgstr "Höhe der Diagramme in Pixeln."
 
-#: stellarisdashboard/dashboard_app/settings.py:213
+#: stellarisdashboard/dashboard_app/settings.py:217
 msgid "Settings applied."
 msgstr "Einstellungen übernommen."
 

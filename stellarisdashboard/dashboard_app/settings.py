@@ -182,6 +182,7 @@ def settings_page():
 @flask_app.route("/applysettings/", methods=["POST"])
 def apply_settings():
     previous_settings = config.CONFIG.get_adjustable_settings_dict()
+    previous_locale = i18n.current_locale()
     settings = request.form.to_dict(flat=True)
     invalid_keys = []
     for key, value in settings.items():
@@ -206,6 +207,9 @@ def apply_settings():
     config.CONFIG.apply_dict(settings)
     config.CONFIG.write_to_file()
     if request.headers.get("HX-Request"):
+        if i18n.current_locale() != previous_locale:
+            # the page (form, menus) is in the old language: have htmx reload it
+            return "", 200, {"HX-Refresh": "true"}
         # htmx save: confirm with an out-of-band toast swapped into #toast-slot;
         # the form itself is left untouched (hx-swap="none").
         return (

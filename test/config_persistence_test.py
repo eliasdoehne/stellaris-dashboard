@@ -173,3 +173,37 @@ def test_default_dicts_are_unchanged_by_loading_and_writing(settings_dir):
 def test_dashboard_language_is_validated_on_load(settings_dir, stored, expected):
     _write_settings(settings_dir, dashboard_language=stored)
     assert _load_config().dashboard_language == expected
+
+
+@pytest.fixture
+def settings_client(settings_dir, monkeypatch):
+    from stellarisdashboard import dashboard_app
+
+    _write_settings(settings_dir, stellaris_language="l_english")
+    monkeypatch.setattr(config, "CONFIG", _load_config())
+    return dashboard_app.flask_app.test_client()
+
+
+def _apply_settings(client, **form):
+    return client.post("/applysettings/", data=form, headers={"HX-Request": "true"})
+
+
+def test_settings_page_reloads_when_the_dashboard_language_changes(settings_client):
+    response = _apply_settings(settings_client, dashboard_language="de")
+    assert response.headers.get("HX-Refresh") == "true"
+    assert config.CONFIG.dashboard_language == "de"
+
+
+def test_settings_page_reloads_when_the_followed_stellaris_language_changes(
+    settings_client,
+):
+    response = _apply_settings(
+        settings_client, dashboard_language="auto", stellaris_language="l_french"
+    )
+    assert response.headers.get("HX-Refresh") == "true"
+
+
+def test_settings_page_shows_toast_when_the_language_is_unchanged(settings_client):
+    response = _apply_settings(settings_client, dashboard_language="auto", port="4321")
+    assert "HX-Refresh" not in response.headers
+    assert "toast" in response.get_data(as_text=True)

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-30 23:56+0000\n"
+"POT-Creation-Date: 2026-11-01 11:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -2740,7 +2740,7 @@ msgstr "图表高度"
 msgid "Height of graphs in pixels."
 msgstr "图表高度，单位为像素。"
 
-#: stellarisdashboard/dashboard_app/settings.py:213
+#: stellarisdashboard/dashboard_app/settings.py:217
 msgid "Settings applied."
 msgstr "设置已应用。"
 
