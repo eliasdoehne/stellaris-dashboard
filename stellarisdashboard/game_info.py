@@ -210,6 +210,11 @@ class NameRenderer:
             # LEADER_2 -> "$1$ $2$", then $2$ = MAM4_CHR_daughterofNagg -> "$1$, daughter of Nagg"
             # This last template contains another $1$ which is never resolved.
             render_template = re.sub(pattern, "", render_template)
+        # a value that only references another key, e.g. "$astral_rift.2510.name$": resolve it
+        # before the post-processing below splits the dotted key apart
+        match_dotted_reference = re.fullmatch(r"\$([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\$", render_template)
+        if match_dotted_reference:
+            return lookup_key(match_dotted_reference.group(1))
         # post-processing: The above issue can cause
         render_template = ", ".join(s.strip() for s in render_template.split(","))
         render_template = ". ".join(s.strip() for s in render_template.split("."))
@@ -227,7 +232,8 @@ class NameRenderer:
             resolved = lookup_key(match)
             render_template = re.sub(rf"\${match}\$", resolved, render_template)
 
-        return render_template
+        # the ". " join leaves a trailing space after a final dot, e.g. "S. I. D. N. I. "
+        return render_template.strip()
 
     def _fmt_ord_number(self, num: int):
         if num % 10 == 1:

@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 
 class Category(enum.Enum):
@@ -44,15 +44,29 @@ POINT = "point"
 SPAN = "span"
 ENVOY = "envoy"   # a span that is merged per envoy group (see event_grouping)
 
-# Helper macros, made available to every
-# sentence template via a shared prefix.
+# Helper macros, made available to every sentence template via a shared prefix.
+# the(x) / The(x) render an entity link (or a plain name) after "the", see with_article.
 _MACROS = """
 {% macro render_leader(event, fallback="an unknown leader") -%}
-    {% if "leader" in event %}
-        {{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }}
-    {% else %}
-        {{ fallback }}
-    {% endif %}
+    {% if "leader" in event %}{{ event["leader"].leader_class.capitalize() }} {{ links[event["leader"]] | safe }}{% else %}{{ fallback }}{% endif %}
+{%- endmacro %}
+{% macro country_under_ruler(event) -%}
+    {% if "leader" in event %}Under {{ render_leader(event) }}, {{ the(event["country"]) }}{% else %}{{ The(event["country"]) }}{% endif %}
+{%- endmacro %}
+{% macro leader_of_country(event) -%}
+    {% if "leader" in event %}{{ render_leader(event) }} of {{ the(event["country"]) }}{% else %}{{ The(event["country"]) }}{% endif %}
+{%- endmacro %}
+{% macro the_war(war) -%}
+    {{ the(war) }}{% if not war.ingame_name %} war{% endif %}
+{%- endmacro %}
+{% macro in_system(event) -%}
+    {% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}
+{%- endmacro %}
+{% macro during_war(event) -%}
+    {% if "war" in event %} during {{ the_war(event["war"]) }}{% endif %}
+{%- endmacro %}
+{% macro under_governor(event) -%}
+    {% if "leader" in event %} under the governorship of {{ render_leader(event) }}{% endif %}
 {%- endmacro %}
 {% macro render_envoys(event) -%}
     {% if "leaders" in event %}
@@ -67,20 +81,46 @@ _MACROS = """
     {% if "assignment_count" in event %} ({{ event["assignment_count"] }} assignments){% endif %}
 {%- endmacro %}
 {% macro render_planet_and_class(event, fallback="an unknown planet") -%}
-    {% if event["planet"] is not none %}
-        {% if event["planet"].planet_class is not none %}
-            the {{ event["planet"].planetclass }} {{ links[event["planet"]] | safe }}
-        {% else %}
-            {{ links[event["planet"]] | safe }}
-        {% endif %}
+    {% if "planet" in event %}
+        {% if event["planet"].planet_class is not none %}the {{ event["planet"].planetclass }} {% endif %}{{ links[event["planet"]] | safe }}
     {% else %}
         {{ fallback }}
     {% endif %}
 {%- endmacro %}
 {% macro render_a_an(text) -%}
-    {% if text.lower().startswith(("a", "e", "i", "o", "u")) %} an {% else %} a {% endif %}
+    {{ "an" if text.lstrip('"').lower().startswith(("a", "e", "i", "o", "u")) else "a" }}
+{%- endmacro %}
+{% macro combat_exhaustion(event) -%}
+    (exhaustion: attackers {{ event["attacker_exhaustion"] }}, defenders {{ event["defender_exhaustion"] }})
 {%- endmacro %}
 """
+
+
+def has_own_article(name: str) -> bool:
+    """Whether a name starts with its own article, like "The Chosen" or "The War in Heaven"."""
+    return name.lower().startswith("the ")
+
+
+def with_article(entity, links=None, capitalize=False) -> Markup:
+    """An entity's link (or a plain name) after "the", unless the name brings its own.
+
+    "the Tzynn Empire", but "The Chosen" instead of "the The Chosen".
+    """
+    if isinstance(entity, str):
+        name, shown = entity, escape(entity)
+    else:
+        name, shown = entity.rendered_name, Markup(links[entity])
+    if has_own_article(name):
+        return shown
+    return Markup("The " if capitalize else "the ") + shown
+
+
+def with_articles(entities, links=None, capitalize=False) -> Markup:
+    """Several entities, each with its article: "the A, the B and the C"."""
+    parts = [with_article(e, links, capitalize and i == 0) for i, e in enumerate(entities)]
+    if len(parts) < 2:
+        return Markup("").join(parts)
+    return Markup(", ").join(parts[:-1]) + Markup(" and ") + parts[-1]
 
 
 # galactic_crisis event description (see parsing/galaxy_events.py) -> what happened to its country
@@ -134,596 +174,416 @@ class EventDescriptor:
     sentence: Optional[str] = None
 
 
-# event_type -> EventDescriptor. Sentences are copied verbatim from the old
-# per-branch markup. category is the topic group, tier the importance.
+# event_type -> EventDescriptor. category is the topic group, tier the importance.
 REGISTRY: dict[str, EventDescriptor] = {
     # ---- Warfare --------------------------------------------------------
     "war": EventDescriptor(
         Category.WARFARE, Tier.HEADLINE, "swords", POINT,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered the {{ links[event["war"]] | safe }}{% if not event["war"].ingame_name %} war{% endif %} {{ event["description"] }}{% if event["target_country"] %} {{ links[event["target_country"]] | safe}}{% endif %}.\n',
+        # "..., honoring their alliance with the X." but "... as a primary party."
+        '{{ country_under_ruler(event) }} entered {{ the_war(event["war"]) }}'
+        '{% if "target_country" in event %}, {{ event["description"] }} {{ the(event["target_country"]) }}'
+        '{% else %} {{ event["description"] }}{% endif %}.',
     ),
     "peace": EventDescriptor(
         Category.WARFARE, Tier.HEADLINE, "dove", POINT,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} made peace in the {{ links[event["war"]] | safe }}{% if not event["war"].ingame_name %} conflict{% endif %}.\n',
+        '{{ country_under_ruler(event) }} made peace in {{ the_war(event["war"]) }}.',
     ),
     "conquered_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} conquered the {{ links[event["system"]] | safe }} system from the\n'
-        '                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war"]] | safe }}{% endif %}.\n',
+        '{{ The(event["country"]) }} conquered the {{ links[event["system"]] | safe }} system'
+        '{% if "target_country" in event %} from {{ the(event["target_country"]) }}{% endif %}{{ during_war(event) }}.',
     ),
     "founded_with_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} was founded with the {{ links[event["system"]] | safe }} system, formerly held by the'
-        ' {{ links[event["target_country"]] | safe }}.\n',
+        '{{ The(event["country"]) }} was founded with the {{ links[event["system"]] | safe }} system'
+        '{% if "target_country" in event %}, formerly held by {{ the(event["target_country"]) }}{% endif %}.',
     ),
     "lost_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} lost control of the {{ links[event["system"]] | safe}}\n'
-        '                    system{% if event["target_country"] %} to the {{ links[event["target_country"]] | safe }}.\n'
-        '                    {% else %}, leaving it unclaimed.\n'
-        '                    {% endif %}\n',
+        '{{ The(event["country"]) }} lost control of the {{ links[event["system"]] | safe }} system'
+        '{% if "target_country" in event %} to {{ the(event["target_country"]) }}{% else %}, leaving it unclaimed{% endif %}.',
     ),
     "fleet_combat": EventDescriptor(
         Category.WARFARE, Tier.ROUTINE, "crosshair", POINT,
-        '\n'
-        '                    Space battle in the {{ links[event["system"]] | safe }} system:\n'
-        '                    Attackers {{ event["attackers"] | safe }} ({{event["attacker_exhaustion"]}} exhaustion)\n'
-        '                    {% if event["attacker_victory"] %} defeated {% else %} were defeated by {% endif %}\n'
-        '                    {{ event["defenders"] | safe }} (exhaustion {{event["defender_exhaustion"]}}) in the\n'
-        '                    {{ links[event["war"]] | safe }}.\n',
+        '{% if event["attacker_victory"] %}'
+        '{{ The_all(event["attackers"]) }} defeated {{ the_all(event["defenders"]) }}'
+        '{% else %}'
+        '{{ The_all(event["defenders"]) }} repelled an attack by {{ the_all(event["attackers"]) }}'
+        '{% endif %}'
+        ' in a space battle{{ in_system(event) }}{{ during_war(event) }} {{ combat_exhaustion(event) }}.',
     ),
     "army_combat": EventDescriptor(
         Category.WARFARE, Tier.ROUTINE, "crosshair", POINT,
-        '\n'
-        '                    Invasion of planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system:\n'
-        '                    Attackers {{ event["attackers"] | safe }} ({{event["attacker_exhaustion"]}} exhaustion)\n'
-        '                    {% if event["attacker_victory"] %} defeated {% else %} were defeated by {% endif %}\n'
-        '                    {{ event["defenders"] | safe }} (exhaustion {{event["defender_exhaustion"]}}) in the\n'
-        '                    {{ links[event["war"]] | safe }}.\n',
+        '{% set planet %}{% if "planet" in event %}the planet {{ links[event["planet"]] | safe }}{% else %}a planet{% endif %}{{ in_system(event) }}{% endset %}'
+        '{% if event["attacker_victory"] %}'
+        '{{ The_all(event["attackers"]) }} invaded {{ planet }}, defeating {{ the_all(event["defenders"]) }}'
+        '{% else %}'
+        '{{ The_all(event["defenders"]) }} fought off an invasion of {{ planet }} by {{ the_all(event["attackers"]) }}'
+        '{% endif %}'
+        '{{ during_war(event) }} {{ combat_exhaustion(event) }}.',
     ),
     # ---- Diplomacy ------------------------------------------------------
     "first_contact": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "handshake", POINT,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} established first contact with the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} established first contact with {{ the(event["target_country"]) }}.',
     ),
     "first_contact_stage": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "handshake", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }}\'s first contact with the {{ links[event["target_country"]] | safe }}: {{ event["description"] }}.\n',
+        '{{ The(event["country"]) }}\'s first contact with {{ the(event["target_country"]) }}: {{ event["description"] }}.',
     ),
     "first_contact_process": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "handshake", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }}{% if "leader" in event %}\'s {{ event["leader"].leader_class }} {{ links[event["leader"]] | safe }}{% endif %}\n'
-        '                    {{ event["description"] }} the {{ links[event["target_country"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ The(event["country"]) }}{% if "leader" in event %}\'s {{ event["leader"].leader_class }} {{ links[event["leader"]] | safe }}{% endif %}'
+        ' {{ event["description"] }} {{ the(event["target_country"]) }}{{ in_system(event) }}.',
     ),
     "espionage_operation": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "eye", SPAN,
-        '\n'
-        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} ran the "{{ event["description"] }}" operation against the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ leader_of_country(event) }} ran the "{{ event["description"] }}" operation against {{ the(event["target_country"]) }}.',
     ),
     "completed_espionage_operation": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "key", POINT,
-        '\n'
-        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} completed the "{{ event["description"] }}" operation against the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ leader_of_country(event) }} completed the "{{ event["description"] }}" operation against {{ the(event["target_country"]) }}.',
     ),
     "formed_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} and {{ links[event["target_country"]] | safe }} are now allied in the  "{{ event["description"] }}" federation.\n',
+        '{{ country_under_ruler(event) }} allied with {{ the(event["target_country"]) }} in the "{{ event["description"] }}" federation.',
     ),
     "founded_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} founded the "{{ event["federation_name"] }}" federation'
-        '{% if "federation_partners" in event %} together with the {{ event["federation_partners"] | safe }}{% endif %}.\n',
+        '{{ The(event["country"]) }} founded the "{{ event["federation_name"] }}" federation'
+        '{% if "federation_partners" in event %} together with {{ the_all(event["federation_partners"]) }}{% endif %}.',
     ),
     "joined_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }}'
+        '{{ The(event["country"]) }}'
         '{% if event["changed_role"] %} became {{ "an associate" if event["is_associate"] else "a full" }} member of'
         '{% else %} joined{% endif %} the "{{ event["federation_name"] }}" federation'
         '{% if event["is_associate"] and not event["changed_role"] %} as an associate member{% endif %}'
-        '{% if event["federation_member_count"] %} ({{ event["federation_member_count"] }} members){% endif %}.\n',
+        '{% if event["federation_member_count"] %} ({{ event["federation_member_count"] }} members){% endif %}.',
     ),
     "left_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} left the "{{ event["federation_name"] }}" federation.\n',
+        '{{ The(event["country"]) }} left the "{{ event["federation_name"] }}" federation.',
     ),
     "dissolved_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
-        '\n'
-        '                    The "{{ event["federation_name"] }}" federation of the {{ links[event["country"]] | safe }} was dissolved.\n',
+        'The "{{ event["federation_name"] }}" federation of {{ the(event["country"]) }} was dissolved.',
     ),
     "defensive_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "shield", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered a defensive pact with the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} entered a defensive pact with {{ the(event["target_country"]) }}.',
     ),
     "non_aggression_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "scroll", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered a non-aggression pact with the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} entered a non-aggression pact with {{ the(event["target_country"]) }}.',
     ),
     "commercial_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "coins", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered a commercial pact with the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} entered a commercial pact with {{ the(event["target_country"]) }}.',
     ),
     "research_agreement": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "scroll", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered a research agreement with the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} entered a research agreement with {{ the(event["target_country"]) }}.',
     ),
     "migration_treaty": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "scroll", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} entered a migration treaty with the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} entered a migration treaty with {{ the(event["target_country"]) }}.',
     ),
     "embassy": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "building", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} have established an embassy in the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ The(event["country"]) }} established an embassy with {{ the(event["target_country"]) }}.',
     ),
     "closed_borders": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "barrier", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} revoked border access to the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} closed their borders to {{ the(event["target_country"]) }}.',
     ),
     "received_closed_borders": EventDescriptor(
         Category.DIPLOMACY, Tier.TRIVIA, "barrier", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} are denied access to the {{ links[event["target_country"]] | safe }} territories.\n',
+        '{{ The(event["country"]) }} lost border access to {{ the(event["target_country"]) }}.',
     ),
     "sent_rivalry": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "rivalry", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} declared rivalry against the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} declared {{ the(event["target_country"]) }} a rival.',
     ),
     "received_rivalry": EventDescriptor(
         Category.DIPLOMACY, Tier.TRIVIA, "rivalry", SPAN,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} received a rivalry declaration from the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ country_under_ruler(event) }} was declared a rival by {{ the(event["target_country"]) }}.',
     ),
     "became_subject": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "chain", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} became a {{ event["description"] }} of the {{ links[event["target_country"]] | safe }}.\n',
+        '{{ The(event["country"]) }} became {{ render_a_an(event["description"]) }} {{ event["description"] }}'
+        ' of {{ the(event["target_country"]) }}.',
     ),
     "federation_president": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "federation", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} held the presidency of the {{ event["federation_title"] }}.\n',
+        '{{ The(event["country"]) }} held the presidency of the {{ event["federation_title"] }}.',
     ),
     "federation_level_up": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
-        '\n'
-        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the {{ event["federation_title"] }}'
-        ' reached level {{ event["description"] }}.\n',
+        'Under the presidency of {{ the(event["country"]) }}, the {{ event["federation_title"] }}'
+        ' reached level {{ event["description"] }}.',
     ),
     "federation_renamed": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
-        '\n'
-        '                    Under the presidency of the {{ links[event["country"]] | safe }}, the "{{ event["old_federation_name"] }}" federation'
-        ' was renamed "{{ event["federation_name"] }}".\n',
+        'Under the presidency of {{ the(event["country"]) }}, the "{{ event["old_federation_name"] }}" federation'
+        ' was renamed "{{ event["federation_name"] }}".',
     ),
     "envoy_community": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_envoys(event) }}\n'
-        '                    to increase their diplomatic weight in the galactic community{{ render_assignment_count(event) }}.\n',
+        '{{ The(event["country"]) }} sent {{ render_envoys(event) }}'
+        ' to increase their diplomatic weight in the Galactic Community{{ render_assignment_count(event) }}.',
     ),
     "envoy_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_envoys(event) }}\n'
-        '                    to improve the cohesion of the {{ event["description"] }}{{ render_assignment_count(event) }}.\n',
+        '{{ The(event["country"]) }} sent {{ render_envoys(event) }}'
+        ' to improve the cohesion of {{ the(event["description"]) }}{{ render_assignment_count(event) }}.',
     ),
     "envoy_improving_relations": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_envoys(event) }}\n'
-        '                    to improve relations with the {{ links[event["target_country"]] | safe }}{{ render_assignment_count(event) }}.\n',
+        '{{ The(event["country"]) }} sent {{ render_envoys(event) }}'
+        ' to improve relations with {{ the(event["target_country"]) }}{{ render_assignment_count(event) }}.',
     ),
     "envoy_harming_relations": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} sent\n'
-        '                    {{ render_envoys(event) }}\n'
-        '                    to harm relations with the {{ links[event["target_country"]] | safe }}{{ render_assignment_count(event) }}.\n',
+        '{{ The(event["country"]) }} sent {{ render_envoys(event) }}'
+        ' to harm relations with {{ the(event["target_country"]) }}{{ render_assignment_count(event) }}.',
     ),
     # ---- Galaxy ---------------------------------------------------------
     "joined_galactic_community": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} joined the Galactic Community.\n',
+        '{{ country_under_ruler(event) }} joined the Galactic Community.',
     ),
     "joined_galactic_council": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} joined the Galactic Council.\n',
+        '{{ country_under_ruler(event) }} joined the Galactic Council.',
     ),
     "left_galactic_community": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} left the Galactic Community.\n',
+        '{{ country_under_ruler(event) }} left the Galactic Community.',
     ),
     "left_galactic_council": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} left the Galactic Council.\n',
+        '{{ country_under_ruler(event) }} left the Galactic Council.',
     ),
     "galactic_resolution_passed": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "ballot", POINT,
-        '\n'
-        '                    The Galactic Community passed the resolution {{ event["description"] }}, proposed by the {{ links[event["country"]] | safe }}'
-        '{% if "target_country" in event %}, concerning the {{ links[event["target_country"]] | safe }}{% endif %}.\n',
+        'The Galactic Community passed the resolution {{ event["description"] }}'
+        '{% if "country" in event %}, proposed by {{ the(event["country"]) }}{% endif %}'
+        '{% if "target_country" in event %}, concerning {{ the(event["target_country"]) }}{% endif %}.',
     ),
     "galactic_custodian": EventDescriptor(
         Category.GALAXY, Tier.HEADLINE, "crown", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} held the office of {{ event["description"] }}.\n',
+        '{{ The(event["country"]) }} held the office of {{ event["description"] }}.',
     ),
     "country_destroyed": EventDescriptor(
         Category.GALAXY, Tier.HEADLINE, "skull", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} ceased to exist{% if event["description"] %} {{ event["description"] }}{% endif %}'
-        '{% if "target_country" in event %} {{ links[event["target_country"]] | safe }}{% endif %}.\n',
+        '{{ The(event["country"]) }} ceased to exist'
+        '{% if event["description"] and "target_country" in event %} {{ event["description"] }} {{ the(event["target_country"]) }}{% endif %}.',
     ),
     "voted_for_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "voted_against_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "galactic_crisis": EventDescriptor(
         Category.GALAXY, Tier.HEADLINE, "crisis", POINT,
-        '\n'
-        '                    {% set phrases = ' + json.dumps(GALACTIC_CRISIS_PHRASES) + ' %}\n'
-        '                    The {{ links[event["country"]] | safe }} {{ phrases.get(event["description"], event["description"]) }}.\n',
+        '{% set phrases = ' + json.dumps(GALACTIC_CRISIS_PHRASES) + ' %}'
+        '{{ The(event["country"]) }} {{ phrases.get(event["description"], event["description"]) }}.',
     ),
     # ---- Expansion ------------------------------------------------------
     "megastructure_construction": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "megastructure", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} {% if event["end_date"] %}built{% else %}began building{% endif %}'
-        ' the {{ event["description"] }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ The(event["country"]) }} {% if event["end_date"] %}built{% else %}began building{% endif %}'
+        ' the {{ event["description"] }}{{ in_system(event) }}.',
     ),
     "planet_destroyed": EventDescriptor(
         Category.EXPANSION, Tier.HEADLINE, "explosion", POINT,
-        '\n'
-        '                    The planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system, owned by the\n'
-        '                    {{ links[event["country"]] | safe }} was destroyed.\n'
-        '                    {% if event["planet"].planet_class is not none %}\n'
-        '                        It is now {{ render_a_an(event["planet"].planetclass) }} {{ event["planet"].planetclass }}.\n'
-        '                    {% else %}\n'
-        '                        No trace remains.\n'
-        '                    {% endif %}\n',
+        'The planet {{ links[event["planet"]] | safe }}{{ in_system(event) }}'
+        '{% if "country" in event %}, owned by {{ the(event["country"]) }},{% endif %} was destroyed.'
+        '{% if event["planet"].planet_class is not none %}'
+        ' It is now {{ render_a_an(event["planet"].planetclass) }} {{ event["planet"].planetclass }}.'
+        '{% else %} No trace remains.{% endif %}',
     ),
     "habitat_ringworld_construction": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "ringworld", POINT,
-        '\n'
-        '                    Finished construction of {{ event["description"] }} in the {{ links[event["system"]] | safe }} system\n'
-        '                    {% if "leader" in event %},\n'
-        '                        under the governorship of {{ render_leader(event) }}\n'
-        '                    {% endif %}.\n',
+        '{% if "country" in event %}{{ The(event["country"]) }} finished building{% else %}Construction finished on{% endif %}'
+        ' {{ event["description"] }}{{ in_system(event) }}{{ under_governor(event) }}.',
     ),
     "colonization": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "planet", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} colonized {{ render_planet_and_class(event) }}\n'
-        '                    in the {{ links[event["system"]] | safe }} system\n'
-        '                    {% if "leader" in event%} under the governorship of {{ render_leader(event) }}{% endif %}.\n',
+        '{{ The(event["country"]) }} colonized {{ render_planet_and_class(event) }}{{ in_system(event) }}{{ under_governor(event) }}.',
     ),
     "capital_relocation": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "capital", POINT,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} relocated their capital to {{ render_planet_and_class(event) }}\n'
-        '                    {% if "system" in event %}in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ country_under_ruler(event) }} relocated their capital to {{ render_planet_and_class(event) }}{{ in_system(event) }}.',
     ),
     "terraforming": EventDescriptor(
         Category.EXPANSION, Tier.ROUTINE, "planet", SPAN,
-        '\n'
-        '                    {% if "leader" in event %} under the governorship of {{ render_leader(event) }}, the {% endif %}{{ links[event["country"]] | safe }}\n'
-        '                    terraformed the planet {{ links[event["planet"]] | safe }} in the {{ links[event["system"]] | safe }} system\n'
-        '                    {{ event["description"] }}.\n',
+        '{{ The(event["country"]) }} terraformed the planet {{ links[event["planet"]] | safe }}{{ in_system(event) }}'
+        ' {{ event["description"] }}{{ under_governor(event) }}.',
     ),
     "expanded_to_system": EventDescriptor(
         Category.EXPANSION, Tier.ROUTINE, "outpost", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} built an outpost in the {{ links[event["system"]] | safe }} system, claiming it for their empire.\n',
+        '{{ The(event["country"]) }} built an outpost in the {{ links[event["system"]] | safe }} system.',
     ),
     "sector_creation": EventDescriptor(
         Category.EXPANSION, Tier.TRIVIA, "sector", POINT,
-        '\n\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} created the {{ event["description"] }} sector{% if "planet" in event %}\n'
-        '                    with capital on the planet {{ links[event["planet"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}\n'
-        '                    {% endif %}.\n',
+        '{{ country_under_ruler(event) }} created {{ the(event["description"]) }} sector'
+        '{% if "planet" in event %} with its capital on {{ links[event["planet"]] | safe }}{{ in_system(event) }}{% endif %}.',
     ),
     "planetary_unrest": EventDescriptor(Category.EXPANSION, Tier.ROUTINE, "unrest"),
     # ---- Science --------------------------------------------------------
     "discovered_new_system": EventDescriptor(
         Category.SCIENCE, Tier.TRIVIA, "telescope", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} discovered the previously unknown {{ links[event["system"]] | safe }} system.\n',
+        '{{ The(event["country"]) }} discovered the previously unknown {{ links[event["system"]] | safe }} system.',
     ),
     "researched_technology": EventDescriptor(
         Category.SCIENCE, Tier.ROUTINE, "flask", SPAN,
-        '\n'
-        '                    The {{ links[event["country"]] | safe}} researched the "{{event["description"]}}" technology.\n',
+        '{{ The(event["country"]) }} researched the "{{ event["description"] }}" technology.',
     ),
     "pre_ftl_age_change": EventDescriptor(
         Category.SCIENCE, Tier.MAJOR, "flask", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} {{ event["description"] }}.\n',
+        '{{ The(event["country"]) }} {{ event["description"] }}.',
     ),
     # ---- Exploration ----------------------------------------------------
     "discovered_anomaly": EventDescriptor(
         Category.EXPLORATION, Tier.ROUTINE, "search", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} discovered the "{{ event["description"] }}" anomaly on\n'
-        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ The(event["country"]) }} discovered the "{{ event["description"] }}" anomaly'
+        ' on {{ render_planet_and_class(event) }}{{ in_system(event) }}.',
     ),
     "researched_anomaly": EventDescriptor(
         Category.EXPLORATION, Tier.ROUTINE, "microscope", POINT,
-        '\n'
-        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} finished researching the "{{ event["description"] }}" anomaly on\n'
-        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ leader_of_country(event) }} finished researching the "{{ event["description"] }}" anomaly'
+        ' on {{ render_planet_and_class(event) }}{{ in_system(event) }}.',
     ),
     "excavated_dig_site": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "shovel", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} completed an excavation at the "{{ event["description"] }}" archaeological site on\n'
-        '                    {{ render_planet_and_class(event) }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ The(event["country"]) }} completed an excavation at the "{{ event["description"] }}" archaeological site'
+        ' on {{ render_planet_and_class(event) }}{{ in_system(event) }}.',
     ),
     "explored_astral_rift": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "compass", POINT,
-        '\n'
-        '                    {% if "leader" in event %}{{ render_leader(event) }} of the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} explored an astral rift ({{ event["description"] }})\n'
-        '                    {% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}.\n',
+        '{{ leader_of_country(event) }} explored the astral rift "{{ event["description"] }}"{{ in_system(event) }}.',
     ),
     "acquired_relic": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "gem", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} acquired the "{{ event["description"] }}" relic.\n',
+        '{{ The(event["country"]) }} acquired the "{{ event["description"] }}" relic.',
     ),
     "destroyed_leviathan": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "skull", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} destroyed a leviathan{% if "target_country" in event %} guarded by the {{ links[event["target_country"]] | safe }}{% endif %}.\n',
+        '{{ The(event["country"]) }} destroyed a leviathan'
+        '{% if "target_country" in event %} guarded by {{ the(event["target_country"]) }}{% endif %}.',
     ),
     # ---- Statecraft -----------------------------------------------------
     "crisis_level_up": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} became a {{ event["description"] }}.\n',
+        '{{ The(event["country"]) }} became {{ render_a_an(event["description"]) }} {{ event["description"] }}.',
     ),
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
-        '\n'
-        '                    {% if "leader" in event %}\n'
-        '                    {{ render_leader(event) }} ascended the {{ links[event["country"]] | safe }} with "{{event["description"]}}".\n'
-        '                    {% else %}\n'
-        '                    The  {{ links[event["country"]] | safe }} ascended with "{{event["description"]}}".\n'
-        '                    {% endif %}\n',
+        '{{ country_under_ruler(event) }} unlocked the "{{ event["description"] }}" ascension perk.',
     ),
     "government_reform": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "gavel", POINT,
-        '\n'
-        '                    {% if "leader" in event %}\n'
-        '                    {{ render_leader(event) }} reformed the {{ links[event["country"]] | safe }} government:\n'
-        '                    {% else %}\n'
-        '                    Government reforms in the {{ links[event["country"]] | safe}}:\n'
-        '                    {% endif %}\n'
-        '                    {{event["description"]}}\n',
+        '{{ country_under_ruler(event) }} reformed their government'
+        '{% if event["description"] %}: {{ event["description"] }}{% else %}.{% endif %}',
     ),
     "empire_renamed": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "gavel", POINT,
-        '\n'
-        '                    {% if "leader" in event %}\n'
-        '                    {{ render_leader(event) }} renamed the {{ links[event["country"]] | safe }}\n'
-        '                    {% else %}\n'
-        '                    The {{ links[event["country"]] | safe }} was renamed\n'
-        '                    {% endif %}\n'
-        '                    {{event["description"]}}.\n',
+        '{{ country_under_ruler(event) }} was renamed {{ event["description"] }}.',
     ),
     "species_rights_reform": EventDescriptor(Category.STATECRAFT, Tier.MAJOR, "gavel"),
     "new_faction": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "faction", POINT,
-        '\n'
-        '                    {% if event["faction_type"] == event["faction"].rendered_name %}\n'
-        '                        {% if not event["faction_type"].startswith("The ") %}The{%endif %} "{{ event["faction_type"] }}" faction\n'
-        '                    {% else %}\n'
-        '                        The {{ event["faction_type"] }} "{{ event["faction"].rendered_name }}"\n'
-        '                    {%endif %}\n'
-        '                    emerged in the {{ links[event["country"]] | safe}}.\n',
+        '{% if event["faction_type"] == event["faction"].rendered_name %}'
+        '{% if not has_own_article(event["faction_type"]) %}The {% endif %}"{{ event["faction_type"] }}" faction'
+        '{% else %}'
+        '{{ The(event["faction_type"]) }} "{{ event["faction"].rendered_name }}"'
+        '{% endif %}'
+        ' emerged in {{ the(event["country"]) }}.',
     ),
     "new_policy": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "policy", POINT,
-        '\n'
-        '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe}} enacted a new policy on {{event["description"]}}.\n',
+        '{{ country_under_ruler(event) }} {{ event["description"] }}.',
     ),
     "changed_policy": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "policy", POINT,
-        '\n'
-        '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe}} changed their policy on {{event["description"]}}.\n',
+        '{{ country_under_ruler(event) }} {{ event["description"] }}.',
     ),
     "tradition": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "tradition", POINT,
-        '\n'
-        '                    {% if "leader" in event %} Under the rule of {{ render_leader(event) }}, the\n'
-        '                    {% else %} The\n'
-        '                    {% endif %}\n'
-        '                    {{ links[event["country"]] | safe }} adopted the "{{ event["description"]}}" tradition.\n',
+        '{{ country_under_ruler(event) }} {{ event["description"] }}.',
     ),
     "agenda_launch": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "agenda", POINT,
-        '\n'
-        '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe}} launched the agenda "{{event["description"]}}".\n',
+        '{{ country_under_ruler(event) }} launched the "{{ event["description"] }}" agenda.',
     ),
     "edict": EventDescriptor(
         Category.STATECRAFT, Tier.TRIVIA, "edict", SPAN,
-        '\n'
-        '                    {% if "leader" in event %}{{ render_leader(event) }}{% else %}The {{ links[event["country"]] | safe}}{% endif %}\n'
-        '                    enacted the "{{event["description"]}}" edict.\n',
+        '{{ country_under_ruler(event) }} enacted the "{{ event["description"] }}" edict.',
     ),
     "agenda_preparation": EventDescriptor(
         Category.STATECRAFT, Tier.TRIVIA, "agenda", SPAN,
-        '\n'
-        '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
-        '                    {{ links[event["country"]] | safe}} prepared a new agenda "{{event["description"]}}".\n',
+        '{{ country_under_ruler(event) }} prepared the "{{ event["description"] }}" agenda.',
     ),
     # ---- Leaders --------------------------------------------------------
     "ruled_empire": EventDescriptor(
         Category.LEADERS, Tier.MAJOR, "crown", SPAN,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }} ruled the {{ links[event["country"]] | safe}}\n'
-        '                    {% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }}{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %} {% endif %}.\n',
+        '{{ render_leader(event, "An unknown leader") }} ruled {{ the(event["country"]) }}'
+        '{% if "planet" in event %} from the capital {{ links[event["planet"]] | safe }}{{ in_system(event) }}{% endif %}.',
     ),
     "leader_died": EventDescriptor(
         Category.LEADERS, Tier.MAJOR, "skull", POINT,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    died or retired.\n',
+        '{{ render_leader(event, "An unknown leader") }} died or retired.',
     ),
     "leader_recruited": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "person", POINT,
-        '\n'
-        '                    The {{ links[event["country"]] | safe }} hired\n'
-        '                    {{ render_leader(event) }}.\n',
+        '{{ The(event["country"]) }} hired {{ render_leader(event) }}.',
     ),
     "councilor": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "council", SPAN,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    served as {{event["description"]}} on the council of the {{ links[event["country"]] | safe}}.\n',
+        # hive minds' councilors are named after their seat, e.g. "Growth Node"
+        '{{ render_leader(event, "An unknown leader") }} served'
+        '{% if "leader" not in event or event["description"] != event["leader"].rendered_name %} as {{ event["description"] }}{% endif %}'
+        ' on the council of {{ the(event["country"]) }}.',
     ),
     "gained_trait": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "dna", POINT,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    gained the "{{ event["description"] }}" trait.\n',
+        '{{ render_leader(event, "An unknown leader") }}'
+        ' gained {% if event["description"] %}the "{{ event["description"] }}" trait{% else %}a trait{% endif %}.',
     ),
     "lost_trait": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "dna", POINT,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    lost the "{{ event["description"] }}" trait.\n',
+        '{{ render_leader(event, "An unknown leader") }}'
+        ' lost {% if event["description"] %}the "{{ event["description"] }}" trait{% else %}a trait{% endif %}.',
     ),
     "leader_left_country": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "person", POINT,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    left the service of the {{ links[event["country"]] | safe }}.\n',
+        '{{ render_leader(event, "An unknown leader") }} left the service of {{ the(event["country"]) }}.',
     ),
     "faction_leader": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "faction", SPAN,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    was leader of the "{{ event["faction"].rendered_name}}" faction.\n',
+        '{{ render_leader(event, "An unknown leader") }} led the "{{ event["faction"].rendered_name }}" faction.',
     ),
     "governed_sector": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "sector", SPAN,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    governed the {{event["description"]}} sector\n'
-        '                    from the planet {{ links[event["planet"]] | safe }}\n'
-        '                    in the {{ links[event["system"]] | safe }} system.\n',
+        '{{ render_leader(event, "An unknown leader") }} governed {{ the(event["description"]) }} sector'
+        '{% if "planet" in event %} from {{ links[event["planet"]] | safe }}{{ in_system(event) }}{% endif %}.',
     ),
     "governed_planet": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "planet", SPAN,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    governed the planet {{ links[event["planet"]] | safe }}\n'
-        '                    in the {{ links[event["system"]] | safe }} system.\n',
+        '{{ render_leader(event, "An unknown leader") }} governed the planet {{ links[event["planet"]] | safe }}{{ in_system(event) }}.',
     ),
     "fleet_command": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "fleet", SPAN,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    {% if event["fleet"].is_civilian_fleet %} commanded {% else %} led {% endif %} the\n'
-        '                    {% if event["fleet"].is_civilian_fleet %} science ship {% else %} fleet {% endif %}\n'
-        '                    "{{ event["fleet"].rendered_name }}".\n',
+        '{{ render_leader(event, "An unknown leader") }}'
+        '{% if event["fleet"].is_civilian_fleet %} commanded the science ship{% else %} led the fleet{% endif %}'
+        ' "{{ event["fleet"].rendered_name }}".',
     ),
     "level_up": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "chevron-up", POINT,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    was promoted to rank {{event["description"]}}.\n',
+        '{{ render_leader(event, "An unknown leader") }} reached level {{ event["description"] }}.',
     ),
     "leader_changed_ethic": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "dna", POINT,
-        '\n'
-        '                    {{ render_leader(event, "An unknown leader") }}\n'
-        '                    changed their ethic to {{ event["description"] }}.\n',
+        '{{ render_leader(event, "An unknown leader") }} changed their ethic to {{ event["description"] }}.',
     ),
 }
 
@@ -739,8 +599,7 @@ class StorylineDescriptor:
 
 
 _STORYLINE_LEADER = '{% if "leader" in event %} ({{ render_leader(event) | trim }}){% endif %}'
-_STORYLINE_SYSTEM = '{% if "system" in event %} in the {{ links[event["system"]] | safe }} system{% endif %}'
-_STORYLINE_COUNTRY = '{% if "country" in event %} by the {{ links[event["country"]] | safe }}{% endif %}'
+_STORYLINE_COUNTRY = '{% if "country" in event %} by {{ the(event["country"]) }}{% endif %}'
 
 # StorylineType name -> StorylineDescriptor
 STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
@@ -748,21 +607,20 @@ STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
         Category.EXPLORATION, Tier.MAJOR, "shovel", "chapter",
         'Excavation of the "{{ event["title"] }}" archaeological site'
         '{% if "planet" in event %} on {{ render_planet_and_class(event) }}{% endif %}'
-        + _STORYLINE_SYSTEM + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
+        '{{ in_system(event) }}' + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
         {"active": "excavating", "paused": "paused", "completed": "fully excavated"},
     ),
     "astral_rift": StorylineDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "compass", "step",
         'Exploration of the astral rift "{{ event["title"] }}"'
-        + _STORYLINE_SYSTEM + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
+        '{{ in_system(event) }}' + _STORYLINE_COUNTRY + _STORYLINE_LEADER,
         {"active": "exploring", "paused": "paused", "completed": "fully explored"},
     ),
     "first_contact": StorylineDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "handshake", "stage",
-        'First contact between the {{ links[event["country"]] | safe }}'
-        ' and the {{ links[event["target_country"]] | safe }}'
+        'First contact between {{ the(event["country"]) }} and {{ the(event["target_country"]) }}'
         # both sides' envoys once the two sides are merged
-        + _STORYLINE_SYSTEM + '{% if "leader" in event %} ({{ render_envoys(event) | trim }}){% endif %}',
+        '{{ in_system(event) }}{% if "leader" in event %} ({{ render_envoys(event) | trim }}){% endif %}',
         {"active": "in progress", "completed": "contact made", "abandoned": "abandoned"},
     ),
 }
@@ -788,7 +646,16 @@ def render_sentence(event, links) -> Markup:
     template = _COMPILED_SENTENCES[key]
     if template is None:
         return Markup("")
-    text = " ".join(template.render(event=event, links=links).split())
+    text = template.render(
+        event=event,
+        links=links,
+        has_own_article=has_own_article,
+        the=lambda x: with_article(x, links),
+        The=lambda x: with_article(x, links, capitalize=True),
+        the_all=lambda xs: with_articles(xs, links),
+        The_all=lambda xs: with_articles(xs, links, capitalize=True),
+    )
+    text = " ".join(text.split())
     return Markup(re.sub(r" ([,.;:)])", r"\1", text))
 
 

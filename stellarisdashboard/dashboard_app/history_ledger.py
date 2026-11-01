@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 MAX_NAMED_ENVOYS = 3
 
 flask_app.jinja_env.globals["render_sentence"] = event_registry.render_sentence
+flask_app.jinja_env.globals["with_article"] = event_registry.with_article
 
 
 @flask_app.route("/history")
@@ -887,12 +888,11 @@ class EventTemplateDictBuilder:
         return details
 
     def _combat_dict(self, combat: datamodel.Combat):
-        attackers = ", ".join(
-            sorted(self._get_url_for(cp.country) for cp in combat.attackers)
-        )
-        defenders = ", ".join(
-            sorted(self._get_url_for(cp.country) for cp in combat.defenders)
-        )
+        # country lists; the sentence templates add the links and articles
+        attackers = sorted((cp.country for cp in combat.attackers), key=lambda c: c.rendered_name)
+        defenders = sorted((cp.country for cp in combat.defenders), key=lambda c: c.rendered_name)
+        for country in attackers + defenders:
+            self._formatted_urls[country] = self._get_url_for(country)
         return dict(
             combat_type=combat.combat_type,
             attackers=attackers,
@@ -916,16 +916,11 @@ class EventTemplateDictBuilder:
                 and not m.is_associate
                 and m.country_id != event.country_id
             ]
-            links = []
-            for country in sorted(partners, key=lambda c: c.rendered_name):
+            partners = sorted(partners, key=lambda c: c.rendered_name)
+            for country in partners:
                 self._formatted_urls[country] = self._get_url_for(country)
-                links.append(self._formatted_urls[country])
-            if links:
-                result["federation_partners"] = (
-                    links[0]
-                    if len(links) == 1
-                    else ", ".join(links[:-1]) + " and " + links[-1]
-                )
+            if partners:
+                result["federation_partners"] = partners
         elif event.event_type == datamodel.HistoricalEventType.joined_federation:
             membership = next(
                 (

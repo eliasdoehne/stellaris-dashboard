@@ -1686,6 +1686,13 @@ class CombatParticipant(Base):
         return self.war_participant.country
 
 
+# trait names the game fills in by scripted loc (common/scripted_loc) -> the loc key of its default text
+SCRIPTED_TRAIT_NAME_DEFAULTS = {
+    "[triggered_salvager_name]": "leader_trait_salvager_regular",
+    "[GetChosenName]": "leader_trait_chosen_default",
+}
+
+
 class Leader(Base):
     __tablename__ = "leader"
 
@@ -1748,8 +1755,11 @@ class Leader(Base):
 
         if description == "[triggered_imperial_name]":
             # logic from common/scripted_loc/08_scripted_loc_paragon.txt
-            key = "imperial_ruler" if self == self.country.ruler else "imperial_heir"
+            is_ruler = self.country is not None and self == self.country.ruler
+            key = "imperial_ruler" if is_ruler else "imperial_heir"
             return game_info.lookup_key(key)
+        elif description in SCRIPTED_TRAIT_NAME_DEFAULTS:
+            return game_info.lookup_key(SCRIPTED_TRAIT_NAME_DEFAULTS[description])
         else:
             level = text.removeprefix(key).lstrip("_")
             if level:
@@ -2019,6 +2029,35 @@ def render_dig_site_description(text: str) -> str:
     site_type, chapter = split_packed_description(text)
     name = game_info.lookup_id_name(site_type, remove_prefix="site")
     return f"{name} (chapter {chapter})" if chapter else name
+
+
+# war participant call type -> how they joined; the target country (if any) follows
+WAR_CALL_PHRASES = {
+    "primary": "as a primary party",
+    "overlord": "called in by their overlord",
+    "subject": "called in by their subject",
+    "secret_fealty": "called in by their secret overlord",
+    "offensive": "attacking alongside",
+    "defensive": "honoring their defensive pact with",
+    "alliance": "honoring their alliance with",
+    "guarantee": "honoring their guarantee of independence for",
+    "trade_deal": "honoring a deal with",
+}
+
+
+def render_tradition_description(key: str) -> str:
+    """The verb phrase of a tradition event, e.g. 'adopted the "Science Division" tradition'."""
+    if key.endswith("_adopt"):
+        return f"adopted the {game_info.lookup_key(key)}"
+    if key.endswith("_finish"):
+        # "Discovery Traditions Finished" -> "completed the Discovery Traditions"
+        tree = game_info.lookup_key_if_known(key.removesuffix("_finish") + "_adopt")
+        return f"completed the {tree}" if tree else f"completed the {game_info.lookup_key(key)}"
+    return f'adopted the "{game_info.lookup_key(key)}" tradition'
+
+
+def render_policy_name(policy: str) -> str:
+    return game_info.lookup_key_if_known(f"policy_{policy}") or game_info.convert_id_to_name(policy)
 
 
 def render_astral_rift_description(text: str) -> str:
@@ -2339,7 +2378,7 @@ class HistoricalEvent(Base):
     def description(self) -> str:
         """A brief description associated with the event, e.g. technology name or changes in government reform."""
         if self.event_type == HistoricalEventType.tradition:
-            return game_info.lookup_key(self.db_description.text)
+            return render_tradition_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.researched_technology:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.edict:
@@ -2371,33 +2410,24 @@ class HistoricalEvent(Base):
         ]:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type in [HistoricalEventType.war]:
-            call_type = self.db_description.text
-            # no leading whitespace: the ledger's localisation lookup strips it
-            if call_type == "primary":
-                return "as a primary party"
-            elif call_type == "overlord":
-                return "called by their overlord"
-            elif call_type == "offensive":
-                return "attacking on the side of the"
-            elif call_type == "defensive":
-                return "due to their defensive pact with the"
-            elif call_type == "alliance":
-                return "due to their alliance with the"
-            else:
-                return f"(called as {call_type})"
+            # the ledger names the target country after this phrase
+            return WAR_CALL_PHRASES.get(self.db_description.text, "called in by")
         elif self.event_type == HistoricalEventType.councilor:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.new_policy:
             name, selected = self.db_description.text.split("|")
-            name_rendered = game_info.convert_id_to_name(name)
+            name_rendered = render_policy_name(name)
             selected_rendered = game_info.lookup_key(selected)
-            return f"{name_rendered!r}: {selected_rendered!r}"
+            if selected_rendered == name_rendered:
+                # e.g. the gestalt logistics option is also called "Logistics Policy"
+                return f'adopted the "{name_rendered}"'
+            return f'set their policy on "{name_rendered}" to "{selected_rendered}"'
         elif self.event_type == HistoricalEventType.changed_policy:
             name, old, new = self.db_description.text.split("|")
-            name_rendered = game_info.convert_id_to_name(name)
+            name_rendered = render_policy_name(name)
             old_rendered = game_info.lookup_key(old)
             new_rendered = game_info.lookup_key(new)
-            return f"{name_rendered!r} from {old_rendered!r} to {new_rendered!r}"
+            return f'changed their policy on "{name_rendered}" from "{old_rendered}" to "{new_rendered}"'
         elif self.event_type in (
             HistoricalEventType.agenda_launch,
             HistoricalEventType.agenda_preparation,
@@ -2443,10 +2473,11 @@ class HistoricalEvent(Base):
             return render_subject_type(self.db_description.text if self.db_description else "")
         elif self.event_type == HistoricalEventType.country_destroyed:
             cause = self.db_description.text if self.db_description else ""
+            # the ledger names the target country after this phrase
             if cause == "war":
-                return "after losing a war against the"
+                return "after losing a war against"
             elif cause == "subject":
-                return "after being integrated by the"
+                return "after being integrated by"
             return ""
         elif self.event_type == HistoricalEventType.federation_level_up:
             return self.db_description.text if self.db_description else ""
