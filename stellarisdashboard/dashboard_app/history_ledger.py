@@ -6,16 +6,14 @@ from typing import Dict
 from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
-from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping
+from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping, ledger_timeline
 
 logger = logging.getLogger(__name__)
 
 # A merged envoy entry names this many envoys and counts the rest.
 MAX_NAMED_ENVOYS = 3
 
-# Descriptor-driven event renderer (replaces the old ~50-branch if/elif chain in
-# history_page.html). Exposed to the template as render_event(event, links).
-flask_app.jinja_env.globals["render_event"] = event_registry.render_event
+flask_app.jinja_env.globals["render_sentence"] = event_registry.render_sentence
 
 
 @flask_app.route("/history")
@@ -33,29 +31,72 @@ def history_page(game_id="", version=None):
     games_dict = datamodel.get_available_games_dict()
     country = games_dict[game_id]["country_name"]
 
-    event_filter = get_event_filter()
-
+    params = ledger_timeline.LedgerParams.from_request(game_id)
     with datamodel.get_db_session(game_id) as session:
-        dict_builder = EventTemplateDictBuilder(session, game_id, event_filter)
-        events, title, details, links = dict_builder.get_event_and_link_dicts()
-        wars = dict_builder.get_war_list()
-        # In-game date of the most recent save, for the shell topbar stardate.
+        query = ledger_timeline.LedgerQuery(session, game_id, params)
+        # the timeline query does the level filtering, so let every scope through
+        event_filter = EventFilter()
+        event_filter.scope_threshold = datamodel.HistoricalEventScope.all
+        builder = EventTemplateDictBuilder(session, game_id, event_filter)
+        year_counts = query.year_counts()
+        years = query.window(year_counts)
+        items = builder.build_items(query.events(years))
+        by_year = collections.OrderedDict((y, []) for y in years)
+        for item in items:
+            year = max(int(item["start_date_days"] // 360) + 2200, 2200)
+            by_year.setdefault(year, []).append(_ledger_row(item))
+        focus = None
+        if query.focus is not None:
+            builder._formatted_urls[query.focus] = builder._get_url_for(query.focus)
+            focus = dict(
+                kind=ledger_timeline.FOCUS_KINDS[params.focus_kind][1],
+                name=query.focus.rendered_name,
+                is_player=getattr(query.focus, "is_player", False),
+                details=builder._get_details(query.focus),
+            )
+        last_year = years[-1] if years else None
+        remaining = [y for y in year_counts if (y < last_year if params.newest_first else y > last_year)] if last_year else []
         current_date = datamodel.days_to_date(utils.get_most_recent_date(session))
-    return render_template(
-        "history_page.html",
-        game_name=game_id,
-        country=country,
-        current_date=current_date,
-        wars=wars,
-        events=events,
-        details=details,
-        links=links,
-        title=title,
-        is_filtered_page=not event_filter.is_empty_filter,
-        show_old_version_notice=show_old_version_notice,
-        version=utils.VERSION,
-        update_version_id=version,
+        page = render_template(
+            "ledger_page.html",
+            game_name=game_id,
+            country=country,
+            current_date=current_date,
+            params=params,
+            levels=ledger_timeline.LEVELS,
+            categories=list(event_registry.Category),
+            category_counts=query.category_counts(),
+            by_year=by_year,
+            decades=query.decades(year_counts),
+            hidden_counts=query.hidden_counts(year_counts),
+            next_level=query.next_level(),
+            remaining=len(remaining),
+            last_year=last_year,
+            links=builder._formatted_urls,
+            focus=focus,
+            show_old_version_notice=show_old_version_notice,
+            version=utils.VERSION,
+            update_version_id=version,
+        )
+    return page
+
+
+def _ledger_row(item) -> dict:
+    category, tier = event_registry.describe(item)
+    row = dict(
+        item=item,
+        category=category.name.lower() if category else "other",
+        category_label=category.value if category else "",
+        tier=int(tier) if tier else 2,
+        date=item["start_date"][5:],
+        end_date=item.get("end_date") if event_registry.is_span(item) else None,
     )
+    if item.get("event_type") == "storyline":
+        descriptor = event_registry.STORYLINE_REGISTRY[item["storyline_type"]]
+        row["stage_noun"] = descriptor.stage_noun
+        row["state_label"] = descriptor.state_labels.get(item.get("state"), item.get("state"))
+        row["end_date"] = None
+    return row
 
 
 def get_event_filter() -> "EventFilter":
@@ -277,10 +318,22 @@ class EventTemplateDictBuilder:
         return self._events, self._titles, self._details, self._formatted_urls
 
     def collect_event_dicts(self, event_list, key_object):
-        self._events[key_object] = []
         self._details[key_object] = self._get_details(key_object)
         self._titles[key_object] = self._get_title(key_object)
         self._formatted_urls[key_object] = self._get_url_for(key_object)
+        self._events[key_object] = self.build_items(event_list)
+        if not self._events[key_object] and self.event_filter.is_empty_filter:
+            del self._events[key_object]
+
+    def build_items(self, event_list) -> list:
+        """Ledger items for the visible events in event_list, in order: one dict per
+        event, merged envoy assignment or storyline (folded at its first member).
+        Entity links are collected in self._formatted_urls."""
+        if self._formatted_urls is None:
+            self._formatted_urls = {}
+        if self._most_recent_date is None:
+            self._most_recent_date = utils.get_most_recent_date(self._session)
+        items = []
         shown_events = []
         storyline_items = {}  # storyline_id -> item dict, per section
         for event in event_list:
@@ -372,22 +425,22 @@ class EventTemplateDictBuilder:
                     item = storyline_items[event.storyline_id] = self._storyline_dict(
                         event.storyline
                     )
-                    self._events[key_object].append(item)
+                    items.append(item)
                     self._preformat_storyline_urls(event.storyline)
                 if event.stage_index is not None:
                     sort_key = (event.start_date_days, event.stage_index)
                     item["stages"].append((sort_key, self._stage_dict(event, start)))
                 self._preformat_urls(event)
                 continue
-            self._events[key_object].append(event_dict)
+            event_dict["start_date_days"] = event.start_date_days
+            items.append(event_dict)
             for grouped_event in group.events:
                 self._preformat_urls(grouped_event)
         for item in storyline_items.values():
             item["stages"] = [s for _, s in sorted(item["stages"], key=lambda s: s[0])]
             # the furthest stage reached, which counts stages hidden from the player too
             item["stage_count"] = max((s["index"] for s in item["stages"]), default=0)
-        if not self._events[key_object] and self.event_filter.is_empty_filter:
-            del self._events[key_object]
+        return items
 
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
@@ -440,6 +493,7 @@ class EventTemplateDictBuilder:
             end_date = datamodel.days_to_date(storyline.end_date_days)
         item = dict(
             event_type="storyline",
+            start_date_days=storyline.start_date_days,
             storyline_type=str(storyline.storyline_type),
             state=str(storyline.state),
             title=storyline.rendered_title,

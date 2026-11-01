@@ -9,6 +9,8 @@
     <title>{% if country %}{{ country }} · {% endif %}{{ section_labels.get(active, "Stellaris Dashboard") }}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='theme.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    {# global rather than per page: hx-boost navigation swaps only the body #}
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='ledger.css') }}">
     <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
     <script src="{{ url_for('static', filename='shell.js') }}" defer></script>
     {% block head_extra %}{% endblock %}
@@ -63,6 +65,12 @@
                     <a class="rail-sublink{% if active == 'graphs' and tab == graph_tab %} is-active{% endif %}"
                        href="{{ section_url('graphs', game_name, tab) }}" data-graph-tab="{{ tab }}" hx-boost="false">{{ tab }}</a>
                     {% endfor %}
+                </div>
+                {% elif key == "ledger" %}
+                {% set ledger_focused = request.args | select("in", ["country", "leader", "war", "system", "planet", "focus"]) | list %}
+                <div class="rail-sub">
+                    <a class="rail-sublink{% if active == 'ledger' and not ledger_focused %} is-active{% endif %}" href="{{ section_url('ledger', game_name) }}">Galaxy</a>
+                    <a class="rail-sublink{% if active == 'ledger' and request.args.get('focus') == 'player' %} is-active{% endif %}" href="{{ section_url('ledger', game_name) }}?focus=player">Your empire</a>
                 </div>
                 {% endif %}
                 {% endfor %}

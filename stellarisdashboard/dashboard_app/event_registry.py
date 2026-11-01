@@ -1,33 +1,20 @@
-"""Data-driven descriptor registry for historical events (ledger rework Chunk F).
+"""Data-driven descriptor registry for historical events.
 
-Replaces the ~50-branch ``if/elif`` chain that used to live in
-``history_page.html``. Each ``HistoricalEventType`` maps to an
-:class:`EventDescriptor` carrying:
-
-* ``category`` / ``tier`` — the two editorial axes (topic group and
-  importance) of an event type (data-driven metadata;
-  recorded here but **not yet surfaced in the UI** — that lands in Chunk H), and
-* ``icon`` — a name for a future glyph (also not rendered yet), plus
-* the bits needed to reproduce the old per-branch markup exactly: an optional
-  ``li_class`` (defaults to the event type), a ``dateblock`` style, and the
-  verbatim Jinja ``sentence`` the old branch used.
-
-:func:`render_event` dispatches on ``event_type`` and renders one ``<li>`` of
-ledger markup, so ``history_page.html`` collapses to a single loop. Rendering
-goes through Flask's own Jinja environment with the same event dict, so the
-output is text-equivalent to the previous chain.
+Each ``HistoricalEventType`` maps to an :class:`EventDescriptor` carrying its
+``category`` (topic group) and ``tier`` (importance), which drive the ledger's
+filters, an ``icon`` name (not rendered yet), whether it is a point in time or
+a ``SPAN`` (council seats, envoy assignments, ...), and the Jinja ``sentence``
+that :func:`render_sentence` renders for one event dict.
 
 Multi-stage arcs (:class:`~stellarisdashboard.datamodel.Storyline`) have a
-:class:`StorylineDescriptor` in :data:`STORYLINE_REGISTRY`; :func:`render_storyline`
-renders one as a single ``<li>`` with a ``<details>`` card that expands to its
-stages, and :func:`render_event` delegates to it for ``event_type == "storyline"``.
+:class:`StorylineDescriptor` in :data:`STORYLINE_REGISTRY`.
 
-Event types that the parser doesn't emit yet (and that had no branch) carry
-``sentence=None``; :func:`render_event` returns empty markup for them, matching
-the old chain's fall-through (no output).
+Event types that the parser doesn't emit yet carry ``sentence=None`` and render
+as empty markup.
 """
 import enum
 import json
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -52,21 +39,12 @@ class Tier(enum.IntEnum):
     TRIVIA = 1
 
 
-# Dateblock variants, lifted verbatim from the old template so the rendered date
-# column is byte-for-byte the same.
-POINT = "point"   # {{start_date}}:
-SPAN = "span"     # (A) marker + optional " - end_date"
-ENVOY = "envoy"   # span, but the (A) marker is commented out (TODO upstream)
+# How an event is dated: a point in time, or a span with an optional end date.
+POINT = "point"
+SPAN = "span"
+ENVOY = "envoy"   # a span that is merged per envoy group (see event_grouping)
 
-_DATEBLOCKS = {
-    POINT: '{{event["start_date"]}}:',
-    SPAN: '{% if event["is_active"] %}(A){% endif %} {{event["start_date"]}}'
-          '{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:',
-    ENVOY: '<!-- TODO fix is_active post-leader-rework {% if event["is_active"] %}(A){% endif %} -->'
-           '{{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:',
-}
-
-# Helper macros, verbatim from history_page.html, made available to every
+# Helper macros, made available to every
 # sentence template via a shared prefix.
 _MACROS = """
 {% macro render_leader(event, fallback="an unknown leader") -%}
@@ -154,7 +132,6 @@ class EventDescriptor:
     icon: str
     dateblock: Optional[str] = None
     sentence: Optional[str] = None
-    li_class: Optional[str] = None  # defaults to the event type
 
 
 # event_type -> EventDescriptor. Sentences are copied verbatim from the old
@@ -182,14 +159,12 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    The {{ links[event["country"]] | safe }} conquered the {{ links[event["system"]] | safe }} system from the\n'
         '                    {{ links[event["target_country"]] | safe }}{% if event["war"] %} during the {{ links[event["war"]] | safe }}{% endif %}.\n',
-        li_class="gained_system",
     ),
     "founded_with_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
         '\n'
         '                    The {{ links[event["country"]] | safe }} was founded with the {{ links[event["system"]] | safe }} system, formerly held by the'
         ' {{ links[event["target_country"]] | safe }}.\n',
-        li_class="gained_system",
     ),
     "lost_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
@@ -326,7 +301,6 @@ REGISTRY: dict[str, EventDescriptor] = {
         Category.DIPLOMACY, Tier.ROUTINE, "building", SPAN,
         '\n'
         '                    The {{ links[event["country"]] | safe }} have established an embassy in the {{ links[event["target_country"]] | safe }}.\n',
-        li_class="established_embassy",
     ),
     "closed_borders": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "barrier", SPAN,
@@ -482,7 +456,6 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% else %}\n'
         '                        No trace remains.\n'
         '                    {% endif %}\n',
-        li_class="colonization",
     ),
     "habitat_ringworld_construction": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "ringworld", POINT,
@@ -635,14 +608,12 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
         '                    {{ links[event["country"]] | safe}} enacted a new policy on {{event["description"]}}.\n',
-        li_class="policy",
     ),
     "changed_policy": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "policy", POINT,
         '\n'
         '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
         '                    {{ links[event["country"]] | safe}} changed their policy on {{event["description"]}}.\n',
-        li_class="policy",
     ),
     "tradition": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "tradition", POINT,
@@ -657,7 +628,6 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
         '                    {{ links[event["country"]] | safe}} launched the agenda "{{event["description"]}}".\n',
-        li_class="agenda",
     ),
     "edict": EventDescriptor(
         Category.STATECRAFT, Tier.TRIVIA, "edict", SPAN,
@@ -670,7 +640,6 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    {% if "leader" in event %}Under the rule of {{ render_leader(event) }}, the {% else %}The {% endif %}\n'
         '                    {{ links[event["country"]] | safe}} prepared a new agenda "{{event["description"]}}".\n',
-        li_class="agenda",
     ),
     # ---- Leaders --------------------------------------------------------
     "ruled_empire": EventDescriptor(
@@ -743,7 +712,6 @@ REGISTRY: dict[str, EventDescriptor] = {
         '                    {% if event["fleet"].is_civilian_fleet %} commanded {% else %} led {% endif %} the\n'
         '                    {% if event["fleet"].is_civilian_fleet %} science ship {% else %} fleet {% endif %}\n'
         '                    "{{ event["fleet"].rendered_name }}".\n',
-        li_class="leader_died",
     ),
     "level_up": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "chevron-up", POINT,
@@ -756,7 +724,6 @@ REGISTRY: dict[str, EventDescriptor] = {
         '\n'
         '                    {{ render_leader(event, "An unknown leader") }}\n'
         '                    changed their ethic to {{ event["description"] }}.\n',
-        li_class="leader_left_country",
     ),
 }
 
@@ -799,105 +766,43 @@ STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
     ),
 }
 
-_COMPILED: dict[str, object] = {}
-_COMPILED_STORYLINES: dict[str, object] = {}
+_COMPILED_SENTENCES: dict[str, object] = {}
 
 
-def _compiled(event_type: str):
-    """Lazily compile (and cache) the full ``<li>`` template for an event type
-    using Flask's own Jinja environment, so rendering matches the page exactly."""
-    if event_type in _COMPILED:
-        return _COMPILED[event_type]
-    descriptor = REGISTRY.get(event_type)
-    if descriptor is None or descriptor.sentence is None:
-        _COMPILED[event_type] = None
-        return None
-    from stellarisdashboard.dashboard_app import flask_app
-
-    li_class = descriptor.li_class or event_type
-    source = (
-        _MACROS
-        + '<li class="eventitem ' + li_class + '">\n'
-        + '    <div class="eventdescription">\n'
-        + '        <span class="dateblock">' + _DATEBLOCKS[descriptor.dateblock] + "</span>\n"
-        + '        <span class="eventtext">' + descriptor.sentence + "</span>\n"
-        + "    </div>\n"
-        + "</li>"
-    )
-    template = flask_app.jinja_env.from_string(source)
-    _COMPILED[event_type] = template
-    return template
-
-
-def _compiled_storyline(storyline_type: str):
-    """Lazily compile (and cache) the card template for a storyline type."""
-    if storyline_type in _COMPILED_STORYLINES:
-        return _COMPILED_STORYLINES[storyline_type]
-    descriptor = STORYLINE_REGISTRY.get(storyline_type)
-    if descriptor is None:
-        _COMPILED_STORYLINES[storyline_type] = None
-        return None
-    from stellarisdashboard.dashboard_app import flask_app
-
-    head = (
-        '<span class="dateblock">' + _DATEBLOCKS[SPAN] + "</span>\n"
-        + '<span class="eventtext">' + descriptor.sentence
-        + '<span class="storyline_meta"> <span class="storyline_state state_{{ event["state"] }}">{{ state_label }}</span>'
-        + '{% if event["stage_count"] %} {{ event["stage_count"] }} {{ stage_noun }}{% if event["stage_count"] != 1 %}s{% endif %}{% endif %}'
-        + "</span></span>\n"
-    )
-    source = (
-        _MACROS
-        + '<li class="eventitem storyline {{ event["storyline_type"] }}_storyline">\n'
-        + '{% if event["stages"] %}'
-        + '<details class="storyline_card"><summary class="storyline_summary eventdescription">\n'
-        + head
-        + "</summary>\n"
-        + '<ul class="event_list storyline_stages">'
-        + '{% for stage in event["stages"] %}'
-        + '<li class="eventitem storyline_stage"><span class="dateblock">{{ stage["start_date"] }}:</span> '
-        + '<span class="eventtext">{{ stage_noun | capitalize }} {{ stage["index"] }}'
-        + '{% if "detail" in stage %}: {{ stage["detail"] }}{% endif %}'
-        + '{% if "country" in stage %} by the {{ links[stage["country"]] | safe }}{% endif %}'
-        + '{% if "leader" in stage %} ({{ render_leader(stage) | trim }}){% endif %}'
-        + "</span></li>"
-        + "{% endfor %}"
-        + "</ul></details>\n"
-        + "{% else %}"
-        + '<div class="eventdescription">\n' + head + "</div>\n"
-        + "{% endif %}"
-        + "</li>"
-    )
-    template = flask_app.jinja_env.from_string(source)
-    _COMPILED_STORYLINES[storyline_type] = template
-    return template
-
-
-def render_storyline(event, links) -> Markup:
-    """Render one storyline item as a ``<li>`` card that expands to its stages."""
-    storyline_type = event.get("storyline_type")
-    template = _compiled_storyline(storyline_type)
-    if template is None:
-        return Markup("")
-    descriptor = STORYLINE_REGISTRY[storyline_type]
-    state = event.get("state")
-    return Markup(
-        template.render(
-            event=event,
-            links=links,
-            state_label=descriptor.state_labels.get(state, state),
-            stage_noun=descriptor.stage_noun,
-        )
-    )
-
-
-def render_event(event, links) -> Markup:
-    """Render one event's ``<li>`` of ledger markup, dispatching on
-    ``event_type``. Returns empty markup for types with no template (matching
-    the old chain's fall-through)."""
+def render_sentence(event, links) -> Markup:
+    """Just the sentence of an event or storyline item, without the date or list markup."""
     if event.get("event_type") == "storyline":
-        return render_storyline(event, links)
-    template = _compiled(event.get("event_type"))
+        key = "storyline:" + event.get("storyline_type", "")
+        descriptor = STORYLINE_REGISTRY.get(event.get("storyline_type"))
+    else:
+        key = event.get("event_type")
+        descriptor = REGISTRY.get(key)
+    if key not in _COMPILED_SENTENCES:
+        template = None
+        if descriptor is not None and descriptor.sentence is not None:
+            from stellarisdashboard.dashboard_app import flask_app
+
+            template = flask_app.jinja_env.from_string(_MACROS + descriptor.sentence)
+        _COMPILED_SENTENCES[key] = template
+    template = _COMPILED_SENTENCES[key]
     if template is None:
         return Markup("")
-    return Markup(template.render(event=event, links=links))
+    text = " ".join(template.render(event=event, links=links).split())
+    return Markup(re.sub(r" ([,.;:)])", r"\1", text))
+
+
+def is_span(event) -> bool:
+    """Whether the event lasts over time (council seats, envoy assignments, ...)."""
+    descriptor = REGISTRY.get(event.get("event_type"))
+    return descriptor is not None and descriptor.dateblock in (SPAN, ENVOY)
+
+
+def describe(event) -> tuple:
+    """(category, tier) of an event or storyline item."""
+    if event.get("event_type") == "storyline":
+        descriptor = STORYLINE_REGISTRY.get(event.get("storyline_type"))
+    else:
+        descriptor = REGISTRY.get(event.get("event_type"))
+    if descriptor is None:
+        return None, None
+    return descriptor.category, descriptor.tier
