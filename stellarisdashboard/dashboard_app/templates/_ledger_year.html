@@ -27,7 +27,7 @@
                 </ol>
             </details>
             {% else %}
-            <span class="ledger-text">{{ render_sentence(item, links) }}{% if row.end_date %}<span class="ledger-span">until {{ row.end_date }}</span>{% endif %}</span>
+            <span class="ledger-text">{{ render_sentence(item, links) }}{% if row.end_date %}<span class="ledger-span" title="Ended {{ row.end_date }}">→ {{ row.end_date }}</span>{% endif %}</span>
             {% endif %}
         </li>
         {% endfor %}
