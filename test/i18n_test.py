@@ -129,6 +129,34 @@ def test_resolve_locale(dashboard_language, stellaris_language, expected):
     assert i18n.resolve_locale(dashboard_language, stellaris_language) == expected
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, "auto"),
+        ("", "auto"),
+        ("auto", "auto"),
+        ("de", "de"),
+        ("pt_BR", "pt_BR"),
+        ("pt-BR", "pt_BR"),
+        ("zh-cn", "zh_CN"),
+        ("DE", "de"),
+        ("de_DE", None),
+        ("german", None),
+        ("l_german", None),
+        (3, None),
+    ],
+)
+def test_normalize_dashboard_language(value, expected):
+    assert i18n.normalize_dashboard_language(value) == expected
+
+
+def test_unknown_dashboard_language_warns_once(caplog):
+    i18n._warn_unknown_dashboard_language.cache_clear()
+    for _ in range(3):
+        assert i18n.resolve_locale("xx_unknown", "l_german") == "en"
+    assert sum("xx_unknown" in r.getMessage() for r in caplog.records) == 1
+
+
 def test_every_language_has_a_name():
     assert set(i18n.STELLARIS_LANGUAGE_TO_LOCALE.values()) == set(i18n.LANGUAGE_NAMES)
 

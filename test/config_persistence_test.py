@@ -165,3 +165,11 @@ def test_default_dicts_are_unchanged_by_loading_and_writing(settings_dir):
     cfg.write_to_file()
     assert config.DEFAULT_TAB_LAYOUT == layout_before
     assert config.DEFAULT_MARKET_RESOURCES == resources_before
+
+
+@pytest.mark.parametrize(
+    "stored,expected", [("pt-BR", "pt_BR"), ("german", "auto"), ("de", "de")]
+)
+def test_dashboard_language_is_validated_on_load(settings_dir, stored, expected):
+    _write_settings(settings_dir, dashboard_language=stored)
+    assert _load_config().dashboard_language == expected

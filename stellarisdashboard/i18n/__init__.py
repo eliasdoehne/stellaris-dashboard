@@ -82,13 +82,35 @@ def current_locale() -> str:
     return resolve_locale(cfg.dashboard_language, cfg.stellaris_language)
 
 
+def normalize_dashboard_language(value) -> Optional[str]:
+    """The dashboard_language setting as AUTO or a locale of LANGUAGE_NAMES, accepting
+    other spellings of a locale ("pt-BR", "DE"). None if the value names no known locale."""
+    if value is None or value == "" or value == AUTO:
+        return AUTO
+    if not isinstance(value, str):
+        return None
+    if value in LANGUAGE_NAMES:
+        return value
+    wanted = value.strip().replace("-", "_").lower()
+    for locale in LANGUAGE_NAMES:
+        if locale.lower() == wanted:
+            return locale
+    return None
+
+
 def resolve_locale(dashboard_language: Optional[str], stellaris_language: Optional[str]) -> str:
     if dashboard_language and dashboard_language != AUTO:
         if dashboard_language in LANGUAGE_NAMES:
             return dashboard_language
-        logger.warning(f"Unknown dashboard language {dashboard_language!r}, using {DEFAULT_LOCALE}")
+        _warn_unknown_dashboard_language(dashboard_language)
         return DEFAULT_LOCALE
     return STELLARIS_LANGUAGE_TO_LOCALE.get(stellaris_language, DEFAULT_LOCALE)
+
+
+@functools.lru_cache(maxsize=None)
+def _warn_unknown_dashboard_language(dashboard_language: str):
+    # resolve_locale runs for every translated text, so warn only once per value
+    logger.warning(f"Unknown dashboard language {dashboard_language!r}, using {DEFAULT_LOCALE}")
 
 
 def html_lang(locale: str) -> str:

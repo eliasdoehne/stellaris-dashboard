@@ -13,7 +13,7 @@ from typing import List, Dict, Any
 
 import yaml
 
-from stellarisdashboard import legacy_config_defaults
+from stellarisdashboard import i18n, legacy_config_defaults
 
 LOG_LEVELS = {
     "CRITICAL": logging.CRITICAL,
@@ -373,12 +373,25 @@ class Config:
                 val = self._process_path_keys(key, val)
                 if val is None:
                     continue
+            if key == "dashboard_language":
+                val = self._process_dashboard_language(val)
 
             self.__setattr__(key, val)
             if val != old_val:
                 logger.info(
                     f"Updated setting {key.ljust(28)} {str(old_val).rjust(8)} -> {str(val).ljust(8)}"
                 )
+
+    @staticmethod
+    def _process_dashboard_language(val):
+        locale = i18n.normalize_dashboard_language(val)
+        if locale is None:
+            logger.warning(
+                f"Ignoring unknown dashboard language {val!r}, using {i18n.AUTO!r} "
+                f"(one of: {', '.join([i18n.AUTO, *i18n.LANGUAGE_NAMES])})"
+            )
+            return i18n.AUTO
+        return locale
 
     def _process_path_keys(self, key, val):
         if val == "":
