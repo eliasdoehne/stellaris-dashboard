@@ -42,6 +42,8 @@ def history_page(game_id="", version=None):
         years = query.window(year_counts)
         items = builder.build_items(query.events(years))
         by_year = collections.OrderedDict((y, []) for y in years)
+        # storylines sit at their first member in page order, but are dated by their start
+        items.sort(key=lambda i: i["start_date_days"], reverse=params.newest_first)
         for item in items:
             year = max(int(item["start_date_days"] // 360) + 2200, 2200)
             by_year.setdefault(year, []).append(_ledger_row(item))
@@ -336,6 +338,7 @@ class EventTemplateDictBuilder:
         items = []
         shown_events = []
         storyline_items = {}  # storyline_id -> item dict, per section
+        contact_items = collections.defaultdict(list)  # contact_pair -> first contact items
         for event in event_list:
             if not self.event_filter.include_event(event):
                 continue
@@ -367,6 +370,7 @@ class EventTemplateDictBuilder:
             ):
                 continue
             shown_events.append(event)
+        shown_events = event_grouping.drop_mirrored_contacts(shown_events)
 
         for group in event_grouping.group_envoy_assignments(shown_events):
             event = group.events[0]
@@ -419,28 +423,96 @@ class EventTemplateDictBuilder:
                 event_dict["assignment_count"] = len(group.events)
 
             if event.storyline_id is not None:
-                # members fold into one card per storyline, placed at its first visible member
+                # members fold into one card per storyline, placed at its first visible member;
+                # both sides of a first contact share one card
                 item = storyline_items.get(event.storyline_id)
                 if item is None:
-                    item = storyline_items[event.storyline_id] = self._storyline_dict(
-                        event.storyline
-                    )
-                    items.append(item)
-                    self._preformat_storyline_urls(event.storyline)
+                    storyline = event.storyline
+                    item = event_grouping.find_contact_partner(contact_items, storyline)
+                    if item is None:
+                        item = self._storyline_dict(storyline)
+                        items.append(item)
+                        if "sides" in item:
+                            contact_items[event_grouping.contact_pair(storyline)].append(item)
+                    else:
+                        item["sides"].append(storyline)
+                    storyline_items[event.storyline_id] = item
+                    self._preformat_storyline_urls(storyline)
                 if event.stage_index is not None:
                     sort_key = (event.start_date_days, event.stage_index)
-                    item["stages"].append((sort_key, self._stage_dict(event, start)))
+                    item["stages"].append((sort_key, self._stage_dict(event, start), event.country))
                 self._preformat_urls(event)
                 continue
             event_dict["start_date_days"] = event.start_date_days
             items.append(event_dict)
             for grouped_event in group.events:
                 self._preformat_urls(grouped_event)
-        for item in storyline_items.values():
-            item["stages"] = [s for _, s in sorted(item["stages"], key=lambda s: s[0])]
+        contacts = [i for i in items if "sides" in i]
+        all_sides = self._all_contact_sides(contacts)
+        for item in {id(i): i for i in storyline_items.values()}.values():
+            stages = sorted(item["stages"], key=lambda s: s[0])
+            sides = item.pop("sides", None)
+            if sides:
+                pair = event_grouping.contact_pair(sides[0])
+                partners = [s for s in all_sides.get(pair, []) if event_grouping.spans_overlap(s, sides[0])]
+                self._combine_contact_sides(item, sides, partners)
+                if len(sides) > 1:
+                    stages = event_grouping.label_contact_stages(stages)
+            item["stages"] = [s for _, s, _ in stages]
             # the furthest stage reached, which counts stages hidden from the player too
             item["stage_count"] = max((s["index"] for s in item["stages"]), default=0)
         return items
+
+    def _all_contact_sides(self, contact_items) -> dict:
+        """Every first contact storyline of the shown pairs, including sides hidden from this view."""
+        country_ids = {
+            country_id
+            for item in contact_items
+            for s in item["sides"]
+            for country_id in (s.country_id, s.target_country_id)
+            if country_id is not None
+        }
+        if not country_ids:
+            return {}
+        result = collections.defaultdict(list)
+        for storyline in self._session.query(datamodel.Storyline).filter(
+            datamodel.Storyline.storyline_type == datamodel.StorylineType.first_contact,
+            datamodel.Storyline.country_id.in_(country_ids),
+            datamodel.Storyline.target_country_id.in_(country_ids),
+        ):
+            result[event_grouping.contact_pair(storyline)].append(storyline)
+        return result
+
+    def _combine_contact_sides(self, item, sides, partners):
+        """One first contact card for both sides: the state and end of the contact as a whole, both envoys,
+        and the system where contact was made."""
+        everything = list({s.storyline_id: s for s in [*sides, *partners]}.values())
+        state = event_grouping.combined_contact_state([s.state for s in everything])
+        item["state"] = str(state)
+        item["is_active"] = state == datamodel.StorylineState.active
+        ends = [s.end_date_days for s in everything if s.end_date_days is not None]
+        item["end_date"] = None if item["is_active"] or not ends else datamodel.days_to_date(max(ends))
+        if len(sides) == 1:
+            return
+        sides = sorted(sides, key=lambda s: event_grouping.STATE_RANK.index(s.state))
+        main = sides[0]
+        first, second = main.country, main.target_country
+        if second is not None and second.is_player and not (first is not None and first.is_player):
+            first, second = second, first
+        item.update(country=first, target_country=second)
+        start = min(s.start_date_days for s in sides)
+        item.update(start_date_days=start, start_date=datamodel.days_to_date(start))
+        # the system of the side that got furthest; the envoys in the order of the countries
+        system = next((s.system for s in sides if s.system is not None), None)
+        leaders = list(dict.fromkeys(
+            s.leader for s in sorted(sides, key=lambda s: s.country is not first) if s.leader is not None
+        ))
+        for key, value in (("system", system), ("leader", leaders[0] if leaders else None)):
+            item.pop(key, None)
+            if value is not None:
+                item[key] = value
+        if len(leaders) > 1:
+            item.update(leaders=leaders, other_envoy_count=0)
 
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
@@ -508,6 +580,8 @@ class EventTemplateDictBuilder:
         )
         item = {k: v for (k, v) in item.items() if v is not None}
         item["stages"] = []
+        if storyline.storyline_type == datamodel.StorylineType.first_contact:
+            item["sides"] = [storyline]  # each empire's own process; build_items merges the pair
         return item
 
     @staticmethod

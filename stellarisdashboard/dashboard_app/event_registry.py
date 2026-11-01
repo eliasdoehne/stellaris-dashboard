@@ -761,7 +761,8 @@ STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
         Category.DIPLOMACY, Tier.MAJOR, "handshake", "stage",
         'First contact between the {{ links[event["country"]] | safe }}'
         ' and the {{ links[event["target_country"]] | safe }}'
-        + _STORYLINE_SYSTEM + _STORYLINE_LEADER,
+        # both sides' envoys once the two sides are merged
+        + _STORYLINE_SYSTEM + '{% if "leader" in event %} ({{ render_envoys(event) | trim }}){% endif %}',
         {"active": "in progress", "completed": "contact made", "abandoned": "abandoned"},
     ),
 }
