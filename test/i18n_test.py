@@ -137,6 +137,15 @@ def _placeholders(message):
     return sorted(re.findall(r"%\((\w+)\)s", message))
 
 
+# languages written without spaces between words, which may drop a message's edge spaces
+# (the list separator ", " is "、" in Japanese)
+NO_SPACE_LOCALES = {"ja", "zh_CN"}
+
+
+def _edge_whitespace(message):
+    return re.match(r"\s*", message).group(), re.search(r"\s*$", message).group()
+
+
 @pytest.mark.parametrize("locale", sorted(set(i18n.LANGUAGE_NAMES) - {i18n.DEFAULT_LOCALE}))
 def test_shipped_translations(locale):
     """Every shipped PO file parses, and its translations use the same placeholders
@@ -155,8 +164,18 @@ def test_shipped_translations(locale):
                 # a language's singular form may leave out %(num)s ("one envoy")
                 expected = set(_placeholders(msgid)) | set(_placeholders(entry["msgid_plural"]))
                 assert set(_placeholders(form)) - {"num"} == expected - {"num"}, (locale, msgid, form)
+                _check_edge_whitespace(locale, msgid, form)
         elif entry["msgstr"]:
             assert _placeholders(entry["msgstr"]) == _placeholders(msgid), (locale, msgid, entry["msgstr"])
+            _check_edge_whitespace(locale, msgid, entry["msgstr"])
+
+
+def _check_edge_whitespace(locale, msgid, translation):
+    """Messages are joined with other text, so a translation keeps the leading and
+    trailing spaces of the English message (", " must not become ",")."""
+    if locale in NO_SPACE_LOCALES:
+        return
+    assert _edge_whitespace(translation) == _edge_whitespace(msgid), (locale, msgid, translation)
 
 
 def test_message_template_is_up_to_date():
