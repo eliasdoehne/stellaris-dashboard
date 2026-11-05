@@ -899,7 +899,7 @@ class Country(Base):
 
     @property
     def rendered_name(self):
-        rendered = game_info.render_name(self.country_name)
+        rendered = game_info.render_name_or_prettify(self.country_name)
         if config.CONFIG.include_id_in_names:
             rendered += f" ({self.country_id_in_game})"
         return rendered

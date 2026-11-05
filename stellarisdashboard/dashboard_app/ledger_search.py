@@ -184,8 +184,11 @@ def _build_index(session) -> List[Entry]:
     names = {c.country_id: c.rendered_name for c in countries}
     player = {c.country_id for c in countries if c.is_player}
 
+    # scripted leaders come from nameless "faction" countries of the game's scripts
+    unnamed = hidden | {c.country_id for c in countries if c.country_type == "faction"}
+
     def owner_name(country_id) -> Optional[str]:
-        return names.get(country_id) if country_id is not None and country_id not in hidden else None
+        return names.get(country_id) if country_id is not None and country_id not in unnamed else None
 
     def add(kind, entity_id, name, meta, weight):
         if name:

@@ -87,6 +87,10 @@ def test_stored_name_template_passed_as_key(fixture_renderer):
     assert game_info.lookup_key(json.dumps(name)) == "St. Elmo II"
 
 
+def test_country_name_without_localisation_is_prettified(fixture_renderer):
+    assert game_info.render_name_or_prettify('{"key": "NAME_dead_leader_country"}') == "Dead Leader Country"
+
+
 def test_ethic_found_in_localisation(fixture_renderer):
     assert game_info.lookup_id_name("ethic_xenophile", "ethic") == "Xenophile"
 

@@ -621,7 +621,7 @@ def render_name_or_prettify(name_json: str) -> str:
             and "_" in key
             and _KEY_LIKE_RE.fullmatch(key)
         ):
-            return convert_id_to_name(key.replace(".", "_"))
+            return convert_id_to_name(key.replace(".", "_"), remove_prefix="NAME")
         if is_bare_key:
             return get_global_renderer().render_from_dict(name)
     return render_name(name_json)
