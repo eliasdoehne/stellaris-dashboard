@@ -81,6 +81,12 @@ def test_faction_type(fixture_renderer, faction_type, expected):
     assert game_info.lookup_faction_type(faction_type) == expected
 
 
+def test_stored_name_template_passed_as_key(fixture_renderer):
+    fixture_renderer.name_mapping["NAME_Two"] = "$world$ II"
+    name = {"key": "NAME_Two", "variables": [{"key": "world", "value": {"key": "St. Elmo", "literal": "yes"}}]}
+    assert game_info.lookup_key(json.dumps(name)) == "St. Elmo II"
+
+
 def test_ethic_found_in_localisation(fixture_renderer):
     assert game_info.lookup_id_name("ethic_xenophile", "ethic") == "Xenophile"
 

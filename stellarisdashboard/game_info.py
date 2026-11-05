@@ -291,6 +291,8 @@ def render_name(json_str: str):
 
 
 def lookup_key(key: str) -> str:
+    if key.startswith("{"):  # a stored name template rather than a key
+        return render_name(key)
     return get_global_renderer().render_from_dict({"key": key})
 
 
