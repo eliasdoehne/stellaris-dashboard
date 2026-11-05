@@ -94,7 +94,7 @@
             dashNavigate(new URL(next.href).pathname + new URL(next.href).search);
             return;
         }
-        var section = document.querySelector('.rail a[data-shortcut="' + e.key.toLowerCase() + '"]');
+        var section = document.querySelector('.rail a[data-shortcut="' + CSS.escape(e.key.toLowerCase()) + '"]');
         if (section && !section.classList.contains("is-active")) window.location.href = section.href;
     });
 })();
