@@ -29,9 +29,9 @@
             <button type="button" class="icon-button rail-collapse" data-shell-toggle="collapse" title="Collapse sidebar (\)" aria-label="Collapse sidebar">{{ icon("collapse") }}</button>
         </div>
 
-        {# Graphs and the galaxy map load their own scripts, so links to them always
-           do a full page load; the other same-app links swap the page via hx-boost. #}
-        <nav class="rail-nav" {% if active != "graphs" %}hx-boost="true"{% endif %}>
+        {# Graphs and the galaxy map load their own scripts, so links to and from them
+           always do a full page load; the other same-app links swap the page via hx-boost. #}
+        <nav class="rail-nav" {% if active not in ("graphs", "galaxy") %}hx-boost="true"{% endif %}>
             {% if game_name %}
             <details class="game-switch">
                 <summary title="Switch game">
@@ -104,7 +104,7 @@
             {% if game_name %}
             {# results come from ledger_search.py; assets/search.js drives the box #}
             <div class="topsearch" data-search-url="{{ url_for('ledger_search', game_id=game_name) }}"
-                 {% if active == "graphs" %}data-search-boost="false"{% endif %}>
+                 {% if active in ("graphs", "galaxy") %}data-search-boost="false"{% endif %}>
                 <button type="button" class="icon-button topsearch-open" data-search-open aria-label="Search this game" title="Search (/)">{{ icon("search") }}</button>
                 <div class="topsearch-box">
                     {{ icon("search") }}
