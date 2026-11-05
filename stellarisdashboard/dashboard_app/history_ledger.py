@@ -27,7 +27,7 @@ def history_page(game_id="", version=None):
     matches = datamodel.get_known_games(game_id)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
-        return render_template("404_page.html", game_not_found=True, game_name=game_id)
+        return render_template("404_page.html", game_not_found=True, missing_game=game_id)
     game_id = matches[0]
     games_dict = datamodel.get_available_games_dict()
     country = games_dict[game_id]["country_name"]
