@@ -38,8 +38,16 @@
         s.input.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
-    function close(s) {
+    // Drops the pending search and any response still on its way.
+    function cancel(s) {
         clearTimeout(s.timer);
+        s.seq++;
+        if (s.controller) s.controller.abort();
+        s.root.classList.remove("is-loading");
+    }
+
+    function close(s) {
+        cancel(s);
         show(s, false);
     }
 
@@ -48,7 +56,7 @@
         var q = s.input.value.trim();
         if (!q) { s.results.innerHTML = ""; s.shownFor = null; close(s); return Promise.resolve(); }
         var key = q + "\n" + s.kind;
-        if (key === s.shownFor) { show(s, true); return Promise.resolve(); }
+        if (key === s.shownFor) { cancel(s); show(s, true); return Promise.resolve(); }
         if (s.controller) s.controller.abort();
         s.controller = window.AbortController ? new AbortController() : null;
         var seq = ++s.seq;
@@ -126,8 +134,10 @@
                 var newTab = e.ctrlKey || e.metaKey;
                 // typed faster than the delay: search now, then open the best hit
                 var pending = s.shownFor !== s.input.value.trim() + "\n" + s.kind;
-                (pending ? fetchResults(s) : Promise.resolve()).then(function () {
-                    go(s, hits(s)[Math.max(s.active, 0)], newTab);
+                var search = pending ? fetchResults(s) : Promise.resolve();
+                var seq = s.seq;
+                search.then(function () {
+                    if (seq === s.seq) go(s, hits(s)[Math.max(s.active, 0)], newTab);  // unless closed meanwhile
                 });
             } else if (e.key === "Escape") {
                 e.preventDefault();
