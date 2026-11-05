@@ -77,6 +77,23 @@ def test_stages_name_their_side_unless_both_reached_them_together():
     ]
 
 
+def test_lines_from_both_sides_drop_their_numbers():
+    stages = [
+        ((0, 1), {"index": 1, "detail": "contact detected"}, "A"),
+        ((0, 1), {"index": 1, "detail": "contact detected"}, "B"),
+        ((50, 2), {"index": 2, "detail": "investigation progressed"}, "A"),
+        ((60, 2), {"index": 2, "detail": "investigation progressed"}, "B"),
+        ((70, 3), {"index": 3}, "B"),  # nothing else to show
+    ]
+    labelled = [stage for _, stage, _ in event_grouping.label_contact_stages(stages)]
+    assert labelled == [
+        {"detail": "contact detected"},
+        {"detail": "investigation progressed", "country": "A"},
+        {"detail": "investigation progressed", "country": "B"},
+        {"index": 3, "country": "B"},
+    ]
+
+
 def test_both_sides_of_a_first_contact_share_a_row():
     a, b = _storyline(1, 2, 100, 200), _storyline(2, 1, 150, 300)
     assert event_grouping.storyline_rows([a, b]) == [[a, b]]

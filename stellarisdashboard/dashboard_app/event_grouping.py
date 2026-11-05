@@ -123,7 +123,7 @@ def storyline_rows(storylines: Sequence) -> List[list]:
 
 def label_contact_stages(stages: list) -> list:
     """(sort key, stage dict, country) of both sides, sorted: each stage names its side, except stages both
-    sides reached on the same day, shown once."""
+    sides reached on the same day, shown once. Lines from both sides lose their index if they have a detail."""
     countries = collections.defaultdict(set)
     for key, stage, country in stages:
         countries[(key, stage.get("detail"))].add(country)
@@ -137,6 +137,12 @@ def label_contact_stages(stages: list) -> list:
         elif country is not None:
             stage = dict(stage, country=country)
         result.append((key, stage, country))
+    # each side numbers its own stages, so a mix of both has no meaningful numbers
+    if len({stage["country"] for _, stage, _ in result if "country" in stage}) > 1:
+        result = [
+            (key, {k: v for k, v in stage.items() if k != "index" or not stage.get("detail")}, country)
+            for key, stage, country in result
+        ]
     return result
 
 

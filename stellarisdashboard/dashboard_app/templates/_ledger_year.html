@@ -22,7 +22,7 @@
                 <ol class="story-stages">
                     {% for stage in item.stages %}
                     <li><time class="ledger-date">{{ stage.start_date }}</time>
-                        <span>{{ row.stage_noun | capitalize }} {{ stage.index }}{% if stage.detail %}: {{ stage.detail }}{% endif %}{% if stage.country %} by {{ with_article(stage.country, links) }}{% endif %}</span></li>
+                        <span>{% if stage.index is defined %}{{ row.stage_noun | capitalize }} {{ stage.index }}{% if stage.detail %}: {{ stage.detail }}{% endif %}{% else %}{{ stage.detail[:1] | upper }}{{ stage.detail[1:] }}{% endif %}{% if stage.country %} by {{ with_article(stage.country, links) }}{% endif %}</span></li>
                     {% endfor %}
                 </ol>
             </details>

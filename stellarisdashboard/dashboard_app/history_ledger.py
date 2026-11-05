@@ -488,8 +488,8 @@ class EventTemplateDictBuilder:
                 if len(sides) > 1:
                     stages = event_grouping.label_contact_stages(stages)
             item["stages"] = [s for _, s, _ in stages]
-            # the furthest stage reached, which counts stages hidden from the player too
-            item["stage_count"] = max((s["index"] for s in item["stages"]), default=0)
+            # first contacts count their lines; others the furthest stage reached, including stages hidden from the player
+            item["stage_count"] = len(stages) if sides else max((s["index"] for s in item["stages"]), default=0)
         return items
 
     def _all_contact_sides(self, contact_items) -> dict:
