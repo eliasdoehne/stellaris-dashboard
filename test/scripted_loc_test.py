@@ -99,6 +99,40 @@ def test_trigger_holds(trigger, expected):
 
 
 @pytest.mark.parametrize(
+    "trigger",
+    [
+        "yes",
+        None,
+        [("has_trait", [("a", "b")])],  # a block against a set
+        [("is_ruler", [("a", "b")])],  # a block against a bool
+        [("owner", "yes")],  # a value against a scope
+        [("OR", [("has_trait", [("a", "b")])])],
+    ],
+)
+def test_trigger_holds_is_unknown_for_malformed_triggers(trigger):
+    facts = {"is_ruler": True, "has_trait": {"t1"}, "owner": {"is_gestalt": True}}
+    assert game_info.trigger_holds(trigger, facts) is None
+
+
+def test_scripted_loc_ignores_blocks_in_place_of_text(monkeypatch):
+    script = "defined_text = { name = GetModded default = { a = b } text = { trigger = yes localization_key = { c = d } } }"
+    monkeypatch.setattr(game_info, "_read_common_scripts", lambda subdir: [script])
+    assert game_info._scripted_loc.__wrapped__() == {"GetModded": ([("yes", None)], None)}
+
+
+def test_first_contact_stages_ignore_blocks_in_place_of_text(monkeypatch):
+    script = """
+    modded_stage = { icon = { a = b } stage_event = { icon = { a = b } summary = { c = d } } }
+    modded_default = { icon = { a = b } }
+    """
+    monkeypatch.setattr(game_info, "_read_common_scripts", lambda subdir: [script])
+    assert game_info._first_contact_stages.__wrapped__() == {
+        "modded_stage": [(None, None)],
+        "modded_default": [(None, None)],
+    }
+
+
+@pytest.mark.parametrize(
     "name, facts, expected",
     [
         ("GetChosenName", {"owner": {"is_gestalt": True}}, "chosen_gestalt"),

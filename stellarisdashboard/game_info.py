@@ -470,6 +470,8 @@ def parse_script(text: str) -> list:
 
 def trigger_holds(trigger: list, facts: Optional[dict]) -> Optional[bool]:
     """Evaluates parsed trigger conditions against facts (scopes are nested dicts); None if unknown."""
+    if not isinstance(trigger, list):
+        return None
     results = [_condition_holds(key, value, facts or {}) for key, value in trigger]
     return False if False in results else None if None in results else True
 
@@ -482,15 +484,20 @@ def _condition_holds(key: str, value, facts: dict) -> Optional[bool]:
             results = [_condition_holds(k, v, facts) for k, v in value]
             any_holds = True if True in results else None if None in results else False
             return any_holds if key == "OR" or any_holds is None else not any_holds
-        return trigger_holds(value, facts[key]) if facts.get(key) is not None else None
+        return trigger_holds(value, facts[key]) if isinstance(facts.get(key), dict) else None
     if key == "exists":
         return facts[value] is not None if value in facts else None
     known = facts.get(key)
-    if known is None:
+    if known is None or isinstance(known, dict):
         return None
     if isinstance(known, (set, frozenset)):
         return value in known
     return known == (value == "yes")
+
+
+def _script_text(value) -> Optional[str]:
+    """A script value where text is expected; mods can put a block there."""
+    return value if isinstance(value, str) else None
 
 
 @functools.lru_cache(maxsize=1)
@@ -506,9 +513,9 @@ def _scripted_loc() -> dict[str, tuple[list, Optional[str]]]:
             for field, variant in block:
                 if field == "text" and isinstance(variant, list):
                     variant_fields = dict(variant)
-                    variants.append((variant_fields.get("trigger", []), variant_fields.get("localization_key")))
+                    variants.append((variant_fields.get("trigger", []), _script_text(variant_fields.get("localization_key"))))
             if isinstance(fields.get("name"), str):
-                scripted[fields["name"]] = (variants, fields.get("default"))
+                scripted[fields["name"]] = (variants, _script_text(fields.get("default")))
     return scripted
 
 
@@ -544,8 +551,9 @@ def _first_contact_stages() -> dict[str, list[tuple[Optional[str], Optional[str]
             fields = dict(block)
             outcomes = [dict(event) for field, event in block if field == "stage_event" and isinstance(event, list)]
             stages[stage] = [
-                (outcome.get("icon", fields.get("icon")), outcome.get("summary")) for outcome in outcomes
-            ] or [(fields.get("icon"), None)]
+                (_script_text(outcome.get("icon", fields.get("icon"))), _script_text(outcome.get("summary")))
+                for outcome in outcomes
+            ] or [(_script_text(fields.get("icon")), None)]
     return stages
 
 
