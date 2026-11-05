@@ -149,3 +149,8 @@ def test_anomaly_category(fixture_renderer, category, expected):
 )
 def test_astral_rift_description(fixture_renderer, text, expected):
     assert datamodel.render_astral_rift_description(text) == expected
+
+
+def test_astral_rift_description_has_no_double_quotes(fixture_renderer):
+    fixture_renderer.name_mapping["astral_rift.1.name"] = 'Impossible "Glass"'
+    assert datamodel.render_astral_rift_description("corridors|astral_rift.1") == "Corridors: Impossible 'Glass'"

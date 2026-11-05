@@ -2081,7 +2081,8 @@ def render_astral_rift_description(text: str) -> str:
     name = game_info.lookup_key_if_known(f"astral_rift_{rift_type}")
     name = name or game_info.convert_id_to_name(rift_type)
     title = game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
-    return f"{name}: {title}" if title and title != name else name
+    # the ledger quotes this description, so quotes within it become single ones
+    return (f"{name}: {title}" if title and title != name else name).replace('"', "'")
 
 
 # Technology ages of primitive (pre-FTL) countries, oldest first
