@@ -35,3 +35,36 @@
         }
     });
 })();
+
+// The decade scrubber highlights the decades of the years on screen, as the reader scrolls and pages append.
+(function () {
+    "use strict";
+    var queued = false;
+
+    function highlight() {
+        queued = false;
+        var links = document.querySelectorAll(".scrub[data-decade]");
+        if (!links.length) return;
+        var toolbar = document.querySelector(".ledger-toolbar");
+        var top = toolbar ? toolbar.getBoundingClientRect().bottom : 0;
+        var decades = {};
+        document.querySelectorAll(".ledger-year").forEach(function (section) {
+            var box = section.getBoundingClientRect();
+            if (box.bottom > top && box.top < window.innerHeight) decades[Math.floor(section.id.slice(1) / 10) * 10] = true;
+        });
+        links.forEach(function (link) {
+            link.classList.toggle("is-in-view", !!decades[link.dataset.decade]);
+        });
+    }
+
+    function queue() {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(highlight);
+    }
+
+    window.addEventListener("scroll", queue, {passive: true});
+    window.addEventListener("resize", queue);
+    document.addEventListener("htmx:afterSettle", queue);
+    queue();
+})();

@@ -71,7 +71,7 @@
             {% for decade in decades %}
             {% set d = decade[0] %}
             {% set in_view = by_year and (d <= by_year.keys()|max and d + 9 >= by_year.keys()|min) %}
-            <a class="scrub{% if in_view %} is-in-view{% endif %}"
+            <a class="scrub{% if in_view %} is-in-view{% endif %}" data-decade="{{ d }}"
                href="{{ (params.url(before=d + 10) if params.newest_first else params.url(after=d - 1)) }}#y{{ d + 9 if params.newest_first else d }}">
                 <span class="scrub-label">{{ d }}s</span>
                 <span class="scrub-bar"><span style="width: {{ (100 * decade[1] / peak) | round(0) }}%"></span></span>
