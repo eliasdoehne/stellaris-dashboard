@@ -43,17 +43,14 @@ def history_page(game_id="", version=None):
         years = query.window(year_counts)
         items = builder.build_items(query.events(years))
         by_year = collections.OrderedDict((y, []) for y in years)
-        # storylines sit at their first member in page order, but are dated by their start
-        # (or, if that is before these years, by their first event in them)
-        items.sort(
-            key=lambda i: i["start_date_days"] if _year(i["start_date_days"]) in by_year else i["placed_days"],
-            reverse=params.newest_first,
-        )
+        # every row is listed in the year it started (query.events loads storylines and envoy assignments whole)
+        items.sort(key=lambda i: i["start_date_days"], reverse=params.newest_first)
         for item in items:
-            year = _year(item["start_date_days"])
+            year = ledger_timeline.year_of(item["start_date_days"])
             if year not in by_year:
-                # a storyline that started outside these years sits at its first event in them
-                year = _year(item["placed_days"])
+                # only if build_items merged a first contact differently than the counts did
+                logger.warning(f"Ledger row {item.get('key')} of {year} loaded for the years {years}")
+                year = min(by_year, key=lambda y: abs(y - year))
             by_year[year].append(_ledger_row(item, year))
         last_year = years[-1] if years else None
         remaining = [y for y in year_counts if (y < last_year if params.newest_first else y > last_year)] if last_year else []
@@ -71,8 +68,8 @@ def history_page(game_id="", version=None):
             new_keys = set()
             if params.level != params.base_level:
                 # highlight what this level added to the one before it
-                seen = query.row_keys(years, query.previous_level())
-                new_keys = {row["key"] for row in by_year[params.year]} - seen
+                seen = query.row_keys(params.year, query.previous_level())
+                new_keys = {row["key"] for row in by_year[params.year] if not row["keys"] & seen}
             return render_template(
                 "_ledger_year.html", year=params.year, rows=by_year[params.year], new_keys=new_keys, **timeline
             )
@@ -107,17 +104,13 @@ def history_page(game_id="", version=None):
     return page
 
 
-def _year(days) -> int:
-    # events from before the game started (leaders hired earlier) count as its first year
-    return max(int(days // 360) + 2200, 2200)
-
-
 def _ledger_row(item, year: int) -> dict:
     category, tier = event_registry.describe(item)
     start_year, _, month_day = item["start_date"].partition(".")
     row = dict(
         item=item,
         key=item.get("key"),
+        keys={item.get("key"), *item.get("side_keys", ())},
         category=category.name.lower() if category else "other",
         category_label=category.value if category else "",
         tier=int(tier) if tier else 2,
@@ -361,8 +354,8 @@ class EventTemplateDictBuilder:
             del self._events[key_object]
 
     def build_items(self, event_list) -> list:
-        """Ledger items for the visible events in event_list, in order: one dict per
-        event, merged envoy assignment or storyline (folded at its first member).
+        """Ledger items for the visible events in event_list (chronological): one dict per
+        event, merged envoy assignment or storyline, in the order of their first event.
         Entity links are collected in self._formatted_urls."""
         if self._formatted_urls is None:
             self._formatted_urls = {}
@@ -456,7 +449,7 @@ class EventTemplateDictBuilder:
                 event_dict["assignment_count"] = len(group.events)
 
             if event.storyline_id is not None:
-                # members fold into one card per storyline, placed at its first visible member;
+                # members fold into one card per storyline, dated by its start;
                 # both sides of a first contact share one card
                 item = storyline_items.get(event.storyline_id)
                 if item is None:
@@ -464,7 +457,6 @@ class EventTemplateDictBuilder:
                     item = event_grouping.find_contact_partner(contact_items, storyline)
                     if item is None:
                         item = self._storyline_dict(storyline)
-                        item["placed_days"] = event.start_date_days
                         items.append(item)
                         if "sides" in item:
                             contact_items[event_grouping.contact_pair(storyline)].append(item)
@@ -477,7 +469,7 @@ class EventTemplateDictBuilder:
                     item["stages"].append((sort_key, self._stage_dict(event, start), event.country))
                 self._preformat_urls(event)
                 continue
-            event_dict["start_date_days"] = event_dict["placed_days"] = event.start_date_days
+            event_dict["start_date_days"] = event.start_date_days
             event_dict["key"] = ledger_timeline.row_key(event.historical_event_id, None)
             items.append(event_dict)
             for grouped_event in group.events:
@@ -488,6 +480,7 @@ class EventTemplateDictBuilder:
             stages = sorted(item["stages"], key=lambda s: s[0])
             sides = item.pop("sides", None)
             if sides:
+                item["side_keys"] = [ledger_timeline.row_key(None, s.storyline_id) for s in sides]
                 pair = event_grouping.contact_pair(sides[0])
                 partners = [s for s in all_sides.get(pair, []) if event_grouping.spans_overlap(s, sides[0])]
                 self._combine_contact_sides(item, sides, partners)

@@ -75,3 +75,15 @@ def test_stages_name_their_side_unless_both_reached_them_together():
         {"index": 1, "detail": "contact detected"},
         {"index": 2, "detail": "investigation progressed", "country": "B"},
     ]
+
+
+def test_both_sides_of_a_first_contact_share_a_row():
+    a, b = _storyline(1, 2, 100, 200), _storyline(2, 1, 150, 300)
+    assert event_grouping.storyline_rows([a, b]) == [[a, b]]
+
+
+def test_separate_contacts_and_other_storylines_get_their_own_rows():
+    early, late = _storyline(1, 2, 100, 200), _storyline(2, 1, 900, None)
+    third_party = _storyline(1, 3, 100, 200)
+    rift = SimpleNamespace(storyline_type=datamodel.StorylineType.astral_rift)
+    assert event_grouping.storyline_rows([early, third_party, rift, late]) == [[early], [third_party], [rift], [late]]

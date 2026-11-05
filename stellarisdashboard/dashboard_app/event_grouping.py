@@ -105,6 +105,22 @@ def find_contact_partner(contact_items: dict, storyline) -> Optional[dict]:
     return None
 
 
+def storyline_rows(storylines: Sequence) -> List[list]:
+    """Which of these storylines (in the order of their first shown event) share a ledger row: each its own,
+    except both sides of a first contact, merged as build_items merges them."""
+    rows, contact_items = [], collections.defaultdict(list)
+    for storyline in storylines:
+        item = find_contact_partner(contact_items, storyline)
+        if item is not None:
+            item["sides"].append(storyline)
+            continue
+        item = {"sides": [storyline]}
+        rows.append(item)
+        if storyline.storyline_type == datamodel.StorylineType.first_contact:
+            contact_items[contact_pair(storyline)].append(item)
+    return [item["sides"] for item in rows]
+
+
 def label_contact_stages(stages: list) -> list:
     """(sort key, stage dict, country) of both sides, sorted: each stage names its side, except stages both
     sides reached on the same day, shown once."""
