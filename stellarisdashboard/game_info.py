@@ -533,10 +533,64 @@ def dig_site_stage_count(site_type: str) -> Optional[int]:
     return int(stages) if stages is not None and stages.isdigit() else None
 
 
+@functools.lru_cache(maxsize=1)
+def _first_contact_stages() -> dict[str, list[tuple[Optional[str], Optional[str]]]]:
+    """(icon, summary) of each outcome (stage_event) per first contact stage; the stage's icon is the default."""
+    stages = {}
+    for text in _read_common_scripts("first_contact"):
+        for stage, block in parse_script(text):
+            if not isinstance(block, list):
+                continue
+            fields = dict(block)
+            outcomes = [dict(event) for field, event in block if field == "stage_event" and isinstance(event, list)]
+            stages[stage] = [
+                (outcome.get("icon", fields.get("icon")), outcome.get("summary")) for outcome in outcomes
+            ] or [(fields.get("icon"), None)]
+    return stages
+
+
 def first_contact_stage_role(stage: str) -> Optional[str]:
-    """The role of a first contact stage from its icon (starter, progress, question, success, fail)."""
-    icon = _common_block_fields("first_contact", "icon").get(stage)
-    return icon.removeprefix("GFX_firstcontact_icon_") if icon else None
+    """The role of a first contact stage from its icons (starter, progress, success, question, fail), the first of those."""
+    icons = {icon for icon, _ in _first_contact_stages().get(stage, ()) if icon}
+    roles = {icon.removeprefix("GFX_firstcontact_icon_").removeprefix("warship_") for icon in icons}
+    return next((role for role in ("starter", "progress", "success", "question", "fail") if role in roles), None)
+
+
+def shared_clause(texts: list[str]) -> str:
+    """The start of the first sentence shared by all texts, if it has at least three words."""
+    words = []
+    for parts in zip(*(text.split() for text in texts)):
+        if len(set(parts)) > 1:
+            break
+        words.append(parts[0])
+        if parts[0].endswith("."):
+            break
+    return " ".join(words) if len(words) >= 3 else ""
+
+
+_FIRST_PERSON_RE = re.compile(r"\b(we|us|our)\b", re.I)
+
+
+def first_contact_stage_summary(stage: str, values: dict) -> Optional[str]:
+    """
+    The game's text for a first contact stage as a third-person phrase: the summary of its outcomes, or what
+    those share since saves don't tell the outcome. None if there is no such phrase or it needs other values.
+    """
+    mapping = get_global_renderer().name_mapping
+    summaries = []
+    for _, key in _first_contact_stages().get(stage, ()):
+        text = mapping.get(key) if key else None
+        while text and (reference := re.fullmatch(r"\$(\w+)\$", text)):
+            text = mapping.get(reference.group(1))
+        if text and text not in summaries:
+            summaries.append(text)
+    text = summaries[0] if len(summaries) == 1 else shared_clause(summaries) if summaries else ""
+    text = text.removeprefix("Our ")
+    if not text or _FIRST_PERSON_RE.search(text) or not set(scripted_re.findall(text)) <= set(values):
+        return None
+    if text[0].isalpha():
+        text = text[0].lower() + text[1:]
+    return render_loc_text(text, values=values).rstrip(".").replace("the The ", "the ")
 
 
 _KEY_LIKE_RE = re.compile(r"[A-Za-z0-9_.]+")

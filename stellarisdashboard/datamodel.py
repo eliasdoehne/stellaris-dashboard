@@ -2135,10 +2135,13 @@ FIRST_CONTACT_STAGE_LABELS = {
 FIRST_CONTACT_APPROACHES = ("hostile", "proactive", "cautious")
 
 
-def render_first_contact_stage(stage: str) -> str:
-    """A first contact stage by its role in the game files, e.g. "communications established (cautious)"."""
-    role = "starter" if stage == "base_contact_set" else game_info.first_contact_stage_role(stage)
-    label = FIRST_CONTACT_STAGE_LABELS.get(role) or game_info.convert_id_to_name(stage)
+def render_first_contact_stage(stage: str, values: Optional[dict] = None) -> str:
+    """A first contact stage by the game's text for it, else by its role in the game files, plus the approach."""
+    label = (
+        game_info.first_contact_stage_summary(stage, values or {})
+        or FIRST_CONTACT_STAGE_LABELS.get(game_info.first_contact_stage_role(stage))
+        or game_info.convert_id_to_name(stage, remove_prefix="default")
+    )
     approach = next((a for a in FIRST_CONTACT_APPROACHES if a in stage.split("_")), None)
     return f"{label} ({approach})" if approach else label
 
@@ -2472,7 +2475,7 @@ class HistoricalEvent(Base):
                 self.db_description.text if self.db_description else ""
             )
         elif self.event_type == HistoricalEventType.first_contact_stage and self.db_description:
-            return render_first_contact_stage(self.db_description.text)
+            return render_first_contact_stage(self.db_description.text, self._first_contact_loc_values())
         elif self.event_type == HistoricalEventType.galactic_resolution_passed:
             return render_resolution_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.galactic_custodian:
@@ -2511,8 +2514,17 @@ class HistoricalEvent(Base):
             _, event_id = split_packed_description(text)
             return game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
         elif self.event_type == HistoricalEventType.first_contact_stage and text:
-            return render_first_contact_stage(text)
+            return render_first_contact_stage(text, self._first_contact_loc_values())
         return None
+
+    def _first_contact_loc_values(self) -> dict:
+        """What the game's first contact texts ask about this event."""
+        values = {}
+        if self.target_country is not None:
+            values["This.ContactCountry.GetName"] = game_info.render_name_or_prettify(self.target_country.country_name)
+        if self.system is not None:
+            values["This.System.GetName"] = self.system.rendered_name
+        return values
 
     def involved_countries(self):
         if self.country_id is not None:
