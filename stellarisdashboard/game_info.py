@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 # Regex explanation: https://regex101.com/r/qc0QhS/1
 loc_re = re.compile(r'\s*(?P<key>\S+?):\d*\s*"(?P<value>.*)"\s*(#.*)?')
 var_re = re.compile(r"\$(?P<key>\S+)\$")
+scripted_re = re.compile(r"\[([A-Za-z_][\w.]*)\]")  # e.g. [Root.GetName]
+concept_re = re.compile(r"\['(\w+)'(?:,\s*([^\]]*))?\]")  # e.g. ['concept_pop'] or ['concept_pop', Pops]
+icon_re = re.compile(r"£(\w+)(?:\|[^£]*)?£")  # e.g. £energy£
 
 
 class NameRenderer:
@@ -106,11 +109,34 @@ class NameRenderer:
             return self.render_from_dict(name_dict["value"], tags)
 
         substitution_values = self._collect_substitution_values(name_dict, tags)
+        render_template = self._resolve_scripted_loc(
+            render_template, known={key for key, _ in substitution_values}
+        )
         render_template = self._substitute_variables(
             render_template, substitution_values
         )
         render_template = self._handle_unresolved_variables(render_template)
-        return render_template
+        return _strip_markup(render_template)
+
+    def _resolve_scripted_loc(self, template, known=frozenset(), facts=None, values=None):
+        """Resolves [...] other than the known variables: given values, then scripted loc; drops the rest."""
+        if "[" not in template:
+            return template
+
+        def replace_concept(match):
+            return match.group(2) or self.render_from_dict({"key": match.group(1)})
+
+        def replace_scripted(match):
+            expression = match.group(1)
+            if expression in known:
+                return match.group(0)
+            if values and expression in values:
+                return values[expression]
+            key = scripted_loc_key(expression.rpartition(".")[2], facts)
+            return self.render_from_dict({"key": key}) if key else ""
+
+        resolved = scripted_re.sub(replace_scripted, concept_re.sub(replace_concept, template))
+        return re.sub(r" {2,}", " ", resolved).strip(" -") if resolved != template else template
 
     def _collect_substitution_values(self, name_dict, tags: set[str]):
         substitution_values = []
@@ -279,6 +305,13 @@ class NameRenderer:
                         yield line
 
 
+def _strip_markup(text: str) -> str:
+    """Removes colour codes and replaces icons by their name, e.g. "§G£energy£ +2§!" -> "Energy +2"."""
+    if "§" not in text and "£" not in text:
+        return text
+    return icon_re.sub(lambda m: convert_id_to_name(m.group(1), remove_prefix="sr"), re.sub(r"§.", "", text))
+
+
 global_renderer: NameRenderer = None
 _renderer_lock = threading.Lock()  # guards lazy setup (warm-up thread vs. requests)
 
@@ -301,6 +334,18 @@ def lookup_key_if_known(key: str) -> Optional[str]:
     if key not in get_global_renderer().name_mapping:
         return None
     return lookup_key(key) or None
+
+
+def loc_template(key: str) -> Optional[str]:
+    """The unrendered localisation value of the key, None if the game's localisation has no entry for it."""
+    return get_global_renderer().name_mapping.get(key)
+
+
+def render_loc_text(text: str, facts: Optional[dict] = None, values: Optional[dict] = None) -> str:
+    """Renders a localisation value given what its scripted loc asks: trigger facts (see trigger_holds) and values."""
+    renderer = get_global_renderer()
+    text = renderer._resolve_scripted_loc(text, facts=facts, values=values)
+    return _strip_markup(renderer._handle_unresolved_variables(text))
 
 
 @functools.lru_cache(maxsize=2**12)
@@ -368,25 +413,118 @@ def parse_top_level_fields(lines: Iterable[str], field: str) -> dict[str, str]:
     return values
 
 
-@functools.lru_cache(maxsize=8)
-def _common_block_fields(subdir: str, field: str) -> dict[str, str]:
-    """The field per block over common/<subdir>/*.txt of the game and enabled mods; later files override."""
+def _read_common_scripts(subdir: str) -> Iterable[str]:
+    """The text of each file common/<subdir>/*.txt of the game, then of enabled mods."""
     from stellarisdashboard import config
 
-    values = {}
     try:
         data_dirs = [d for d in config.CONFIG.game_data_dirs if d is not None]
     except Exception:
         logger.warning("Could not determine the game data directories", exc_info=True)
-        return values
+        return
     for data_dir in data_dirs:
         for path in sorted((data_dir / "common" / subdir).glob("*.txt")):
             try:
                 with open(path, "rt", encoding="utf-8-sig", errors="replace") as f:
-                    values.update(parse_top_level_fields(f, field))
+                    yield f.read()
             except OSError:
                 logger.warning(f"Could not read game file {path}")
+
+
+@functools.lru_cache(maxsize=8)
+def _common_block_fields(subdir: str, field: str) -> dict[str, str]:
+    """The field per block over common/<subdir>/*.txt of the game and enabled mods; later files override."""
+    values = {}
+    for text in _read_common_scripts(subdir):
+        values.update(parse_top_level_fields(text.splitlines(), field))
     return values
+
+
+_SCRIPT_TOKEN_RE = re.compile(r'#[^\n]*|"[^"\n]*"|[{}]|[=<>]+|[^\s{}=<>"#]+')
+
+
+def parse_script(text: str) -> list:
+    """Parses game script into (key, value) pairs in file order; the value of a block is a list of pairs."""
+    root = []
+    stack = [root]
+    key = None
+    for token in _SCRIPT_TOKEN_RE.findall(text):
+        if token[0] in "#=<>":
+            continue
+        if token == "{":
+            block = []
+            stack[-1].append((key, block))
+            stack.append(block)
+            key = None
+        elif token == "}":
+            if len(stack) > 1:
+                stack.pop()
+            key = None
+        elif key is None:
+            key = token.strip('"')
+        else:
+            stack[-1].append((key, token.strip('"')))
+            key = None
+    return root
+
+
+def trigger_holds(trigger: list, facts: Optional[dict]) -> Optional[bool]:
+    """Evaluates parsed trigger conditions against facts (scopes are nested dicts); None if unknown."""
+    results = [_condition_holds(key, value, facts or {}) for key, value in trigger]
+    return False if False in results else None if None in results else True
+
+
+def _condition_holds(key: str, value, facts: dict) -> Optional[bool]:
+    if isinstance(value, list):
+        if key in ("AND", "hidden_trigger"):
+            return trigger_holds(value, facts)
+        if key in ("OR", "NOT", "NOR"):
+            results = [_condition_holds(k, v, facts) for k, v in value]
+            any_holds = True if True in results else None if None in results else False
+            return any_holds if key == "OR" or any_holds is None else not any_holds
+        return trigger_holds(value, facts[key]) if facts.get(key) is not None else None
+    if key == "exists":
+        return facts[value] is not None if value in facts else None
+    known = facts.get(key)
+    if known is None:
+        return None
+    if isinstance(known, (set, frozenset)):
+        return value in known
+    return known == (value == "yes")
+
+
+@functools.lru_cache(maxsize=1)
+def _scripted_loc() -> dict[str, tuple[list, Optional[str]]]:
+    """Every defined_text of common/scripted_loc by name: its [(trigger, key)] and its default key."""
+    scripted = {}
+    for text in _read_common_scripts("scripted_loc"):
+        for block_type, block in parse_script(text):
+            if block_type != "defined_text" or not isinstance(block, list):
+                continue
+            fields = dict(block)
+            variants = []
+            for field, variant in block:
+                if field == "text" and isinstance(variant, list):
+                    variant_fields = dict(variant)
+                    variants.append((variant_fields.get("trigger", []), variant_fields.get("localization_key")))
+            if isinstance(fields.get("name"), str):
+                scripted[fields["name"]] = (variants, fields.get("default"))
+    return scripted
+
+
+def scripted_loc_key(name: str, facts: Optional[dict] = None) -> Optional[str]:
+    """The localisation key a defined_text picks: the first variant known to apply, else its default."""
+    variants, default = _scripted_loc().get(name, ((), None))
+    for trigger, key in variants:
+        if trigger_holds(trigger, facts) is True:
+            return key
+    return default or (variants[0][1] if variants else None)
+
+
+def ruler_title(gov_type: Optional[str]) -> Optional[str]:
+    """The ruler title of a government type, None if unknown."""
+    title = _common_block_fields("governments", "ruler_title").get(gov_type)
+    return lookup_key(title) if title else None
 
 
 def dig_site_stage_count(site_type: str) -> Optional[int]:

@@ -1687,12 +1687,6 @@ class CombatParticipant(Base):
 
 
 # trait names the game fills in by scripted loc (common/scripted_loc) -> the loc key of its default text
-SCRIPTED_TRAIT_NAME_DEFAULTS = {
-    "[triggered_salvager_name]": "leader_trait_salvager_regular",
-    "[GetChosenName]": "leader_trait_chosen_default",
-}
-
-
 class Leader(Base):
     __tablename__ = "leader"
 
@@ -1751,20 +1745,41 @@ class Leader(Base):
 
     def render_trait(self, text: str):
         key = text.rstrip("_0123456789")
-        description = game_info.lookup_key(key)
-
-        if description == "[triggered_imperial_name]":
-            # logic from common/scripted_loc/08_scripted_loc_paragon.txt
-            is_ruler = self.country is not None and self == self.country.ruler
-            key = "imperial_ruler" if is_ruler else "imperial_heir"
-            return game_info.lookup_key(key)
-        elif description in SCRIPTED_TRAIT_NAME_DEFAULTS:
-            return game_info.lookup_key(SCRIPTED_TRAIT_NAME_DEFAULTS[description])
+        template = game_info.loc_template(key)
+        if template and "[" in template:
+            facts, values = self._scripted_loc_context()
+            description = game_info.render_loc_text(template, facts, values)
+            description = description or game_info.convert_id_to_name(key.removeprefix("leader_trait_"))
         else:
-            level = text.removeprefix(key).lstrip("_")
-            if level:
-                description = f"{description} ({level})"
-            return description
+            description = game_info.lookup_key(key)
+        level = text.removeprefix(key).lstrip("_")
+        if level:
+            description = f"{description} ({level})"
+        return description
+
+    def _scripted_loc_context(self) -> tuple[dict, dict]:
+        """What the game's scripted localisation asks about this leader: trigger facts and values."""
+        owner = self.country or self.creator
+        government = owner.get_current_government() if owner is not None else None
+        owner_facts, values = {}, {}
+        if government is not None:
+            owner_facts = {
+                "is_gestalt": "ethic_gestalt_consciousness" in government.ethics,
+                "is_hive_empire": government.authority == "auth_hive_mind",
+                "is_machine_empire": government.authority == "auth_machine_intelligence",
+                "is_imperial_authority": government.authority == "auth_imperial",
+                "is_wilderness_empire": owner.origin == "origin_wilderness",
+            }
+            title = game_info.ruler_title(government.gov_type)
+            if title:
+                values["owner.GetRulerTitle"] = title
+        traits = set(self.leader_traits.split("|"))
+        facts = {
+            "is_ruler": self.country is not None and self == self.country.ruler,
+            "has_trait": traits | {trait.removeprefix("leader_") for trait in traits},
+            "owner": owner_facts if owner is not None else None,
+        }
+        return facts, values
 
 
 class Planet(Base):
@@ -2128,17 +2143,12 @@ def render_first_contact_stage(stage: str) -> str:
     return f"{label} ({approach})" if approach else label
 
 
-def _strip_colour_codes(text: str) -> str:
-    """Removes the game's text colour codes, e.g. "§RRepeal X§!" -> "Repeal X"."""
-    return re.sub(r"§.", "", text)
-
-
 def render_resolution_description(resolution_type: str) -> str:
     """Renders a resolution type as its quoted name, e.g. '"The Readied Shield"'."""
     name = game_info.lookup_key_if_known(resolution_type) or game_info.convert_id_to_name(
         resolution_type, remove_prefix="resolution"
     )
-    return f'"{_strip_colour_codes(name)}"'
+    return f'"{name}"'
 
 
 SUBJECT_PRESET_VARIANT_RE = re.compile(r"_(oppressive|balanced|benevolent|mean_\d+|nice_\d+)(_ai)?$")
@@ -2171,7 +2181,6 @@ def render_megastructure_description(text: str) -> str:
 def render_crisis_level(level_key: str) -> str:
     """Renders a crisis level key as a phrase, e.g. "crisis_level_2" -> '"Risk"-level threat to the galaxy'."""
     name = game_info.lookup_key_if_known(level_key) or game_info.convert_id_to_name(level_key, remove_prefix="crisis")
-    name = _strip_colour_codes(name)
     if level_key.startswith("crisis_defender_"):
         return f'"{name}"-rank Defender of the Galaxy'
     return f'"{name}"-level threat to the galaxy'
