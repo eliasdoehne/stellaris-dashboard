@@ -67,7 +67,7 @@ def _gather_empires(session, game_id):
             link=utils.preformat_history_url(
                 c.rendered_name, country=c.country_id, game_id=game_id
             ),
-            country_type=game_info.convert_id_to_name(c.country_type),
+            country_type=c.rendered_type,
             is_player=bool(c.is_player),
         )
         for c in empires

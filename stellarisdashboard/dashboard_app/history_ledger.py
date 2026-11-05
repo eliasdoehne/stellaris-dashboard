@@ -680,7 +680,7 @@ class EventTemplateDictBuilder:
             return str(key)
 
     def system_details(self, system_model: datamodel.System) -> Dict[str, str]:
-        star_class = game_info.convert_id_to_name(
+        star_class = game_info.lookup_id_name(
             system_model.star_class, remove_prefix="sc"
         )
         details = {
@@ -756,13 +756,13 @@ class EventTemplateDictBuilder:
 
     def country_details(self, country_model: datamodel.Country) -> Dict[str, str]:
         details = {
-            "Country Type": game_info.convert_id_to_name(country_model.country_type),
+            "Country Type": country_model.rendered_type,
         }
         gov = country_model.get_current_government()
         if gov is not None:
             details.update(
                 {
-                    "Personality": game_info.convert_id_to_name(gov.personality),
+                    "Personality": game_info.lookup_id_name(gov.personality, loc_prefix="personality_"),
                     "Government Type": game_info.lookup_key(gov.gov_type),
                     "Authority": game_info.lookup_key(gov.authority),
                     "Ethics": ", ".join(
@@ -805,7 +805,7 @@ class EventTemplateDictBuilder:
         if planet_model.planet_class is None:
             details["Planet Class"] = "Destroyed (no trace remains)"
         else:
-            details["Planet Class"] = game_info.convert_id_to_name(
+            details["Planet Class"] = game_info.lookup_id_name(
                 planet_model.planet_class, remove_prefix="pc"
             )
         modifiers = []
@@ -861,12 +861,12 @@ class EventTemplateDictBuilder:
             "Start date": start,
             "End date": "-",
             "Attackers": ", ".join(
-                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                f"{self._get_url_for(wp.country)} ({wp.rendered_call_type})"
                 for wp in war.attackers
             ),
             "Attacker War Goal": attacker.get_war_goal() if attacker is not None else "Unknown",
             "Defenders": ", ".join(
-                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                f"{self._get_url_for(wp.country)} ({wp.rendered_call_type})"
                 for wp in war.defenders
             ),
             "Defender War Goal": defender.get_war_goal() if defender is not None else "Unknown",

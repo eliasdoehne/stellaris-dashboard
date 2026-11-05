@@ -746,13 +746,15 @@ WORD_REPLACEMENT = {
     "Ai": "AI",
     "Ftl": "FTL",
     "Tb": "Tile Blocker",
+    "Communations": "Communications",  # the game's own spelling in saves
 }
 
 
 def convert_id_to_name(object_id: str, remove_prefix="") -> str:
     words = [word for word in object_id.split("_") if word != remove_prefix]
     words = [
-        word.capitalize() if word not in LOWERCASE_WORDS else word for word in words
+        word.capitalize() if i == 0 or word not in LOWERCASE_WORDS else word
+        for i, word in enumerate(words)
     ]
     words = [WORD_REPLACEMENT.get(word, word) for word in words]
     return " ".join(words)

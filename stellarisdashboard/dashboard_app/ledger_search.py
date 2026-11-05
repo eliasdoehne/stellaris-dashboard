@@ -172,9 +172,7 @@ def get_index(game_id: str) -> List[Entry]:
 def _country_label(country: datamodel.Country) -> str:
     if country.is_player:
         return "Your empire"
-    if country.country_type == "default":
-        return "Empire"
-    return game_info.convert_id_to_name(country.country_type)
+    return country.rendered_type
 
 
 def _build_index(session) -> List[Entry]:
@@ -242,7 +240,7 @@ def _build_index(session) -> List[Entry]:
     for planet_id, name, planet_class, system_id, colonized in planets:
         if planet_class and (planet_class.endswith("_star") or planet_class in _STAR_CLASSES):
             continue  # stars share their system's name and have no events of their own
-        kind = game_info.convert_id_to_name(planet_class, remove_prefix="pc") if planet_class else "Destroyed"
+        kind = game_info.lookup_id_name(planet_class, remove_prefix="pc") if planet_class else "Destroyed"
         meta = f"{kind} · {system_names[system_id]}" if system_id in system_names else kind
         add("planet", planet_id, game_info.render_name(name), meta, (colonized is None,))
     return entries

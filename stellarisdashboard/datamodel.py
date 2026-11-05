@@ -773,9 +773,9 @@ class Bypass(Base):
 
     @property
     def name(self):
-        bypass_type = game_info.convert_id_to_name(self.db_description.text)
+        bypass_type = game_info.lookup_id_name(self.db_description.text)
         status_str = "" if self.is_active else " (inactive)"
-        return f"{self.system.name} {bypass_type}{status_str}"
+        return f"{self.system.rendered_name} {bypass_type}{status_str}"
 
 
 class GameState(Base):
@@ -903,6 +903,10 @@ class Country(Base):
         if config.CONFIG.include_id_in_names:
             rendered += f" ({self.country_id_in_game})"
         return rendered
+
+    @property
+    def rendered_type(self) -> str:
+        return "Empire" if self.country_type == "default" else game_info.lookup_id_name(self.country_type)
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -1054,15 +1058,15 @@ class Government(Base):
         reform_dict = {}
 
         if old_gov.gov_type != self.gov_type:
-            ogt = game_info.convert_id_to_name(old_gov.gov_type, remove_prefix="gov")
-            ngt = game_info.convert_id_to_name(self.gov_type, remove_prefix="gov")
+            ogt = game_info.lookup_id_name(old_gov.gov_type, remove_prefix="gov")
+            ngt = game_info.lookup_id_name(self.gov_type, remove_prefix="gov")
             reform_dict["Type changed"] = [f'from "{ogt}" to "{ngt}"']
 
         if old_gov.authority != self.authority:
-            old_authority = game_info.convert_id_to_name(
+            old_authority = game_info.lookup_id_name(
                 old_gov.authority, remove_prefix="auth"
             )
-            new_authority = game_info.convert_id_to_name(
+            new_authority = game_info.lookup_id_name(
                 self.authority, remove_prefix="auth"
             )
             reform_dict["Authority changed"] = [
@@ -1072,21 +1076,21 @@ class Government(Base):
         new_civics = self.civics - old_gov.civics
         removed_civics = old_gov.civics - self.civics
         reform_dict["Removed civics"] = sorted(
-            game_info.convert_id_to_name(c, remove_prefix="civic")
+            game_info.lookup_id_name(c, remove_prefix="civic")
             for c in removed_civics
         )
         reform_dict["Adopted civics"] = sorted(
-            game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics
+            game_info.lookup_id_name(c, remove_prefix="civic") for c in new_civics
         )
 
         new_ethics = self.ethics - old_gov.ethics
         removed_ethics = old_gov.ethics - self.ethics
         reform_dict["Abandoned ethics"] = sorted(
-            game_info.convert_id_to_name(e, remove_prefix="ethic")
+            game_info.lookup_id_name(e, remove_prefix="ethic")
             for e in removed_ethics
         )
         reform_dict["Embraced ethics"] = sorted(
-            game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics
+            game_info.lookup_id_name(e, remove_prefix="ethic") for e in new_ethics
         )
         return {k: v for k, v in reform_dict.items() if v}
 
@@ -1137,7 +1141,7 @@ class CouncilAgenda(Base):
 
     @property
     def rendered_name(self) -> str:
-        return game_info.lookup_key(self.db_name.text + "_name")
+        return game_info.lookup_key(f"council_agenda_{self.db_name.text}_name")
 
 
 class DiplomaticRelation(Base):
@@ -1618,7 +1622,11 @@ class WarParticipant(Base):
     def get_war_goal(self):
         if self.war_goal is None:
             return "Unknown"
-        return game_info.convert_id_to_name(self.war_goal, remove_prefix="wg")
+        return game_info.lookup_id_name(self.war_goal, remove_prefix="wg", loc_prefix="war_goal_")
+
+    @property
+    def rendered_call_type(self) -> str:
+        return (self.call_type or "unknown").replace("_", " ")
 
 
 class Combat(Base):
@@ -1858,7 +1866,7 @@ class PlanetDeposit(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "d")
+        return game_info.lookup_id_name(self.db_description.text, "d")
 
     @property
     def is_resource_deposit(self):
@@ -1903,7 +1911,8 @@ class PlanetModifier(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "pm")
+        # the localisation key lacks the modifier's prefix
+        return game_info.lookup_id_name(self.db_description.text.removeprefix("pm_"), "pm")
 
 
 class PopStatsBySpecies(Base):
