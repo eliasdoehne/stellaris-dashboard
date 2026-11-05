@@ -66,9 +66,10 @@ def history_page(game_id="", version=None):
         # htmx fragments: one year expanded or collapsed in place, or the next page appended
         if params.part == "year" and params.year is not None:
             new_keys = set()
-            if params.level != params.base_level:
+            previous_level = query.previous_level()
+            if params.level != params.base_level and previous_level is not None:
                 # highlight what this level added to the one before it
-                seen = query.row_keys(params.year, query.previous_level())
+                seen = query.row_keys(params.year, previous_level)
                 new_keys = {row["key"] for row in by_year[params.year] if not row["keys"] & seen}
             return render_template(
                 "_ledger_year.html", year=params.year, rows=by_year[params.year], new_keys=new_keys, **timeline

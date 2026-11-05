@@ -92,7 +92,7 @@ class LedgerParams:
         params.newest_first = args.get("order") != "oldest"
         params.before = _int_arg("before")
         params.after = _int_arg("after")
-        params.year = _int_arg("year")
+        params.year = _int_arg("year", bits=32)  # SQL compares years in days, which must fit 64 bits
         if args.get("part") in ("year", "page"):
             params.part = args["part"]
         params.base = args.get("base") if args.get("base") in _LEVEL_TIERS else None
@@ -139,11 +139,13 @@ class LedgerParams:
         return url_for("history_page", game_id=self.game_id, **args)
 
 
-def _int_arg(name) -> Optional[int]:
+def _int_arg(name, bits: int = 64) -> Optional[int]:
+    """A URL argument as a signed integer; None if missing, malformed or too large for SQLite."""
     try:
-        return int(request.args[name])
+        value = int(request.args[name])
     except (KeyError, ValueError):
         return None
+    return value if -(2 ** (bits - 1)) <= value < 2 ** (bits - 1) else None
 
 
 def _types(categories, min_tier) -> list:
