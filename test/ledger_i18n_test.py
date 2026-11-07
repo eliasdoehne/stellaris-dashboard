@@ -373,3 +373,19 @@ def test_stages_name_the_country_with_its_article():
         f"Contact detected by the {LINKS[TARGET]}"
     )
     assert event_registry.render_stage(dict(storyline_type="dig_site"), dict(index=3, detail="x"), LINKS) == "Chapter 3: x"
+
+
+class BrokenTranslations(gettext.NullTranslations):
+    """Returns translations whose placeholders do not fit their messages."""
+
+    def gettext(self, message):
+        return message.replace("%(country)s", "%(land)s").replace("%(target)s", "%(target)")
+
+
+def test_sentence_with_a_broken_translation_falls_back_to_english(monkeypatch, caplog):
+    translations = BrokenTranslations()
+    monkeypatch.setattr(i18n, "_translations", lambda: translations)
+    event = {**BASE, "event_type": "defensive_pact", "target_country": TARGET}
+    with caplog.at_level("WARNING"):
+        assert text_of(render(event)) == "The EmpireOne entered a defensive pact with the EmpireTwo."
+    assert "does not fit its placeholders" in caplog.text

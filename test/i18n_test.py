@@ -99,6 +99,64 @@ def test_gettext_formats_variables(german):
     assert i18n.gettext("100%") == "100%"
 
 
+BROKEN_PO_FILE = r'''msgid ""
+msgstr ""
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "The %(country)s declared war."
+msgstr "%(land)s erklärte den Krieg."
+
+msgid "%(num)s envoy"
+msgid_plural "%(num)s envoys"
+msgstr[0] "%(num)s Gesandter"
+msgstr[1] "%(num) Gesandte"
+
+msgid "Settings"
+msgstr "Einstellungen 100%"
+
+msgid "Galaxy Map"
+msgstr "Galaxiekarte"
+'''
+
+
+@pytest.fixture
+def broken_german(tmp_path, monkeypatch):
+    path = tmp_path / "de.po"
+    path.write_text(BROKEN_PO_FILE, encoding="utf-8")
+    translations = i18n.POTranslations(path)
+    monkeypatch.setattr(i18n, "_translations", lambda: translations)
+    return translations
+
+
+def test_translations_with_broken_placeholders_fall_back_to_english(broken_german, caplog):
+    """A translation that does not fit its placeholders shows the English text, instead of an error page."""
+    assert i18n.gettext("The %(country)s declared war.", country="Empire") == "The Empire declared war."
+    assert i18n.ngettext("%(num)s envoy", "%(num)s envoys", 3) == "3 envoys"
+    # they are left out when the file is read, with a warning
+    warnings = " ".join(r.getMessage() for r in caplog.get_records("setup"))
+    assert "declared war" in warnings and "Gesandte" in warnings and "100%" in warnings
+    # also in templates, which format every message
+    env = jinja2.Environment(autoescape=True)
+    i18n.install_jinja(env)
+    template = env.from_string(
+        '{{ _("The %(country)s declared war.", country=name) }} {{ ngettext("%(num)s envoy", "%(num)s envoys", 2) }} '
+        '{{ _("Settings") }} {{ _("Galaxy Map") }}'
+    )
+    assert template.render(name="Empire") == "The Empire declared war. 2 envoys Settings Galaxiekarte"
+
+
+def test_format_message_falls_back_to_the_english_message(caplog):
+    with caplog.at_level("WARNING"):
+        assert i18n.format_message("%(land)s erklärte", {"country": "A"}, fallback="The %(country)s declared") == (
+            "The A declared"
+        )
+        assert i18n.format_message("50%% von %(country)", {"country": "A"}, fallback="%(country)s") == "A"
+    assert len(caplog.records) == 2
+    # the English message itself must fit
+    with pytest.raises(KeyError):
+        i18n.format_message("The %(country)s", {"land": "A"}, fallback="The %(country)s")
+
+
 def test_jinja_newstyle_escapes_arguments_but_not_safe_ones(german):
     env = jinja2.Environment(autoescape=True)
     i18n.install_jinja(env)

@@ -143,9 +143,11 @@ class POTranslations(_gettext.NullTranslations):
                 key = entry["msgctxt"] + _CONTEXT_SEPARATOR + msgid
             if "msgid_plural" in entry:
                 forms = entry["msgstr_plural"]
-                if forms and all(forms.values()):
+                if forms and all(forms.values()) and _placeholders_fit(
+                    [msgid, entry["msgid_plural"]], list(forms.values()), plural=True
+                ):
                     self._catalog[key] = forms
-            elif entry.get("msgstr"):
+            elif entry.get("msgstr") and _placeholders_fit([msgid], [entry["msgstr"]]):
                 self._catalog[key] = entry["msgstr"]
 
     def _read_header(self, header: str):
@@ -178,6 +180,32 @@ class POTranslations(_gettext.NullTranslations):
         if isinstance(forms, dict):
             return forms.get(self._plural(n), singular if n == 1 else plural)
         return singular if n == 1 else plural
+
+
+_PLACEHOLDER_RE = re.compile(r"%\((\w+)\)")
+
+
+def _placeholders_fit(msgids, translations, plural=False) -> bool:
+    """Whether the translations can be formatted wherever their messages can: they use no
+    placeholders that the messages lack, and have no stray "%". A translation that does not
+    fit is left out (with a warning), so the English text is shown instead of an error."""
+    names = {name for msgid in msgids for name in _PLACEHOLDER_RE.findall(msgid)}
+    if plural:
+        names.add("num")
+    values = {name: "" for name in names}
+    try:
+        for msgid in msgids:
+            msgid % values
+    except (KeyError, ValueError, TypeError):
+        # not a format string (a message formatted without variables may contain a plain "%")
+        return True
+    for translation in translations:
+        try:
+            translation % values
+        except (KeyError, ValueError, TypeError) as error:
+            logger.warning(f"Ignoring the translation {translation!r} of {msgids[0]!r}: {error!r}")
+            return False
+    return True
 
 
 def _parse_po(text: str):
@@ -303,13 +331,22 @@ _ = gettext
 
 
 def format_message(message: str, variables: dict, fallback: Optional[str] = None) -> str:
-    """Fill the %(name)s placeholders of a (translated) message. ``fallback`` is its English text.
+    """Fill the %(name)s placeholders of a (translated) message.
 
     Only messages with variables are formatted, so a message without them can contain a
-    plain "%". (Jinja templates format every message, see docs/translating.md.)"""
+    plain "%". (Jinja templates format every message, see docs/translating.md.)
+    If the translation does not fit the variables (a misspelled placeholder, a stray "%"),
+    this logs a warning and formats the English ``fallback`` instead, rather than failing
+    the whole page."""
     if not variables:
         return message
-    return message % variables
+    try:
+        return message % variables
+    except (KeyError, ValueError, TypeError) as error:
+        if fallback is None or fallback == message:
+            raise
+        logger.warning(f"Translation {message!r} of {fallback!r} does not fit its placeholders ({error!r}), using English")
+        return fallback % variables
 
 
 def install_jinja(env):

@@ -35,7 +35,8 @@ dashboard's wording differs from the official terms of the game in your language
 4. Keep every placeholder like `%(country)s` exactly as it is, but move it
    wherever your language's word order needs it. The placeholders are filled with
    names, links or numbers, and the test suite checks that no placeholder was lost
-   or misspelled.
+   or misspelled. (A translation with a broken placeholder is ignored with a warning
+   in the log, and the English text is shown instead.)
 5. Messages with a plural form (`msgid_plural`) have one `msgstr[n]` per plural
    form of your language (see the `Plural-Forms` header). The number is `%(num)s`.
 6. `#.` comments above an entry are notes for translators, `#:` lines say where
