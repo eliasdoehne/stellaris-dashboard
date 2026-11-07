@@ -26,6 +26,7 @@ import zipfile
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from stellarisdashboard import config
+from stellarisdashboard.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,7 @@ class KeptCopy:
 def _summarize_failure(f: Dict[str, Any]) -> str:
     lines = [line.strip() for line in str(f.get("error", "")).splitlines() if line.strip()]
     prefix = f["stage"] + (f" ({f['processor']})" if f.get("processor") else "")
-    return f"{prefix}: {lines[-1][:300] if lines else 'unknown error'}"
+    return f"{prefix}: {lines[-1][:300] if lines else _('unknown error')}"
 
 
 def list_kept_copies(game_id: Optional[str] = None) -> List[KeptCopy]:

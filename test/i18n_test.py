@@ -1,0 +1,275 @@
+import re
+
+import jinja2
+import pytest
+
+from stellarisdashboard import i18n
+
+PO_FILE = r'''# a translator comment
+msgid ""
+msgstr ""
+"Language: de\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: some/file.py:12
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgid "Escaped \"quotes\"\n"
+"and a second line"
+msgstr "Maskierte \"Anführungszeichen\"\n"
+"und eine zweite Zeile"
+
+#, fuzzy
+msgid "Graphs"
+msgstr "Grafen"
+
+msgid "Untranslated"
+msgstr ""
+
+msgctxt "ledger tab"
+msgid "Events"
+msgstr "Ereignisse"
+
+msgid "%(num)s envoy"
+msgid_plural "%(num)s envoys"
+msgstr[0] "%(num)s Gesandter"
+msgstr[1] "%(num)s Gesandte"
+
+#, python-format
+msgid "The %(country)s declared war."
+msgstr "Das %(country)s erklärte den Krieg."
+'''
+
+RUSSIAN_PLURALS = r'''msgid ""
+msgstr ""
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "%(num)s envoy"
+msgid_plural "%(num)s envoys"
+msgstr[0] "%(num)s посланник"
+msgstr[1] "%(num)s посланника"
+msgstr[2] "%(num)s посланников"
+'''
+
+
+@pytest.fixture
+def german(tmp_path, monkeypatch):
+    path = tmp_path / "de.po"
+    path.write_text(PO_FILE, encoding="utf-8")
+    translations = i18n.POTranslations(path)
+    monkeypatch.setattr(i18n, "_translations", lambda: translations)
+    return translations
+
+
+def test_po_translations(german):
+    assert german.gettext("Settings") == "Einstellungen"
+    assert german.gettext('Escaped "quotes"\nand a second line') == 'Maskierte "Anführungszeichen"\nund eine zweite Zeile'
+    assert german.gettext("Untranslated") == "Untranslated"
+    assert german.gettext("Unknown message") == "Unknown message"
+
+
+def test_fuzzy_entries_are_ignored(german):
+    assert german.gettext("Graphs") == "Graphs"
+
+
+def test_context(german):
+    assert german.pgettext("ledger tab", "Events") == "Ereignisse"
+    assert german.gettext("Events") == "Events"
+
+
+def test_plurals(german):
+    assert i18n.ngettext("%(num)s envoy", "%(num)s envoys", 1) == "1 Gesandter"
+    assert i18n.ngettext("%(num)s envoy", "%(num)s envoys", 3) == "3 Gesandte"
+    assert i18n.ngettext("%(num)s other", "%(num)s others", 3) == "3 others"
+
+
+def test_plural_forms_header(tmp_path):
+    path = tmp_path / "ru.po"
+    path.write_text(RUSSIAN_PLURALS, encoding="utf-8")
+    russian = i18n.POTranslations(path)
+    assert russian.ngettext("%(num)s envoy", "%(num)s envoys", 1) == "%(num)s посланник"
+    assert russian.ngettext("%(num)s envoy", "%(num)s envoys", 3) == "%(num)s посланника"
+    assert russian.ngettext("%(num)s envoy", "%(num)s envoys", 11) == "%(num)s посланников"
+
+
+def test_gettext_formats_variables(german):
+    assert i18n.gettext("The %(country)s declared war.", country="Empire") == "Das Empire erklärte den Krieg."
+    # without variables, a message is not formatted, so it can contain "%"
+    assert i18n.gettext("100%") == "100%"
+
+
+BROKEN_PO_FILE = r'''msgid ""
+msgstr ""
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "The %(country)s declared war."
+msgstr "%(land)s erklärte den Krieg."
+
+msgid "%(num)s envoy"
+msgid_plural "%(num)s envoys"
+msgstr[0] "%(num)s Gesandter"
+msgstr[1] "%(num) Gesandte"
+
+msgid "Settings"
+msgstr "Einstellungen 100%"
+
+msgid "Galaxy Map"
+msgstr "Galaxiekarte"
+'''
+
+
+@pytest.fixture
+def broken_german(tmp_path, monkeypatch):
+    path = tmp_path / "de.po"
+    path.write_text(BROKEN_PO_FILE, encoding="utf-8")
+    translations = i18n.POTranslations(path)
+    monkeypatch.setattr(i18n, "_translations", lambda: translations)
+    return translations
+
+
+def test_translations_with_broken_placeholders_fall_back_to_english(broken_german, caplog):
+    """A translation that does not fit its placeholders shows the English text, instead of an error page."""
+    assert i18n.gettext("The %(country)s declared war.", country="Empire") == "The Empire declared war."
+    assert i18n.ngettext("%(num)s envoy", "%(num)s envoys", 3) == "3 envoys"
+    # they are left out when the file is read, with a warning
+    warnings = " ".join(r.getMessage() for r in caplog.get_records("setup"))
+    assert "declared war" in warnings and "Gesandte" in warnings and "100%" in warnings
+    # also in templates, which format every message
+    env = jinja2.Environment(autoescape=True)
+    i18n.install_jinja(env)
+    template = env.from_string(
+        '{{ _("The %(country)s declared war.", country=name) }} {{ ngettext("%(num)s envoy", "%(num)s envoys", 2) }} '
+        '{{ _("Settings") }} {{ _("Galaxy Map") }}'
+    )
+    assert template.render(name="Empire") == "The Empire declared war. 2 envoys Settings Galaxiekarte"
+
+
+def test_format_message_falls_back_to_the_english_message(caplog):
+    with caplog.at_level("WARNING"):
+        assert i18n.format_message("%(land)s erklärte", {"country": "A"}, fallback="The %(country)s declared") == (
+            "The A declared"
+        )
+        assert i18n.format_message("50%% von %(country)", {"country": "A"}, fallback="%(country)s") == "A"
+    assert len(caplog.records) == 2
+    # the English message itself must fit
+    with pytest.raises(KeyError):
+        i18n.format_message("The %(country)s", {"land": "A"}, fallback="The %(country)s")
+
+
+def test_jinja_newstyle_escapes_arguments_but_not_safe_ones(german):
+    env = jinja2.Environment(autoescape=True)
+    i18n.install_jinja(env)
+    template = env.from_string(
+        '{{ _("The %(country)s declared war.", country=link | safe) }} {{ _("Settings") }} '
+        '{{ _("The %(country)s declared war.", country=name) }}'
+        "{% trans %}Settings{% endtrans %}"
+    )
+    rendered = template.render(link='<a href="x">A</a>', name="<b>")
+    assert rendered == (
+        'Das <a href="x">A</a> erklärte den Krieg. Einstellungen '
+        "Das &lt;b&gt; erklärte den Krieg.Einstellungen"
+    )
+
+
+@pytest.mark.parametrize(
+    "dashboard_language,stellaris_language,expected",
+    [
+        ("auto", "l_german", "de"),
+        ("auto", "l_braz_por", "pt_BR"),
+        ("auto", "l_unknown", "en"),
+        (None, "l_french", "fr"),
+        ("ru", "l_german", "ru"),
+        ("xx", "l_german", "en"),
+    ],
+)
+def test_resolve_locale(dashboard_language, stellaris_language, expected):
+    assert i18n.resolve_locale(dashboard_language, stellaris_language) == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, "auto"),
+        ("", "auto"),
+        ("auto", "auto"),
+        ("de", "de"),
+        ("pt_BR", "pt_BR"),
+        ("pt-BR", "pt_BR"),
+        ("zh-cn", "zh_CN"),
+        ("DE", "de"),
+        ("de_DE", None),
+        ("german", None),
+        ("l_german", None),
+        (3, None),
+    ],
+)
+def test_normalize_dashboard_language(value, expected):
+    assert i18n.normalize_dashboard_language(value) == expected
+
+
+def test_unknown_dashboard_language_warns_once(caplog):
+    i18n._warn_unknown_dashboard_language.cache_clear()
+    for _ in range(3):
+        assert i18n.resolve_locale("xx_unknown", "l_german") == "en"
+    assert sum("xx_unknown" in r.getMessage() for r in caplog.records) == 1
+
+
+def test_every_language_has_a_name():
+    assert set(i18n.STELLARIS_LANGUAGE_TO_LOCALE.values()) == set(i18n.LANGUAGE_NAMES)
+
+
+def _placeholders(message):
+    return sorted(re.findall(r"%\((\w+)\)s", message))
+
+
+# languages written without spaces between words, which may drop a message's edge spaces
+# (the list separator ", " is "、" in Japanese)
+NO_SPACE_LOCALES = {"ja", "zh_CN"}
+
+
+def _edge_whitespace(message):
+    return re.match(r"\s*", message).group(), re.search(r"\s*$", message).group()
+
+
+@pytest.mark.parametrize("locale", sorted(set(i18n.LANGUAGE_NAMES) - {i18n.DEFAULT_LOCALE}))
+def test_shipped_translations(locale):
+    """Every shipped PO file parses, and its translations use the same placeholders
+    as the English message (a missing or misspelled one would fail at runtime)."""
+    path = i18n.LOCALES_DIR / f"{locale}.po"
+    if not path.exists():
+        pytest.skip(f"no translations for {locale}")
+    for entry in i18n._parse_po(path.read_text(encoding="utf-8")):
+        msgid = entry["msgid"]
+        if not msgid or "fuzzy" in entry["flags"]:
+            continue
+        if "msgid_plural" in entry:
+            for n, form in entry["msgstr_plural"].items():
+                if not form:
+                    continue
+                # a language's singular form may leave out %(num)s ("one envoy")
+                expected = set(_placeholders(msgid)) | set(_placeholders(entry["msgid_plural"]))
+                assert set(_placeholders(form)) - {"num"} == expected - {"num"}, (locale, msgid, form)
+                _check_edge_whitespace(locale, msgid, form)
+        elif entry["msgstr"]:
+            assert _placeholders(entry["msgstr"]) == _placeholders(msgid), (locale, msgid, entry["msgstr"])
+            _check_edge_whitespace(locale, msgid, entry["msgstr"])
+
+
+def _check_edge_whitespace(locale, msgid, translation):
+    """Messages are joined with other text, so a translation keeps the leading and
+    trailing spaces of the English message (", " must not become ",")."""
+    if locale in NO_SPACE_LOCALES:
+        return
+    assert _edge_whitespace(translation) == _edge_whitespace(msgid), (locale, msgid, translation)
+
+
+def test_message_template_is_up_to_date():
+    """locales/messages.pot lists exactly the messages marked in the code. If this
+    fails, run: uv run python -m stellarisdashboard.i18n.extract"""
+    extract = pytest.importorskip("stellarisdashboard.i18n.extract")
+    with open(extract.POT_PATH, "rb") as f:
+        from babel.messages.pofile import read_po
+
+        pot = read_po(f)
+    assert extract.message_keys(extract.build_template_catalog()) == extract.message_keys(pot)

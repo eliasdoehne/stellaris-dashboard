@@ -132,11 +132,11 @@ def test_reform_uses_the_game_names(fixture_renderer):
     )
     old = datamodel.Government(gov_type="gov_machine_empire", authority="auth_old")
     new = datamodel.Government(gov_type="gov_other_type", authority="auth_test", civic_1="civic_test_civic")
-    assert new.get_reform_description_dict(old) == {
-        "Type changed": ['from "Artificial Intelligence Network" to "Other Type"'],
-        "Authority changed": ["from Old to Test Rule"],
-        "Adopted civics": ["Test Civic Name"],
-    }
+    assert new.get_reform_description_lines(old) == [
+        'Type changed from "Artificial Intelligence Network" to "Other Type".',
+        "Authority changed from Old to Test Rule.",
+        "Adopted civics Test Civic Name.",
+    ]
 
 
 def test_ethic_found_in_localisation(fixture_renderer):

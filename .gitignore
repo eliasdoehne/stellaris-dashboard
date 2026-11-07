@@ -62,6 +62,8 @@ coverage.xml
 # Translations
 *.mo
 *.pot
+# the dashboard's message template is checked in (see stellarisdashboard/i18n)
+!stellarisdashboard/i18n/locales/messages.pot
 
 # Django stuff:
 *.log

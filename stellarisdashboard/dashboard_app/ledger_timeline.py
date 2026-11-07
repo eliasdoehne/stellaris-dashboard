@@ -22,15 +22,17 @@ from flask import request, url_for
 from stellarisdashboard import config, datamodel
 from stellarisdashboard.dashboard_app import event_grouping, event_registry, utils
 from stellarisdashboard.dashboard_app.event_registry import Category, Tier
+from stellarisdashboard.i18n import N_
 
 HE = datamodel.HistoricalEvent
 
-# (key, label, minimum tier)
+# (key, label, minimum tier); the labels are translated where they are shown
 LEVELS = [
-    ("headlines", "Headlines", Tier.HEADLINE),
-    ("notable", "Notable", Tier.MAJOR),
-    ("detailed", "Detailed", Tier.ROUTINE),
-    ("everything", "Everything", Tier.TRIVIA),
+    # Translators: detail levels of the event ledger, from the fewest events to all of them
+    ("headlines", N_("Headlines"), Tier.HEADLINE),
+    ("notable", N_("Notable"), Tier.MAJOR),
+    ("detailed", N_("Detailed"), Tier.ROUTINE),
+    ("everything", N_("Everything"), Tier.TRIVIA),
 ]
 DEFAULT_LEVEL = "notable"
 _LEVEL_TIERS = {key: tier for key, _, tier in LEVELS}
@@ -38,12 +40,14 @@ _LEVEL_TIERS = {key: tier for key, _, tier in LEVELS}
 # a page holds whole years until it has at least this many events
 PAGE_EVENTS = 120
 
+# the labels are translated where they are shown
 FOCUS_KINDS = {
-    "country": (datamodel.Country, "Empire"),
-    "leader": (datamodel.Leader, "Leader"),
-    "war": (datamodel.War, "War"),
-    "system": (datamodel.System, "System"),
-    "planet": (datamodel.Planet, "Planet"),
+    # Translators: what kind of thing an event ledger page is about, shown above its name
+    "country": (datamodel.Country, N_("Empire")),
+    "leader": (datamodel.Leader, N_("Leader")),
+    "war": (datamodel.War, N_("War")),
+    "system": (datamodel.System, N_("System")),
+    "planet": (datamodel.Planet, N_("Planet")),
 }
 
 DAYS_PER_YEAR = 360

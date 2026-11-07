@@ -4,10 +4,10 @@
 {% endfor %}
 
 {% if params.year %}
-<a class="button ledger-pager" href="{{ params.url() }}">Back to all years</a>
+<a class="button ledger-pager" href="{{ params.url() }}">{{ _("Back to all years") }}</a>
 {% elif remaining %}
 {% set next_page = {"before": last_year} if params.newest_first else {"after": last_year} %}
 <a class="button ledger-pager" id="ledger-pager" href="{{ params.url(**next_page) }}"
    hx-get="{{ params.url(part='page', **next_page) }}" hx-target="this" hx-swap="outerHTML">
-    {{ "Earlier years" if params.newest_first else "Later years" }} ({{ remaining }} more)</a>
+    {% if params.newest_first %}{{ ngettext("Earlier years (%(num)s more)", "Earlier years (%(num)s more)", remaining) }}{% else %}{{ ngettext("Later years (%(num)s more)", "Later years (%(num)s more)", remaining) }}{% endif %}</a>
 {% endif %}

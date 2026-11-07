@@ -17,18 +17,19 @@ import sqlalchemy
 from flask import render_template, request, url_for
 from sqlalchemy.orm import load_only, selectinload
 
-from stellarisdashboard import config, datamodel, game_info
-from stellarisdashboard.dashboard_app import flask_app
+from stellarisdashboard import config, datamodel, game_info, i18n
+from stellarisdashboard.dashboard_app import event_registry, flask_app
+from stellarisdashboard.i18n import N_, gettext as _, ngettext, pgettext
 
 logger = logging.getLogger(__name__)
 
-# (kind, group label), in display order for groups that match equally well
+# (kind, group label), in display order for groups that match equally well; the labels are translated where shown
 KINDS = [
-    ("country", "Empires"),
-    ("leader", "Leaders"),
-    ("war", "Wars"),
-    ("system", "Systems"),
-    ("planet", "Planets"),
+    ("country", N_("Empires")),
+    ("leader", N_("Leaders")),
+    ("war", N_("Wars")),
+    ("system", N_("Systems")),
+    ("planet", N_("Planets")),
 ]
 _KIND_ORDER = {kind: i for i, (kind, _) in enumerate(KINDS)}
 PER_KIND = 5  # hits per group in the mixed view
@@ -147,7 +148,7 @@ def _index_key(session) -> tuple:
                                   sqlalchemy.func.max(datamodel.GameState.date)).one()
     c = config.CONFIG
     return (count, latest, c.show_everything, c.hide_other_players, c.show_all_country_types,
-            c.include_id_in_names, c.stellaris_language)
+            c.include_id_in_names, c.stellaris_language, i18n.current_locale())
 
 
 def get_index(game_id: str) -> List[Entry]:
@@ -171,7 +172,8 @@ def get_index(game_id: str) -> List[Entry]:
 
 def _country_label(country: datamodel.Country) -> str:
     if country.is_player:
-        return "Your empire"
+        # Translators: shown next to the player's empire in the search results
+        return pgettext("search result", "Your empire")
     return country.rendered_type
 
 
@@ -207,11 +209,12 @@ def _build_index(session) -> List[Entry]:
         owner = leader.country_id if leader.country_id is not None else leader.creator_id
         if owner in hidden:
             continue
-        meta = [game_info.convert_id_to_name(leader.leader_class or "leader")]
+        meta = [event_registry.leader_class_label(leader.leader_class) or _("Leader")]
         if owner_name(owner):
             meta.append(owner_name(owner))
         if not leader.is_active:
-            meta.append("dead or retired")
+            # Translators: shown next to a leader in the search results
+            meta.append(pgettext("search result", "dead or retired"))
         add("leader", leader.leader_id, leader.rendered_name, " · ".join(meta),
             (owner not in player, not leader.is_active))
 
@@ -223,7 +226,11 @@ def _build_index(session) -> List[Entry]:
         if sides and sides <= hidden:
             continue
         start = war.start_date or "?"
-        meta = f"{start} – {war.end_date}" if war.end_date else f"since {start}"
+        if war.end_date:
+            meta = _("%(start)s – %(end)s", start=start, end=war.end_date)
+        else:
+            # Translators: shown next to an ongoing war in the search results; %(start)s is its start date
+            meta = _("since %(start)s", start=start)
         add("war", war.war_id, war.rendered_name, meta, (not sides & player, -(war.start_date_days or 0)))
 
     systems = session.query(datamodel.System.system_id, datamodel.System.name, datamodel.System.country_id)
@@ -232,7 +239,8 @@ def _build_index(session) -> List[Entry]:
         rendered = game_info.render_name(name)
         system_names[system_id] = rendered
         owner = owner_name(country_id)
-        meta = owner or ("Unowned" if country_id is None else "System")
+        # Translators: shown next to a system in the search results, instead of its owner
+        meta = owner or (pgettext("search result", "Unowned") if country_id is None else pgettext("search result", "System"))
         add("system", system_id, rendered, meta, (country_id not in player, owner is None))
 
     planets = session.query(datamodel.Planet.planet_id, datamodel.Planet.planet_name, datamodel.Planet.planet_class,
@@ -240,13 +248,28 @@ def _build_index(session) -> List[Entry]:
     for planet_id, name, planet_class, system_id, colonized in planets:
         if planet_class and (planet_class.endswith("_star") or planet_class in _STAR_CLASSES):
             continue  # stars share their system's name and have no events of their own
-        kind = game_info.lookup_id_name(planet_class, remove_prefix="pc") if planet_class else "Destroyed"
+        # Translators: shown next to a destroyed planet in the search results, instead of its class
+        kind = game_info.lookup_id_name(planet_class, remove_prefix="pc") if planet_class else pgettext("search result", "Destroyed")
         meta = f"{kind} · {system_names[system_id]}" if system_id in system_names else kind
         add("planet", planet_id, game_info.render_name(name), meta, (colonized is None,))
     return entries
 
 
 # ---- Route ------------------------------------------------------------------
+
+
+def _show_all(kind: str, total: int) -> str:
+    """The button that lists all matches of one kind."""
+    if kind == "country":
+        return ngettext("Show all %(num)s empire", "Show all %(num)s empires", total)
+    if kind == "leader":
+        return ngettext("Show all %(num)s leader", "Show all %(num)s leaders", total)
+    if kind == "war":
+        return ngettext("Show all %(num)s war", "Show all %(num)s wars", total)
+    if kind == "system":
+        return ngettext("Show all %(num)s system", "Show all %(num)s systems", total)
+    return ngettext("Show all %(num)s planet", "Show all %(num)s planets", total)
+
 
 @flask_app.route("/history/<game_id>/search")
 def ledger_search(game_id):
@@ -259,7 +282,7 @@ def ledger_search(game_id):
         groups = search(get_index(game_id), query, kind)
     elif known and "warm" in request.args:
         get_index(game_id)  # sent on focus, so the first keystroke finds the index built
-    labels = dict(KINDS)
+    labels = {k: _(label) for k, label in KINDS}
     return render_template(
         "_search_results.html",
         query=query,
@@ -269,6 +292,7 @@ def ledger_search(game_id):
                 kind=k,
                 label=labels[k],
                 total=total,
+                show_all=_show_all(k, total),
                 hits=[
                     dict(
                         url=url_for("history_page", game_id=game_id, **{k: h.entry.entity_id}),

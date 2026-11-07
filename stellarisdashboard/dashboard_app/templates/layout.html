@@ -1,12 +1,11 @@
 {% from "_icons.html" import icon %}
 {% set active = section or endpoint_section %}
-{% set section_labels = {"graphs": "Graphs", "galaxy": "Galaxy Map", "ledger": "Event Ledger", "codex": "Codex", "games": "Games", "import": "Import Saves", "settings": "Settings"} %}
 <!doctype html>
-<html lang="en">
+<html lang="{{ html_lang() }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% if country %}{{ country }} · {% endif %}{{ section_labels.get(active, "Stellaris Dashboard") }}</title>
+    <title>{% if country %}{{ country }} · {% endif %}{{ section_label(active) }}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='theme.css') }}">
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
     {# global rather than per page: hx-boost navigation swaps only the body #}
@@ -20,13 +19,13 @@
 <body>
 <div id="toast-slot" aria-live="polite"></div>
 <div class="shell section-{{ active or 'none' }}" id="shell">
-    <aside class="rail" id="rail" aria-label="Navigation">
+    <aside class="rail" id="rail" aria-label="{{ _('Navigation') }}">
         <div class="rail-head">
-            <a class="brand" href="/" title="All games">
+            <a class="brand" href="/" title="{{ _('All games') }}">
                 <span class="brand-title">STELLARIS</span>
                 <span class="brand-sub">DASHBOARD</span>
             </a>
-            <button type="button" class="icon-button rail-collapse" data-shell-toggle="collapse" title="Collapse sidebar (\)" aria-label="Collapse sidebar">{{ icon("collapse") }}</button>
+            <button type="button" class="icon-button rail-collapse" data-shell-toggle="collapse" title="{{ _('Collapse sidebar') }} (\)" aria-label="{{ _('Collapse sidebar') }}">{{ icon("collapse") }}</button>
         </div>
 
         {# Graphs and the galaxy map load their own scripts, so links to and from them
@@ -34,7 +33,7 @@
         <nav class="rail-nav" {% if active not in ("graphs", "galaxy") %}hx-boost="true"{% endif %}>
             {% if game_name %}
             <details class="game-switch">
-                <summary title="Switch game">
+                <summary title="{{ _('Switch game') }}">
                     <span class="game-switch-text">
                         <span class="game-switch-name">{{ country or game_name }}</span>
                         <span class="game-switch-meta">{{ current_date }}</span>
@@ -49,7 +48,7 @@
                         <span class="game-switch-meta">{{ g.game_date }} · {{ g.game_id }}</span>
                     </a></li>
                     {% endfor %}
-                    <li><a href="/" class="game-switch-all">All games &amp; details</a></li>
+                    <li><a href="/" class="game-switch-all">{{ _("All games & details") }}</a></li>
                 </ul>
             </details>
 
@@ -65,14 +64,16 @@
                 <div class="rail-sub" data-graph-tabs>
                     {% for tab in graph_tabs() %}
                     <a class="rail-sublink{% if active == 'graphs' and tab == graph_tab %} is-active{% endif %}"
-                       href="{{ section_url('graphs', game_name, tab) }}" data-graph-tab="{{ tab }}" hx-boost="false">{{ tab }}</a>
+                       href="{{ section_url('graphs', game_name, tab) }}" data-graph-tab="{{ tab }}" hx-boost="false">{{ graph_tab_label(tab) }}</a>
                     {% endfor %}
                 </div>
                 {% elif key == "ledger" %}
                 {% set ledger_focused = request.args | select("in", ["country", "leader", "war", "system", "planet", "focus"]) | list %}
                 <div class="rail-sub">
-                    <a class="rail-sublink{% if active == 'ledger' and not ledger_focused %} is-active{% endif %}" href="{{ section_url('ledger', game_name) }}">Galaxy</a>
-                    <a class="rail-sublink{% if active == 'ledger' and request.args.get('focus') == 'player' %} is-active{% endif %}" href="{{ section_url('ledger', game_name) }}?focus=player">Your empire</a>
+                    {# Translators: link in the sidebar to the event ledger of the whole galaxy #}
+                    <a class="rail-sublink{% if active == 'ledger' and not ledger_focused %} is-active{% endif %}" href="{{ section_url('ledger', game_name) }}">{{ pgettext("ledger scope", "Galaxy") }}</a>
+                    {# Translators: link in the sidebar to the event ledger of the player's empire #}
+                    <a class="rail-sublink{% if active == 'ledger' and request.args.get('focus') == 'player' %} is-active{% endif %}" href="{{ section_url('ledger', game_name) }}?focus=player">{{ pgettext("ledger scope", "Your empire") }}</a>
                 </div>
                 {% endif %}
                 {% endfor %}
@@ -80,10 +81,10 @@
             {% endif %}
 
             <div class="rail-group rail-group--utility">
-                <a class="rail-link{% if active == 'games' %} is-active{% endif %}" href="/">{{ icon("games") }}<span class="rail-label">All Games</span></a>
-                <a class="rail-link{% if active == 'import' %} is-active{% endif %}" href="/import/">{{ icon("import") }}<span class="rail-label">Import Saves</span></a>
-                <a class="rail-link{% if active == 'settings' %} is-active{% endif %}" href="/settings/">{{ icon("settings") }}<span class="rail-label">Settings</span></a>
-                <a class="rail-link rail-link--ext" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki" target="_blank" rel="noopener">{{ icon("external") }}<span class="rail-label">Stellaris Wiki</span></a>
+                <a class="rail-link{% if active == 'games' %} is-active{% endif %}" href="/">{{ icon("games") }}<span class="rail-label">{{ _("All Games") }}</span></a>
+                <a class="rail-link{% if active == 'import' %} is-active{% endif %}" href="/import/">{{ icon("import") }}<span class="rail-label">{{ _("Import Saves") }}</span></a>
+                <a class="rail-link{% if active == 'settings' %} is-active{% endif %}" href="/settings/">{{ icon("settings") }}<span class="rail-label">{{ _("Settings") }}</span></a>
+                <a class="rail-link rail-link--ext" href="https://stellaris.paradoxwikis.com/Stellaris_Wiki" target="_blank" rel="noopener">{{ icon("external") }}<span class="rail-label">{{ _("Stellaris Wiki") }}</span></a>
             </div>
         </nav>
     </aside>
@@ -91,42 +92,43 @@
 
     <div class="content-area">
         <header class="topbar">
-            <button type="button" class="icon-button topbar-menu" data-shell-toggle="drawer" aria-label="Open navigation">{{ icon("menu") }}</button>
+            <button type="button" class="icon-button topbar-menu" data-shell-toggle="drawer" aria-label="{{ _('Open navigation') }}">{{ icon("menu") }}</button>
             <div class="breadcrumb">
                 {% if game_name and country %}<span class="crumb crumb--game">{{ country }}</span><span class="crumb-sep crumb--game">›</span>{% endif %}
-                <span class="crumb{% if not graph_tab and not is_filtered_page %} crumb--current{% endif %}">{{ section_labels.get(active, "Stellaris Dashboard") }}</span>
+                <span class="crumb{% if not graph_tab and not is_filtered_page %} crumb--current{% endif %}">{{ section_label(active) }}</span>
                 {% if active == "graphs" and graph_tab %}
-                <span class="crumb-sep">›</span><span class="crumb crumb--current" data-graph-crumb>{{ graph_tab }}</span>
+                <span class="crumb-sep">›</span><span class="crumb crumb--current" data-graph-crumb>{{ graph_tab_label(graph_tab) }}</span>
                 {% elif active == "ledger" and is_filtered_page %}
-                <span class="crumb-sep">›</span><span class="crumb crumb--current">Filtered</span>
+                {# Translators: last part of the breadcrumb on an event ledger page that shows only the events of one empire, leader, war, ... #}
+                <span class="crumb-sep">›</span><span class="crumb crumb--current">{{ pgettext("breadcrumb", "Filtered") }}</span>
                 {% endif %}
             </div>
             {% if game_name %}
             {# results come from ledger_search.py; assets/search.js drives the box #}
             <div class="topsearch" data-search-url="{{ url_for('ledger_search', game_id=game_name) }}"
                  {% if active in ("graphs", "galaxy") %}data-search-boost="false"{% endif %}>
-                <button type="button" class="icon-button topsearch-open" data-search-open aria-label="Search this game" title="Search (/)">{{ icon("search") }}</button>
+                <button type="button" class="icon-button topsearch-open" data-search-open aria-label="{{ _('Search this game') }}" title="{{ _('Search') }} (/)">{{ icon("search") }}</button>
                 <div class="topsearch-box">
                     {{ icon("search") }}
-                    <input type="search" class="topsearch-input" placeholder="Find an empire, leader, war, system…"
+                    <input type="search" class="topsearch-input" placeholder="{{ _('Find an empire, leader, war, system…') }}"
                            autocomplete="off" spellcheck="false" enterkeyhint="go"
-                           role="combobox" aria-label="Search this game" aria-autocomplete="list"
+                           role="combobox" aria-label="{{ _('Search this game') }}" aria-autocomplete="list"
                            aria-controls="topsearch-results" aria-expanded="false">
-                    <kbd class="topsearch-key" title="Press / to search">/</kbd>
-                    <button type="button" class="icon-button topsearch-close" data-search-close aria-label="Close search">{{ icon("close") }}</button>
+                    <kbd class="topsearch-key" title="{{ _('Press / to search') }}">/</kbd>
+                    <button type="button" class="icon-button topsearch-close" data-search-close aria-label="{{ _('Close search') }}">{{ icon("close") }}</button>
                 </div>
-                <div class="topsearch-results" id="topsearch-results" role="listbox" aria-label="Search results" hidden></div>
+                <div class="topsearch-results" id="topsearch-results" role="listbox" aria-label="{{ _('Search results') }}" hidden></div>
             </div>
             {% endif %}
             <div class="topbar-meta">
-                {% if current_date %}<span class="stardate" title="Date of the latest save">{{ current_date }}</span>{% endif %}
+                {% if current_date %}<span class="stardate" title="{{ _('Date of the latest save') }}">{{ current_date }}</span>{% endif %}
             </div>
         </header>
         {% if active == "graphs" and game_name %}
         {# narrow screens only: the rail's graph categories as a swipeable strip #}
-        <nav class="subnav" aria-label="Graph categories">
+        <nav class="subnav" aria-label="{{ _('Graph categories') }}">
             {% for tab in graph_tabs() %}
-            <a class="subnav-link{% if tab == graph_tab %} is-active{% endif %}" href="{{ section_url('graphs', game_name, tab) }}" data-graph-tab="{{ tab }}">{{ tab }}</a>
+            <a class="subnav-link{% if tab == graph_tab %} is-active{% endif %}" href="{{ section_url('graphs', game_name, tab) }}" data-graph-tab="{{ tab }}">{{ graph_tab_label(tab) }}</a>
             {% endfor %}
         </nav>
         {% endif %}
@@ -135,9 +137,9 @@
             <a id="index"></a>
             {% if show_old_version_notice %}
             <div class="version-notice">
-                <p>You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
-                   You can get the current version <a href="https://github.com/eliasdoehne/stellaris-dashboard" class="textlink">on Github.</a></p>
-                <p>This update notice can be disabled in the <a href="/settings/" class="textlink">Settings</a>.</p>
+                <p>{% trans trimmed version=version, update_version_id=update_version_id %}You may be using an old version of the stellaris dashboard program. You are using version {{ version }}, and the requested version was {{ update_version_id }}.
+                   You can get the current version <a href="https://github.com/eliasdoehne/stellaris-dashboard" class="textlink">on Github.</a>{% endtrans %}</p>
+                <p>{% trans trimmed %}This update notice can be disabled in the <a href="/settings/" class="textlink">Settings</a>.{% endtrans %}</p>
             </div>
             {% endif %}
             {% block body %}{% endblock %}

@@ -3,8 +3,8 @@
 <div class="page page--narrow">
 <div class="page-head">
     <div>
-        <h1 class="page-title">Settings</h1>
-        <p class="page-subtitle">Settings marked * apply after a restart.</p>
+        <h1 class="page-title">{{ _("Settings") }}</h1>
+        <p class="page-subtitle">{{ _("Settings marked * apply after a restart.") }}</p>
     </div>
 </div>
 
@@ -32,6 +32,13 @@
                     {% if setting["type"] == "str" %}
                     <input id="{{key}}" type="text" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
                     {% endif %}
+                    {% if setting["type"] == "select" %}
+                    <select id="{{key}}" title="{{ setting['description'] }}" name={{key}}>
+                        {% for option_value, option_name in setting["options"].items() %}
+                        <option value="{{ option_value }}" {% if option_value == setting["value"] %} selected {% endif %}>{{ option_name }}</option>
+                        {% endfor %}
+                    </select> <br>
+                    {% endif %}
                     {% if setting["type"] == "float" %}
                     <input id="{{key}}" type="number" step="0.01" title="{{ setting['description'] }}" name={{key}} value="{{setting['value']}}"> <br>
                     {% endif %}
@@ -42,8 +49,8 @@
     </div>
 
     <div class="settingsbuttons">
-        <button type="submit" class="button">Apply Settings</button>
-        <button type="reset" class="button">Reset Values</button>
+        <button type="submit" class="button">{{ _("Apply Settings") }}</button>
+        <button type="reset" class="button">{{ _("Reset Values") }}</button>
     </div>
 </form>
 </div>

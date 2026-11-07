@@ -10,9 +10,11 @@ import plotly.graph_objs as go
 from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
 
 from stellarisdashboard import config, datamodel
+from stellarisdashboard.i18n import gettext as _, pgettext
 from stellarisdashboard.dashboard_app import (
     utils,
     flask_app,
+    shell,
     visualization_data,
 )
 
@@ -96,8 +98,8 @@ timeline_app = ShellDash(
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
     # Fresh axis dicts so we don't mutate the shared DEFAULT_PLOT_LAYOUT.
-    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.x_axis_label)
-    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.y_axis_label)
+    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.display_x_axis_label())
+    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.display_y_axis_label())
     if plot_spec.y_axis_reversed:
         layout["yaxis"]["autorange"] = "reversed"
     # Width is fluid (autosize); the card/container controls it. Height stays configurable.
@@ -188,9 +190,9 @@ def _plot_grid_card(plot_spec, compact_figure):
                 className="tl-plot-card__header",
                 id={"type": "expand-plot", "index": plot_spec.plot_id},
                 n_clicks=0,
-                title="Click to enlarge",
+                title=_("Click to enlarge"),
                 children=[
-                    html.Span(plot_spec.title, className="tl-plot-card__title"),
+                    html.Span(plot_spec.display_title(), className="tl-plot-card__title"),
                     html.Span("⤢", className="tl-expand-icon"),
                 ],
             ),
@@ -208,21 +210,22 @@ def _plot_grid_card(plot_spec, compact_figure):
 
 @timeline_app.callback(Output("graph-tab-title", "children"), [Input("url", "search")])
 def update_tab_title(search):
-    return _get_tab_from_url(search)
+    return shell.graph_tab_label(_get_tab_from_url(search))
 
 
 @timeline_app.callback(
     Output("country-perspective-dropdown", "options"), [Input("url", "search")]
 )
 def update_country_select_options(search):
-    game_id, _ = _get_game_ids_matching_url(search)
+    game_id, _matches = _get_game_ids_matching_url(search)
     games_dict = datamodel.get_available_games_dict()
 
     if game_id not in games_dict:
         logger.warning(f"Game ID {game_id} does not match any known game!")
         return []
 
-    options = [{"label": "None", "value": None}]
+    # Translators: entry of the country perspective dropdown that selects no country
+    options = [{"label": pgettext("country perspective", "None"), "value": None}]
     with datamodel.get_db_session(game_id) as session:
         for c in session.query(datamodel.Country):
             if (
@@ -254,9 +257,9 @@ def update_content(search, dash_plot_checklist, country_perspective):
         # up as its source text; return a component instead.
         return html.Div(
             [
-                html.H2("Game not found"),
-                html.P(f'No game matches "{game_id}".'),
-                html.A("Back to game selection", href="/"),
+                html.H2(_("Game not found")),
+                html.P(_('No game matches "%(game)s".', game=game_id)),
+                html.A(_("Back to game selection"), href="/"),
             ],
             className="tl-content",
         )
@@ -301,7 +304,7 @@ def update_content(search, dash_plot_checklist, country_perspective):
 
         full_layout = get_figure_layout(plot_spec)
         full_layout["title"] = dict(
-            text=plot_spec.title,
+            text=plot_spec.display_title(),
             font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
             x=0.5,
             xanchor="center",
@@ -504,13 +507,14 @@ def _get_raw_data_for_stacked_and_budget_plots(
 
     if lines and plot_spec.style == visualization_data.PlotStyle.budget:
         # Add net value over time
-        name = "Net result"
+        # Translators: legend label of the line showing the sum of all budget items
+        name = _("Net result")
         line = dict(
             x=lines[0]["x"],
             y=net_gain,
             name=name,
             line=dict(color="rgba(255,255,255,1)"),
-            text=get_plot_value_labels(lines[0]["x"], net_gain, "Net result"),
+            text=get_plot_value_labels(lines[0]["x"], net_gain, name),
             hoverinfo="text",
         )
         lines.append(line)
@@ -525,8 +529,15 @@ def dict_key_to_legend_label(key: str):
 
 
 def get_plot_value_labels(x_values, y_values, label):
+    legend_label = dict_key_to_legend_label(label)
     return [
-        f"{datamodel.days_to_date(360 * x)}: {y:.2f} - {dict_key_to_legend_label(label)}"
+        # Translators: hover text of a point in a graph. Placeholders: the in-game date, the value and the name of the plotted item
+        _(
+            "%(date)s: %(value)s - %(label)s",
+            date=datamodel.days_to_date(360 * x),
+            value=f"{y:.2f}",
+            label=legend_label,
+        )
         if (y and y == y)
         else ""
         for (x, y) in zip(x_values, y_values)
@@ -564,7 +575,8 @@ def get_layout():
                 className="tl-control",
                 children=[
                     html.Label(
-                        "Perspective",
+                        # Translators: label of the dropdown that selects the country from whose perspective the graphs are shown
+                        _("Perspective"),
                         className="tl-control-label",
                         htmlFor="country-perspective-dropdown",
                     ),
@@ -572,7 +584,8 @@ def get_layout():
                         id="country-perspective-dropdown",
                         className="tl-dropdown",
                         options=[],
-                        placeholder="Galaxy default",
+                        # Translators: shown in the country perspective dropdown when no country is selected, the graphs then show the default view of the whole galaxy
+                        placeholder=_("Galaxy default"),
                         value=None,
                     ),
                 ],
@@ -582,7 +595,7 @@ def get_layout():
                 className="tl-checklist",
                 options=[
                     {
-                        "label": "Normalize stacked plots",
+                        "label": _("Normalize stacked plots"),
                         "value": "normalize_stacked_plots",
                     },
                 ],
@@ -625,7 +638,7 @@ def get_layout():
                                 "✕",
                                 id="modal-close",
                                 className="tl-modal__close",
-                                title="Close",
+                                title=_("Close"),
                                 n_clicks=0,
                             ),
                         ],

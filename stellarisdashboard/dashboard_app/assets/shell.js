@@ -33,13 +33,16 @@
 
     function syncGraphTab() {
         var tab = currentGraphTab();
+        var label = null;
         document.querySelectorAll("[data-graph-tab]").forEach(function (a) {
             var active = a.getAttribute("data-graph-tab") === tab;
             a.classList.toggle("is-active", active);
+            // the links show the tab's name in the dashboard language; data-graph-tab is its key
+            if (active) label = a.textContent.trim();
             if (active && a.classList.contains("subnav-link")) a.scrollIntoView({block: "nearest", inline: "nearest"});
         });
         var crumb = document.querySelector("[data-graph-crumb]");
-        if (crumb && tab) crumb.textContent = tab;
+        if (crumb && tab) crumb.textContent = label || tab;
     }
 
     // dcc.Location picks up pushState navigation through this private event.

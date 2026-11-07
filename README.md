@@ -71,6 +71,10 @@ After updating the dashboard, import the kept copies again from the `Import Save
 
 The `Back up all saves` setting (off by default) copies every save the dashboard reads to `save_backups/<game>/` in the output folder. This folder has no size limit. To rebuild a game's history from it, delete that game's database from the `db/` folder and run `uv run stellarisdashboardcli parse-saves --save-path <output folder>/save_backups`.
 
+## Language
+
+Names from the game (empires, leaders, systems, technologies, ...) are shown in the language set by the `Stellaris language` setting (for example `l_german`), using the game's own localisation files. The dashboard's own text (menus, settings, graph titles and the sentences of the event ledger) follows the same language by default; the `Dashboard language` setting can pick a different one. Translations of the dashboard's text are welcome: see [docs/translating.md](docs/translating.md).
+
 ## Visibility Settings
 
 For balance and immersion, only some information about other empires is shown by default. You can enable some settings to show everything:

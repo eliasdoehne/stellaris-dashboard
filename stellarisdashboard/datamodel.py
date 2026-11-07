@@ -20,8 +20,25 @@ from alembic.operations import Operations
 from alembic.operations.ops import ModifyTableOps, CreateForeignKeyOp
 
 from stellarisdashboard import config, game_info
+from stellarisdashboard.i18n import N_, gettext as _, ngettext, pgettext
 
 logger = logging.getLogger(__name__)
+
+
+def join_comma(items: Iterable[str]) -> str:
+    """Joins names into a list shown to the player, with the language's list separator."""
+    # Translators: separates the items of a list of names, e.g. "A, B, C"
+    return pgettext("list separator", ", ").join(items)
+
+
+def join_and(items: Iterable[str]) -> str:
+    """Joins names into a list ending in "and", e.g. "A, B and C"."""
+    items = list(items)
+    if len(items) < 2:
+        return "".join(items)
+    # Translators: the last item of a list of names, e.g. "A, B and C".
+    # %(others)s is the comma-separated list of all other items ("A, B").
+    return _("%(others)s and %(last)s", others=join_comma(items[:-1]), last=items[-1])
 
 
 Base = declarative_base()
@@ -199,7 +216,14 @@ class WarOutcome(enum.Enum):
     defender_victory = enum.auto()
 
     def __str__(self):
-        return game_info.convert_id_to_name(self.name)
+        labels = {
+            "in_progress": pgettext("war outcome", "In Progress"),
+            "truce": pgettext("war outcome", "Truce"),
+            "resolution_unknown": pgettext("war outcome", "Resolution Unknown"),
+            "attacker_victory": pgettext("war outcome", "Attacker Victory"),
+            "defender_victory": pgettext("war outcome", "Defender Victory"),
+        }
+        return labels.get(self.name) or game_info.convert_id_to_name(self.name)
 
 
 @enum.unique
@@ -774,8 +798,11 @@ class Bypass(Base):
     @property
     def name(self):
         bypass_type = game_info.lookup_id_name(self.db_description.text)
-        status_str = "" if self.is_active else " (inactive)"
-        return f"{self.system.rendered_name} {bypass_type}{status_str}"
+        name = f"{self.system.rendered_name} {bypass_type}"
+        if self.is_active:
+            return name
+        # Translators: a bypass (wormhole, gateway, ...) that is not working; %(bypass)s is its name
+        return _("%(bypass)s (inactive)", bypass=name)
 
 
 class GameState(Base):
@@ -906,7 +933,10 @@ class Country(Base):
 
     @property
     def rendered_type(self) -> str:
-        return "Empire" if self.country_type == "default" else game_info.lookup_id_name(self.country_type)
+        if self.country_type == "default":
+            # Translators: the type of a regular country, as opposed to e.g. "Fallen Empire" or "Primitive"
+            return pgettext("country type", "Empire")
+        return game_info.lookup_id_name(self.country_type)
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -1054,45 +1084,52 @@ class Government(Base):
         }
         return civics - {None}
 
-    def get_reform_description_dict(self, old_gov: "Government") -> Dict[str, str]:
-        reform_dict = {}
+    def get_reform_description_lines(self, old_gov: "Government") -> List[str]:
+        """One sentence per kind of change from the old government to this one."""
+        lines = []
 
         if old_gov.gov_type != self.gov_type:
-            ogt = game_info.lookup_id_name(old_gov.gov_type, remove_prefix="gov")
-            ngt = game_info.lookup_id_name(self.gov_type, remove_prefix="gov")
-            reform_dict["Type changed"] = [f'from "{ogt}" to "{ngt}"']
+            lines.append(
+                # Translators: %(old)s and %(new)s are government types
+                _(
+                    'Type changed from "%(old)s" to "%(new)s".',
+                    old=game_info.lookup_id_name(old_gov.gov_type, remove_prefix="gov"),
+                    new=game_info.lookup_id_name(self.gov_type, remove_prefix="gov"),
+                )
+            )
 
         if old_gov.authority != self.authority:
-            old_authority = game_info.lookup_id_name(
-                old_gov.authority, remove_prefix="auth"
+            lines.append(
+                # Translators: %(old)s and %(new)s are authorities, e.g. "Democratic"
+                _(
+                    "Authority changed from %(old)s to %(new)s.",
+                    old=game_info.lookup_id_name(old_gov.authority, remove_prefix="auth"),
+                    new=game_info.lookup_id_name(self.authority, remove_prefix="auth"),
+                )
             )
-            new_authority = game_info.lookup_id_name(
-                self.authority, remove_prefix="auth"
-            )
-            reform_dict["Authority changed"] = [
-                f"from {old_authority} to {new_authority}"
-            ]
 
-        new_civics = self.civics - old_gov.civics
+        def names(ids, prefix):
+            return join_comma(
+                sorted(game_info.lookup_id_name(i, remove_prefix=prefix) for i in ids)
+            )
+
         removed_civics = old_gov.civics - self.civics
-        reform_dict["Removed civics"] = sorted(
-            game_info.lookup_id_name(c, remove_prefix="civic")
-            for c in removed_civics
-        )
-        reform_dict["Adopted civics"] = sorted(
-            game_info.lookup_id_name(c, remove_prefix="civic") for c in new_civics
-        )
-
-        new_ethics = self.ethics - old_gov.ethics
+        if removed_civics:
+            # Translators: %(civics)s is a comma-separated list of civics
+            lines.append(_("Removed civics %(civics)s.", civics=names(removed_civics, "civic")))
+        new_civics = self.civics - old_gov.civics
+        if new_civics:
+            # Translators: %(civics)s is a comma-separated list of civics
+            lines.append(_("Adopted civics %(civics)s.", civics=names(new_civics, "civic")))
         removed_ethics = old_gov.ethics - self.ethics
-        reform_dict["Abandoned ethics"] = sorted(
-            game_info.lookup_id_name(e, remove_prefix="ethic")
-            for e in removed_ethics
-        )
-        reform_dict["Embraced ethics"] = sorted(
-            game_info.lookup_id_name(e, remove_prefix="ethic") for e in new_ethics
-        )
-        return {k: v for k, v in reform_dict.items() if v}
+        if removed_ethics:
+            # Translators: %(ethics)s is a comma-separated list of ethics
+            lines.append(_("Abandoned ethics %(ethics)s.", ethics=names(removed_ethics, "ethic")))
+        new_ethics = self.ethics - old_gov.ethics
+        if new_ethics:
+            # Translators: %(ethics)s is a comma-separated list of ethics
+            lines.append(_("Embraced ethics %(ethics)s.", ethics=names(new_ethics, "ethic")))
+        return lines
 
     def __str__(self):
         return f"{self.authority} {self.gov_type} {self.civics} {self.ethics}"
@@ -1549,11 +1586,20 @@ class War(Base):
     def rendered_name(self):
         name = self.ingame_name
         if name and self.name_is_shared:
-            return f"{name} ({self._main_party_name(True)} vs {self._main_party_name(False)})"
-        return name or (
-            ", ".join(a.country.rendered_name for a in self.attackers)
-            + " vs "
-            + ", ".join(d.country.rendered_name for d in self.defenders)
+            # Translators: name of a war that several wars share, followed by the main
+            # empires of both sides, e.g. "War in Heaven (Empire A vs Empire B)".
+            return _(
+                "%(name)s (%(attackers)s vs %(defenders)s)",
+                name=name,
+                attackers=self._main_party_name(True),
+                defenders=self._main_party_name(False),
+            )
+        # Translators: name of a war without a name in the game: the empires on both sides,
+        # e.g. "Empire A, Empire B vs Empire C". %(attackers)s and %(defenders)s are lists of empires.
+        return name or _(
+            "%(attackers)s vs %(defenders)s",
+            attackers=join_comma(a.country.rendered_name for a in self.attackers),
+            defenders=join_comma(d.country.rendered_name for d in self.defenders),
         )
 
     @property
@@ -1621,7 +1667,7 @@ class WarParticipant(Base):
 
     def get_war_goal(self):
         if self.war_goal is None:
-            return "Unknown"
+            return _("Unknown")
         return game_info.lookup_id_name(self.war_goal, remove_prefix="wg", loc_prefix="war_goal_")
 
     @property
@@ -2052,32 +2098,22 @@ def render_dig_site_description(text: str) -> str:
     """Renders a "<site type>|<chapter>" description, e.g. "Under the Ice (chapter 3)"."""
     site_type, chapter = split_packed_description(text)
     name = game_info.lookup_id_name(site_type, remove_prefix="site")
-    return f"{name} (chapter {chapter})" if chapter else name
+    if not chapter:
+        return name
+    # Translators: a dig site and the chapter of its excavation, e.g. "Under the Ice (chapter 3)"
+    return _("%(name)s (chapter %(chapter)s)", name=name, chapter=chapter)
 
 
-# war participant call type -> how they joined; the target country (if any) follows
-WAR_CALL_PHRASES = {
-    "primary": "as a primary party",
-    "overlord": "called in by their overlord",
-    "subject": "called in by their subject",
-    "secret_fealty": "called in by their secret overlord",
-    "offensive": "attacking alongside",
-    "defensive": "honoring their defensive pact with",
-    "alliance": "honoring their alliance with",
-    "guarantee": "honoring their guarantee of independence for",
-    "trade_deal": "honoring a deal with",
-}
-
-
-def render_tradition_description(key: str) -> str:
-    """The verb phrase of a tradition event, e.g. 'adopted the "Science Division" tradition'."""
+def describe_tradition(key: str) -> Tuple[str, str]:
+    """What a tradition event did and the name of what it concerns: ("adopt", tradition tree) for adopting a
+    tree, ("finish", tree) for completing one, else ("single", tradition), e.g. ("finish", "Discovery Traditions")."""
     if key.endswith("_adopt"):
-        return f"adopted the {game_info.lookup_key(key)}"
+        return "adopt", game_info.lookup_key(key)
     if key.endswith("_finish"):
-        # "Discovery Traditions Finished" -> "completed the Discovery Traditions"
+        # "Discovery Traditions Finished" -> "Discovery Traditions"
         tree = game_info.lookup_key_if_known(key.removesuffix("_finish") + "_adopt")
-        return f"completed the {tree}" if tree else f"completed the {game_info.lookup_key(key)}"
-    return f'adopted the "{game_info.lookup_key(key)}" tradition'
+        return "finish", tree or game_info.lookup_key(key)
+    return "single", game_info.lookup_key(key)
 
 
 def render_policy_name(policy: str) -> str:
@@ -2090,8 +2126,11 @@ def render_astral_rift_description(text: str) -> str:
     name = game_info.lookup_key_if_known(f"astral_rift_{rift_type}")
     name = name or game_info.convert_id_to_name(rift_type)
     title = game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
-    # the ledger quotes this description, so quotes within it become single ones
-    return (f"{name}: {title}" if title and title != name else name).replace('"', "'")
+    if not title or title == name:
+        # the ledger quotes this description, so quotes within it become single ones
+        return name.replace('"', "'")
+    # Translators: an astral rift and the name of the event of its exploration, e.g. "The Corridors: Rift Anomaly"
+    return _("%(name)s: %(title)s", name=name, title=title).replace('"', "'")
 
 
 # Technology ages of primitive (pre-FTL) countries, oldest first
@@ -2109,51 +2148,44 @@ PRE_FTL_AGES = (
 )
 
 
-def render_pre_ftl_age_description(text: str) -> str:
-    """Renders an "<old age>|<new age>" description, e.g. "advanced from the Steam Age to the Industrial Age"."""
+def describe_pre_ftl_age_change(text: str) -> Tuple[str, str, bool]:
+    """Splits an "<old age>|<new age>" description into the localised names of both ages and
+    whether the country regressed, e.g. ("Steam Age", "Industrial Age", False)."""
     old_age, new_age = split_packed_description(text)
     regressed = (
         old_age in PRE_FTL_AGES
         and new_age in PRE_FTL_AGES
         and PRE_FTL_AGES.index(new_age) < PRE_FTL_AGES.index(old_age)
     )
-    verb = "fell back" if regressed else "advanced"
-    old_name = game_info.lookup_id_name(old_age)
-    new_name = game_info.lookup_id_name(new_age)
-    return f"{verb} from the {old_name} to the {new_name}"
+    return game_info.lookup_id_name(old_age), game_info.lookup_id_name(new_age), regressed
 
 
-FIRST_CONTACT_PROCESS_VERBS = {
-    "in_progress": "began first contact with",
-    "finished": "made first contact with",
-    "aborted": "abandoned first contact with",
-}
-
-
-def render_first_contact_description(status: str) -> str:
-    """The verb phrase of a first contact process with the given status."""
-    return FIRST_CONTACT_PROCESS_VERBS.get(status, "made contact with")
-
-
+# marked here, translated where they are displayed
 FIRST_CONTACT_STAGE_LABELS = {
-    "starter": "contact detected",
-    "progress": "investigation progressed",
-    "question": "complications arose",
-    "success": "communications established",
-    "fail": "communications failed",
+    "starter": N_("contact detected"),
+    "progress": N_("investigation progressed"),
+    "question": N_("complications arose"),
+    "success": N_("communications established"),
+    "fail": N_("communications failed"),
 }
-FIRST_CONTACT_APPROACHES = ("hostile", "proactive", "cautious")
+FIRST_CONTACT_APPROACHES = {
+    "hostile": N_("hostile"),
+    "proactive": N_("proactive"),
+    "cautious": N_("cautious"),
+}
 
 
 def render_first_contact_stage(stage: str, values: Optional[dict] = None) -> str:
     """A first contact stage by the game's text for it, else by its role in the game files, plus the approach."""
-    label = (
-        game_info.first_contact_stage_summary(stage, values or {})
-        or FIRST_CONTACT_STAGE_LABELS.get(game_info.first_contact_stage_role(stage))
-        or game_info.convert_id_to_name(stage, remove_prefix="default")
-    )
+    label = game_info.first_contact_stage_summary(stage, values or {})
+    if not label:
+        role_label = FIRST_CONTACT_STAGE_LABELS.get(game_info.first_contact_stage_role(stage))
+        label = _(role_label) if role_label else game_info.convert_id_to_name(stage, remove_prefix="default")
     approach = next((a for a in FIRST_CONTACT_APPROACHES if a in stage.split("_")), None)
-    return f"{label} ({approach})" if approach else label
+    if approach is None:
+        return label
+    # Translators: a stage of a first contact and the approach taken, e.g. "communications established (cautious)"
+    return _("%(stage)s (%(approach)s)", stage=label, approach=_(FIRST_CONTACT_APPROACHES[approach]))
 
 
 def render_resolution_description(resolution_type: str) -> str:
@@ -2170,7 +2202,8 @@ SUBJECT_PRESET_VARIANT_RE = re.compile(r"_(oppressive|balanced|benevolent|mean_\
 def render_subject_type(preset: str) -> str:
     """Renders an agreement preset as its subject type, e.g. "preset_vassal_mean_02" -> "Vassal"."""
     if not preset:
-        return "subject"
+        # Translators: a country that is subject of another one, as in "The X became a subject of the Y."
+        return _("subject")
     for key in (preset, SUBJECT_PRESET_VARIANT_RE.sub("", preset)):
         name = game_info.lookup_key_if_known(key)
         if name:
@@ -2191,12 +2224,19 @@ def render_megastructure_description(text: str) -> str:
     )
 
 
+def crisis_level_name(level_key: str) -> str:
+    """The name of a crisis level, e.g. "crisis_level_2" -> "Risk"."""
+    return game_info.lookup_key_if_known(level_key) or game_info.convert_id_to_name(level_key, remove_prefix="crisis")
+
+
 def render_crisis_level(level_key: str) -> str:
     """Renders a crisis level key as a phrase, e.g. "crisis_level_2" -> '"Risk"-level threat to the galaxy'."""
-    name = game_info.lookup_key_if_known(level_key) or game_info.convert_id_to_name(level_key, remove_prefix="crisis")
+    name = crisis_level_name(level_key)
     if level_key.startswith("crisis_defender_"):
-        return f'"{name}"-rank Defender of the Galaxy'
-    return f'"{name}"-level threat to the galaxy'
+        # Translators: %(name)s is the name of a crisis level, as in "The X became a "..."-rank Defender of the Galaxy."
+        return _('"%(name)s"-rank Defender of the Galaxy', name=name)
+    # Translators: %(name)s is the name of a crisis level, as in "The X became a "Risk"-level threat to the galaxy."
+    return _('"%(name)s"-level threat to the galaxy', name=name)
 
 
 def render_espionage_description(text: str) -> str:
@@ -2309,7 +2349,8 @@ class Federation(Base):
         rendered_type = game_info.lookup_key_if_known(self.federation_type) if self.federation_type else None
         if rendered_type:
             return f'{rendered_type} "{self.rendered_name}"'
-        return f'"{self.rendered_name}" federation'
+        # Translators: %(name)s is the name of a federation
+        return _('"%(name)s" federation', name=self.rendered_name)
 
     def members_at(self, date_days: int, associates: bool = False) -> List["Country"]:
         """The full members (or associate members) on the given date."""
@@ -2400,7 +2441,7 @@ class HistoricalEvent(Base):
     def description(self) -> str:
         """A brief description associated with the event, e.g. technology name or changes in government reform."""
         if self.event_type == HistoricalEventType.tradition:
-            return render_tradition_description(self.db_description.text)
+            return describe_tradition(self.db_description.text)[1]
         elif self.event_type == HistoricalEventType.researched_technology:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.edict:
@@ -2410,21 +2451,14 @@ class HistoricalEvent(Base):
         elif self.event_type == HistoricalEventType.government_reform:
             old_gov = self.country.get_government_for_date(self.start_date_days - 1)
             new_gov = self.country.get_government_for_date(self.start_date_days)
-            reform_dict = new_gov.get_reform_description_dict(old_gov)
-            reform_lines = [
-                f"{cat} " + ", ".join(reforms) + "."
-                for (cat, reforms) in reform_dict.items()
-            ]
-            ref = " ".join(reform_lines)
-            return ref
+            return " ".join(new_gov.get_reform_description_lines(old_gov))
         elif self.event_type == HistoricalEventType.empire_renamed:
-            old_name, new_name = self.db_description.text.split("\n")
-            return f"from {game_info.render_name(old_name)} to {game_info.render_name(new_name)}"
+            # the ledger sentence uses description_fields
+            fields = self.description_fields
+            return f"{fields['old_name']} -> {fields['new_name']}"
         elif self.event_type == HistoricalEventType.terraforming:
-            current_pc, target_pc = self.db_description.text.split(",")
-            current_pc = game_info.lookup_key(current_pc)
-            target_pc = game_info.lookup_key(target_pc)
-            return f"from {current_pc} to {target_pc}"
+            fields = self.description_fields
+            return f"{fields['old_class']} -> {fields['new_class']}"
         elif self.event_type in [
             HistoricalEventType.envoy_federation,
             HistoricalEventType.formed_federation,
@@ -2432,24 +2466,16 @@ class HistoricalEvent(Base):
         ]:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type in [HistoricalEventType.war]:
-            # the ledger names the target country after this phrase
-            return WAR_CALL_PHRASES.get(self.db_description.text, "called in by")
+            # how the country entered the war, e.g. "primary"; the ledger sentence depends on it
+            return self.db_description.text
         elif self.event_type == HistoricalEventType.councilor:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.new_policy:
-            name, selected = self.db_description.text.split("|")
-            name_rendered = render_policy_name(name)
-            selected_rendered = game_info.lookup_key(selected)
-            if selected_rendered == name_rendered:
-                # e.g. the gestalt logistics option is also called "Logistics Policy"
-                return f'adopted the "{name_rendered}"'
-            return f'set their policy on "{name_rendered}" to "{selected_rendered}"'
+            fields = self.description_fields
+            return f"{fields['policy']}: {fields['selected']}"
         elif self.event_type == HistoricalEventType.changed_policy:
-            name, old, new = self.db_description.text.split("|")
-            name_rendered = render_policy_name(name)
-            old_rendered = game_info.lookup_key(old)
-            new_rendered = game_info.lookup_key(new)
-            return f'changed their policy on "{name_rendered}" from "{old_rendered}" to "{new_rendered}"'
+            fields = self.description_fields
+            return f"{fields['policy']}: {fields['old_choice']} -> {fields['new_choice']}"
         elif self.event_type in (
             HistoricalEventType.agenda_launch,
             HistoricalEventType.agenda_preparation,
@@ -2479,11 +2505,10 @@ class HistoricalEvent(Base):
         ):
             return render_espionage_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.pre_ftl_age_change:
-            return render_pre_ftl_age_description(self.db_description.text)
+            old_age, new_age, _regressed = describe_pre_ftl_age_change(self.db_description.text)
+            return f"{old_age} -> {new_age}"
         elif self.event_type == HistoricalEventType.first_contact_process:
-            return render_first_contact_description(
-                self.db_description.text if self.db_description else ""
-            )
+            return self.db_description.text if self.db_description else ""
         elif self.event_type == HistoricalEventType.first_contact_stage and self.db_description:
             return render_first_contact_stage(self.db_description.text, self._first_contact_loc_values())
         elif self.event_type == HistoricalEventType.galactic_resolution_passed:
@@ -2494,13 +2519,8 @@ class HistoricalEvent(Base):
         elif self.event_type == HistoricalEventType.became_subject:
             return render_subject_type(self.db_description.text if self.db_description else "")
         elif self.event_type == HistoricalEventType.country_destroyed:
-            cause = self.db_description.text if self.db_description else ""
-            # the ledger names the target country after this phrase
-            if cause == "war":
-                return "after losing a war against"
-            elif cause == "subject":
-                return "after being integrated by"
-            return ""
+            # why the country ceased to exist ("war" or "subject"); the ledger sentence depends on it
+            return self.db_description.text if self.db_description else ""
         elif self.event_type == HistoricalEventType.federation_level_up:
             return self.db_description.text if self.db_description else ""
         elif self.event_type == HistoricalEventType.federation_renamed:
@@ -2514,7 +2534,49 @@ class HistoricalEvent(Base):
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
-            return "Unknown Event"
+            return _("Unknown Event")
+
+    @property
+    def description_fields(self) -> Dict[str, object]:
+        """The parts of the description that the ledger sentence of some event types is built from,
+        so that translators can phrase the whole sentence. Empty for other event types."""
+        text = self.db_description.text if self.db_description else ""
+        if self.event_type == HistoricalEventType.war:
+            return dict(call_type=text)
+        elif self.event_type == HistoricalEventType.empire_renamed:
+            old_name, new_name = text.split("\n")
+            return dict(old_name=game_info.render_name(old_name), new_name=game_info.render_name(new_name))
+        elif self.event_type == HistoricalEventType.terraforming:
+            current_pc, target_pc = text.split(",")
+            return dict(old_class=game_info.lookup_key(current_pc), new_class=game_info.lookup_key(target_pc))
+        elif self.event_type == HistoricalEventType.new_policy:
+            name, selected = text.split("|")
+            return dict(
+                policy=render_policy_name(name),
+                selected=game_info.lookup_key(selected),
+            )
+        elif self.event_type == HistoricalEventType.changed_policy:
+            name, old, new = text.split("|")
+            return dict(
+                policy=render_policy_name(name),
+                old_choice=game_info.lookup_key(old),
+                new_choice=game_info.lookup_key(new),
+            )
+        elif self.event_type == HistoricalEventType.tradition:
+            kind, name = describe_tradition(text)
+            return dict(tradition_kind=kind, tradition=name)
+        elif self.event_type == HistoricalEventType.crisis_level_up:
+            return dict(crisis_level=crisis_level_name(text), crisis_defender=text.startswith("crisis_defender_"))
+        elif self.event_type == HistoricalEventType.pre_ftl_age_change:
+            old_age, new_age, regressed = describe_pre_ftl_age_change(text)
+            return dict(old_age=old_age, new_age=new_age, regressed=regressed)
+        elif self.event_type == HistoricalEventType.first_contact_process:
+            return dict(contact_status=text)
+        elif self.event_type == HistoricalEventType.country_destroyed:
+            return dict(cause=text)
+        elif self.event_type == HistoricalEventType.galactic_crisis:
+            return dict(crisis_key=text)
+        return {}
 
     @property
     def stage_detail(self) -> Optional[str]:

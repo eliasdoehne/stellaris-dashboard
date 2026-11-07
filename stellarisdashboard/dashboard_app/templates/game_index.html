@@ -4,41 +4,41 @@
 <div class="page page--narrow">
 <div class="page-head">
     <div>
-        <h1 class="page-title">Games</h1>
-        {% if games|length %}<p class="page-subtitle">{{ games|length }} game{{ "s" if games|length != 1 }}, most recently updated first</p>{% endif %}
+        <h1 class="page-title">{{ _("Games") }}</h1>
+        {% if games|length %}<p class="page-subtitle">{{ ngettext("%(num)s game, most recently updated first", "%(num)s games, most recently updated first", games|length) }}</p>{% endif %}
     </div>
 </div>
 
 <ul class="notifications">
     {% if not save_file_path_is_valid %}
         <li class="warning">
-            <h2>⚠️ Save files folder is invalid</h2>
-            <p>This folder should contain folders for each game, which each contain <code>.sav</code> files.</p>
-            <p><small>(Usually, this means you use cloud saves, which you need to configure manually. If the folder is correct, but you simply do not have any saved games, you can ignore this warning.)</small></p>
-            <p><a href="/settings">Go to Settings to change it, then restart the dashboard.</a></p>
+            <h2>⚠️ {{ _("Save files folder is invalid") }}</h2>
+            <p>{% trans trimmed %}This folder should contain folders for each game, which each contain <code>.sav</code> files.{% endtrans %}</p>
+            <p><small>{{ _("(Usually, this means you use cloud saves, which you need to configure manually. If the folder is correct, but you simply do not have any saved games, you can ignore this warning.)") }}</small></p>
+            <p><a href="/settings">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
         </li>
     {% endif %}
     {% if not stellaris_install_path_is_valid %}
         <li class="warning">
-            <h2>⚠️ Stellaris install folder is invalid</h2>
-            <p>This folder should contain the Stellaris install data, such as the <code>localisation</code> and <code>flags</code> folders.</p>
-            <p><small>(Usually this means your game is not installed in the default Steam location of your main drive.)</small></p>
-            <p><a href="/settings">Go to Settings to change it, then restart the dashboard.</a></p>
+            <h2>⚠️ {{ _("Stellaris install folder is invalid") }}</h2>
+            <p>{% trans trimmed %}This folder should contain the Stellaris install data, such as the <code>localisation</code> and <code>flags</code> folders.{% endtrans %}</p>
+            <p><small>{{ _("(Usually this means your game is not installed in the default Steam location of your main drive.)") }}</small></p>
+            <p><a href="/settings">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
         </li>
     {% endif %}
     {% if not stellaris_user_data_path_is_valid %}
         <li class="warning">
-            <h2>⚠️ Stellaris user data folder is invalid</h2>
-            <p>This folder should contain the <code>dlc_load.json</code> file.</p>
-            <p><a href="/settings">Go to Settings to change it, then restart the dashboard.</a></p>
+            <h2>⚠️ {{ _("Stellaris user data folder is invalid") }}</h2>
+            <p>{% trans trimmed %}This folder should contain the <code>dlc_load.json</code> file.{% endtrans %}</p>
+            <p><a href="/settings">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
         </li>
     {% endif %}
     {% if games|length == 0 %}
         <li class="info">
-            <h2>ℹ️ No games available</h2>
-            <p>Don’t panic! Looks like this is your first time opening the dashboard.</p>
-            <p>To get started, create a new save now then refresh this page, or simply play until the next autosave then refresh.</p>
-            <p>To import saves you already have, go to <a href="/import/">Import Saves</a>.</p>
+            <h2>ℹ️ {{ _("No games available") }}</h2>
+            <p>{{ _("Don’t panic! Looks like this is your first time opening the dashboard.") }}</p>
+            <p>{{ _("To get started, create a new save now then refresh this page, or simply play until the next autosave then refresh.") }}</p>
+            <p>{% trans trimmed %}To import saves you already have, go to <a href="/import/">Import Saves</a>.{% endtrans %}</p>
         </li>
     {% endif %}
 </ul>
@@ -51,7 +51,8 @@
             <span class="game-card-name">{{ game.country_name }}</span>
             <span class="game-card-meta">
                 <span class="game-card-date">{{ game.game_date }}</span>
-                {{ game.galaxy }} · {{ game.difficulty }} · {{ game.num_saves }} saves · updated {{ game.last_updated }}
+                {# Translators: part of the details of a game in the list of games, after its galaxy size and difficulty #}
+                {{ game.galaxy }} · {{ game.difficulty }} · {{ ngettext("%(num)s save · updated %(last_updated)s", "%(num)s saves · updated %(last_updated)s", game.num_saves, last_updated=game.last_updated) }}
             </span>
             <span class="game-card-id">{{ game.game_id }}</span>
         </a>

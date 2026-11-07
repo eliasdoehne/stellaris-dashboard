@@ -39,8 +39,7 @@ def test_sentences_avoid_doubled_articles():
         "<a>The Chosen</a> conquered the <a>Rana</a> system from the <a>Tzynn Empire</a>"
         " during <a>The War in Heaven</a>."
     )
-    event = dict(event_type="war", country=empire, target_country=chosen, war=war,
-                 description="honoring their alliance with")
+    event = dict(event_type="war", country=empire, target_country=chosen, war=war, call_type="alliance")
     assert render_sentence(event, links) == (
         "The <a>Tzynn Empire</a> entered <a>The War in Heaven</a>, honoring their alliance with <a>The Chosen</a>."
     )
@@ -51,4 +50,4 @@ def test_every_sentence_compiles():
 
     for descriptor in list(event_registry.REGISTRY.values()) + list(event_registry.STORYLINE_REGISTRY.values()):
         if descriptor.sentence is not None:
-            flask_app.jinja_env.from_string(event_registry._MACROS + descriptor.sentence)
+            flask_app.jinja_env.from_string(descriptor.sentence)

@@ -218,14 +218,13 @@ def test_primitive_reform_without_age_change_is_kept(session, steam_age_primitiv
 
 
 @pytest.mark.parametrize(
-    "description,verb",
+    "description,regressed",
     [
-        ("steam_age|industrial_age", "advanced"),
-        ("atomic_age|stone_age", "fell back"),
-        ("steam_age|modded_age", "advanced"),
+        ("steam_age|industrial_age", False),
+        ("atomic_age|stone_age", True),
+        ("steam_age|modded_age", False),
     ],
 )
-def test_pre_ftl_age_description_verb(description, verb):
-    assert datamodel.render_pre_ftl_age_description(description).startswith(
-        f"{verb} from the "
-    )
+def test_pre_ftl_age_description_verb(description, regressed):
+    _old_age, _new_age, fell_back = datamodel.describe_pre_ftl_age_change(description)
+    assert fell_back == regressed

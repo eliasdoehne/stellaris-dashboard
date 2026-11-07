@@ -18,6 +18,7 @@ from scipy.spatial import Voronoi
 from sqlalchemy.orm import selectinload
 
 from stellarisdashboard import datamodel, config, game_info
+from stellarisdashboard.i18n import gettext as _, N_
 from stellarisdashboard.country_color_cache import GAME_COUNTRY_COLORS, LRUDict
 from stellarisdashboard.parsing.save_parser import rust_parser
 
@@ -42,6 +43,8 @@ class PlotSpecification:
     """This class is used to define all available visualizations."""
 
     plot_id: str
+    # Marked with N_() and translated by display_title(). Titles with placeholders
+    # take their values from title_variables.
     title: str
 
     # This function specifies which data container class should be used for the plot.
@@ -51,11 +54,23 @@ class PlotSpecification:
     style: PlotStyle
     yrange: Tuple[float, float] = None
 
-    x_axis_label: str = "Year"
+    # Translators: label of the time axis of the graphs
+    x_axis_label: str = N_("Year")
     y_axis_label: str = ""
     y_axis_reversed: bool = False  # for rankings, where lower values are better
 
     data_container_factory_kwargs: Dict = dataclasses.field(default_factory=dict)
+    title_variables: Dict[str, str] = dataclasses.field(default_factory=dict)
+
+    def display_title(self) -> str:
+        """The title in the current dashboard language."""
+        return _(self.title, **self.title_variables)
+
+    def display_x_axis_label(self) -> str:
+        return _(self.x_axis_label) if self.x_axis_label else ""
+
+    def display_y_axis_label(self) -> str:
+        return _(self.y_axis_label) if self.y_axis_label else ""
 
 
 def get_plot_specifications_for_tab_layout():
@@ -302,7 +317,12 @@ class AbstractPlotDataContainer(abc.ABC):
         self,
     ) -> Iterable[Tuple[Union[str, int], str, List[int], List[float]]]:
         for key, values in self.data_dict.items():
-            yield key, self.key_labels.get(key, key), self.dates, values
+            yield key, self._get_label(key), self.dates, values
+
+    def _get_label(self, key: Union[str, int]) -> str:
+        """The legend label of a key. Called when the traces are displayed, so that
+        labels made by the dashboard can follow a change of the dashboard language."""
+        return self.key_labels.get(key, key)
 
     def _add_new_value_to_data_dict(self, key, new_val, default_val=DEFAULT_VAL):
         if key not in self.data_dict:
@@ -519,6 +539,18 @@ class AbstractPlayerInfoDataContainer(AbstractPlotDataContainer, abc.ABC):
 class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = 0.0
 
+    # legend labels of the research fields, translated when displayed
+    LABELS = {
+        "Physics": N_("Physics"),
+        "Society": N_("Society"),
+        "Engineering": N_("Engineering"),
+    }
+
+    def _get_label(self, key):
+        if key in self.LABELS:
+            return _(self.LABELS[key])
+        return super()._get_label(key)
+
     def _iterate_budgetitems(
         self, cd: datamodel.CountryData
     ) -> Iterable[Tuple[str, float]]:
@@ -529,6 +561,22 @@ class ScienceOutputByFieldDataContainer(AbstractPlayerInfoDataContainer):
 
 class FleetCompositionDataContainer(AbstractPlayerInfoDataContainer):
     DEFAULT_VAL = 0.0
+
+    # legend labels of the ship classes, translated when displayed
+    LABELS = {
+        "frigates": N_("Frigates"),
+        "corvettes": N_("Corvettes"),
+        "destroyers": N_("Destroyers"),
+        "cruisers": N_("Cruisers"),
+        "battleships": N_("Battleships"),
+        "titans": N_("Titans"),
+        "colossi": N_("Colossi"),
+    }
+
+    def _get_label(self, key):
+        if key in self.LABELS:
+            return _(self.LABELS[key])
+        return super()._get_label(key)
 
     def _iterate_budgetitems(
         self, cd: datamodel.CountryData
@@ -552,6 +600,27 @@ class MarketPriceDataContainer(AbstractPlayerInfoDataContainer):
         self.resource_name = resource_name
         self.base_price = base_price
         self.resource_index = resource_index
+
+    def _get_label(self, key):
+        # The resource name comes from the game's localisation. The other parts of the
+        # label are the dashboard's own text, translated as whole labels.
+        resource = game_info.lookup_id_name(self.resource_name, remove_prefix="sr")
+        if key == f"{self.resource_name}_base_price":
+            # Translators: legend label of the market price graph, price without market fee
+            return _("%(resource)s base price", resource=resource)
+        if key == f"{self.resource_name}_buy_price":
+            # Translators: legend label of the market price graph, price to buy the resource (includes the market fee)
+            return _("%(resource)s buy price", resource=resource)
+        if key == f"{self.resource_name}_sell_price":
+            # Translators: legend label of the market price graph, price to sell the resource (after the market fee)
+            return _("%(resource)s sell price", resource=resource)
+        if key == self.galactic_market_indicator_key:
+            # Translators: legend label of the market price graph, marks the period in which the player could trade on the galactic market
+            return _("Traded on galactic market")
+        if key == self.internal_market_indicator_key:
+            # Translators: legend label of the market price graph, marks the period in which the player could only trade on their internal market
+            return _("Traded on internal market")
+        return super()._get_label(key)
 
     def _iterate_budgetitems(
         self, cd: datamodel.CountryData
@@ -1045,402 +1114,412 @@ class StratumCrimeDataContainer(AbstractPopStatsByStratumDataContainer):
 
 PLANET_COUNT_GRAPH = PlotSpecification(
     plot_id="planet-count",
-    title="Owned Planets",
+    title=N_("Owned Planets"),
     data_container_factory=PlanetCountDataContainer,
     style=PlotStyle.line,
 )
 SYSTEM_COUNT_GRAPH = PlotSpecification(
     plot_id="system-count",
-    title="Controlled Systems",
+    title=N_("Controlled Systems"),
     data_container_factory=SystemCountDataContainer,
     style=PlotStyle.line,
 )
 NET_MINERAL_INCOME_GRAPH = PlotSpecification(
     plot_id="net-mineral-income",
-    title="Net Mineral Income",
+    title=N_("Net Mineral Income"),
     data_container_factory=TotalMineralsIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_ENERGY_INCOME_GRAPH = PlotSpecification(
     plot_id="net-energy-income",
-    title="Net Energy Income",
+    title=N_("Net Energy Income"),
     data_container_factory=TotalEnergyIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_ALLOYS_INCOME_GRAPH = PlotSpecification(
     plot_id="net-alloys-income",
-    title="Net Alloys Income",
+    title=N_("Net Alloys Income"),
     data_container_factory=TotalAlloysIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_TRADE_INCOME_GRAPH = PlotSpecification(
     plot_id="net-trade-income",
-    title="Net Trade Income",
+    title=N_("Net Trade Income"),
     data_container_factory=TotalTradeIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
     plot_id="net-consumer-goods-income",
-    title="Net Consumer Goods Income",
+    title=N_("Net Consumer Goods Income"),
     data_container_factory=TotalConsumerGoodsIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_FOOD_INCOME_GRAPH = PlotSpecification(
     plot_id="net-food-income",
-    title="Net Food Income",
+    title=N_("Net Food Income"),
     data_container_factory=TotalFoodIncomeDataContainer,
     style=PlotStyle.line,
 )
 NET_BIOMASS_INCOME_GRAPH = PlotSpecification(
     plot_id="net-biomass-income",
-    title="Net Biomass Income",
+    title=N_("Net Biomass Income"),
     data_container_factory=TotalBiomassIncomeDataContainer,
     style=PlotStyle.line,
 )
 EMPIRE_SIZE_GRAPH = PlotSpecification(
     plot_id="empire-size",
-    title="Empire Size",
+    title=N_("Empire Size"),
     data_container_factory=EmpireSizeDataContainer,
     style=PlotStyle.line,
 )
 TECHNOLOGY_PROGRESS_GRAPH = PlotSpecification(
     plot_id="tech-count",
-    title="Researched Technologies",
+    title=N_("Researched Technologies"),
     data_container_factory=TechCountDataContainer,
     style=PlotStyle.line,
 )
 RESEARCH_OUTPUT_BY_CATEGORY_GRAPH = PlotSpecification(
     plot_id="empire-research-output",
-    title="Research Output",
+    title=N_("Research Output"),
     data_container_factory=ScienceOutputByFieldDataContainer,
     style=PlotStyle.stacked,
 )
 RESEARCH_OUTPUT_GRAPH = PlotSpecification(
     plot_id="empire-research-output-comparison",
-    title="Total Research Output",
+    title=N_("Total Research Output"),
     data_container_factory=TotalScienceOutputDataContainer,
     style=PlotStyle.line,
 )
 MILITARY_POWER_GRAPH = PlotSpecification(
     plot_id="military-power",
-    title="Military Strength",
+    title=N_("Military Strength"),
     data_container_factory=MilitaryPowerDataContainer,
     style=PlotStyle.line,
 )
 FLEET_SIZE_GRAPH = PlotSpecification(
     plot_id="fleet-size",
-    title="Fleet Size",
+    title=N_("Fleet Size"),
     data_container_factory=FleetSizeDataContainer,
     style=PlotStyle.line,
 )
 FLEET_COMPOSITION_GRAPH = PlotSpecification(
     plot_id="empire-fleet-composition",
-    title="Fleet Composition",
+    title=N_("Fleet Composition"),
     data_container_factory=FleetCompositionDataContainer,
     style=PlotStyle.stacked,
 )
 SPECIES_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id="empire-species-distribution",
-    title="Species Demographics",
+    title=N_("Species Demographics"),
     data_container_factory=SpeciesDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 SPECIES_HAPPINESS_GRAPH = PlotSpecification(
     plot_id="empire-species-happiness",
-    title="Happiness by Species",
+    title=N_("Happiness by Species"),
     data_container_factory=SpeciesHappinessDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_POWER_GRAPH = PlotSpecification(
     plot_id="empire-species-power",
-    title="Power by Species",
+    title=N_("Power by Species"),
     data_container_factory=SpeciesPowerDataContainer,
     style=PlotStyle.line,
 )
 SPECIES_CRIME_GRAPH = PlotSpecification(
     plot_id="empire-species-crime",
-    title="Crime by Species",
+    title=N_("Crime by Species"),
     data_container_factory=SpeciesCrimeDataContainer,
     style=PlotStyle.line,
 )
 FACTION_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id="empire-faction-distribution",
-    title="Faction Demographics",
+    title=N_("Faction Demographics"),
     data_container_factory=FactionDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 FACTION_SUPPORT_GRAPH = PlotSpecification(
     plot_id="empire-faction-support",
-    title="Faction Support",
+    title=N_("Faction Support"),
     data_container_factory=FactionSupportDataContainer,
     style=PlotStyle.stacked,
 )
 FACTION_APPROVAL_GRAPH = PlotSpecification(
     plot_id="empire-faction-approval",
-    title="Faction Approval",
+    title=N_("Faction Approval"),
     data_container_factory=FactionApprovalDataContainer,
     style=PlotStyle.line,
 )
 FACTION_CRIME_GRAPH = PlotSpecification(
     plot_id="empire-faction-crime",
-    title="Crime by Faction",
+    title=N_("Crime by Faction"),
     data_container_factory=FactionCrimeDataContainer,
     style=PlotStyle.line,
 )
 FACTION_POWER_GRAPH = PlotSpecification(
     plot_id="empire-faction-power",
-    title="Power by Faction",
+    title=N_("Power by Faction"),
     data_container_factory=FactionPowerDataContainer,
     style=PlotStyle.line,
 )
 FACTION_HAPPINESS_GRAPH = PlotSpecification(
     plot_id="empire-faction-happiness",
-    title="Happiness by Faction",
+    title=N_("Happiness by Faction"),
     data_container_factory=FactionHappinessDataContainer,
     style=PlotStyle.line,
 )
 PLANET_POP_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id="empire-planet-pop-distribution",
-    title="Population by Planet",
+    title=N_("Population by Planet"),
     data_container_factory=PlanetDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 PLANET_AMENITIES_GRAPH = PlotSpecification(
     plot_id="empire-planet-amenities",
-    title="Free Amenities by Planet",
+    title=N_("Free Amenities by Planet"),
     data_container_factory=PlanetAmenitiesDataContainer,
     style=PlotStyle.line,
 )
 PLANET_STABILITY_GRAPH = PlotSpecification(
     plot_id="empire-planet-stability",
-    title="Stability by Planet",
+    title=N_("Stability by Planet"),
     data_container_factory=PlanetStabilityDataContainer,
     style=PlotStyle.line,
 )
 PLANET_HOUSING_GRAPH = PlotSpecification(
     plot_id="empire-planet-housing",
-    title="Free Housing by Planet",
+    title=N_("Free Housing by Planet"),
     data_container_factory=PlanetHousingDataContainer,
     style=PlotStyle.line,
 )
 PLANET_CRIME_GRAPH = PlotSpecification(
     plot_id="empire-planet-crime",
-    title="Crime by Planet",
+    title=N_("Crime by Planet"),
     data_container_factory=PlanetCrimeDataContainer,
     style=PlotStyle.line,
 )
 PLANET_POWER_GRAPH = PlotSpecification(
     plot_id="empire-planet-power",
-    title="Power by Planet",
+    title=N_("Power by Planet"),
     data_container_factory=PlanetPowerDataContainer,
     style=PlotStyle.line,
 )
 PLANET_HAPPINESS_GRAPH = PlotSpecification(
     plot_id="empire-planet-happiness",
-    title="Happiness by Planet",
+    title=N_("Happiness by Planet"),
     data_container_factory=PlanetHappinessDataContainer,
     style=PlotStyle.line,
 )
 ETHOS_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id="empire-ethos-distribution",
-    title="Ethos Demographics",
+    title=N_("Ethos Demographics"),
     data_container_factory=EthosDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 
 ETHOS_CRIME_GRAPH = PlotSpecification(
     plot_id="empire-ethos-crime",
-    title="Crime by Ethos",
+    title=N_("Crime by Ethos"),
     data_container_factory=EthosCrimeDataContainer,
     style=PlotStyle.line,
 )
 
 ETHOS_POWER_GRAPH = PlotSpecification(
     plot_id="empire-ethos-power",
-    title="Power by Ethos",
+    title=N_("Power by Ethos"),
     data_container_factory=EthosPowerDataContainer,
     style=PlotStyle.line,
 )
 ETHOS_HAPPINESS_GRAPH = PlotSpecification(
     plot_id="empire-ethos-happiness",
-    title="Happiness by Ethos",
+    title=N_("Happiness by Ethos"),
     data_container_factory=EthosHappinessDataContainer,
     style=PlotStyle.line,
 )
 STRATA_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id="empire-strata-distribution",
-    title="Stratum Demographics",
+    title=N_("Stratum Demographics"),
     data_container_factory=StratumDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 STRATA_CRIME_GRAPH = PlotSpecification(
     plot_id="empire-strata-crime",
-    title="Crime by Stratum",
+    title=N_("Crime by Stratum"),
     data_container_factory=StratumCrimeDataContainer,
     style=PlotStyle.line,
 )
 STRATA_POWER_GRAPH = PlotSpecification(
     plot_id="empire-strata-power",
-    title="Power by Stratum",
+    title=N_("Power by Stratum"),
     data_container_factory=StratumPowerDataContainer,
     style=PlotStyle.line,
 )
 STRATA_HAPPINESS_GRAPH = PlotSpecification(
     plot_id="empire-strata-happiness",
-    title="Happiness by Stratum",
+    title=N_("Happiness by Stratum"),
     data_container_factory=StratumHappinessDataContainer,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
 JOB_DISTRIBUTION_GRAPH = PlotSpecification(
     plot_id="empire-job-distribution",
-    title="Job Demographics",
+    title=N_("Job Demographics"),
     data_container_factory=JobDistributionDataContainer,
     style=PlotStyle.stacked,
 )
 JOB_CRIME_GRAPH = PlotSpecification(
     plot_id="empire-job-crime",
-    title="Crime by Job",
+    title=N_("Crime by Job"),
     data_container_factory=JobCrimeDataContainer,
     style=PlotStyle.line,
 )
 JOB_POWER_GRAPH = PlotSpecification(
     plot_id="empire-job-power",
-    title="Power by Job",
+    title=N_("Power by Job"),
     data_container_factory=JobPowerDataContainer,
     style=PlotStyle.line,
 )
 JOB_HAPPINESS_GRAPH = PlotSpecification(
     plot_id="empire-job-happiness",
-    title="Happiness by Job",
+    title=N_("Happiness by Job"),
     data_container_factory=JobHappinessDataContainer,
     style=PlotStyle.line,
     yrange=(0, 1.0),
 )
 ENERGY_BUDGET = PlotSpecification(
     plot_id="empire-energy-budget",
-    title="Energy Budget",
+    title=N_("Energy Budget"),
     data_container_factory=EnergyBudgetDataContainer,
     style=PlotStyle.budget,
 )
 MINERAL_BUDGET = PlotSpecification(
     plot_id="empire-mineral-budget",
-    title="Mineral Budget",
+    title=N_("Mineral Budget"),
     data_container_factory=MineralsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 CONSUMER_GOODS_BUDGET = PlotSpecification(
     plot_id="empire-consumer-goods-budget",
-    title="Consumer Goods Budget",
+    title=N_("Consumer Goods Budget"),
     data_container_factory=ConsumerGoodsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 TRADE_BUDGET = PlotSpecification(
     plot_id="empire-trade-budget",
-    title="Trade Budget",
+    title=N_("Trade Budget"),
     data_container_factory=TradeBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ALLOYS_BUDGET = PlotSpecification(
     plot_id="empire-alloys-budget",
-    title="Alloys Budget",
+    title=N_("Alloys Budget"),
     data_container_factory=AlloysBudgetDataContainer,
     style=PlotStyle.budget,
 )
 FOOD_BUDGET = PlotSpecification(
     plot_id="empire-food-budget",
-    title="Food",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Food"),
     data_container_factory=FoodBudgetDataContainer,
     style=PlotStyle.budget,
 )
 VOLATILE_MOTES_BUDGET = PlotSpecification(
     plot_id="empire-volatile-motes-budget",
-    title="Volatile Motes",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Volatile Motes"),
     data_container_factory=VolatileMotesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 EXOTIC_GASES_BUDGET = PlotSpecification(
     plot_id="empire-exotic-gas-budget",
-    title="Exotic Gases",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Exotic Gases"),
     data_container_factory=ExoticGasesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 RARE_CRYSTALS_BUDGET = PlotSpecification(
     plot_id="empire-rare-crystals-budget",
-    title="Rare Crystals",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Rare Crystals"),
     data_container_factory=RareCrystalsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 LIVING_METAL_BUDGET = PlotSpecification(
     plot_id="empire-living-metal-budget",
-    title="Living Metal",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Living Metal"),
     data_container_factory=LivingMetalBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ZRO_BUDGET = PlotSpecification(
     plot_id="empire-zro-budget",
-    title="Zro",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Zro"),
     data_container_factory=ZroBudgetDataContainer,
     style=PlotStyle.budget,
 )
 DARK_MATTER_BUDGET = PlotSpecification(
     plot_id="empire-dark-matter-budget",
-    title="Dark Matter",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Dark Matter"),
     data_container_factory=DarkMatterBudgetDataContainer,
     style=PlotStyle.budget,
 )
 NANITES_BUDGET = PlotSpecification(
     plot_id="empire-nanites-budget",
-    title="Nanites",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Nanites"),
     data_container_factory=NanitesBudgetDataContainer,
     style=PlotStyle.budget,
 )
 MINOR_ARTIFACTS_BUDGET = PlotSpecification(
     plot_id="empire-minor-artifacts-budget",
-    title="Minor Artifacts Budget",
+    title=N_("Minor Artifacts Budget"),
     data_container_factory=MinorArtifactsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 ASTRAL_THREADS_BUDGET = PlotSpecification(
     plot_id="empire-astral-threads-budget",
-    title="Astral Threads Budget",
+    title=N_("Astral Threads Budget"),
     data_container_factory=AstralThreadsBudgetDataContainer,
     style=PlotStyle.budget,
 )
 BIOMASS_BUDGET = PlotSpecification(
     plot_id="empire-biomass-budget",
-    title="Biomass Budget",
+    title=N_("Biomass Budget"),
     data_container_factory=BiomassBudgetDataContainer,
     style=PlotStyle.budget,
 )
 INFLUENCE_BUDGET = PlotSpecification(
     plot_id="empire-influence-budget",
-    title="Influence",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Influence"),
     data_container_factory=InfluenceBudgetDataContainer,
     style=PlotStyle.budget,
 )
 UNITY_BUDGET = PlotSpecification(
     plot_id="empire-unity-budget",
-    title="Unity",
+    # Translators: title of the budget graph of a resource, use the name of the resource in the game
+    title=N_("Unity"),
     data_container_factory=UnityBudgetDataContainer,
     style=PlotStyle.budget,
 )
 VICTORY_RANK_GRAPH = PlotSpecification(
     plot_id="victory-rank",
-    title="Victory Rank",
+    title=N_("Victory Rank"),
     data_container_factory=VictoryRankDataContainer,
     style=PlotStyle.line,
     y_axis_reversed=True,
 )
 VICTORY_SCORE_GRAPH = PlotSpecification(
     plot_id="victory-score",
-    title="Victory Score",
+    title=N_("Victory Score"),
     data_container_factory=VictoryScoreDataContainer,
     style=PlotStyle.line,
 )
 VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
     plot_id="victory-economy-score",
-    title="Victory Economic Score",
+    title=N_("Victory Economic Score"),
     data_container_factory=EconomyScoreDataContainer,
     style=PlotStyle.line,
 )
@@ -1448,7 +1527,7 @@ VICTORY_ECONOMY_SCORE_GRAPH = PlotSpecification(
 # Below are not shown by default, but can be enabled in configuration
 TOTAL_MINERAL_INCOME_GRAPH = PlotSpecification(
     plot_id="total-mineral-income",
-    title="Total Mineral Income",
+    title=N_("Total Mineral Income"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: max(0.0, bi.net_minerals)
     ),
@@ -1456,7 +1535,7 @@ TOTAL_MINERAL_INCOME_GRAPH = PlotSpecification(
 )
 TOTAL_ENERGY_INCOME_GRAPH = PlotSpecification(
     plot_id="total-energy-income",
-    title="Total Energy Income",
+    title=N_("Total Energy Income"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: max(0.0, bi.net_energy)
     ),
@@ -1464,7 +1543,7 @@ TOTAL_ENERGY_INCOME_GRAPH = PlotSpecification(
 )
 TOTAL_ALLOYS_INCOME_GRAPH = PlotSpecification(
     plot_id="total-alloys-income",
-    title="Total Alloys Income",
+    title=N_("Total Alloys Income"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: max(0.0, bi.net_alloys)
     ),
@@ -1472,7 +1551,7 @@ TOTAL_ALLOYS_INCOME_GRAPH = PlotSpecification(
 )
 TOTAL_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
     plot_id="total-consumer-goods-income",
-    title="Total Consumer Goods Income",
+    title=N_("Total Consumer Goods Income"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: max(0.0, bi.net_consumer_goods)
     ),
@@ -1480,7 +1559,7 @@ TOTAL_CONSUMER_GOODS_INCOME_GRAPH = PlotSpecification(
 )
 TOTAL_FOOD_INCOME_GRAPH = PlotSpecification(
     plot_id="total-food-income",
-    title="Total Food Income",
+    title=N_("Total Food Income"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: max(0.0, bi.net_food)
     ),
@@ -1489,7 +1568,7 @@ TOTAL_FOOD_INCOME_GRAPH = PlotSpecification(
 # Below are not shown by default, but can be enabled in configuration
 TOTAL_MINERAL_EXPENSE_GRAPH = PlotSpecification(
     plot_id="total-mineral-expense",
-    title="Total Mineral Expenses",
+    title=N_("Total Mineral Expenses"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: min(0.0, bi.net_minerals)
     ),
@@ -1497,7 +1576,7 @@ TOTAL_MINERAL_EXPENSE_GRAPH = PlotSpecification(
 )
 TOTAL_ENERGY_EXPENSE_GRAPH = PlotSpecification(
     plot_id="total-energy-expense",
-    title="Total Energy Expenses",
+    title=N_("Total Energy Expenses"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: min(0.0, bi.net_energy)
     ),
@@ -1505,7 +1584,7 @@ TOTAL_ENERGY_EXPENSE_GRAPH = PlotSpecification(
 )
 TOTAL_ALLOYS_EXPENSE_GRAPH = PlotSpecification(
     plot_id="total-alloys-expense",
-    title="Total Alloys Expenses",
+    title=N_("Total Alloys Expenses"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: min(0.0, bi.net_alloys)
     ),
@@ -1513,7 +1592,7 @@ TOTAL_ALLOYS_EXPENSE_GRAPH = PlotSpecification(
 )
 TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH = PlotSpecification(
     plot_id="total-consumer-goods-expense",
-    title="Total Consumer Goods Expenses",
+    title=N_("Total Consumer Goods Expenses"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: min(0.0, bi.net_consumer_goods)
     ),
@@ -1521,7 +1600,7 @@ TOTAL_CONSUMER_GOODS_EXPENSE_GRAPH = PlotSpecification(
 )
 TOTAL_FOOD_EXPENSE_GRAPH = PlotSpecification(
     plot_id="total-food-expense",
-    title="Total Food Expenses",
+    title=N_("Total Food Expenses"),
     data_container_factory=functools.partial(
         BudgetSumDataContainer, lambda bi: min(0.0, bi.net_food)
     ),
@@ -1614,11 +1693,11 @@ def market_graph_id(resource_config) -> str:
     return f"trade-price-{resource_config['name']}"
 
 
-def market_graph_title(resource_config) -> str:
-    resource_name = game_info.convert_id_to_name(
-        resource_config["name"], remove_prefix="sr"
+def market_graph_title_variables(resource_config) -> Dict[str, str]:
+    # the resource name comes from the game's localisation (or is prettified from its ID)
+    return dict(
+        resource=game_info.lookup_id_name(resource_config["name"], remove_prefix="sr")
     )
-    return f"{resource_name} market price"
 
 
 def get_market_graphs(resource_config) -> List[PlotSpecification]:
@@ -1628,7 +1707,9 @@ def get_market_graphs(resource_config) -> List[PlotSpecification]:
             res.append(
                 PlotSpecification(
                     plot_id=market_graph_id(rc),
-                    title=market_graph_title(rc),
+                    # Translators: title of the price graph of a resource on the market, e.g. "Energy Credits market price"
+                    title=N_("%(resource)s market price"),
+                    title_variables=market_graph_title_variables(rc),
                     data_container_factory=MarketPriceDataContainer,
                     data_container_factory_kwargs=dict(
                         resource_name=rc["name"],
