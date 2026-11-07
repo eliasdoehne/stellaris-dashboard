@@ -24,13 +24,13 @@ def codex_page(game_id=""):
     matches = datamodel.get_known_games(game_id)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
-        return render_template("404_page.html", game_not_found=True, game_name=game_id)
+        return render_template("404_page.html", game_not_found=True, missing_game=game_id)
     game_id = matches[0]
     games_dict = datamodel.get_available_games_dict()
     if game_id not in games_dict:
         # known DB file, but not a fully-available game (e.g. an empty/invalid db)
         logger.warning(f"Game {game_id} is not available")
-        return render_template("404_page.html", game_not_found=True, game_name=game_id)
+        return render_template("404_page.html", game_not_found=True, missing_game=game_id)
     country = games_dict[game_id]["country_name"]
 
     with datamodel.get_db_session(game_id) as session:
@@ -67,7 +67,7 @@ def _gather_empires(session, game_id):
             link=utils.preformat_history_url(
                 c.rendered_name, country=c.country_id, game_id=game_id
             ),
-            country_type=game_info.convert_id_to_name(c.country_type),
+            country_type=c.rendered_type,
             is_player=bool(c.is_player),
         )
         for c in empires

@@ -21,6 +21,8 @@ from stellarisdashboard.dashboard_app import (
     codex,
     settings,
     import_page,
+    shell,
+    ledger_search,
 )
 
 

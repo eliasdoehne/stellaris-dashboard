@@ -773,9 +773,9 @@ class Bypass(Base):
 
     @property
     def name(self):
-        bypass_type = game_info.convert_id_to_name(self.db_description.text)
+        bypass_type = game_info.lookup_id_name(self.db_description.text)
         status_str = "" if self.is_active else " (inactive)"
-        return f"{self.system.name} {bypass_type}{status_str}"
+        return f"{self.system.rendered_name} {bypass_type}{status_str}"
 
 
 class GameState(Base):
@@ -899,10 +899,14 @@ class Country(Base):
 
     @property
     def rendered_name(self):
-        rendered = game_info.render_name(self.country_name)
+        rendered = game_info.render_name_or_prettify(self.country_name)
         if config.CONFIG.include_id_in_names:
             rendered += f" ({self.country_id_in_game})"
         return rendered
+
+    @property
+    def rendered_type(self) -> str:
+        return "Empire" if self.country_type == "default" else game_info.lookup_id_name(self.country_type)
 
     def get_government_for_date(self, date_in_days) -> "Government":
         # could be slow, but fine for now
@@ -1054,15 +1058,15 @@ class Government(Base):
         reform_dict = {}
 
         if old_gov.gov_type != self.gov_type:
-            ogt = game_info.convert_id_to_name(old_gov.gov_type, remove_prefix="gov")
-            ngt = game_info.convert_id_to_name(self.gov_type, remove_prefix="gov")
+            ogt = game_info.lookup_id_name(old_gov.gov_type, remove_prefix="gov")
+            ngt = game_info.lookup_id_name(self.gov_type, remove_prefix="gov")
             reform_dict["Type changed"] = [f'from "{ogt}" to "{ngt}"']
 
         if old_gov.authority != self.authority:
-            old_authority = game_info.convert_id_to_name(
+            old_authority = game_info.lookup_id_name(
                 old_gov.authority, remove_prefix="auth"
             )
-            new_authority = game_info.convert_id_to_name(
+            new_authority = game_info.lookup_id_name(
                 self.authority, remove_prefix="auth"
             )
             reform_dict["Authority changed"] = [
@@ -1072,21 +1076,21 @@ class Government(Base):
         new_civics = self.civics - old_gov.civics
         removed_civics = old_gov.civics - self.civics
         reform_dict["Removed civics"] = sorted(
-            game_info.convert_id_to_name(c, remove_prefix="civic")
+            game_info.lookup_id_name(c, remove_prefix="civic")
             for c in removed_civics
         )
         reform_dict["Adopted civics"] = sorted(
-            game_info.convert_id_to_name(c, remove_prefix="civic") for c in new_civics
+            game_info.lookup_id_name(c, remove_prefix="civic") for c in new_civics
         )
 
         new_ethics = self.ethics - old_gov.ethics
         removed_ethics = old_gov.ethics - self.ethics
         reform_dict["Abandoned ethics"] = sorted(
-            game_info.convert_id_to_name(e, remove_prefix="ethic")
+            game_info.lookup_id_name(e, remove_prefix="ethic")
             for e in removed_ethics
         )
         reform_dict["Embraced ethics"] = sorted(
-            game_info.convert_id_to_name(e, remove_prefix="ethic") for e in new_ethics
+            game_info.lookup_id_name(e, remove_prefix="ethic") for e in new_ethics
         )
         return {k: v for k, v in reform_dict.items() if v}
 
@@ -1137,7 +1141,7 @@ class CouncilAgenda(Base):
 
     @property
     def rendered_name(self) -> str:
-        return game_info.lookup_key(self.db_name.text + "_name")
+        return game_info.lookup_key(f"council_agenda_{self.db_name.text}_name")
 
 
 class DiplomaticRelation(Base):
@@ -1618,7 +1622,11 @@ class WarParticipant(Base):
     def get_war_goal(self):
         if self.war_goal is None:
             return "Unknown"
-        return game_info.convert_id_to_name(self.war_goal, remove_prefix="wg")
+        return game_info.lookup_id_name(self.war_goal, remove_prefix="wg", loc_prefix="war_goal_")
+
+    @property
+    def rendered_call_type(self) -> str:
+        return (self.call_type or "unknown").replace("_", " ")
 
 
 class Combat(Base):
@@ -1686,6 +1694,7 @@ class CombatParticipant(Base):
         return self.war_participant.country
 
 
+# trait names the game fills in by scripted loc (common/scripted_loc) -> the loc key of its default text
 class Leader(Base):
     __tablename__ = "leader"
 
@@ -1744,17 +1753,41 @@ class Leader(Base):
 
     def render_trait(self, text: str):
         key = text.rstrip("_0123456789")
-        description = game_info.lookup_key(key)
-
-        if description == "[triggered_imperial_name]":
-            # logic from common/scripted_loc/08_scripted_loc_paragon.txt
-            key = "imperial_ruler" if self == self.country.ruler else "imperial_heir"
-            return game_info.lookup_key(key)
+        template = game_info.loc_template(key)
+        if template and "[" in template:
+            facts, values = self._scripted_loc_context()
+            description = game_info.render_loc_text(template, facts, values)
+            description = description or game_info.convert_id_to_name(key.removeprefix("leader_trait_"))
         else:
-            level = text.removeprefix(key).lstrip("_")
-            if level:
-                description = f"{description} ({level})"
-            return description
+            description = game_info.lookup_key(key)
+        level = text.removeprefix(key).lstrip("_")
+        if level:
+            description = f"{description} ({level})"
+        return description
+
+    def _scripted_loc_context(self) -> tuple[dict, dict]:
+        """What the game's scripted localisation asks about this leader: trigger facts and values."""
+        owner = self.country or self.creator
+        government = owner.get_current_government() if owner is not None else None
+        owner_facts, values = {}, {}
+        if government is not None:
+            owner_facts = {
+                "is_gestalt": "ethic_gestalt_consciousness" in government.ethics,
+                "is_hive_empire": government.authority == "auth_hive_mind",
+                "is_machine_empire": government.authority == "auth_machine_intelligence",
+                "is_imperial_authority": government.authority == "auth_imperial",
+                "is_wilderness_empire": owner.origin == "origin_wilderness",
+            }
+            title = game_info.ruler_title(government.gov_type)
+            if title:
+                values["owner.GetRulerTitle"] = title
+        traits = set(self.leader_traits.split("|"))
+        facts = {
+            "is_ruler": self.country is not None and self == self.country.ruler,
+            "has_trait": traits | {trait.removeprefix("leader_") for trait in traits},
+            "owner": owner_facts if owner is not None else None,
+        }
+        return facts, values
 
 
 class Planet(Base):
@@ -1833,7 +1866,7 @@ class PlanetDeposit(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "d")
+        return game_info.lookup_id_name(self.db_description.text, "d")
 
     @property
     def is_resource_deposit(self):
@@ -1878,7 +1911,8 @@ class PlanetModifier(Base):
 
     @property
     def name(self):
-        return game_info.convert_id_to_name(self.db_description.text, "pm")
+        # the localisation key lacks the modifier's prefix
+        return game_info.lookup_id_name(self.db_description.text.removeprefix("pm_"), "pm")
 
 
 class PopStatsBySpecies(Base):
@@ -2021,13 +2055,43 @@ def render_dig_site_description(text: str) -> str:
     return f"{name} (chapter {chapter})" if chapter else name
 
 
+# war participant call type -> how they joined; the target country (if any) follows
+WAR_CALL_PHRASES = {
+    "primary": "as a primary party",
+    "overlord": "called in by their overlord",
+    "subject": "called in by their subject",
+    "secret_fealty": "called in by their secret overlord",
+    "offensive": "attacking alongside",
+    "defensive": "honoring their defensive pact with",
+    "alliance": "honoring their alliance with",
+    "guarantee": "honoring their guarantee of independence for",
+    "trade_deal": "honoring a deal with",
+}
+
+
+def render_tradition_description(key: str) -> str:
+    """The verb phrase of a tradition event, e.g. 'adopted the "Science Division" tradition'."""
+    if key.endswith("_adopt"):
+        return f"adopted the {game_info.lookup_key(key)}"
+    if key.endswith("_finish"):
+        # "Discovery Traditions Finished" -> "completed the Discovery Traditions"
+        tree = game_info.lookup_key_if_known(key.removesuffix("_finish") + "_adopt")
+        return f"completed the {tree}" if tree else f"completed the {game_info.lookup_key(key)}"
+    return f'adopted the "{game_info.lookup_key(key)}" tradition'
+
+
+def render_policy_name(policy: str) -> str:
+    return game_info.lookup_key_if_known(f"policy_{policy}") or game_info.convert_id_to_name(policy)
+
+
 def render_astral_rift_description(text: str) -> str:
     """Renders a "<rift type>|<step event id>" description, e.g. "The Corridors: Rift Anomaly"."""
     rift_type, event_id = split_packed_description(text)
     name = game_info.lookup_key_if_known(f"astral_rift_{rift_type}")
     name = name or game_info.convert_id_to_name(rift_type)
     title = game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
-    return f"{name}: {title}" if title and title != name else name
+    # the ledger quotes this description, so quotes within it become single ones
+    return (f"{name}: {title}" if title and title != name else name).replace('"', "'")
 
 
 # Technology ages of primitive (pre-FTL) countries, oldest first
@@ -2081,17 +2145,15 @@ FIRST_CONTACT_STAGE_LABELS = {
 FIRST_CONTACT_APPROACHES = ("hostile", "proactive", "cautious")
 
 
-def render_first_contact_stage(stage: str) -> str:
-    """A first contact stage by its role in the game files, e.g. "communications established (cautious)"."""
-    role = "starter" if stage == "base_contact_set" else game_info.first_contact_stage_role(stage)
-    label = FIRST_CONTACT_STAGE_LABELS.get(role) or game_info.convert_id_to_name(stage)
+def render_first_contact_stage(stage: str, values: Optional[dict] = None) -> str:
+    """A first contact stage by the game's text for it, else by its role in the game files, plus the approach."""
+    label = (
+        game_info.first_contact_stage_summary(stage, values or {})
+        or FIRST_CONTACT_STAGE_LABELS.get(game_info.first_contact_stage_role(stage))
+        or game_info.convert_id_to_name(stage, remove_prefix="default")
+    )
     approach = next((a for a in FIRST_CONTACT_APPROACHES if a in stage.split("_")), None)
     return f"{label} ({approach})" if approach else label
-
-
-def _strip_colour_codes(text: str) -> str:
-    """Removes the game's text colour codes, e.g. "§RRepeal X§!" -> "Repeal X"."""
-    return re.sub(r"§.", "", text)
 
 
 def render_resolution_description(resolution_type: str) -> str:
@@ -2099,7 +2161,7 @@ def render_resolution_description(resolution_type: str) -> str:
     name = game_info.lookup_key_if_known(resolution_type) or game_info.convert_id_to_name(
         resolution_type, remove_prefix="resolution"
     )
-    return f'"{_strip_colour_codes(name)}"'
+    return f'"{name}"'
 
 
 SUBJECT_PRESET_VARIANT_RE = re.compile(r"_(oppressive|balanced|benevolent|mean_\d+|nice_\d+)(_ai)?$")
@@ -2132,7 +2194,6 @@ def render_megastructure_description(text: str) -> str:
 def render_crisis_level(level_key: str) -> str:
     """Renders a crisis level key as a phrase, e.g. "crisis_level_2" -> '"Risk"-level threat to the galaxy'."""
     name = game_info.lookup_key_if_known(level_key) or game_info.convert_id_to_name(level_key, remove_prefix="crisis")
-    name = _strip_colour_codes(name)
     if level_key.startswith("crisis_defender_"):
         return f'"{name}"-rank Defender of the Galaxy'
     return f'"{name}"-level threat to the galaxy'
@@ -2339,7 +2400,7 @@ class HistoricalEvent(Base):
     def description(self) -> str:
         """A brief description associated with the event, e.g. technology name or changes in government reform."""
         if self.event_type == HistoricalEventType.tradition:
-            return game_info.lookup_key(self.db_description.text)
+            return render_tradition_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.researched_technology:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.edict:
@@ -2371,33 +2432,24 @@ class HistoricalEvent(Base):
         ]:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type in [HistoricalEventType.war]:
-            call_type = self.db_description.text
-            # no leading whitespace: the ledger's localisation lookup strips it
-            if call_type == "primary":
-                return "as a primary party"
-            elif call_type == "overlord":
-                return "called by their overlord"
-            elif call_type == "offensive":
-                return "attacking on the side of the"
-            elif call_type == "defensive":
-                return "due to their defensive pact with the"
-            elif call_type == "alliance":
-                return "due to their alliance with the"
-            else:
-                return f"(called as {call_type})"
+            # the ledger names the target country after this phrase
+            return WAR_CALL_PHRASES.get(self.db_description.text, "called in by")
         elif self.event_type == HistoricalEventType.councilor:
             return game_info.lookup_key(self.db_description.text)
         elif self.event_type == HistoricalEventType.new_policy:
             name, selected = self.db_description.text.split("|")
-            name_rendered = game_info.convert_id_to_name(name)
+            name_rendered = render_policy_name(name)
             selected_rendered = game_info.lookup_key(selected)
-            return f"{name_rendered!r}: {selected_rendered!r}"
+            if selected_rendered == name_rendered:
+                # e.g. the gestalt logistics option is also called "Logistics Policy"
+                return f'adopted the "{name_rendered}"'
+            return f'set their policy on "{name_rendered}" to "{selected_rendered}"'
         elif self.event_type == HistoricalEventType.changed_policy:
             name, old, new = self.db_description.text.split("|")
-            name_rendered = game_info.convert_id_to_name(name)
+            name_rendered = render_policy_name(name)
             old_rendered = game_info.lookup_key(old)
             new_rendered = game_info.lookup_key(new)
-            return f"{name_rendered!r} from {old_rendered!r} to {new_rendered!r}"
+            return f'changed their policy on "{name_rendered}" from "{old_rendered}" to "{new_rendered}"'
         elif self.event_type in (
             HistoricalEventType.agenda_launch,
             HistoricalEventType.agenda_preparation,
@@ -2433,7 +2485,7 @@ class HistoricalEvent(Base):
                 self.db_description.text if self.db_description else ""
             )
         elif self.event_type == HistoricalEventType.first_contact_stage and self.db_description:
-            return render_first_contact_stage(self.db_description.text)
+            return render_first_contact_stage(self.db_description.text, self._first_contact_loc_values())
         elif self.event_type == HistoricalEventType.galactic_resolution_passed:
             return render_resolution_description(self.db_description.text)
         elif self.event_type == HistoricalEventType.galactic_custodian:
@@ -2443,10 +2495,11 @@ class HistoricalEvent(Base):
             return render_subject_type(self.db_description.text if self.db_description else "")
         elif self.event_type == HistoricalEventType.country_destroyed:
             cause = self.db_description.text if self.db_description else ""
+            # the ledger names the target country after this phrase
             if cause == "war":
-                return "after losing a war against the"
+                return "after losing a war against"
             elif cause == "subject":
-                return "after being integrated by the"
+                return "after being integrated by"
             return ""
         elif self.event_type == HistoricalEventType.federation_level_up:
             return self.db_description.text if self.db_description else ""
@@ -2471,8 +2524,17 @@ class HistoricalEvent(Base):
             _, event_id = split_packed_description(text)
             return game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
         elif self.event_type == HistoricalEventType.first_contact_stage and text:
-            return render_first_contact_stage(text)
+            return render_first_contact_stage(text, self._first_contact_loc_values())
         return None
+
+    def _first_contact_loc_values(self) -> dict:
+        """What the game's first contact texts ask about this event."""
+        values = {}
+        if self.target_country is not None:
+            values["This.ContactCountry.GetName"] = game_info.render_name_or_prettify(self.target_country.country_name)
+        if self.system is not None:
+            values["This.System.GetName"] = self.system.rendered_name
+        return values
 
     def involved_countries(self):
         if self.country_id is not None:

@@ -6,16 +6,15 @@ from typing import Dict
 from flask import render_template, request
 
 from stellarisdashboard import config, datamodel, game_info
-from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping
+from stellarisdashboard.dashboard_app import flask_app, utils, event_registry, event_grouping, ledger_timeline
 
 logger = logging.getLogger(__name__)
 
 # A merged envoy entry names this many envoys and counts the rest.
 MAX_NAMED_ENVOYS = 3
 
-# Descriptor-driven event renderer (replaces the old ~50-branch if/elif chain in
-# history_page.html). Exposed to the template as render_event(event, links).
-flask_app.jinja_env.globals["render_event"] = event_registry.render_event
+flask_app.jinja_env.globals["render_sentence"] = event_registry.render_sentence
+flask_app.jinja_env.globals["with_article"] = event_registry.with_article
 
 
 @flask_app.route("/history")
@@ -28,34 +27,105 @@ def history_page(game_id="", version=None):
     matches = datamodel.get_known_games(game_id)
     if not matches:
         logger.warning(f"Could not find a game matching {game_id}")
-        return render_template("404_page.html", game_not_found=True, game_name=game_id)
+        return render_template("404_page.html", game_not_found=True, missing_game=game_id)
     game_id = matches[0]
     games_dict = datamodel.get_available_games_dict()
     country = games_dict[game_id]["country_name"]
 
-    event_filter = get_event_filter()
-
+    params = ledger_timeline.LedgerParams.from_request(game_id)
     with datamodel.get_db_session(game_id) as session:
-        dict_builder = EventTemplateDictBuilder(session, game_id, event_filter)
-        events, title, details, links = dict_builder.get_event_and_link_dicts()
-        wars = dict_builder.get_war_list()
-        # In-game date of the most recent save, for the shell topbar stardate.
+        query = ledger_timeline.LedgerQuery(session, game_id, params)
+        # the timeline query does the level filtering, so let every scope through
+        event_filter = EventFilter()
+        event_filter.scope_threshold = datamodel.HistoricalEventScope.all
+        builder = EventTemplateDictBuilder(session, game_id, event_filter)
+        year_counts = query.year_counts()
+        years = query.window(year_counts)
+        items = builder.build_items(query.events(years))
+        by_year = collections.OrderedDict((y, []) for y in years)
+        # every row is listed in the year it started (query.events loads storylines and envoy assignments whole)
+        items.sort(key=lambda i: i["start_date_days"], reverse=params.newest_first)
+        for item in items:
+            year = ledger_timeline.year_of(item["start_date_days"])
+            if year not in by_year:
+                # only if build_items merged a first contact differently than the counts did
+                logger.warning(f"Ledger row {item.get('key')} of {year} loaded for the years {years}")
+                year = min(by_year, key=lambda y: abs(y - year))
+            by_year[year].append(_ledger_row(item, year))
+        last_year = years[-1] if years else None
+        remaining = [y for y in year_counts if (y < last_year if params.newest_first else y > last_year)] if last_year else []
+        timeline = dict(
+            params=params,
+            by_year=by_year,
+            hidden_counts=query.hidden_counts(year_counts),
+            next_level=query.next_level(),
+            remaining=len(remaining),
+            last_year=last_year,
+            links=builder._formatted_urls,
+        )
+        # htmx fragments: one year expanded or collapsed in place, or the next page appended
+        if params.part == "year" and params.year is not None:
+            new_keys = set()
+            previous_level = query.previous_level()
+            if params.level != params.base_level and previous_level is not None:
+                # highlight what this level added to the one before it
+                seen = query.row_keys(params.year, previous_level)
+                new_keys = {row["key"] for row in by_year[params.year] if not row["keys"] & seen}
+            return render_template(
+                "_ledger_year.html", year=params.year, rows=by_year[params.year], new_keys=new_keys, **timeline
+            )
+        if params.part == "page":
+            return render_template("_ledger_years.html", **timeline)
+
+        focus = None
+        if query.focus is not None:
+            builder._formatted_urls[query.focus] = builder._get_url_for(query.focus)
+            focus = dict(
+                kind=ledger_timeline.FOCUS_KINDS[params.focus_kind][1],
+                name=query.focus.rendered_name,
+                is_player=getattr(query.focus, "is_player", False),
+                details=builder._get_details(query.focus),
+            )
         current_date = datamodel.days_to_date(utils.get_most_recent_date(session))
-    return render_template(
-        "history_page.html",
-        game_name=game_id,
-        country=country,
-        current_date=current_date,
-        wars=wars,
-        events=events,
-        details=details,
-        links=links,
-        title=title,
-        is_filtered_page=not event_filter.is_empty_filter,
-        show_old_version_notice=show_old_version_notice,
-        version=utils.VERSION,
-        update_version_id=version,
+        page = render_template(
+            "ledger_page.html",
+            game_name=game_id,
+            country=country,
+            current_date=current_date,
+            levels=ledger_timeline.LEVELS,
+            categories=list(event_registry.Category),
+            category_counts=query.category_counts(),
+            decades=query.decades(year_counts),
+            focus=focus,
+            show_old_version_notice=show_old_version_notice,
+            version=utils.VERSION,
+            update_version_id=version,
+            **timeline,
+        )
+    return page
+
+
+def _ledger_row(item, year: int) -> dict:
+    category, tier = event_registry.describe(item)
+    start_year, _, month_day = item["start_date"].partition(".")
+    row = dict(
+        item=item,
+        key=item.get("key"),
+        keys={item.get("key"), *item.get("side_keys", ())},
+        category=category.name.lower() if category else "other",
+        category_label=category.value if category else "",
+        tier=int(tier) if tier else 2,
+        date=month_day,
+        # only for rows dated outside the year they're listed in
+        date_year=start_year if int(start_year) != year else None,
+        end_date=item.get("end_date") if event_registry.is_span(item) else None,
     )
+    if item.get("event_type") == "storyline":
+        descriptor = event_registry.STORYLINE_REGISTRY[item["storyline_type"]]
+        row["stage_noun"] = descriptor.stage_noun
+        row["state_label"] = descriptor.state_labels.get(item.get("state"), item.get("state"))
+        row["end_date"] = None
+    return row
 
 
 def get_event_filter() -> "EventFilter":
@@ -277,12 +347,25 @@ class EventTemplateDictBuilder:
         return self._events, self._titles, self._details, self._formatted_urls
 
     def collect_event_dicts(self, event_list, key_object):
-        self._events[key_object] = []
         self._details[key_object] = self._get_details(key_object)
         self._titles[key_object] = self._get_title(key_object)
         self._formatted_urls[key_object] = self._get_url_for(key_object)
+        self._events[key_object] = self.build_items(event_list)
+        if not self._events[key_object] and self.event_filter.is_empty_filter:
+            del self._events[key_object]
+
+    def build_items(self, event_list) -> list:
+        """Ledger items for the visible events in event_list (chronological): one dict per
+        event, merged envoy assignment or storyline, in the order of their first event.
+        Entity links are collected in self._formatted_urls."""
+        if self._formatted_urls is None:
+            self._formatted_urls = {}
+        if self._most_recent_date is None:
+            self._most_recent_date = utils.get_most_recent_date(self._session)
+        items = []
         shown_events = []
         storyline_items = {}  # storyline_id -> item dict, per section
+        contact_items = collections.defaultdict(list)  # contact_pair -> first contact items
         for event in event_list:
             if not self.event_filter.include_event(event):
                 continue
@@ -314,6 +397,7 @@ class EventTemplateDictBuilder:
             ):
                 continue
             shown_events.append(event)
+        shown_events = event_grouping.drop_mirrored_contacts(shown_events)
 
         for group in event_grouping.group_envoy_assignments(shown_events):
             event = group.events[0]
@@ -366,28 +450,98 @@ class EventTemplateDictBuilder:
                 event_dict["assignment_count"] = len(group.events)
 
             if event.storyline_id is not None:
-                # members fold into one card per storyline, placed at its first visible member
+                # members fold into one card per storyline, dated by its start;
+                # both sides of a first contact share one card
                 item = storyline_items.get(event.storyline_id)
                 if item is None:
-                    item = storyline_items[event.storyline_id] = self._storyline_dict(
-                        event.storyline
-                    )
-                    self._events[key_object].append(item)
-                    self._preformat_storyline_urls(event.storyline)
+                    storyline = event.storyline
+                    item = event_grouping.find_contact_partner(contact_items, storyline)
+                    if item is None:
+                        item = self._storyline_dict(storyline)
+                        items.append(item)
+                        if "sides" in item:
+                            contact_items[event_grouping.contact_pair(storyline)].append(item)
+                    else:
+                        item["sides"].append(storyline)
+                    storyline_items[event.storyline_id] = item
+                    self._preformat_storyline_urls(storyline)
                 if event.stage_index is not None:
                     sort_key = (event.start_date_days, event.stage_index)
-                    item["stages"].append((sort_key, self._stage_dict(event, start)))
+                    item["stages"].append((sort_key, self._stage_dict(event, start), event.country))
                 self._preformat_urls(event)
                 continue
-            self._events[key_object].append(event_dict)
+            event_dict["start_date_days"] = event.start_date_days
+            event_dict["key"] = ledger_timeline.row_key(event.historical_event_id, None)
+            items.append(event_dict)
             for grouped_event in group.events:
                 self._preformat_urls(grouped_event)
-        for item in storyline_items.values():
-            item["stages"] = [s for _, s in sorted(item["stages"], key=lambda s: s[0])]
-            # the furthest stage reached, which counts stages hidden from the player too
-            item["stage_count"] = max((s["index"] for s in item["stages"]), default=0)
-        if not self._events[key_object] and self.event_filter.is_empty_filter:
-            del self._events[key_object]
+        contacts = [i for i in items if "sides" in i]
+        all_sides = self._all_contact_sides(contacts)
+        for item in {id(i): i for i in storyline_items.values()}.values():
+            stages = sorted(item["stages"], key=lambda s: s[0])
+            sides = item.pop("sides", None)
+            if sides:
+                item["side_keys"] = [ledger_timeline.row_key(None, s.storyline_id) for s in sides]
+                pair = event_grouping.contact_pair(sides[0])
+                partners = [s for s in all_sides.get(pair, []) if event_grouping.spans_overlap(s, sides[0])]
+                self._combine_contact_sides(item, sides, partners)
+                if len(sides) > 1:
+                    stages = event_grouping.label_contact_stages(stages)
+            item["stages"] = [s for _, s, _ in stages]
+            # first contacts count their lines; others the furthest stage reached, including stages hidden from the player
+            item["stage_count"] = len(stages) if sides else max((s["index"] for s in item["stages"]), default=0)
+        return items
+
+    def _all_contact_sides(self, contact_items) -> dict:
+        """Every first contact storyline of the shown pairs, including sides hidden from this view."""
+        country_ids = {
+            country_id
+            for item in contact_items
+            for s in item["sides"]
+            for country_id in (s.country_id, s.target_country_id)
+            if country_id is not None
+        }
+        if not country_ids:
+            return {}
+        result = collections.defaultdict(list)
+        for storyline in self._session.query(datamodel.Storyline).filter(
+            datamodel.Storyline.storyline_type == datamodel.StorylineType.first_contact,
+            datamodel.Storyline.country_id.in_(country_ids),
+            datamodel.Storyline.target_country_id.in_(country_ids),
+        ):
+            result[event_grouping.contact_pair(storyline)].append(storyline)
+        return result
+
+    def _combine_contact_sides(self, item, sides, partners):
+        """One first contact card for both sides: the state and end of the contact as a whole, both envoys,
+        and the system where contact was made."""
+        everything = list({s.storyline_id: s for s in [*sides, *partners]}.values())
+        state = event_grouping.combined_contact_state([s.state for s in everything])
+        item["state"] = str(state)
+        item["is_active"] = state == datamodel.StorylineState.active
+        ends = [s.end_date_days for s in everything if s.end_date_days is not None]
+        item["end_date"] = None if item["is_active"] or not ends else datamodel.days_to_date(max(ends))
+        if len(sides) == 1:
+            return
+        sides = sorted(sides, key=lambda s: event_grouping.STATE_RANK.index(s.state))
+        main = sides[0]
+        first, second = main.country, main.target_country
+        if second is not None and second.is_player and not (first is not None and first.is_player):
+            first, second = second, first
+        item.update(country=first, target_country=second)
+        start = min(s.start_date_days for s in sides)
+        item.update(start_date_days=start, start_date=datamodel.days_to_date(start))
+        # the system of the side that got furthest; the envoys in the order of the countries
+        system = next((s.system for s in sides if s.system is not None), None)
+        leaders = list(dict.fromkeys(
+            s.leader for s in sorted(sides, key=lambda s: s.country is not first) if s.leader is not None
+        ))
+        for key, value in (("system", system), ("leader", leaders[0] if leaders else None)):
+            item.pop(key, None)
+            if value is not None:
+                item[key] = value
+        if len(leaders) > 1:
+            item.update(leaders=leaders, other_envoy_count=0)
 
     def get_war_list(self):
         if not self.event_filter.is_empty_filter:
@@ -440,6 +594,7 @@ class EventTemplateDictBuilder:
             end_date = datamodel.days_to_date(storyline.end_date_days)
         item = dict(
             event_type="storyline",
+            start_date_days=storyline.start_date_days,
             storyline_type=str(storyline.storyline_type),
             state=str(storyline.state),
             title=storyline.rendered_title,
@@ -453,7 +608,10 @@ class EventTemplateDictBuilder:
             planet=storyline.planet,
         )
         item = {k: v for (k, v) in item.items() if v is not None}
+        item["key"] = ledger_timeline.row_key(None, storyline.storyline_id)
         item["stages"] = []
+        if storyline.storyline_type == datamodel.StorylineType.first_contact:
+            item["sides"] = [storyline]  # each empire's own process; build_items merges the pair
         return item
 
     @staticmethod
@@ -523,7 +681,7 @@ class EventTemplateDictBuilder:
             return str(key)
 
     def system_details(self, system_model: datamodel.System) -> Dict[str, str]:
-        star_class = game_info.convert_id_to_name(
+        star_class = game_info.lookup_id_name(
             system_model.star_class, remove_prefix="sc"
         )
         details = {
@@ -599,13 +757,13 @@ class EventTemplateDictBuilder:
 
     def country_details(self, country_model: datamodel.Country) -> Dict[str, str]:
         details = {
-            "Country Type": game_info.convert_id_to_name(country_model.country_type),
+            "Country Type": country_model.rendered_type,
         }
         gov = country_model.get_current_government()
         if gov is not None:
             details.update(
                 {
-                    "Personality": game_info.convert_id_to_name(gov.personality),
+                    "Personality": game_info.lookup_id_name(gov.personality, loc_prefix="personality_"),
                     "Government Type": game_info.lookup_key(gov.gov_type),
                     "Authority": game_info.lookup_key(gov.authority),
                     "Ethics": ", ".join(
@@ -648,7 +806,7 @@ class EventTemplateDictBuilder:
         if planet_model.planet_class is None:
             details["Planet Class"] = "Destroyed (no trace remains)"
         else:
-            details["Planet Class"] = game_info.convert_id_to_name(
+            details["Planet Class"] = game_info.lookup_id_name(
                 planet_model.planet_class, remove_prefix="pc"
             )
         modifiers = []
@@ -704,12 +862,12 @@ class EventTemplateDictBuilder:
             "Start date": start,
             "End date": "-",
             "Attackers": ", ".join(
-                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                f"{self._get_url_for(wp.country)} ({wp.rendered_call_type})"
                 for wp in war.attackers
             ),
             "Attacker War Goal": attacker.get_war_goal() if attacker is not None else "Unknown",
             "Defenders": ", ".join(
-                f"{self._get_url_for(wp.country)} ({wp.call_type})"
+                f"{self._get_url_for(wp.country)} ({wp.rendered_call_type})"
                 for wp in war.defenders
             ),
             "Defender War Goal": defender.get_war_goal() if defender is not None else "Unknown",
@@ -724,12 +882,11 @@ class EventTemplateDictBuilder:
         return details
 
     def _combat_dict(self, combat: datamodel.Combat):
-        attackers = ", ".join(
-            sorted(self._get_url_for(cp.country) for cp in combat.attackers)
-        )
-        defenders = ", ".join(
-            sorted(self._get_url_for(cp.country) for cp in combat.defenders)
-        )
+        # country lists; the sentence templates add the links and articles
+        attackers = sorted((cp.country for cp in combat.attackers), key=lambda c: c.rendered_name)
+        defenders = sorted((cp.country for cp in combat.defenders), key=lambda c: c.rendered_name)
+        for country in attackers + defenders:
+            self._formatted_urls[country] = self._get_url_for(country)
         return dict(
             combat_type=combat.combat_type,
             attackers=attackers,
@@ -753,16 +910,11 @@ class EventTemplateDictBuilder:
                 and not m.is_associate
                 and m.country_id != event.country_id
             ]
-            links = []
-            for country in sorted(partners, key=lambda c: c.rendered_name):
+            partners = sorted(partners, key=lambda c: c.rendered_name)
+            for country in partners:
                 self._formatted_urls[country] = self._get_url_for(country)
-                links.append(self._formatted_urls[country])
-            if links:
-                result["federation_partners"] = (
-                    links[0]
-                    if len(links) == 1
-                    else ", ".join(links[:-1]) + " and " + links[-1]
-                )
+            if partners:
+                result["federation_partners"] = partners
         elif event.event_type == datamodel.HistoricalEventType.joined_federation:
             membership = next(
                 (

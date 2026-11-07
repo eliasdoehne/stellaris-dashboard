@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 # Regex explanation: https://regex101.com/r/qc0QhS/1
 loc_re = re.compile(r'\s*(?P<key>\S+?):\d*\s*"(?P<value>.*)"\s*(#.*)?')
 var_re = re.compile(r"\$(?P<key>\S+)\$")
+scripted_re = re.compile(r"\[([A-Za-z_][\w.]*)\]")  # e.g. [Root.GetName]
+concept_re = re.compile(r"\['(\w+)'(?:,\s*([^\]]*))?\]")  # e.g. ['concept_pop'] or ['concept_pop', Pops]
+icon_re = re.compile(r"£(\w+)(?:\|[^£]*)?£")  # e.g. £energy£
 
 
 class NameRenderer:
@@ -106,11 +109,34 @@ class NameRenderer:
             return self.render_from_dict(name_dict["value"], tags)
 
         substitution_values = self._collect_substitution_values(name_dict, tags)
+        render_template = self._resolve_scripted_loc(
+            render_template, known={key for key, _ in substitution_values}
+        )
         render_template = self._substitute_variables(
             render_template, substitution_values
         )
         render_template = self._handle_unresolved_variables(render_template)
-        return render_template
+        return _strip_markup(render_template)
+
+    def _resolve_scripted_loc(self, template, known=frozenset(), facts=None, values=None):
+        """Resolves [...] other than the known variables: given values, then scripted loc; drops the rest."""
+        if "[" not in template:
+            return template
+
+        def replace_concept(match):
+            return match.group(2) or self.render_from_dict({"key": match.group(1)})
+
+        def replace_scripted(match):
+            expression = match.group(1)
+            if expression in known:
+                return match.group(0)
+            if values and expression in values:
+                return values[expression]
+            key = scripted_loc_key(expression.rpartition(".")[2], facts)
+            return self.render_from_dict({"key": key}) if key else ""
+
+        resolved = scripted_re.sub(replace_scripted, concept_re.sub(replace_concept, template))
+        return re.sub(r" {2,}", " ", resolved).strip(" -") if resolved != template else template
 
     def _collect_substitution_values(self, name_dict, tags: set[str]):
         substitution_values = []
@@ -210,6 +236,11 @@ class NameRenderer:
             # LEADER_2 -> "$1$ $2$", then $2$ = MAM4_CHR_daughterofNagg -> "$1$, daughter of Nagg"
             # This last template contains another $1$ which is never resolved.
             render_template = re.sub(pattern, "", render_template)
+        # a value that only references another key, e.g. "$astral_rift.2510.name$": resolve it
+        # before the post-processing below splits the dotted key apart
+        match_dotted_reference = re.fullmatch(r"\$([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\$", render_template)
+        if match_dotted_reference:
+            return lookup_key(match_dotted_reference.group(1))
         # post-processing: The above issue can cause
         render_template = ", ".join(s.strip() for s in render_template.split(","))
         render_template = ". ".join(s.strip() for s in render_template.split("."))
@@ -227,7 +258,8 @@ class NameRenderer:
             resolved = lookup_key(match)
             render_template = re.sub(rf"\${match}\$", resolved, render_template)
 
-        return render_template
+        # the ". " join leaves a trailing space after a final dot, e.g. "S. I. D. N. I. "
+        return render_template.strip()
 
     def _fmt_ord_number(self, num: int):
         if num % 10 == 1:
@@ -273,6 +305,13 @@ class NameRenderer:
                         yield line
 
 
+def _strip_markup(text: str) -> str:
+    """Removes colour codes and replaces icons by their name, e.g. "§G£energy£ +2§!" -> "Energy +2"."""
+    if "§" not in text and "£" not in text:
+        return text
+    return icon_re.sub(lambda m: convert_id_to_name(m.group(1), remove_prefix="sr"), re.sub(r"§.", "", text))
+
+
 global_renderer: NameRenderer = None
 _renderer_lock = threading.Lock()  # guards lazy setup (warm-up thread vs. requests)
 
@@ -285,6 +324,8 @@ def render_name(json_str: str):
 
 
 def lookup_key(key: str) -> str:
+    if key.startswith("{"):  # a stored name template rather than a key
+        return render_name(key)
     return get_global_renderer().render_from_dict({"key": key})
 
 
@@ -293,6 +334,18 @@ def lookup_key_if_known(key: str) -> Optional[str]:
     if key not in get_global_renderer().name_mapping:
         return None
     return lookup_key(key) or None
+
+
+def loc_template(key: str) -> Optional[str]:
+    """The unrendered localisation value of the key, None if the game's localisation has no entry for it."""
+    return get_global_renderer().name_mapping.get(key)
+
+
+def render_loc_text(text: str, facts: Optional[dict] = None, values: Optional[dict] = None) -> str:
+    """Renders a localisation value given what its scripted loc asks: trigger facts (see trigger_holds) and values."""
+    renderer = get_global_renderer()
+    text = renderer._resolve_scripted_loc(text, facts=facts, values=values)
+    return _strip_markup(renderer._handle_unresolved_variables(text))
 
 
 @functools.lru_cache(maxsize=2**12)
@@ -360,25 +413,125 @@ def parse_top_level_fields(lines: Iterable[str], field: str) -> dict[str, str]:
     return values
 
 
-@functools.lru_cache(maxsize=8)
-def _common_block_fields(subdir: str, field: str) -> dict[str, str]:
-    """The field per block over common/<subdir>/*.txt of the game and enabled mods; later files override."""
+def _read_common_scripts(subdir: str) -> Iterable[str]:
+    """The text of each file common/<subdir>/*.txt of the game, then of enabled mods."""
     from stellarisdashboard import config
 
-    values = {}
     try:
         data_dirs = [d for d in config.CONFIG.game_data_dirs if d is not None]
     except Exception:
         logger.warning("Could not determine the game data directories", exc_info=True)
-        return values
+        return
     for data_dir in data_dirs:
         for path in sorted((data_dir / "common" / subdir).glob("*.txt")):
             try:
                 with open(path, "rt", encoding="utf-8-sig", errors="replace") as f:
-                    values.update(parse_top_level_fields(f, field))
+                    yield f.read()
             except OSError:
                 logger.warning(f"Could not read game file {path}")
+
+
+@functools.lru_cache(maxsize=8)
+def _common_block_fields(subdir: str, field: str) -> dict[str, str]:
+    """The field per block over common/<subdir>/*.txt of the game and enabled mods; later files override."""
+    values = {}
+    for text in _read_common_scripts(subdir):
+        values.update(parse_top_level_fields(text.splitlines(), field))
     return values
+
+
+_SCRIPT_TOKEN_RE = re.compile(r'#[^\n]*|"[^"\n]*"|[{}]|[=<>]+|[^\s{}=<>"#]+')
+
+
+def parse_script(text: str) -> list:
+    """Parses game script into (key, value) pairs in file order; the value of a block is a list of pairs."""
+    root = []
+    stack = [root]
+    key = None
+    for token in _SCRIPT_TOKEN_RE.findall(text):
+        if token[0] in "#=<>":
+            continue
+        if token == "{":
+            block = []
+            stack[-1].append((key, block))
+            stack.append(block)
+            key = None
+        elif token == "}":
+            if len(stack) > 1:
+                stack.pop()
+            key = None
+        elif key is None:
+            key = token.strip('"')
+        else:
+            stack[-1].append((key, token.strip('"')))
+            key = None
+    return root
+
+
+def trigger_holds(trigger: list, facts: Optional[dict]) -> Optional[bool]:
+    """Evaluates parsed trigger conditions against facts (scopes are nested dicts); None if unknown."""
+    if not isinstance(trigger, list):
+        return None
+    results = [_condition_holds(key, value, facts or {}) for key, value in trigger]
+    return False if False in results else None if None in results else True
+
+
+def _condition_holds(key: str, value, facts: dict) -> Optional[bool]:
+    if isinstance(value, list):
+        if key in ("AND", "hidden_trigger"):
+            return trigger_holds(value, facts)
+        if key in ("OR", "NOT", "NOR"):
+            results = [_condition_holds(k, v, facts) for k, v in value]
+            any_holds = True if True in results else None if None in results else False
+            return any_holds if key == "OR" or any_holds is None else not any_holds
+        return trigger_holds(value, facts[key]) if isinstance(facts.get(key), dict) else None
+    if key == "exists":
+        return facts[value] is not None if value in facts else None
+    known = facts.get(key)
+    if known is None or isinstance(known, dict):
+        return None
+    if isinstance(known, (set, frozenset)):
+        return value in known
+    return known == (value == "yes")
+
+
+def _script_text(value) -> Optional[str]:
+    """A script value where text is expected; mods can put a block there."""
+    return value if isinstance(value, str) else None
+
+
+@functools.lru_cache(maxsize=1)
+def _scripted_loc() -> dict[str, tuple[list, Optional[str]]]:
+    """Every defined_text of common/scripted_loc by name: its [(trigger, key)] and its default key."""
+    scripted = {}
+    for text in _read_common_scripts("scripted_loc"):
+        for block_type, block in parse_script(text):
+            if block_type != "defined_text" or not isinstance(block, list):
+                continue
+            fields = dict(block)
+            variants = []
+            for field, variant in block:
+                if field == "text" and isinstance(variant, list):
+                    variant_fields = dict(variant)
+                    variants.append((variant_fields.get("trigger", []), _script_text(variant_fields.get("localization_key"))))
+            if isinstance(fields.get("name"), str):
+                scripted[fields["name"]] = (variants, _script_text(fields.get("default")))
+    return scripted
+
+
+def scripted_loc_key(name: str, facts: Optional[dict] = None) -> Optional[str]:
+    """The localisation key a defined_text picks: the first variant known to apply, else its default."""
+    variants, default = _scripted_loc().get(name, ((), None))
+    for trigger, key in variants:
+        if trigger_holds(trigger, facts) is True:
+            return key
+    return default or (variants[0][1] if variants else None)
+
+
+def ruler_title(gov_type: Optional[str]) -> Optional[str]:
+    """The ruler title of a government type, None if unknown."""
+    title = _common_block_fields("governments", "ruler_title").get(gov_type)
+    return lookup_key(title) if title else None
 
 
 def dig_site_stage_count(site_type: str) -> Optional[int]:
@@ -387,10 +540,65 @@ def dig_site_stage_count(site_type: str) -> Optional[int]:
     return int(stages) if stages is not None and stages.isdigit() else None
 
 
+@functools.lru_cache(maxsize=1)
+def _first_contact_stages() -> dict[str, list[tuple[Optional[str], Optional[str]]]]:
+    """(icon, summary) of each outcome (stage_event) per first contact stage; the stage's icon is the default."""
+    stages = {}
+    for text in _read_common_scripts("first_contact"):
+        for stage, block in parse_script(text):
+            if not isinstance(block, list):
+                continue
+            fields = dict(block)
+            outcomes = [dict(event) for field, event in block if field == "stage_event" and isinstance(event, list)]
+            stages[stage] = [
+                (_script_text(outcome.get("icon", fields.get("icon"))), _script_text(outcome.get("summary")))
+                for outcome in outcomes
+            ] or [(_script_text(fields.get("icon")), None)]
+    return stages
+
+
 def first_contact_stage_role(stage: str) -> Optional[str]:
-    """The role of a first contact stage from its icon (starter, progress, question, success, fail)."""
-    icon = _common_block_fields("first_contact", "icon").get(stage)
-    return icon.removeprefix("GFX_firstcontact_icon_") if icon else None
+    """The role of a first contact stage from its icons (starter, progress, success, question, fail), the first of those."""
+    icons = {icon for icon, _ in _first_contact_stages().get(stage, ()) if icon}
+    roles = {icon.removeprefix("GFX_firstcontact_icon_").removeprefix("warship_") for icon in icons}
+    return next((role for role in ("starter", "progress", "success", "question", "fail") if role in roles), None)
+
+
+def shared_clause(texts: list[str]) -> str:
+    """The start of the first sentence shared by all texts, if it has at least three words."""
+    words = []
+    for parts in zip(*(text.split() for text in texts)):
+        if len(set(parts)) > 1:
+            break
+        words.append(parts[0])
+        if parts[0].endswith("."):
+            break
+    return " ".join(words) if len(words) >= 3 else ""
+
+
+_FIRST_PERSON_RE = re.compile(r"\b(we|us|our)\b", re.I)
+
+
+def first_contact_stage_summary(stage: str, values: dict) -> Optional[str]:
+    """
+    The game's text for a first contact stage as a third-person phrase: the summary of its outcomes, or what
+    those share since saves don't tell the outcome. None if there is no such phrase or it needs other values.
+    """
+    mapping = get_global_renderer().name_mapping
+    summaries = []
+    for _, key in _first_contact_stages().get(stage, ()):
+        text = mapping.get(key) if key else None
+        while text and (reference := re.fullmatch(r"\$(\w+)\$", text)):
+            text = mapping.get(reference.group(1))
+        if text and text not in summaries:
+            summaries.append(text)
+    text = summaries[0] if len(summaries) == 1 else shared_clause(summaries) if summaries else ""
+    text = text.removeprefix("Our ")
+    if not text or _FIRST_PERSON_RE.search(text) or not set(scripted_re.findall(text)) <= set(values):
+        return None
+    if text[0].isalpha():
+        text = text[0].lower() + text[1:]
+    return render_loc_text(text, values=values).rstrip(".").replace("the The ", "the ")
 
 
 _KEY_LIKE_RE = re.compile(r"[A-Za-z0-9_.]+")
@@ -421,7 +629,7 @@ def render_name_or_prettify(name_json: str) -> str:
             and "_" in key
             and _KEY_LIKE_RE.fullmatch(key)
         ):
-            return convert_id_to_name(key.replace(".", "_"))
+            return convert_id_to_name(key.replace(".", "_"), remove_prefix="NAME")
         if is_bare_key:
             return get_global_renderer().render_from_dict(name)
     return render_name(name_json)
@@ -546,13 +754,15 @@ WORD_REPLACEMENT = {
     "Ai": "AI",
     "Ftl": "FTL",
     "Tb": "Tile Blocker",
+    "Communations": "Communications",  # the game's own spelling in saves
 }
 
 
 def convert_id_to_name(object_id: str, remove_prefix="") -> str:
     words = [word for word in object_id.split("_") if word != remove_prefix]
     words = [
-        word.capitalize() if word not in LOWERCASE_WORDS else word for word in words
+        word.capitalize() if i == 0 or word not in LOWERCASE_WORDS else word
+        for i, word in enumerate(words)
     ]
     words = [WORD_REPLACEMENT.get(word, word) for word in words]
     return " ".join(words)

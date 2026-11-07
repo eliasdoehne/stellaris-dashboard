@@ -1,7 +1,12 @@
 {% extends "layout.html" %}
 {% block body %}
-
-<h1>Settings</h1>
+<div class="page page--narrow">
+<div class="page-head">
+    <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Settings marked * apply after a restart.</p>
+    </div>
+</div>
 
 <!-- htmx: save in place and confirm via an out-of-band toast (apply_settings
      returns just the #toast-slot fragment on HX-Request, leaving this form as-is).
@@ -9,10 +14,6 @@
 <form class="settingsform" action="/applysettings/" method="POST"
       hx-post="/applysettings/" hx-swap="none">
     <div class="settings">
-        <dl>
-            <dt>*</dt>
-            <dl>applies after restart</dl>
-        </dl>
         {% for category, settings in current_settings.items() %}
             <h2>{{ category }}</h2>
             {% for key, setting in settings.items() %}
@@ -45,4 +46,5 @@
         <button type="reset" class="button">Reset Values</button>
     </div>
 </form>
+</div>
 {% endblock %}

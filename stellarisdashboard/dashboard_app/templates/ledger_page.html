@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="ledger">
+    <div class="page-head ledger-head">
+        <div>
+            {% if focus %}
+            <p class="ledger-kind">{{ focus.kind }}{% if focus.is_player %} · You{% endif %}</p>
+            <h1 class="page-title">{{ focus.name }}</h1>
+            {% else %}
+            <h1 class="page-title">Event Ledger</h1>
+            <p class="page-subtitle">The galaxy's history. Your own empire's events count one level higher.</p>
+            {% endif %}
+        </div>
+        {% if focus %}
+        <a class="chip-link" href="{{ params.url(focus_kind=None, focus_id=None, focus_player=False) }}">✕ <span>Back to the galaxy</span></a>
+        {% endif %}
+    </div>
+
+    {% if focus and focus.details %}
+    {# short facts as a grid, long lists (treaties, contacts, ...) folded below it #}
+    {% set long_facts = [] %}
+    <dl class="ledger-facts">
+        {% for key, value in focus.details.items() %}
+        {% if value | striptags | length > 70 %}{% set _ = long_facts.append((key, value)) %}
+        {% elif value | striptags | trim %}
+        <div class="ledger-fact"><dt>{{ key }}</dt><dd>{{ value | safe }}</dd></div>
+        {% endif %}
+        {% endfor %}
+    </dl>
+    {% if long_facts %}
+    <div class="ledger-lists">
+        {% for key, value in long_facts %}
+        <details class="ledger-list-fact"><summary>{{ key }} <span class="cat-count">{{ value.count(",") + 1 }}</span></summary><p>{{ value | safe }}</p></details>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div class="ledger-toolbar" hx-boost="true">
+        <nav class="segmented" aria-label="Detail level">
+            {% for key, label, tier in levels %}
+            <a class="segmented-option{% if key == params.level %} is-active{% endif %}" href="{{ params.url(level=key) }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+        <nav class="ledger-cats" aria-label="Categories">
+            {% for cat in categories %}
+            {% set on = cat in params.categories %}
+            <a class="cat-chip cat-{{ cat.name.lower() }}{% if on %} is-on{% endif %}"
+               href="{{ params.url(categories=params.toggled_categories(cat)) }}"
+               title="{{ 'Hide' if on else 'Show' }} {{ cat.value }}">
+                <span class="cat-dot"></span>{{ cat.value }}<span class="cat-count">{{ category_counts.get(cat, 0) }}</span>
+            </a>
+            {% endfor %}
+        </nav>
+        <a class="ledger-order" href="{{ params.url(newest_first=not params.newest_first) }}"
+           title="Change the order">{{ "Newest first" if params.newest_first else "Oldest first" }} ⇅</a>
+    </div>
+
+    <div class="ledger-body">
+        <div class="ledger-timeline">
+            {% if not by_year %}
+            <p class="ledger-empty">No events match these filters.</p>
+            {% endif %}
+            {% include "_ledger_years.html" %}
+        </div>
+
+        {% if decades %}
+        {% set peak = decades | map(attribute=1) | max %}
+        <nav class="ledger-scrubber" aria-label="Jump to decade" hx-boost="true">
+            {% for decade in decades %}
+            {% set d = decade[0] %}
+            {% set in_view = by_year and (d <= by_year.keys()|max and d + 9 >= by_year.keys()|min) %}
+            <a class="scrub{% if in_view %} is-in-view{% endif %}" data-decade="{{ d }}"
+               href="{{ (params.url(before=d + 10) if params.newest_first else params.url(after=d - 1)) }}#y{{ d + 9 if params.newest_first else d }}">
+                <span class="scrub-label">{{ d }}s</span>
+                <span class="scrub-bar"><span style="width: {{ (100 * decade[1] / peak) | round(0) }}%"></span></span>
+            </a>
+            {% endfor %}
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
