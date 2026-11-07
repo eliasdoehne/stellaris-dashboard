@@ -138,12 +138,18 @@ jobs:
           # gh needs to know the target repo; the release job has no checkout,
           # so without this gh fails with "fatal: not a git repository".
           GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         # A tag created by publishing a release in the GitHub web UI already has
         # a release; attach the builds to it instead of failing on create.
+        # Only a "release not found" error leads to creating a new draft; any
+        # other failure (auth, network, rate limit) stops the job with its error.
         run: |
-          if gh release view ${{ github.ref_name }} > /dev/null 2>&1; then
-            gh release upload ${{ github.ref_name }} release_files/* --clobber
+          if view_err=$(gh release view "$TAG" 2>&1 >/dev/null); then
+            gh release upload "$TAG" release_files/* --clobber
+          elif [[ "$view_err" == *"release not found"* ]]; then
+            gh release create "$TAG" release_files/* --draft --generate-notes
           else
-            gh release create ${{ github.ref_name }} release_files/* --draft --generate-notes
+            echo "$view_err" >&2
+            exit 1
           fi
 
