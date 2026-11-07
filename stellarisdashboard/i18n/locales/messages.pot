@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/eliasdoehne/stellaris-dashboard/issues\n"
-"POT-Creation-Date: 2026-11-07 09:59+0000\n"
+"POT-Creation-Date: 2026-11-07 10:01+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3873,11 +3873,14 @@ msgstr ""
 msgid "Import failed: %(name)s"
 msgstr ""
 
-#. progress of the import: number of saves processed out of the total
+#. progress of the import: %(done)s saves processed out of %(num)s in total; the plural form follows
+#. the total
 #: stellarisdashboard/dashboard_app/templates/import_status.html:22
 #, python-format
-msgid "%(done)s / %(total)s saves"
-msgstr ""
+msgid "%(done)s / %(num)s save"
+msgid_plural "%(done)s / %(num)s saves"
+msgstr[0] ""
+msgstr[1] ""
 
 #: stellarisdashboard/dashboard_app/templates/import_status.html:23
 #, python-format

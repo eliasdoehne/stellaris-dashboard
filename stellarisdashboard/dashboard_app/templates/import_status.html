@@ -18,8 +18,8 @@
         <p class="import-meta">{{ job.game_label }}</p>
         <progress max="{{ job.total }}" value="{{ job.done }}"></progress>
         <p>
-            {# Translators: progress of the import: number of saves processed out of the total #}
-            {{ _("%(done)s / %(total)s saves", done=job.done, total=job.total) }}
+            {# Translators: progress of the import: %(done)s saves processed out of %(num)s in total; the plural form follows the total #}
+            {{ ngettext("%(done)s / %(num)s save", "%(done)s / %(num)s saves", job.total, done=job.done) }}
             {% if job.current_date %}· {{ _("current date %(date)s", date=job.current_date) }}{% endif %}
             · {{ ngettext("%(num)s error", "%(num)s errors", job.num_errors) }}
             · {{ "%d:%02d"|format(job.elapsed_seconds // 60, job.elapsed_seconds % 60) }}
