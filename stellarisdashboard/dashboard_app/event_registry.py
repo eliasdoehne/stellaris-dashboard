@@ -1,37 +1,26 @@
-"""Data-driven descriptor registry for historical events (ledger rework Chunk F).
+"""Data-driven descriptor registry for historical events.
 
-Replaces the ~50-branch ``if/elif`` chain that used to live in
-``history_page.html``. Each ``HistoricalEventType`` maps to an
-:class:`EventDescriptor` carrying:
-
-* ``category`` / ``tier`` — the two editorial axes (topic group and
-  importance) of an event type (data-driven metadata;
-  recorded here but **not yet surfaced in the UI** — that lands in Chunk H), and
-* ``icon`` — a name for a future glyph (also not rendered yet), plus
-* the bits needed to reproduce the old per-branch markup exactly: an optional
-  ``li_class`` (defaults to the event type), a ``dateblock`` style, and the
-  Jinja ``sentence`` of the event.
-
-:func:`render_event` dispatches on ``event_type`` and renders one ``<li>`` of
-ledger markup, so ``history_page.html`` collapses to a single loop. Rendering
-goes through Flask's own Jinja environment with the same event dict, so the
-output is text-equivalent to the previous chain.
+Each ``HistoricalEventType`` maps to an :class:`EventDescriptor` carrying its
+``category`` (topic group) and ``tier`` (importance), which drive the ledger's
+filters, an ``icon`` name (not rendered yet), whether it is a point in time or
+a ``SPAN`` (council seats, envoy assignments, ...), and the Jinja ``sentence``
+that :func:`render_sentence` renders for one event dict.
 
 Multi-stage arcs (:class:`~stellarisdashboard.datamodel.Storyline`) have a
-:class:`StorylineDescriptor` in :data:`STORYLINE_REGISTRY`; :func:`render_storyline`
-renders one as a single ``<li>`` with a ``<details>`` card that expands to its
-stages, and :func:`render_event` delegates to it for ``event_type == "storyline"``.
+:class:`StorylineDescriptor` in :data:`STORYLINE_REGISTRY`.
 
-Event types that the parser doesn't emit yet (and that had no branch) carry
-``sentence=None``; :func:`render_event` returns empty markup for them, matching
-the old chain's fall-through (no output).
+Event types that the parser doesn't emit yet carry ``sentence=None`` and render
+as empty markup.
 
 Translation: every sentence is a *complete* translatable message with named
 placeholders (see docs/translating.md), built by the helpers below (:func:`_t`,
-:func:`_if`, :func:`_ruled`, ...) into the Jinja source of the sentence. Variants
-of a sentence (with and without a leader, with and without a system, ...) are
-separate messages, so translators can reorder words and decline names freely.
+:func:`_sentence`, :func:`_ruled`, ...) into the Jinja source of the sentence.
+Variants of a sentence (with and without a leader, with and without a system, ...)
+are separate messages, so translators can reorder words and decline names freely.
 :func:`jinja_sources` hands the generated sources to the message extractor.
+
+English sentences write "the" before the names of empires, wars, ...; names that
+bring their own article ("The Chosen") drop it, see :func:`elide_articles`.
 """
 import enum
 import functools
@@ -41,7 +30,7 @@ from typing import Optional
 
 from markupsafe import Markup, escape
 
-from stellarisdashboard import datamodel
+from stellarisdashboard import datamodel, i18n
 from stellarisdashboard.i18n import N_, gettext as _, ngettext, pgettext
 
 
@@ -55,12 +44,111 @@ class Category(enum.Enum):
     LEADERS = "Leaders"
     EXPLORATION = "Exploration"
 
+    @property
+    def label(self) -> str:
+        """The name of the category in the dashboard language."""
+        return {
+            "WARFARE": pgettext("event category", "Warfare"),
+            "DIPLOMACY": pgettext("event category", "Diplomacy"),
+            "GALAXY": pgettext("event category", "Galaxy"),
+            "EXPANSION": pgettext("event category", "Expansion"),
+            "SCIENCE": pgettext("event category", "Science"),
+            "STATECRAFT": pgettext("event category", "Statecraft"),
+            "LEADERS": pgettext("event category", "Leaders"),
+            "EXPLORATION": pgettext("event category", "Exploration"),
+        }[self.name]
+
 
 class Tier(enum.IntEnum):
     HEADLINE = 4
     MAJOR = 3
     ROUTINE = 2
     TRIVIA = 1
+
+
+# How an event is dated: a point in time, or a span with an optional end date.
+POINT = "point"
+SPAN = "span"
+ENVOY = "envoy"   # a span that is merged per envoy group (see event_grouping)
+
+
+# ---------------------------------------------------------------------------
+# Articles. English sentences say "the Tzynn Empire", but "The Chosen" instead of
+# "the The Chosen". The messages keep the "the" (so translators see whole sentences),
+# and it is dropped before names that bring their own, as long as the English text
+# is shown. Translations write whatever their language needs.
+# ---------------------------------------------------------------------------
+
+# placeholders whose names get "the" in English
+_ARTICLE_PLACEHOLDERS = frozenset({"country", "target", "war", "sector", "federation", "faction_type", "name"})
+_ARTICLE_RE = re.compile(r"\b[Tt]he %\((\w+)\)s")
+
+
+def has_own_article(name: str) -> bool:
+    """Whether a name starts with its own article, like "The Chosen" or "The War in Heaven"."""
+    return name.lower().startswith("the ")
+
+
+def _plain_text(value) -> str:
+    return Markup(value).striptags() if isinstance(value, Markup) else str(value)
+
+
+def elide_articles(message: str, variables: dict) -> str:
+    """The English message without "the" before names that start with their own article."""
+
+    def replace(match):
+        name = match.group(1)
+        value = variables.get(name)
+        if name in _ARTICLE_PLACEHOLDERS and value is not None and has_own_article(_plain_text(value)):
+            return f"%({name})s"
+        return match.group(0)
+
+    return _ARTICLE_RE.sub(replace, message)
+
+
+def _markup_message(translated: str, english: str, variables: dict) -> Markup:
+    """A translated message filled with (escaped) values, as markup. The English text drops
+    doubled articles, see elide_articles."""
+    if translated == english:
+        translated = english = elide_articles(english, variables)
+    return Markup(i18n.format_message(Markup(translated), variables, fallback=Markup(english)))
+
+
+def sentence_gettext(message: str, **variables) -> Markup:
+    """gettext for the ledger sentences, see _markup_message."""
+    return _markup_message(i18n.translate(message), message, variables)
+
+
+def sentence_ngettext(singular: str, plural: str, n: int, **variables) -> Markup:
+    variables = {"num": n, **variables}
+    english = singular if n == 1 else plural
+    translated = i18n.ntranslate(singular, plural, n)
+    return _markup_message(translated if translated not in (singular, plural) else english, english, variables)
+
+
+def sentence_pgettext(context: str, message: str, **variables) -> Markup:
+    return _markup_message(i18n.ptranslate(context, message), message, variables)
+
+
+def with_article(entity, links=None, capitalize=False) -> Markup:
+    """An entity's link (or a plain name) with its article: "the Tzynn Empire", but "The Chosen"."""
+    if isinstance(entity, str):
+        shown = escape(entity)
+    else:
+        shown = Markup(links[entity])
+    if capitalize:
+        # Translators: the name of an empire (a link) at the start of a sentence, in a list of empires
+        # ("The A, the B and the C defeated ..."). Leave out the article if your language has none: "%(name)s"
+        return sentence_pgettext("name with article", "The %(name)s", name=shown)
+    # Translators: the name of an empire (a link) in a list of empires ("... together with the A, the B and
+    # the C"). Leave out the article if your language has none: "%(name)s"
+    return sentence_pgettext("name with article", "the %(name)s", name=shown)
+
+
+def with_articles(entities, links=None, capitalize=False) -> Markup:
+    """Several entities, each with its article: "the A, the B and the C"."""
+    parts = [with_article(e, links, capitalize and i == 0) for i, e in enumerate(entities)]
+    return Markup(datamodel.join_and(parts))
 
 
 # ---------------------------------------------------------------------------
@@ -148,29 +236,38 @@ def render_planet_and_class(event, *, links) -> Markup:
     )
 
 
-def render_war(event, kind="war", *, links) -> Markup:
+def render_war(event, *, links) -> Markup:
     """The war's name; wars without a name in the game are described by their sides."""
     war = event["war"]
     link = Markup(links[war])
     if war.ingame_name:
         return link
-    if kind == "conflict":
-        # Translators: a war without a name in the game, e.g. "Empire A vs Empire B conflict".
-        # %(war)s is the link to the war, named after its sides.
-        return Markup(_("%(war)s conflict", war=link))
     # Translators: a war without a name in the game, e.g. "Empire A vs Empire B war".
     # %(war)s is the link to the war, named after its sides.
     return Markup(_("%(war)s war", war=link))
+
+
+def starts_with_vowel(text) -> bool:
+    """Whether English needs "an" rather than "a" before the text (quotes aside)."""
+    return str(text).lstrip('"').lower().startswith(("a", "e", "i", "o", "u"))
 
 
 def _render_context(event, links) -> dict:
     return dict(
         event=event,
         links=links,
+        _=sentence_gettext,
+        gettext=sentence_gettext,
+        ngettext=sentence_ngettext,
+        pgettext=sentence_pgettext,
         render_leader=functools.partial(render_leader, links=links),
         render_envoys=functools.partial(render_envoys, links=links),
         render_planet_and_class=functools.partial(render_planet_and_class, links=links),
         render_war=functools.partial(render_war, links=links),
+        the_all=lambda entities: with_articles(entities, links),
+        The_all=lambda entities: with_articles(entities, links, capitalize=True),
+        has_own_article=has_own_article,
+        starts_with_vowel=starts_with_vowel,
         crisis_phrases=GALACTIC_CRISIS_PHRASES,
     )
 
@@ -180,14 +277,14 @@ def _render_context(event, links) -> dict:
 # ---------------------------------------------------------------------------
 
 # Jinja expressions for the placeholders that most messages use; {ev} is the name of the
-# dict that describes the event (``stage`` for the stages of a storyline).
+# dict that describes the event.
 _DEFAULT_ARGS = {
     "country": '{links}[{ev}["country"]] | safe',
     "target": '{links}[{ev}["target_country"]] | safe',
     "leader": "render_leader({ev})",
     "system": '{links}[{ev}["system"]] | safe',
     "planet": '{links}[{ev}["planet"]] | safe',
-    "war": '{links}[{ev}["war"]] | safe',
+    "war": "render_war({ev})",
 }
 
 # What the default placeholders mean, added to the notes for translators of every message using them.
@@ -197,7 +294,7 @@ _PLACEHOLDER_NOTES = {
     "leader": '%(leader)s: class and name of a leader (a link), e.g. "Scientist Jane Doe"',
     "system": "%(system)s: name of a star system (a link)",
     "planet": "%(planet)s: name of a planet (a link)",
-    "war": "%(war)s: name of a war (a link)",
+    "war": '%(war)s: name of a war (a link); a war without a name in the game reads "Empire A vs Empire B war"',
 }
 
 # Placeholders given as plain text of the event
@@ -238,6 +335,10 @@ def _comment(message, note) -> str:
     return "{# Translators: " + ". ".join(notes) + " #}\n"
 
 
+def _used(message, overrides) -> dict:
+    return {k: v for k, v in overrides.items() if f"%({k})s" in message}
+
+
 def _t(message: str, note: Optional[str] = None, *, ev: str = "event", **overrides) -> str:
     """Jinja source of one translatable message, filled with the event's values.
 
@@ -276,16 +377,6 @@ def _cases(*cases, default: str = "") -> str:
 HAS_LEADER = '"leader" in event'
 
 
-def _ruled(with_leader: str, without_leader: str, note: Optional[str] = None, **overrides) -> str:
-    """Two variants of a sentence: whether the event has a leader (``%(leader)s``) or not."""
-    overrides_without = {k: v for k, v in overrides.items() if f"%({k})s" in without_leader}
-    return _if(
-        HAS_LEADER,
-        _t(with_leader, note, **overrides),
-        _t(without_leader, note, **overrides_without),
-    )
-
-
 def _optional(conditions, build) -> str:
     """Nest {% if %} over optional parts: build(parts) gives the content for the parts that are present.
 
@@ -300,27 +391,64 @@ def _optional(conditions, build) -> str:
     return nest(list(conditions), ())
 
 
-# Marks an event that is still going on, before its start date
-_ACTIVE_MARKER = (
-    '{% if event["is_active"] %}'
-    "{# Translators: marks an event or period that is still going on, shown before its start date #}\n"
-    '{{ pgettext("ongoing event marker", "(A)") }}'
-    "{% endif %}"
-)
+@dataclass(frozen=True)
+class Part:
+    """An optional part of a sentence: the {slot} of the sentence is filled with ``text``
+    if ``condition`` holds for the event, else left empty. A part that ``requires`` another
+    one only occurs with it (its condition must imply the other's)."""
+    slot: str
+    condition: str
+    text: str
+    requires: Optional[str] = None
 
-# Dateblock variants, lifted verbatim from the old template so the rendered date
-# column is byte-for-byte the same.
-POINT = "point"   # {{start_date}}:
-SPAN = "span"     # (A) marker + optional " - end_date"
-ENVOY = "envoy"   # span, but the (A) marker is commented out (TODO upstream)
 
-_DATEBLOCKS = {
-    POINT: '{{event["start_date"]}}:',
-    SPAN: _ACTIVE_MARKER + ' {{event["start_date"]}}'
-          '{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:',
-    ENVOY: '<!-- TODO fix is_active post-leader-rework {% if event["is_active"] %}(A){% endif %} -->'
-           '{{event["start_date"]}}{% if event["end_date"] != null %} - {{event["end_date"]}}{%endif%}:',
-}
+IN_SYSTEM = Part("system", '"system" in event', " in the %(system)s system")
+DURING_WAR = Part("war", '"war" in event', " during the %(war)s")
+UNDER_GOVERNOR = Part("governor", HAS_LEADER, " under the governorship of %(leader)s")
+
+
+def _fill(template: str, parts, present) -> str:
+    return template.format(**{p.slot: (p.text if p.slot in present else "") for p in parts})
+
+
+def _sentence(template: str, *parts: Part, note: Optional[str] = None, **overrides) -> str:
+    """All variants of a sentence with optional parts: ``template`` has a {slot} for each part."""
+
+    def build(present):
+        if any(p.requires and p.slot in present and p.requires not in present for p in parts):
+            return ""  # cannot happen
+        message = _fill(template, parts, present)
+        return _t(message, note, **_used(message, overrides))
+
+    return _optional([(p.slot, p.condition) for p in parts], build)
+
+
+def _ruled(template: str, *parts: Part, note: Optional[str] = None, **overrides) -> str:
+    """A sentence about the event's country, starting with "The %(country)s", in two variants:
+    "Under %(leader)s, the %(country)s ..." if the event has a leader (its country's ruler), else as given."""
+    assert template.startswith("The %(country)s ")
+    with_leader = "Under %(leader)s, the %(country)s " + template[len("The %(country)s "):]
+    return _if(HAS_LEADER, _sentence(with_leader, *parts, note=note, **overrides),
+               _sentence(template, *parts, note=note, **overrides))
+
+
+def _leader_of_country(template: str, *parts: Part, note: Optional[str] = None, **overrides) -> str:
+    """A sentence about the event's country, starting with "The %(country)s", in two variants:
+    "%(leader)s of the %(country)s ..." if the event has a leader, else as given."""
+    assert template.startswith("The %(country)s ")
+    with_leader = "%(leader)s of the %(country)s " + template[len("The %(country)s "):]
+    return _if(HAS_LEADER, _sentence(with_leader, *parts, note=note, **overrides),
+               _sentence(template, *parts, note=note, **overrides))
+
+
+def _a_an(condition_text: str, template: str, note: Optional[str] = None, **overrides) -> str:
+    """Two variants of a sentence with "{a}" before a name: "an" or "a" in English."""
+    note = ((note + ". ") if note else "") + 'The English text has the variants "a" and "an" of this sentence'
+    return _if(
+        "starts_with_vowel(" + condition_text + ")",
+        _t(template.format(a="an"), note, **overrides),
+        _t(template.format(a="a"), note, **overrides),
+    )
 
 
 # galactic_crisis event description (see parsing/galaxy_events.py) -> what happened to its country, as a
@@ -374,95 +502,88 @@ class EventDescriptor:
     icon: str
     dateblock: Optional[str] = None
     sentence: Optional[str] = None
-    li_class: Optional[str] = None  # defaults to the event type
 
 
 # ---- Sentences with several variants ---------------------------------------------------
 
+# war participant call type (see datamodel.WAR_CALL_TYPES) -> how they joined, followed by the empire that called them
+_WAR_CALL_SENTENCES = {
+    "overlord": "The %(country)s entered the %(war)s, called in by their overlord the %(target)s.",
+    "subject": "The %(country)s entered the %(war)s, called in by their subject the %(target)s.",
+    "secret_fealty": "The %(country)s entered the %(war)s, called in by their secret overlord the %(target)s.",
+    "offensive": "The %(country)s entered the %(war)s, attacking alongside the %(target)s.",
+    "defensive": "The %(country)s entered the %(war)s, honoring their defensive pact with the %(target)s.",
+    "alliance": "The %(country)s entered the %(war)s, honoring their alliance with the %(target)s.",
+    "guarantee": "The %(country)s entered the %(war)s, honoring their guarantee of independence for the %(target)s.",
+    "trade_deal": "The %(country)s entered the %(war)s, honoring a deal with the %(target)s.",
+}
+
+
 def _war_sentence() -> str:
-    """The country entered a war; the sentence depends on how it was drawn into it."""
-    note = "A war without a name in the game is named after its sides"
-
-    def pair(with_leader, without_leader, **kwargs):
-        return _ruled(with_leader, without_leader, note, war="render_war(event)", **kwargs)
-
-    return (
-        '{% set call_type = event.get("description_key") or "" %}\n'
-        + _cases(
-            ('call_type == "primary"', pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s as a primary party.",
-                "The %(country)s entered the %(war)s as a primary party.",
-            )),
-            ('call_type == "overlord" and "target_country" in event', pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s, called by their overlord %(target)s.",
-                "The %(country)s entered the %(war)s, called by their overlord %(target)s.",
-            )),
-            ('call_type == "offensive" and "target_country" in event', pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s attacking on the side of the %(target)s.",
-                "The %(country)s entered the %(war)s attacking on the side of the %(target)s.",
-            )),
-            ('call_type == "defensive" and "target_country" in event', pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s due to their defensive pact with the %(target)s.",
-                "The %(country)s entered the %(war)s due to their defensive pact with the %(target)s.",
-            )),
-            ('call_type == "alliance" and "target_country" in event', pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s due to their alliance with the %(target)s.",
-                "The %(country)s entered the %(war)s due to their alliance with the %(target)s.",
-            )),
-            ('call_type not in ["", "overlord", "offensive", "defensive", "alliance"]', pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s (called as %(call_type)s).",
-                "The %(country)s entered the %(war)s (called as %(call_type)s).",
-                call_type="call_type",
-            )),
-            default=pair(
-                "Under the rule of %(leader)s, the %(country)s entered the %(war)s.",
-                "The %(country)s entered the %(war)s.",
-            ),
-        )
+    """The country entered a war; the sentence depends on how it was drawn into it and by whom."""
+    call_type = 'event.get("call_type")'
+    return _cases(
+        (call_type + ' == "primary"', _ruled("The %(country)s entered the %(war)s as a primary party.")),
+        *[
+            (f'{call_type} == "{key}" and "target_country" in event', _ruled(message))
+            for key, message in _WAR_CALL_SENTENCES.items()
+        ],
+        # call types the dashboard does not know: still name who called the country in
+        ('"target_country" in event', _ruled("The %(country)s entered the %(war)s, called in by the %(target)s.")),
+        default=_ruled("The %(country)s entered the %(war)s."),
     )
 
 
 def _combat_sentence(invasion: bool) -> str:
-    """A space battle or an invasion: attackers won or lost against the defenders."""
+    """A space battle or an invasion: the attackers won or lost against the defenders."""
     args = dict(
-        attackers='event["attackers"] | safe',
-        defenders='event["defenders"] | safe',
+        attackers_first='The_all(event["attackers"])',
+        attackers='the_all(event["attackers"])',
+        defenders_first='The_all(event["defenders"])',
+        defenders='the_all(event["defenders"])',
         attacker_exhaustion='event["attacker_exhaustion"]',
         defender_exhaustion='event["defender_exhaustion"]',
     )
     note = (
-        "%(attackers)s and %(defenders)s are lists of empires (links). "
-        "The exhaustion values are the war exhaustion of each side in percent, e.g. 12.5%"
+        "%(attackers)s and %(defenders)s are lists of empires (links) with their articles, "
+        'e.g. "the A and the B" (see the messages "the %%(name)s" and "The %%(name)s"). '
+        "The exhaustion values are the war exhaustion of each side in percent, e.g. 12.5%%"
     )
+    exhaustion = " (exhaustion: attackers %(attacker_exhaustion)s, defenders %(defender_exhaustion)s)."
     if invasion:
-        victory = (
-            "Invasion of planet %(planet)s in the %(system)s system: "
-            "Attackers %(attackers)s (%(attacker_exhaustion)s exhaustion) defeated "
-            "%(defenders)s (exhaustion %(defender_exhaustion)s) in the %(war)s."
-        )
-        defeat = victory.replace(" defeated ", " were defeated by ")
+        def build_for_planet(victory, planet):
+            if victory:
+                template = "%(attackers_first)s invaded " + planet + "{system}, defeating %(defenders)s{war}" + exhaustion
+            else:
+                template = (
+                    "%(defenders_first)s fought off an invasion of " + planet + "{system} by %(attackers)s{war}"
+                    + exhaustion
+                )
+            return _sentence(template, IN_SYSTEM, DURING_WAR, note=note, **args)
+
+        def build(victory):
+            return _if('"planet" in event', build_for_planet(victory, "the planet %(planet)s"),
+                       build_for_planet(victory, "a planet"))
     else:
-        victory = (
-            "Space battle in the %(system)s system: "
-            "Attackers %(attackers)s (%(attacker_exhaustion)s exhaustion) defeated "
-            "%(defenders)s (exhaustion %(defender_exhaustion)s) in the %(war)s."
-        )
-        defeat = victory.replace(" defeated ", " were defeated by ")
-    return _if('event["attacker_victory"]', _t(victory, note, **args), _t(defeat, note, **args))
+        def build(victory):
+            if victory:
+                template = "%(attackers_first)s defeated %(defenders)s in a space battle{system}{war}" + exhaustion
+            else:
+                template = "%(defenders_first)s repelled an attack by %(attackers)s in a space battle{system}{war}" + exhaustion
+            return _sentence(template, IN_SYSTEM, DURING_WAR, note=note, **args)
+
+    return _if('event["attacker_victory"]', build(True), build(False))
 
 
 def _first_contact_process_sentence() -> str:
     """Whether a first contact began, was made or was abandoned, with or without leader and system."""
-    def build(status_phrase):
-        def build_parts(parts):
-            with_system = "system" in parts
-            tail = " in the %(system)s system." if with_system else "."
-            return _ruled(
-                "The %(country)s's %(leader)s " + status_phrase + " the %(target)s" + tail,
-                "The %(country)s " + status_phrase + " the %(target)s" + tail,
-            )
 
-        return _optional([("system", '"system" in event')], build_parts)
+    def build(status_phrase):
+        return _if(
+            HAS_LEADER,
+            _sentence("The %(country)s's %(leader)s " + status_phrase + " the %(target)s{system}.", IN_SYSTEM),
+            _sentence("The %(country)s " + status_phrase + " the %(target)s{system}.", IN_SYSTEM),
+        )
 
     return _cases(
         ('event.get("contact_status") == "in_progress"', build("began first contact with")),
@@ -512,88 +633,35 @@ def _envoy_sentence(message: str, **overrides) -> str:
     )
 
 
-def _megastructure_sentence() -> str:
-    mega = dict(megastructure=D)
-
-    def build(parts):
-        verb_built = "The %(country)s built the %(megastructure)s"
-        verb_began = "The %(country)s began building the %(megastructure)s"
-        tail = " in the %(system)s system." if "system" in parts else "."
-        return _if(
-            'event["end_date"]',
-            _t(verb_built + tail, **mega),
-            _t(verb_began + tail, **mega),
-        )
-
-    return _optional([("system", '"system" in event')], build)
-
-
 def _planet_destroyed_sentence() -> str:
-    return (
-        _t("The planet %(planet)s in the %(system)s system, owned by the %(country)s was destroyed.")
-        + _if(
-            'event["planet"].planet_class is not none',
-            _t(
-                "It is now classified as %(planet_class)s.",
-                planet_class='event["planet"].planetclass',
-            ),
-            _t("No trace remains."),
-        )
+    owner = Part("owner", '"country" in event', ", owned by the %(country)s,")
+    return _sentence("The planet %(planet)s{system}{owner} was destroyed.", IN_SYSTEM, owner) + _if(
+        'event["planet"].planet_class is not none',
+        _a_an(
+            'event["planet"].planetclass',
+            "It is now {a} %(planet_class)s.",
+            "%(planet_class)s: the class of the planet, e.g. \"Barren World\"",
+            planet_class='event["planet"].planetclass',
+        ),
+        _t("No trace remains."),
     )
 
 
-def _capital_relocation_sentence() -> str:
-    def build(parts):
-        tail = " in the %(system)s system." if "system" in parts else "."
-        return _ruled(
-            "Under the rule of %(leader)s, the %(country)s relocated their capital to %(planet)s" + tail,
-            "The %(country)s relocated their capital to %(planet)s" + tail,
-            planet=PLANET_AND_CLASS,
-        )
-
-    return _optional([("system", '"system" in event')], build)
-
-
-def _sector_creation_sentence() -> str:
-    sector = dict(sector=D)
-
-    def build(parts):
-        if "planet" not in parts:
-            tail = "."
-        elif "system" not in parts:
-            tail = " with capital on the planet %(planet)s."
-        else:
-            tail = " with capital on the planet %(planet)s in the %(system)s system."
-        return _ruled(
-            "Under the rule of %(leader)s, the %(country)s created the %(sector)s sector" + tail,
-            "The %(country)s created the %(sector)s sector" + tail,
-            **sector,
-        )
-
-    return _optional([("planet", '"planet" in event'), ("system", '"system" in event')], build)
-
-
-def _exploration_on_planet_sentence(with_leader: Optional[str], without_leader: str, **overrides) -> str:
-    """A sentence ending in "on <planet>", followed by " in the <system> system" if there is a system.
-
-    The messages given are the sentences without that ending."""
-
-    def build(parts):
-        tail = " in the %(system)s system." if "system" in parts else "."
-        if with_leader is None:
-            return _t(without_leader + tail, planet=PLANET_AND_CLASS, **overrides)
-        return _ruled(
-            with_leader + tail, without_leader + tail, planet=PLANET_AND_CLASS, **overrides
-        )
-
-    return _optional([("system", '"system" in event')], build)
+def _crisis_level_sentence() -> str:
+    level = dict(level='event["crisis_level"]')
+    note = "%(level)s: the name of a crisis level, e.g. \"Risk\""
+    return _if(
+        'event.get("crisis_defender")',
+        _a_an('event["crisis_level"]', 'The %(country)s became {a} "%(level)s"-rank Defender of the Galaxy.', note, **level),
+        _a_an('event["crisis_level"]', 'The %(country)s became {a} "%(level)s"-level threat to the galaxy.', note, **level),
+    )
 
 
 def _new_faction_sentence() -> str:
     faction = dict(faction='event["faction"].rendered_name')
     note = '%(faction)s: name of the faction. %(faction_type)s: the kind of faction, e.g. "Supremacist"'
     return _cases(
-        ('event["faction_type"] == event["faction"].rendered_name and not event["faction_type"].startswith("The ")',
+        ('event["faction_type"] == event["faction"].rendered_name and not has_own_article(event["faction_type"])',
          _t('The "%(faction)s" faction emerged in the %(country)s.', **faction)),
         ('event["faction_type"] == event["faction"].rendered_name',
          _t('"%(faction)s" faction emerged in the %(country)s.', **faction)),
@@ -604,34 +672,24 @@ def _new_faction_sentence() -> str:
     )
 
 
-def _ruled_empire_sentence() -> str:
-    leader = dict(leader=LEADER_AS_SUBJECT)
+def _tradition_sentence() -> str:
+    tradition = dict(tradition='event["tradition"]')
     return _cases(
-        ('"planet" in event and "system" in event',
-         _t("%(leader)s ruled the %(country)s from the capital %(planet)s in the %(system)s system.", **leader)),
-        ('"planet" in event',
-         _t("%(leader)s ruled the %(country)s from the capital %(planet)s.", **leader)),
-        default=_t("%(leader)s ruled the %(country)s.", **leader),
+        ('event.get("tradition_kind") == "adopt"', _ruled(
+            "The %(country)s adopted the %(tradition)s.",
+            note='%(tradition)s: a tradition tree, e.g. "Discovery Traditions"', **tradition,
+        )),
+        ('event.get("tradition_kind") == "finish"', _ruled(
+            "The %(country)s completed the %(tradition)s.",
+            note='%(tradition)s: a tradition tree, e.g. "Discovery Traditions"', **tradition,
+        )),
+        default=_ruled('The %(country)s adopted the "%(tradition)s" tradition.', **tradition),
     )
 
 
-def _country_destroyed_sentence() -> str:
-    return _cases(
-        ('event.get("cause") == "war" and "target_country" in event',
-         _t("The %(country)s ceased to exist after losing a war against the %(target)s.")),
-        ('event.get("cause") == "subject" and "target_country" in event',
-         _t("The %(country)s ceased to exist after being integrated by the %(target)s.")),
-        default=_t("The %(country)s ceased to exist."),
-    )
-
-
-def _galactic_crisis_sentence() -> str:
-    return _if(
-        'event.get("crisis_key") in crisis_phrases',
-        # the message is picked from GALACTIC_CRISIS_PHRASES, where it is marked for translation
-        "{{ _(crisis_phrases[event[\"crisis_key\"]], country=links[event[\"country\"]] | safe) }}\n",
-        _t("The %(country)s %(description)s.", description=D),
-    )
+_FROM_COUNTRY = Part("from", '"target_country" in event', " from the %(target)s")
+_SECTOR_CAPITAL = Part("capital", '"planet" in event', " with its capital on %(planet)s")
+_SYSTEM_OF_PLANET = Part("system", '"planet" in event and "system" in event', " in the %(system)s system", "capital")
 
 
 # event_type -> EventDescriptor. category is the topic group, tier the importance.
@@ -644,30 +702,23 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "peace": EventDescriptor(
         Category.WARFARE, Tier.HEADLINE, "dove", POINT,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s made peace in the %(war)s.",
-            "The %(country)s made peace in the %(war)s.",
-            war='render_war(event, "conflict")',
-        ),
+        _ruled("The %(country)s made peace in the %(war)s."),
     ),
     "conquered_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
-        _if(
-            'event["war"]',
-            _t("The %(country)s conquered the %(system)s system from the %(target)s during the %(war)s."),
-            _t("The %(country)s conquered the %(system)s system from the %(target)s."),
-        ),
-        li_class="gained_system",
+        _sentence("The %(country)s conquered the %(system)s system{from}{war}.", _FROM_COUNTRY, DURING_WAR),
     ),
     "founded_with_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
-        _t("The %(country)s was founded with the %(system)s system, formerly held by the %(target)s."),
-        li_class="gained_system",
+        _sentence(
+            "The %(country)s was founded with the %(system)s system{held}.",
+            Part("held", '"target_country" in event', ", formerly held by the %(target)s"),
+        ),
     ),
     "lost_system": EventDescriptor(
         Category.WARFARE, Tier.MAJOR, "flag", POINT,
         _if(
-            'event["target_country"]',
+            '"target_country" in event',
             _t("The %(country)s lost control of the %(system)s system to the %(target)s."),
             _t("The %(country)s lost control of the %(system)s system, leaving it unclaimed."),
         ),
@@ -683,10 +734,7 @@ REGISTRY: dict[str, EventDescriptor] = {
     # ---- Diplomacy ------------------------------------------------------
     "first_contact": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "handshake", POINT,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s established first contact with the %(target)s.",
-            "The %(country)s established first contact with the %(target)s.",
-        ),
+        _ruled("The %(country)s established first contact with the %(target)s."),
     ),
     "first_contact_stage": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "handshake", POINT,
@@ -702,37 +750,25 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "espionage_operation": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "eye", SPAN,
-        _ruled(
-            '%(leader)s of the %(country)s ran the "%(operation)s" operation against the %(target)s.',
-            'The %(country)s ran the "%(operation)s" operation against the %(target)s.',
-            operation=D,
-        ),
+        _leader_of_country('The %(country)s ran the "%(operation)s" operation against the %(target)s.', operation=D),
     ),
     "completed_espionage_operation": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "key", POINT,
-        _ruled(
-            '%(leader)s of the %(country)s completed the "%(operation)s" operation against the %(target)s.',
-            'The %(country)s completed the "%(operation)s" operation against the %(target)s.',
-            operation=D,
-        ),
+        _leader_of_country('The %(country)s completed the "%(operation)s" operation against the %(target)s.', operation=D),
     ),
     "formed_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", SPAN,
-        _ruled(
-            'Under the rule of %(leader)s, the %(country)s and %(target)s are now allied in the "%(federation)s" federation.',
-            'The %(country)s and %(target)s are now allied in the "%(federation)s" federation.',
-            federation=D,
-        ),
+        _ruled('The %(country)s allied with the %(target)s in the "%(federation)s" federation.', federation=D),
     ),
     "founded_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.HEADLINE, "federation", POINT,
         _if(
             '"federation_partners" in event',
             _t(
-                'The %(country)s founded the "%(federation)s" federation together with the %(partners)s.',
-                "%(partners)s: the other founding members, e.g. \"A, B and C\" (links)",
+                'The %(country)s founded the "%(federation)s" federation together with %(partners)s.',
+                "%(partners)s: the other founding members with their articles, e.g. \"the A, the B and the C\" (links)",
                 federation='event["federation_name"]',
-                partners='event["federation_partners"] | safe',
+                partners='the_all(event["federation_partners"])',
             ),
             _t('The %(country)s founded the "%(federation)s" federation.', federation='event["federation_name"]'),
         ),
@@ -751,73 +787,49 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "defensive_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "shield", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s entered a defensive pact with the %(target)s.",
-            "The %(country)s entered a defensive pact with the %(target)s.",
-        ),
+        _ruled("The %(country)s entered a defensive pact with the %(target)s."),
     ),
     "non_aggression_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "scroll", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s entered a non-aggression pact with the %(target)s.",
-            "The %(country)s entered a non-aggression pact with the %(target)s.",
-        ),
+        _ruled("The %(country)s entered a non-aggression pact with the %(target)s."),
     ),
     "commercial_pact": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "coins", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s entered a commercial pact with the %(target)s.",
-            "The %(country)s entered a commercial pact with the %(target)s.",
-        ),
+        _ruled("The %(country)s entered a commercial pact with the %(target)s."),
     ),
     "research_agreement": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "scroll", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s entered a research agreement with the %(target)s.",
-            "The %(country)s entered a research agreement with the %(target)s.",
-        ),
+        _ruled("The %(country)s entered a research agreement with the %(target)s."),
     ),
     "migration_treaty": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "scroll", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s entered a migration treaty with the %(target)s.",
-            "The %(country)s entered a migration treaty with the %(target)s.",
-        ),
+        _ruled("The %(country)s entered a migration treaty with the %(target)s."),
     ),
     "embassy": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "building", SPAN,
-        _t("The %(country)s have established an embassy in the %(target)s."),
-        li_class="established_embassy",
+        _t("The %(country)s established an embassy with the %(target)s."),
     ),
     "closed_borders": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "barrier", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s revoked border access to the %(target)s.",
-            "The %(country)s revoked border access to the %(target)s.",
-        ),
+        _ruled("The %(country)s closed their borders to the %(target)s."),
     ),
     "received_closed_borders": EventDescriptor(
         Category.DIPLOMACY, Tier.TRIVIA, "barrier", SPAN,
-        _t("The %(country)s are denied access to the %(target)s territories."),
+        _t("The %(country)s lost border access to the %(target)s."),
     ),
     "sent_rivalry": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "rivalry", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s declared rivalry against the %(target)s.",
-            "The %(country)s declared rivalry against the %(target)s.",
-        ),
+        _ruled("The %(country)s declared the %(target)s a rival."),
     ),
     "received_rivalry": EventDescriptor(
         Category.DIPLOMACY, Tier.TRIVIA, "rivalry", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s received a rivalry declaration from the %(target)s.",
-            "The %(country)s received a rivalry declaration from the %(target)s.",
-        ),
+        _ruled("The %(country)s was declared a rival by the %(target)s."),
     ),
     "became_subject": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "chain", SPAN,
-        _t(
-            "The %(country)s became a %(subject_type)s of the %(target)s.",
+        _a_an(
+            'event["description"]',
+            "The %(country)s became {a} %(subject_type)s of the %(target)s.",
             "%(subject_type)s: the kind of subject, e.g. \"Vassal\"",
             subject_type=D,
         ),
@@ -825,17 +837,17 @@ REGISTRY: dict[str, EventDescriptor] = {
     "federation_president": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "federation", SPAN,
         _t(
-            "The %(country)s held the presidency of the %(federation)s.",
-            "%(federation)s: the type and name of the federation, e.g. Martial Alliance \"Star Security Organization\"",
-            federation='event["federation_title"]',
+            "The %(country)s held the presidency of the %(federation_title)s.",
+            "%(federation_title)s: the type and name of the federation, e.g. Martial Alliance \"Star Security Organization\"",
+            federation_title='event["federation_title"]',
         ),
     ),
     "federation_level_up": EventDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "federation", POINT,
         _t(
-            "Under the presidency of the %(country)s, the %(federation)s reached level %(level)s.",
-            "%(federation)s: the type and name of the federation, e.g. Martial Alliance \"Star Security Organization\"",
-            federation='event["federation_title"]',
+            "Under the presidency of the %(country)s, the %(federation_title)s reached level %(level)s.",
+            "%(federation_title)s: the type and name of the federation, e.g. Martial Alliance \"Star Security Organization\"",
+            federation_title='event["federation_title"]',
             level=D,
         ),
     ),
@@ -849,7 +861,7 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "envoy_community": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
-        _envoy_sentence("The %(country)s sent %(envoys)s to increase their diplomatic weight in the galactic community."),
+        _envoy_sentence("The %(country)s sent %(envoys)s to increase their diplomatic weight in the Galactic Community."),
     ),
     "envoy_federation": EventDescriptor(
         Category.DIPLOMACY, Tier.ROUTINE, "envoy", ENVOY,
@@ -866,46 +878,28 @@ REGISTRY: dict[str, EventDescriptor] = {
     # ---- Galaxy ---------------------------------------------------------
     "joined_galactic_community": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s joined the Galactic Community.",
-            "The %(country)s joined the Galactic Community.",
-        ),
+        _ruled("The %(country)s joined the Galactic Community."),
     ),
     "joined_galactic_council": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s joined the Galactic Council.",
-            "The %(country)s joined the Galactic Council.",
-        ),
+        _ruled("The %(country)s joined the Galactic Council."),
     ),
     "left_galactic_community": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s left the Galactic Community.",
-            "The %(country)s left the Galactic Community.",
-        ),
+        _ruled("The %(country)s left the Galactic Community."),
     ),
     "left_galactic_council": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "globe", SPAN,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s left the Galactic Council.",
-            "The %(country)s left the Galactic Council.",
-        ),
+        _ruled("The %(country)s left the Galactic Council."),
     ),
     "galactic_resolution_passed": EventDescriptor(
         Category.GALAXY, Tier.MAJOR, "ballot", POINT,
-        _if(
-            '"target_country" in event',
-            _t(
-                "The Galactic Community passed the resolution %(resolution)s, proposed by the %(country)s, concerning the %(target)s.",
-                "%(resolution)s: the name of the resolution, in quotation marks",
-                resolution=D,
-            ),
-            _t(
-                "The Galactic Community passed the resolution %(resolution)s, proposed by the %(country)s.",
-                "%(resolution)s: the name of the resolution, in quotation marks",
-                resolution=D,
-            ),
+        _sentence(
+            "The Galactic Community passed the resolution %(resolution)s{proposed}{concerning}.",
+            Part("proposed", '"country" in event', ", proposed by the %(country)s"),
+            Part("concerning", '"target_country" in event', ", concerning the %(target)s"),
+            note="%(resolution)s: the name of the resolution, in quotation marks",
+            resolution=D,
         ),
     ),
     "galactic_custodian": EventDescriptor(
@@ -918,61 +912,79 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "country_destroyed": EventDescriptor(
         Category.GALAXY, Tier.HEADLINE, "skull", POINT,
-        _country_destroyed_sentence(),
+        _cases(
+            ('event.get("cause") == "war" and "target_country" in event',
+             _t("The %(country)s ceased to exist after losing a war against the %(target)s.")),
+            ('event.get("cause") == "subject" and "target_country" in event',
+             _t("The %(country)s ceased to exist after being integrated by the %(target)s.")),
+            default=_t("The %(country)s ceased to exist."),
+        ),
     ),
     "voted_for_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "voted_against_resolution": EventDescriptor(Category.GALAXY, Tier.ROUTINE, "ballot"),
     "galactic_crisis": EventDescriptor(
         Category.GALAXY, Tier.HEADLINE, "crisis", POINT,
-        _galactic_crisis_sentence(),
+        _if(
+            'event.get("crisis_key") in crisis_phrases',
+            # the message is picked from GALACTIC_CRISIS_PHRASES, where it is marked for translation
+            "{{ _(crisis_phrases[event[\"crisis_key\"]], country=links[event[\"country\"]] | safe) }}\n",
+            _t("The %(country)s %(description)s.", description=D),
+        ),
     ),
     # ---- Expansion ------------------------------------------------------
     "megastructure_construction": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "megastructure", SPAN,
-        _megastructure_sentence(),
+        _if(
+            'event["end_date"]',
+            _sentence("The %(country)s built the %(megastructure)s{system}.", IN_SYSTEM, megastructure=D),
+            _sentence("The %(country)s began building the %(megastructure)s{system}.", IN_SYSTEM, megastructure=D),
+        ),
     ),
     "planet_destroyed": EventDescriptor(
         Category.EXPANSION, Tier.HEADLINE, "explosion", POINT,
         _planet_destroyed_sentence(),
-        li_class="colonization",
     ),
     "habitat_ringworld_construction": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "ringworld", POINT,
-        _ruled(
-            "Finished construction of %(structure)s in the %(system)s system under the governorship of %(leader)s.",
-            "Finished construction of %(structure)s in the %(system)s system.",
-            structure=D,
+        _if(
+            '"country" in event',
+            _sentence("The %(country)s finished building %(structure)s{system}{governor}.",
+                      IN_SYSTEM, UNDER_GOVERNOR, structure=D),
+            _sentence("Construction finished on %(structure)s{system}{governor}.",
+                      IN_SYSTEM, UNDER_GOVERNOR, structure=D),
         ),
     ),
     "colonization": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "planet", SPAN,
-        _ruled(
-            "The %(country)s colonized %(planet)s in the %(system)s system under the governorship of %(leader)s.",
-            "The %(country)s colonized %(planet)s in the %(system)s system.",
-            planet=PLANET_AND_CLASS,
-        ),
+        _sentence("The %(country)s colonized %(planet)s{system}{governor}.", IN_SYSTEM, UNDER_GOVERNOR,
+                  planet=PLANET_AND_CLASS),
     ),
     "capital_relocation": EventDescriptor(
         Category.EXPANSION, Tier.MAJOR, "capital", POINT,
-        _capital_relocation_sentence(),
+        _ruled("The %(country)s relocated their capital to %(planet)s{system}.", IN_SYSTEM, planet=PLANET_AND_CLASS),
     ),
     "terraforming": EventDescriptor(
         Category.EXPANSION, Tier.ROUTINE, "planet", SPAN,
-        _ruled(
-            "Under the governorship of %(leader)s, the %(country)s terraformed the planet %(planet)s in the %(system)s system from %(old_class)s to %(new_class)s.",
-            "The %(country)s terraformed the planet %(planet)s in the %(system)s system from %(old_class)s to %(new_class)s.",
-            "%(old_class)s and %(new_class)s are planet classes, e.g. \"Barren World\"",
+        _sentence(
+            "The %(country)s terraformed the planet %(planet)s{system} from %(old_class)s to %(new_class)s{governor}.",
+            IN_SYSTEM, UNDER_GOVERNOR,
+            note="%(old_class)s and %(new_class)s are planet classes, e.g. \"Barren World\"",
             old_class='event["old_class"]',
             new_class='event["new_class"]',
         ),
     ),
     "expanded_to_system": EventDescriptor(
         Category.EXPANSION, Tier.ROUTINE, "outpost", POINT,
-        _t("The %(country)s built an outpost in the %(system)s system, claiming it for their empire."),
+        _t("The %(country)s built an outpost in the %(system)s system."),
     ),
     "sector_creation": EventDescriptor(
         Category.EXPANSION, Tier.TRIVIA, "sector", POINT,
-        _sector_creation_sentence(),
+        _ruled(
+            "The %(country)s created the %(sector)s sector{capital}{system}.",
+            _SECTOR_CAPITAL, _SYSTEM_OF_PLANET,
+            note="%(sector)s: the name of the sector",
+            sector=D,
+        ),
     ),
     "planetary_unrest": EventDescriptor(Category.EXPANSION, Tier.ROUTINE, "unrest"),
     # ---- Science --------------------------------------------------------
@@ -1003,36 +1015,24 @@ REGISTRY: dict[str, EventDescriptor] = {
     # ---- Exploration ----------------------------------------------------
     "discovered_anomaly": EventDescriptor(
         Category.EXPLORATION, Tier.ROUTINE, "search", POINT,
-        _exploration_on_planet_sentence(
-            None, 'The %(country)s discovered the "%(anomaly)s" anomaly on %(planet)s', anomaly=D
-        ),
+        _sentence('The %(country)s discovered the "%(anomaly)s" anomaly on %(planet)s{system}.', IN_SYSTEM,
+                  anomaly=D, planet=PLANET_AND_CLASS),
     ),
     "researched_anomaly": EventDescriptor(
         Category.EXPLORATION, Tier.ROUTINE, "microscope", POINT,
-        _exploration_on_planet_sentence(
-            '%(leader)s of the %(country)s finished researching the "%(anomaly)s" anomaly on %(planet)s',
-            'The %(country)s finished researching the "%(anomaly)s" anomaly on %(planet)s',
-            anomaly=D,
-        ),
+        _leader_of_country('The %(country)s finished researching the "%(anomaly)s" anomaly on %(planet)s{system}.',
+                           IN_SYSTEM, anomaly=D, planet=PLANET_AND_CLASS),
     ),
     "excavated_dig_site": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "shovel", POINT,
-        _exploration_on_planet_sentence(
-            None, 'The %(country)s completed an excavation at the "%(site)s" archaeological site on %(planet)s', site=D
+        _sentence(
+            'The %(country)s completed an excavation at the "%(site)s" archaeological site on %(planet)s{system}.',
+            IN_SYSTEM, site=D, planet=PLANET_AND_CLASS,
         ),
     ),
     "explored_astral_rift": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "compass", POINT,
-        _optional(
-            [("system", '"system" in event')],
-            lambda parts: _ruled(
-                "%(leader)s of the %(country)s explored an astral rift (%(rift)s)"
-                + (" in the %(system)s system." if parts else "."),
-                "The %(country)s explored an astral rift (%(rift)s)"
-                + (" in the %(system)s system." if parts else "."),
-                rift=D,
-            ),
-        ),
+        _leader_of_country('The %(country)s explored the astral rift "%(rift)s"{system}.', IN_SYSTEM, rift=D),
     ),
     "acquired_relic": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "gem", POINT,
@@ -1049,36 +1049,30 @@ REGISTRY: dict[str, EventDescriptor] = {
     # ---- Statecraft -----------------------------------------------------
     "crisis_level_up": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
-        _t(
-            "The %(country)s became a %(threat)s.",
-            "%(threat)s: the crisis level reached, a phrase like \"Risk\"-level threat to the galaxy",
-            threat=D,
-        ),
+        _crisis_level_sentence(),
     ),
     "ascension_perk": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
-        _ruled(
-            '%(leader)s ascended the %(country)s with "%(perk)s".',
-            'The %(country)s ascended with "%(perk)s".',
-            perk=D,
-        ),
+        _ruled('The %(country)s unlocked the "%(perk)s" ascension perk.', perk=D),
     ),
     "government_reform": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "gavel", POINT,
-        _ruled(
-            "%(leader)s reformed the %(country)s government: %(reforms)s",
-            "Government reforms in the %(country)s: %(reforms)s",
-            "%(reforms)s: sentences describing the changes of the government, "
-            "e.g. \"Adopted civics A, B. Embraced ethics C.\"",
-            reforms=D,
+        _if(
+            'event["description"]',
+            _ruled(
+                "The %(country)s reformed their government: %(reforms)s",
+                note="%(reforms)s: sentences describing the changes of the government, "
+                     "e.g. \"Adopted civics A, B. Embraced ethics C.\"",
+                reforms=D,
+            ),
+            _ruled("The %(country)s reformed their government."),
         ),
     ),
     "empire_renamed": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "gavel", POINT,
         _ruled(
-            "%(leader)s renamed the %(country)s from %(old_name)s to %(new_name)s.",
             "The %(country)s was renamed from %(old_name)s to %(new_name)s.",
-            "%(old_name)s and %(new_name)s are the names of the empire",
+            note="%(old_name)s and %(new_name)s are the names of the empire",
             old_name='event["old_name"]',
             new_name='event["new_name"]',
         ),
@@ -1090,62 +1084,50 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "new_policy": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "policy", POINT,
-        _ruled(
-            "Under the rule of %(leader)s, the %(country)s enacted a new policy on '%(policy)s': '%(selected)s'.",
-            "The %(country)s enacted a new policy on '%(policy)s': '%(selected)s'.",
-            "%(policy)s: the area of the policy, %(selected)s: the option chosen",
-            policy='event["policy"]', selected='event["selected"]',
+        _if(
+            'event["selected"] == event["policy"]',
+            # e.g. the gestalt logistics option is also called "Logistics Policy"
+            _ruled('The %(country)s adopted the "%(policy)s".', note="%(policy)s: the name of a policy",
+                   policy='event["policy"]'),
+            _ruled(
+                'The %(country)s set their policy on "%(policy)s" to "%(selected)s".',
+                note="%(policy)s: the area of the policy, %(selected)s: the option chosen",
+                policy='event["policy"]', selected='event["selected"]',
+            ),
         ),
-        li_class="policy",
     ),
     "changed_policy": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "policy", POINT,
         _ruled(
-            "Under the rule of %(leader)s, the %(country)s changed their policy on '%(policy)s' from '%(old_choice)s' to '%(new_choice)s'.",
-            "The %(country)s changed their policy on '%(policy)s' from '%(old_choice)s' to '%(new_choice)s'.",
-            "%(policy)s: the area of the policy, %(old_choice)s and %(new_choice)s: the options",
+            'The %(country)s changed their policy on "%(policy)s" from "%(old_choice)s" to "%(new_choice)s".',
+            note="%(policy)s: the area of the policy, %(old_choice)s and %(new_choice)s: the options",
             policy='event["policy"]', old_choice='event["old_choice"]', new_choice='event["new_choice"]',
         ),
-        li_class="policy",
     ),
     "tradition": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "tradition", POINT,
-        _ruled(
-            'Under the rule of %(leader)s, the %(country)s adopted the "%(tradition)s" tradition.',
-            'The %(country)s adopted the "%(tradition)s" tradition.',
-            tradition=D,
-        ),
+        _tradition_sentence(),
     ),
     "agenda_launch": EventDescriptor(
         Category.STATECRAFT, Tier.ROUTINE, "agenda", POINT,
-        _ruled(
-            'Under the rule of %(leader)s, the %(country)s launched the agenda "%(agenda)s".',
-            'The %(country)s launched the agenda "%(agenda)s".',
-            agenda=D,
-        ),
-        li_class="agenda",
+        _ruled('The %(country)s launched the "%(agenda)s" agenda.', agenda=D),
     ),
     "edict": EventDescriptor(
         Category.STATECRAFT, Tier.TRIVIA, "edict", SPAN,
-        _ruled(
-            '%(leader)s enacted the "%(edict)s" edict.',
-            'The %(country)s enacted the "%(edict)s" edict.',
-            edict=D,
-        ),
+        _ruled('The %(country)s enacted the "%(edict)s" edict.', edict=D),
     ),
     "agenda_preparation": EventDescriptor(
         Category.STATECRAFT, Tier.TRIVIA, "agenda", SPAN,
-        _ruled(
-            'Under the rule of %(leader)s, the %(country)s prepared a new agenda "%(agenda)s".',
-            'The %(country)s prepared a new agenda "%(agenda)s".',
-            agenda=D,
-        ),
-        li_class="agenda",
+        _ruled('The %(country)s prepared the "%(agenda)s" agenda.', agenda=D),
     ),
     # ---- Leaders --------------------------------------------------------
     "ruled_empire": EventDescriptor(
         Category.LEADERS, Tier.MAJOR, "crown", SPAN,
-        _ruled_empire_sentence(),
+        _sentence(
+            "%(leader)s ruled the %(country)s{capital}{system}.",
+            Part("capital", '"planet" in event', " from the capital %(planet)s"), _SYSTEM_OF_PLANET,
+            leader=LEADER_AS_SUBJECT,
+        ),
     ),
     "leader_died": EventDescriptor(
         Category.LEADERS, Tier.MAJOR, "skull", POINT,
@@ -1157,19 +1139,32 @@ REGISTRY: dict[str, EventDescriptor] = {
     ),
     "councilor": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "council", SPAN,
-        _t(
-            "%(leader)s served as %(position)s on the council of the %(country)s.",
-            "%(position)s: the council position, e.g. \"Chancellor\"",
-            leader=LEADER_AS_SUBJECT, position=D,
+        # hive minds' councilors are named after their seat, e.g. "Growth Node"
+        _if(
+            '"leader" not in event or event["description"] != event["leader"].rendered_name',
+            _t(
+                "%(leader)s served as %(position)s on the council of the %(country)s.",
+                "%(position)s: the council position, e.g. \"Chancellor\"",
+                leader=LEADER_AS_SUBJECT, position=D,
+            ),
+            _t("%(leader)s served on the council of the %(country)s.", leader=LEADER_AS_SUBJECT),
         ),
     ),
     "gained_trait": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "dna", POINT,
-        _t('%(leader)s gained the "%(trait)s" trait.', leader=LEADER_AS_SUBJECT, trait=D),
+        _if(
+            'event["description"]',
+            _t('%(leader)s gained the "%(trait)s" trait.', leader=LEADER_AS_SUBJECT, trait=D),
+            _t("%(leader)s gained a trait.", leader=LEADER_AS_SUBJECT),
+        ),
     ),
     "lost_trait": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "dna", POINT,
-        _t('%(leader)s lost the "%(trait)s" trait.', leader=LEADER_AS_SUBJECT, trait=D),
+        _if(
+            'event["description"]',
+            _t('%(leader)s lost the "%(trait)s" trait.', leader=LEADER_AS_SUBJECT, trait=D),
+            _t("%(leader)s lost a trait.", leader=LEADER_AS_SUBJECT),
+        ),
     ),
     "leader_left_country": EventDescriptor(
         Category.LEADERS, Tier.ROUTINE, "person", POINT,
@@ -1178,24 +1173,22 @@ REGISTRY: dict[str, EventDescriptor] = {
     "faction_leader": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "faction", SPAN,
         _t(
-            '%(leader)s was leader of the "%(faction)s" faction.',
+            '%(leader)s led the "%(faction)s" faction.',
             leader=LEADER_AS_SUBJECT, faction='event["faction"].rendered_name',
         ),
     ),
     "governed_sector": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "sector", SPAN,
-        _t(
-            "%(leader)s governed the %(sector)s sector from the planet %(planet)s in the %(system)s system.",
-            "%(sector)s: the name of the sector",
+        _sentence(
+            "%(leader)s governed the %(sector)s sector{capital}{system}.",
+            Part("capital", '"planet" in event', " from %(planet)s"), _SYSTEM_OF_PLANET,
+            note="%(sector)s: the name of the sector",
             leader=LEADER_AS_SUBJECT, sector=D,
         ),
     ),
     "governed_planet": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "planet", SPAN,
-        _t(
-            "%(leader)s governed the planet %(planet)s in the %(system)s system.",
-            leader=LEADER_AS_SUBJECT,
-        ),
+        _sentence("%(leader)s governed the planet %(planet)s{system}.", IN_SYSTEM, leader=LEADER_AS_SUBJECT),
     ),
     "fleet_command": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "fleet", SPAN,
@@ -1206,16 +1199,14 @@ REGISTRY: dict[str, EventDescriptor] = {
             _t('%(leader)s led the fleet "%(fleet)s".',
                leader=LEADER_AS_SUBJECT, fleet='event["fleet"].rendered_name'),
         ),
-        li_class="leader_died",
     ),
     "level_up": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "chevron-up", POINT,
-        _t("%(leader)s was promoted to rank %(rank)s.", leader=LEADER_AS_SUBJECT, rank=D),
+        _t("%(leader)s reached level %(level)s.", leader=LEADER_AS_SUBJECT, level=D),
     ),
     "leader_changed_ethic": EventDescriptor(
         Category.LEADERS, Tier.TRIVIA, "dna", POINT,
         _t("%(leader)s changed their ethic to %(ethic)s.", leader=LEADER_AS_SUBJECT, ethic=D),
-        li_class="leader_left_country",
     ),
 }
 
@@ -1226,217 +1217,156 @@ class StorylineDescriptor:
     tier: Tier
     icon: str
     sentence: str  # Jinja: the arc's title; the storyline item dict is named ``event``
-    stage_row: str  # Jinja: one stage of the arc; the stage dict is named ``stage``
-    stage_count: str  # Jinja: how many stages the arc has reached, ``event["stage_count"]``
-    state_labels: dict[str, str]  # marked with N_, translated when rendered
+    state_labels: dict[str, str]  # marked with N_, translated when shown (see state_label)
+    stage_rows: dict[tuple, str]  # marked with N_, see render_stage
 
 
-_STORYLINE_LEADER = '{% if "leader" in event %} ({{ render_leader(event) | trim }}){% endif %}'
-_STAGE_LEADER = '{% if "leader" in stage %} ({{ render_leader(stage) | trim }}){% endif %}'
-
-
-def _storyline_title(base: str, optional, **overrides) -> str:
-    """The title of an arc: ``base`` followed by the optional parts that its item has.
-
-    ``optional`` is a list of (name, Jinja condition, English text, placeholder values)."""
-
-    def build(parts):
-        message = base
-        values = dict(overrides)
-        for name, _condition, text, extra in optional:
-            if name in parts:
-                message += text
-                values.update(extra)
-        return _t(message, **{k: v for k, v in values.items() if f"%({k})s" in message})
-
-    return _optional([(name, condition) for name, condition, _text, _extra in optional], build) + _STORYLINE_LEADER
-
-
-_IN_SYSTEM = ("system", '"system" in event', " in the %(system)s system", {})
-_BY_COUNTRY = ("country", '"country" in event', " by the %(country)s", {})
-
-
-def _stage_row(label: str, label_with_detail: str, label_by_country: str, label_with_detail_by_country: str) -> str:
-    """A stage of an arc: its number, what happened, and the country if it differs from the arc's."""
-    messages = {
-        (): label,
-        ("detail",): label_with_detail,
-        ("country",): label_by_country,
-        ("detail", "country"): label_with_detail_by_country,
-    }
-
-    def build(parts):
-        message = messages[parts]
-        return _t(
-            message,
-            ev="stage",
-            **{k: v for k, v in dict(index='stage["index"]', detail='stage["detail"]').items() if f"%({k})s" in message},
-        )
-
-    return _optional([("detail", '"detail" in stage'), ("country", '"country" in stage')], build) + _STAGE_LEADER
+_STORYLINE_LEADER = '{% if "leader" in event %} ({{ render_leader(event) }}){% endif %}'
+_BY_COUNTRY = Part("country", '"country" in event', " by the %(country)s")
 
 
 # StorylineType name -> StorylineDescriptor
 STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
     "dig_site": StorylineDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "shovel",
-        _storyline_title(
-            'Excavation of the "%(site)s" archaeological site',
-            [("planet", '"planet" in event', " on %(planet)s", dict(planet=PLANET_AND_CLASS)), _IN_SYSTEM, _BY_COUNTRY],
-            site='event["title"]',
-        ),
-        _stage_row(
-            "Chapter %(index)s",
-            "Chapter %(index)s: %(detail)s",
-            "Chapter %(index)s by the %(country)s",
-            "Chapter %(index)s: %(detail)s by the %(country)s",
-        ),
-        _n("%(num)s chapter", "%(num)s chapters", 'event["stage_count"]'),
+        _sentence(
+            'Excavation of the "%(site)s" archaeological site{planet}{system}{country}',
+            Part("planet", '"planet" in event', " on %(planet)s"), IN_SYSTEM, _BY_COUNTRY,
+            site='event["title"]', planet=PLANET_AND_CLASS,
+        ) + _STORYLINE_LEADER,
         {"active": N_("excavating"), "paused": N_("paused"), "completed": N_("fully excavated")},
+        {
+            (): N_("Chapter %(index)s"),
+            ("detail",): N_("Chapter %(index)s: %(detail)s"),
+            ("country",): N_("Chapter %(index)s by the %(country)s"),
+            ("detail", "country"): N_("Chapter %(index)s: %(detail)s by the %(country)s"),
+        },
     ),
     "astral_rift": StorylineDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "compass",
-        _storyline_title(
-            'Exploration of the astral rift "%(rift)s"',
-            [_IN_SYSTEM, _BY_COUNTRY],
+        _sentence(
+            'Exploration of the astral rift "%(rift)s"{system}{country}', IN_SYSTEM, _BY_COUNTRY,
             rift='event["title"]',
-        ),
-        _stage_row(
-            "Step %(index)s",
-            "Step %(index)s: %(detail)s",
-            "Step %(index)s by the %(country)s",
-            "Step %(index)s: %(detail)s by the %(country)s",
-        ),
-        _n("%(num)s step", "%(num)s steps", 'event["stage_count"]'),
+        ) + _STORYLINE_LEADER,
         {"active": N_("exploring"), "paused": N_("paused"), "completed": N_("fully explored")},
+        {
+            (): N_("Step %(index)s"),
+            ("detail",): N_("Step %(index)s: %(detail)s"),
+            ("country",): N_("Step %(index)s by the %(country)s"),
+            ("detail", "country"): N_("Step %(index)s: %(detail)s by the %(country)s"),
+        },
     ),
     "first_contact": StorylineDescriptor(
         Category.DIPLOMACY, Tier.MAJOR, "handshake",
-        _storyline_title(
-            "First contact between the %(country)s and the %(target)s",
-            [_IN_SYSTEM],
-        ),
-        _stage_row(
-            "Stage %(index)s",
-            "Stage %(index)s: %(detail)s",
-            "Stage %(index)s by the %(country)s",
-            "Stage %(index)s: %(detail)s by the %(country)s",
-        ),
-        _n("%(num)s stage", "%(num)s stages", 'event["stage_count"]'),
+        _sentence("First contact between the %(country)s and the %(target)s{system}", IN_SYSTEM)
+        # both sides' envoys once the two sides are merged
+        + '{% if "leader" in event %} ({{ render_envoys(event) }}){% endif %}',
         {"active": N_("in progress"), "completed": N_("contact made"), "abandoned": N_("abandoned")},
+        {
+            (): N_("Stage %(index)s"),
+            ("detail",): N_("Stage %(index)s: %(detail)s"),
+            ("country",): N_("Stage %(index)s by the %(country)s"),
+            ("detail", "country"): N_("Stage %(index)s: %(detail)s by the %(country)s"),
+        },
     ),
 }
 
-_COMPILED: dict[str, object] = {}
-_COMPILED_STORYLINES: dict[str, object] = {}
+
+def state_label(item) -> str:
+    """The state of a storyline item in the dashboard language, e.g. "fully excavated"."""
+    descriptor = STORYLINE_REGISTRY.get(item.get("storyline_type"))
+    state = item.get("state")
+    label = descriptor.state_labels.get(state) if descriptor else None
+    return _(label) if label else (state or "")
 
 
-def _event_source(event_type: str, descriptor: EventDescriptor) -> str:
-    li_class = descriptor.li_class or event_type
-    return (
-        '<li class="eventitem ' + li_class + '">\n'
-        + '    <div class="eventdescription">\n'
-        + '        <span class="dateblock">' + _DATEBLOCKS[descriptor.dateblock] + "</span>\n"
-        + '        <span class="eventtext">' + descriptor.sentence + "</span>\n"
-        + "    </div>\n"
-        + "</li>"
-    )
+def stage_count_label(item) -> str:
+    """How many stages a storyline item reached, e.g. "3 chapters"."""
+    count = item["stage_count"]
+    if item["storyline_type"] == "dig_site":
+        return ngettext("%(num)s chapter", "%(num)s chapters", count)
+    if item["storyline_type"] == "astral_rift":
+        return ngettext("%(num)s step", "%(num)s steps", count)
+    return ngettext("%(num)s stage", "%(num)s stages", count)
 
 
-def _storyline_source(descriptor: StorylineDescriptor) -> str:
-    head = (
-        '<span class="dateblock">' + _DATEBLOCKS[SPAN] + "</span>\n"
-        + '<span class="eventtext">' + descriptor.sentence
-        + '<span class="storyline_meta"> <span class="storyline_state state_{{ event["state"] }}">{{ state_label }}</span>'
-        + '{% if event["stage_count"] %} ' + descriptor.stage_count + "{% endif %}"
-        + "</span></span>\n"
-    )
-    return (
-        '<li class="eventitem storyline {{ event["storyline_type"] }}_storyline">\n'
-        + '{% if event["stages"] %}'
-        + '<details class="storyline_card"><summary class="storyline_summary eventdescription">\n'
-        + head
-        + "</summary>\n"
-        + '<ul class="event_list storyline_stages">'
-        + '{% for stage in event["stages"] %}'
-        + '<li class="eventitem storyline_stage"><span class="dateblock">{{ stage["start_date"] }}:</span> '
-        + '<span class="eventtext">' + descriptor.stage_row + "</span></li>"
-        + "{% endfor %}"
-        + "</ul></details>\n"
-        + "{% else %}"
-        + '<div class="eventdescription">\n' + head + "</div>\n"
-        + "{% endif %}"
-        + "</li>"
-    )
+def render_stage(item, stage, links) -> Markup:
+    """One stage of a storyline: its number, what happened, and the country if it differs from the arc's.
+
+    Stages without a number (both sides of a first contact) show what happened, capitalized."""
+    descriptor = STORYLINE_REGISTRY[item["storyline_type"]]
+    country = Markup(links[stage["country"]]) if stage.get("country") is not None else None
+    detail = stage.get("detail")
+    if "index" not in stage:
+        detail = (detail or "")[:1].upper() + (detail or "")[1:]
+        if country is None:
+            return escape(detail)
+        # Translators: a stage of a first contact and the empire that reached it, e.g.
+        # "Communications established by the United Nations of Earth". %(country)s is the empire (a link)
+        return sentence_gettext("%(detail)s by the %(country)s", detail=detail, country=country)
+    parts = tuple(p for p, present in (("detail", bool(detail)), ("country", country is not None)) if present)
+    values = dict(index=stage["index"])
+    if detail:
+        values["detail"] = detail
+    if country is not None:
+        values["country"] = country
+    return sentence_gettext(descriptor.stage_rows[parts], **values)
 
 
-def _compiled(event_type: str):
-    """Lazily compile (and cache) the full ``<li>`` template for an event type
-    using Flask's own Jinja environment, so rendering matches the page exactly."""
-    if event_type in _COMPILED:
-        return _COMPILED[event_type]
-    descriptor = REGISTRY.get(event_type)
-    if descriptor is None or descriptor.sentence is None:
-        _COMPILED[event_type] = None
-        return None
-    from stellarisdashboard.dashboard_app import flask_app
+def _compiled(key: str, source: Optional[str]):
+    """Lazily compile (and cache) a sentence template using Flask's own Jinja environment."""
+    if key not in _COMPILED_SENTENCES:
+        template = None
+        if source is not None:
+            from stellarisdashboard.dashboard_app import flask_app
 
-    template = flask_app.jinja_env.from_string(_event_source(event_type, descriptor))
-    _COMPILED[event_type] = template
-    return template
+            template = flask_app.jinja_env.from_string(source)
+        _COMPILED_SENTENCES[key] = template
+    return _COMPILED_SENTENCES[key]
 
 
-def _compiled_storyline(storyline_type: str):
-    """Lazily compile (and cache) the card template for a storyline type."""
-    if storyline_type in _COMPILED_STORYLINES:
-        return _COMPILED_STORYLINES[storyline_type]
-    descriptor = STORYLINE_REGISTRY.get(storyline_type)
-    if descriptor is None:
-        _COMPILED_STORYLINES[storyline_type] = None
-        return None
-    from stellarisdashboard.dashboard_app import flask_app
+_COMPILED_SENTENCES: dict[str, object] = {}
 
-    template = flask_app.jinja_env.from_string(_storyline_source(descriptor))
-    _COMPILED_STORYLINES[storyline_type] = template
-    return template
+
+def render_sentence(event, links) -> Markup:
+    """Just the sentence of an event or storyline item, without the date or list markup."""
+    if event.get("event_type") == "storyline":
+        key = "storyline:" + event.get("storyline_type", "")
+        descriptor = STORYLINE_REGISTRY.get(event.get("storyline_type"))
+    else:
+        key = event.get("event_type")
+        descriptor = REGISTRY.get(key)
+    template = _compiled(key, descriptor.sentence if descriptor is not None else None)
+    if template is None:
+        return Markup("")
+    # collapse the template's line breaks and indents, but keep no-break spaces (French "\u00a0:")
+    text = re.sub(r"[ \t\n\r\f\v]+", " ", template.render(**_render_context(event, links))).strip()
+    # an empty value leaves a space before the punctuation that follows it (French spaces before ":" and ";" stay)
+    return Markup(re.sub(r" ([,.)])", r"\1", text))
 
 
 def jinja_sources():
     """(name, source) of every Jinja template kept in this module, for extracting
     their translatable messages (see stellarisdashboard/i18n/extract.py)."""
-    for name, source in _DATEBLOCKS.items():
-        yield f"_DATEBLOCKS[{name}]", source
     for event_type, descriptor in REGISTRY.items():
         if descriptor.sentence is not None:
-            yield f"REGISTRY[{event_type}]", _event_source(event_type, descriptor)
+            yield f"REGISTRY[{event_type}]", descriptor.sentence
     for storyline_type, descriptor in STORYLINE_REGISTRY.items():
-        yield f"STORYLINE_REGISTRY[{storyline_type}]", _storyline_source(descriptor)
+        yield f"STORYLINE_REGISTRY[{storyline_type}]", descriptor.sentence
 
 
-def render_storyline(event, links) -> Markup:
-    """Render one storyline item as a ``<li>`` card that expands to its stages."""
-    storyline_type = event.get("storyline_type")
-    template = _compiled_storyline(storyline_type)
-    if template is None:
-        return Markup("")
-    descriptor = STORYLINE_REGISTRY[storyline_type]
-    state = event.get("state")
-    label = descriptor.state_labels.get(state)
-    return Markup(
-        template.render(
-            state_label=_(label) if label else state,
-            **_render_context(event, links),
-        )
-    )
+def is_span(event) -> bool:
+    """Whether the event lasts over time (council seats, envoy assignments, ...)."""
+    descriptor = REGISTRY.get(event.get("event_type"))
+    return descriptor is not None and descriptor.dateblock in (SPAN, ENVOY)
 
 
-def render_event(event, links) -> Markup:
-    """Render one event's ``<li>`` of ledger markup, dispatching on
-    ``event_type``. Returns empty markup for types with no template (matching
-    the old chain's fall-through)."""
+def describe(event) -> tuple:
+    """(category, tier) of an event or storyline item."""
     if event.get("event_type") == "storyline":
-        return render_storyline(event, links)
-    template = _compiled(event.get("event_type"))
-    if template is None:
-        return Markup("")
-    return Markup(template.render(**_render_context(event, links)))
+        descriptor = STORYLINE_REGISTRY.get(event.get("storyline_type"))
+    else:
+        descriptor = REGISTRY.get(event.get("event_type"))
+    if descriptor is None:
+        return None, None
+    return descriptor.category, descriptor.tier

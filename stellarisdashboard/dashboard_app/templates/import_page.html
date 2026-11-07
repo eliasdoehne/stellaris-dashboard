@@ -1,11 +1,15 @@
 {% extends "layout.html" %}
 {% block body %}
-<div class="import">
-    <h1>{{ _("Import Saves") }}</h1>
-    <p class="import-intro">
-        {% trans trimmed %}The dashboard picks up new saves while it runs. Here you can import the saves a game already has
-        in the save files folder <code>{{ save_path }}</code>. Saves that are already imported are skipped.{% endtrans %}
-    </p>
+<div class="import page page--narrow">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">{{ _("Import Saves") }}</h1>
+            <p class="page-subtitle">
+                {% trans trimmed %}The dashboard picks up new saves while it runs. Here you can import the saves a game already has
+                in the save files folder <code>{{ save_path }}</code>. Saves that are already imported are skipped.{% endtrans %}
+            </p>
+        </div>
+    </div>
 
     {% include "import_status.html" %}
 

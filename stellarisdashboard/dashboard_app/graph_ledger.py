@@ -5,6 +5,7 @@ from typing import Dict, Any, List, Optional, Union
 from urllib import parse
 
 import dash.exceptions
+import flask
 import plotly.graph_objs as go
 from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
 
@@ -13,6 +14,7 @@ from stellarisdashboard.i18n import gettext as _, pgettext
 from stellarisdashboard.dashboard_app import (
     utils,
     flask_app,
+    shell,
     visualization_data,
 )
 
@@ -58,12 +60,38 @@ GRAPH_CONFIG_COMPACT = {
 }
 COMPACT_PLOT_HEIGHT = 240
 
-timeline_app = Dash(
+class ShellDash(Dash):
+    """Renders the Dash page inside the app shell shared with the Flask pages."""
+
+    def interpolate_index(self, **kwargs):
+        game_id, matches = _get_game_ids_matching_url(flask.request.url)
+        context = {}
+        if matches:
+            game = datamodel.get_available_games_dict().get(matches[0])
+            if game:
+                context = dict(
+                    game_name=game["game_id"],
+                    country=game["country_name"],
+                    current_date=game["game_date"],
+                )
+        return flask.render_template(
+            "timeline_page.html",
+            dash=kwargs,
+            section="graphs",
+            graph_tab=_get_tab_from_url(flask.request.url),
+            **context,
+        )
+
+
+timeline_app = ShellDash(
     __name__,
     title="Stellaris Dashboard",
     server=flask_app,
     compress=False,
     url_base_pathname="/timeline/",
+    update_title=None,
+    # the shell template links the shared stylesheets and scripts itself
+    assets_ignore=r"^(?!timeline\.css$)",
 )
 
 
@@ -180,32 +208,9 @@ def _plot_grid_card(plot_spec, compact_figure):
     )
 
 
-@timeline_app.callback(Output("game-name-header", "children"), [Input("url", "search")])
-def update_game_header(search):
-    game_id, matches = _get_game_ids_matching_url(search)
-    if not matches:
-        logger.warning(f"Could not find a game matching {game_id}")
-        return _("Unknown Game")
-    game_id = matches[0]
-    games_dict = datamodel.get_available_games_dict()
-    country = games_dict[game_id]["country_name"]
-    return f"{country} ({game_id})"
-
-
-@timeline_app.callback(Output("ledger-link", "href"), [Input("url", "search")])
-def update_ledger_link(search):
-    game_id, _matches = _get_game_ids_matching_url(search)
-    if game_id:
-        return f"/history/{game_id}"
-    return "/history"
-
-
-@timeline_app.callback(Output("galaxy-link", "href"), [Input("url", "search")])
-def update_galaxy_link(search):
-    game_id, _matches = _get_game_ids_matching_url(search)
-    if game_id:
-        return f"/galaxy/{game_id}"
-    return "/galaxy"
+@timeline_app.callback(Output("graph-tab-title", "children"), [Input("url", "search")])
+def update_tab_title(search):
+    return shell.graph_tab_label(_get_tab_from_url(search))
 
 
 @timeline_app.callback(
@@ -236,13 +241,12 @@ def update_country_select_options(search):
 @timeline_app.callback(
     Output("tab-content", "children"),
     [
-        Input("tabs-container", "value"),
         Input("url", "search"),
         Input("dash-plot-checklist", "value"),
         Input("country-perspective-dropdown", "value"),
     ],
 )
-def update_content(tab_value, search, dash_plot_checklist, country_perspective):
+def update_content(search, dash_plot_checklist, country_perspective):
     config.CONFIG.normalize_stacked_plots = (
         "normalize_stacked_plots" in dash_plot_checklist
     )
@@ -255,7 +259,7 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
             [
                 html.H2(_("Game not found")),
                 html.P(_('No game matches "%(game)s".', game=game_id)),
-                html.A(_("Return to Game Selection"), href="/"),
+                html.A(_("Back to game selection"), href="/"),
             ],
             className="tl-content",
         )
@@ -267,6 +271,7 @@ def update_content(tab_value, search, dash_plot_checklist, country_perspective):
         )
         return []
 
+    tab_value = _get_tab_from_url(search)
     logger.info(f"dash_server.update_content: Tab is {tab_value}, Game is {game_id}")
 
     children = []
@@ -376,6 +381,12 @@ def _get_game_ids_matching_url(url):
         game_id = ""
     matches = datamodel.get_known_games(game_id)
     return game_id, matches
+
+
+def _get_tab_from_url(url) -> str:
+    tab_names = list(config.CONFIG.tab_layout)
+    tab = _get_url_params(url).get("tab", [None])[0]
+    return tab if tab in tab_names else tab_names[0]
 
 
 def get_raw_plot_data_dicts(
@@ -554,68 +565,30 @@ def start_dash_app(host, port):
         timeline_app.run(host=host, port=port)
 
 
-def _get_tab_labels() -> Dict[str, str]:
-    """Display names of the default tabs in the current dashboard language.
-
-    The tab names are the keys of the tab layout setting and identify the tabs, so they
-    stay English. Customised tabs that are not listed here are displayed as they are."""
-    return {
-        config.MARKET_TAB: pgettext("graph tab", "Markets"),
-        "Budget": pgettext("graph tab", "Budget"),
-        "Economy": pgettext("graph tab", "Economy"),
-        "Demographics": pgettext("graph tab", "Demographics"),
-        # Translators: name of a tab with graphs about the pops (population units)
-        "Pops": pgettext("graph tab", "Pops"),
-        "Planets": pgettext("graph tab", "Planets"),
-        "Science": pgettext("graph tab", "Science"),
-        "Military": pgettext("graph tab", "Military"),
-        "Victory": pgettext("graph tab", "Victory"),
-    }
-
-
 def get_layout():
-    tab_names = list(config.CONFIG.tab_layout)
-    tab_labels = _get_tab_labels()
-
-    brand = html.Div(
-        className="tl-brand",
+    # Navigation (game, section and graph tab) lives in the shared shell around
+    # this layout; the selected tab comes from the URL's ?tab= parameter.
+    controls = html.Div(
+        className="page-actions",
         children=[
-            html.Span("STELLARIS", className="tl-brand-title"),
-            html.Span("DASHBOARD", className="tl-brand-sub"),
-        ],
-    )
-
-    nav = html.Nav(
-        className="tl-nav",
-        children=[
-            html.A("◂  " + _("Game Selection"), className="tl-nav-link", id="index-link", href="/"),
-            html.A(_("Settings"), className="tl-nav-link", id="settings-link", href="/settings/"),
-            html.A(_("Galaxy Map"), className="tl-nav-link", id="galaxy-link", href="/galaxy"),
-            html.A(_("Event Ledger"), className="tl-nav-link", id="ledger-link", href="/history"),
-            html.A(
-                _("Stellaris Wiki") + "  ↗",
-                className="tl-nav-link tl-nav-link--ext",
-                id="wiki-link",
-                href="https://stellaris.paradoxwikis.com/Stellaris_Wiki",
-            ),
-        ],
-    )
-
-    global_graph_controls = html.Div(
-        className="tl-control-group",
-        children=[
-            html.Label(
-                _("Country perspective"),
-                className="tl-control-label",
-                htmlFor="country-perspective-dropdown",
-            ),
-            dcc.Dropdown(
-                id="country-perspective-dropdown",
-                className="tl-dropdown",
-                options=[],
-                # Translators: shown in the country perspective dropdown when no country is selected, the graphs then show the default view of the whole galaxy
-                placeholder=_("Galaxy default"),
-                value=None,
+            html.Div(
+                className="tl-control",
+                children=[
+                    html.Label(
+                        # Translators: label of the dropdown that selects the country from whose perspective the graphs are shown
+                        _("Perspective"),
+                        className="tl-control-label",
+                        htmlFor="country-perspective-dropdown",
+                    ),
+                    dcc.Dropdown(
+                        id="country-perspective-dropdown",
+                        className="tl-dropdown",
+                        options=[],
+                        # Translators: shown in the country perspective dropdown when no country is selected, the graphs then show the default view of the whole galaxy
+                        placeholder=_("Galaxy default"),
+                        value=None,
+                    ),
+                ],
             ),
             dcc.Checklist(
                 id="dash-plot-checklist",
@@ -631,39 +604,20 @@ def get_layout():
         ],
     )
 
-    tabs = dcc.Tabs(
-        id="tabs-container",
-        className="tl-tabs",
-        parent_className="tl-tabs-parent",
+    page_head = html.Div(
+        className="page-head",
         children=[
-            dcc.Tab(
-                id=tab_label,
-                label=tab_labels.get(tab_label, tab_label),
-                value=tab_label,
-                className="tl-tab",
-                selected_className="tl-tab--selected",
-            )
-            for tab_label in tab_names
-        ],
-        value=tab_names[0],
-    )
-
-    sidebar = html.Aside(
-        className="tl-sidebar",
-        children=[
-            brand,
-            html.H1(_("Unknown Game"), id="game-name-header", className="tl-game-name"),
-            nav,
-            global_graph_controls,
+            html.H1(id="graph-tab-title", className="page-title"),
+            controls,
         ],
     )
 
-    main = html.Main(
+    main = html.Div(
         className="tl-main",
         # plot_width is a user setting; honor it as the fluid content's max width.
         style={"--tl-content-max": f"{config.CONFIG.plot_width}px"},
         children=[
-            tabs,
+            page_head,
             html.Div(id="tab-content", className="tl-content"),
         ],
     )
@@ -710,7 +664,6 @@ def get_layout():
         className="tl-app",
         children=[
             dcc.Location(id="url", refresh=False),
-            sidebar,
             main,
             modal,
         ],

@@ -1,0 +1,20 @@
+{# The Dash graphs page: Dash's index parts (see graph_ledger.ShellDash) inside the shared shell. #}
+{% extends "layout.html" %}
+
+{% block head_extra %}
+{{ dash.metas|safe }}
+{{ dash.favicon|safe }}
+{{ dash.css|safe }}
+{% endblock %}
+
+{% block body %}
+{{ dash.app_entry|safe }}
+{% endblock %}
+
+{% block body_end %}
+<footer>
+{{ dash.config|safe }}
+{{ dash.scripts|safe }}
+{{ dash.renderer|safe }}
+</footer>
+{% endblock %}

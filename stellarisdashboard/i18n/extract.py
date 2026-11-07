@@ -32,6 +32,10 @@ KEYWORDS = {
     "ngettext": (1, 2),
     "pgettext": ((1, "c"), 2),
     "npgettext": ((1, "c"), 2, 3),
+    # the ledger's variants, which fill in markup (see dashboard_app/event_registry.py)
+    "sentence_gettext": None,
+    "sentence_ngettext": (1, 2),
+    "sentence_pgettext": ((1, "c"), 2),
 }
 COMMENT_TAGS = ["Translators:"]
 METHOD_MAP = [

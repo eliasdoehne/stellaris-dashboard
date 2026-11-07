@@ -1,5 +1,13 @@
 {% extends "layout.html" %}
+{% from "_icons.html" import icon %}
 {% block body %}
+<div class="page page--narrow">
+<div class="page-head">
+    <div>
+        <h1 class="page-title">{{ _("Games") }}</h1>
+        {% if games|length %}<p class="page-subtitle">{{ ngettext("%(num)s game, most recently updated first", "%(num)s games, most recently updated first", games|length) }}</p>{% endif %}
+    </div>
+</div>
 
 <ul class="notifications">
     {% if not save_file_path_is_valid %}
@@ -36,25 +44,27 @@
 </ul>
 
 {% if games|length %}
-<div class="gamelist">
-    <ul class=entries>
-        <h1>{{ _("Available Games") }}</h1>
-        {% for game in games %}
-        <li class="game"><h3>{{ game["country_name"] }} ({{ game["game_id"] }})</h3>
-            <p>
-                {{ game["game_date"] }}, {{ game["galaxy"] }}, {{ game["difficulty"] }}
-            </p>
-            <p>
-                {{ ngettext("%(num)s save, last updated %(last_updated)s", "%(num)s saves, last updated %(last_updated)s", game["num_saves"], last_updated=game["last_updated"]) }}
-            </p>
-            <a class="button" href={{url_for("/timeline/", game_name=game["game_id"])}}>{{ _("Timeline Graphs") }}</a>
-            <a class="button" href={{url_for("galaxy_page", game_id=game["game_id"])}}>{{ _("Galaxy Map") }}</a>
-            <a class="button" href={{url_for("history_page", game_id=game["game_id"])}}>{{ _("Event Ledger") }}</a>
-        </li>
-        {% endfor %}
-    </ul>
-</div>
+<ul class="game-list">
+    {% for game in games %}
+    <li class="game-card">
+        <a class="game-card-main" href="{{ section_url('graphs', game.game_id) }}">
+            <span class="game-card-name">{{ game.country_name }}</span>
+            <span class="game-card-meta">
+                <span class="game-card-date">{{ game.game_date }}</span>
+                {# Translators: part of the details of a game in the list of games, after its galaxy size and difficulty #}
+                {{ game.galaxy }} · {{ game.difficulty }} · {{ ngettext("%(num)s save · updated %(last_updated)s", "%(num)s saves · updated %(last_updated)s", game.num_saves, last_updated=game.last_updated) }}
+            </span>
+            <span class="game-card-id">{{ game.game_id }}</span>
+        </a>
+        <nav class="game-card-links">
+            {% for key, label, icon_name, shortcut in game_sections %}
+            <a class="chip-link" href="{{ section_url(key, game.game_id) }}">{{ icon(icon_name) }}<span>{{ label }}</span></a>
+            {% endfor %}
+        </nav>
+    </li>
+    {% endfor %}
+</ul>
 {% endif %}
-
+</div>
 {% endblock %}
 

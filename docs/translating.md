@@ -101,6 +101,13 @@ Jinja templates kept in Python strings (like the ledger sentences in
 `event_registry.py`) are found through the module's `jinja_sources()` function;
 modules with such templates are listed in `JINJA_STRING_MODULES` in `extract.py`.
 
+The ledger sentences write "the" before the names of empires, wars and sectors
+("The %(country)s entered the %(war)s."), so translators see whole sentences. While
+the English text is shown, `event_registry.elide_articles` drops that "the" before a
+name that brings its own article ("The Chosen"); translations are shown as written.
+Their messages go through `sentence_gettext` (and `sentence_ngettext`,
+`sentence_pgettext`), which `extract.py` knows as keywords too.
+
 ## Adding a language
 
 The dashboard supports the languages of the game. Their locales are listed in

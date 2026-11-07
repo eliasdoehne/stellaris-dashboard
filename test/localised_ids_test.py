@@ -81,6 +81,64 @@ def test_faction_type(fixture_renderer, faction_type, expected):
     assert game_info.lookup_faction_type(faction_type) == expected
 
 
+def test_stored_name_template_passed_as_key(fixture_renderer):
+    fixture_renderer.name_mapping["NAME_Two"] = "$world$ II"
+    name = {"key": "NAME_Two", "variables": [{"key": "world", "value": {"key": "St. Elmo", "literal": "yes"}}]}
+    assert game_info.lookup_key(json.dumps(name)) == "St. Elmo II"
+
+
+def test_country_name_without_localisation_is_prettified(fixture_renderer):
+    assert game_info.render_name_or_prettify('{"key": "NAME_dead_leader_country"}') == "Dead Leader Country"
+
+
+@pytest.mark.parametrize(
+    "object_id, expected",
+    [
+        ("in_progress", "In Progress"),
+        ("war_in_heaven", "War in Heaven"),
+        ("communations", "Communications"),
+    ],
+)
+def test_convert_id_to_name(object_id, expected):
+    assert game_info.convert_id_to_name(object_id) == expected
+
+
+def test_war_goal_uses_the_game_name(fixture_renderer):
+    fixture_renderer.name_mapping["war_goal_wg_conquest"] = "Conquer"
+    assert datamodel.WarParticipant(war_goal="wg_conquest").get_war_goal() == "Conquer"
+    assert datamodel.WarParticipant(war_goal="wg_new_goal").get_war_goal() == "New Goal"
+
+
+def test_planet_modifier_uses_the_game_name(fixture_renderer):
+    fixture_renderer.name_mapping["mineral_poor"] = "Poor Quality Minerals"
+    description = datamodel.SharedDescription(text="pm_mineral_poor")
+    assert datamodel.PlanetModifier(db_description=description).name == "Poor Quality Minerals"
+
+
+def test_country_type_uses_the_game_name(fixture_renderer):
+    fixture_renderer.name_mapping["awakened_fallen_empire"] = "Awakened Empire"
+    assert datamodel.Country(country_type="awakened_fallen_empire").rendered_type == "Awakened Empire"
+    assert datamodel.Country(country_type="default").rendered_type == "Empire"
+    assert datamodel.Country(country_type="drone_faction").rendered_type == "Drone Faction"
+
+
+def test_call_type_is_readable():
+    assert datamodel.WarParticipant(call_type="secret_fealty").rendered_call_type == "secret fealty"
+
+
+def test_reform_uses_the_game_names(fixture_renderer):
+    fixture_renderer.name_mapping.update(
+        gov_machine_empire="Artificial Intelligence Network", civic_test_civic="Test Civic Name", auth_test="Test Rule"
+    )
+    old = datamodel.Government(gov_type="gov_machine_empire", authority="auth_old")
+    new = datamodel.Government(gov_type="gov_other_type", authority="auth_test", civic_1="civic_test_civic")
+    assert new.get_reform_description_lines(old) == [
+        'Type changed from "Artificial Intelligence Network" to "Other Type".',
+        "Authority changed from Old to Test Rule.",
+        "Adopted civics Test Civic Name.",
+    ]
+
+
 def test_ethic_found_in_localisation(fixture_renderer):
     assert game_info.lookup_id_name("ethic_xenophile", "ethic") == "Xenophile"
 
@@ -139,3 +197,8 @@ def test_anomaly_category(fixture_renderer, category, expected):
 )
 def test_astral_rift_description(fixture_renderer, text, expected):
     assert datamodel.render_astral_rift_description(text) == expected
+
+
+def test_astral_rift_description_has_no_double_quotes(fixture_renderer):
+    fixture_renderer.name_mapping["astral_rift.1.name"] = 'Impossible "Glass"'
+    assert datamodel.render_astral_rift_description("corridors|astral_rift.1") == "Corridors: Impossible 'Glass'"

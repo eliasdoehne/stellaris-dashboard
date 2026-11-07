@@ -1,6 +1,6 @@
 import re
 
-from stellarisdashboard.dashboard_app.event_registry import render_event
+from stellarisdashboard.dashboard_app.event_registry import render_sentence
 from stellarisdashboard.datamodel import (
     date_to_days,
     render_espionage_description,
@@ -47,7 +47,7 @@ def test_first_contact_process_sentence_depends_on_status():
             event_type="first_contact_process", country=country, target_country=target,
             start_date="2243.05.16", end_date=None, is_active=True, contact_status=status,
         )
-        return " ".join(re.sub(r"<[^>]+>", "", str(render_event(event, links))).split())
+        return " ".join(re.sub(r"<[^>]+>", "", str(render_sentence(event, links))).split())
 
     assert sentence("finished").endswith("The Alpha made first contact with the Beta.")
     assert sentence("in_progress").endswith("The Alpha began first contact with the Beta.")

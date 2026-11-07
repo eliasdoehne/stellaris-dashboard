@@ -11,7 +11,7 @@ from stellarisdashboard.dashboard_app.event_registry import (
     GALACTIC_CRISIS_PHRASES,
     REGISTRY,
     STORYLINE_REGISTRY,
-    render_event,
+    render_sentence,
 )
 
 MARKER = "[xx]"
@@ -44,6 +44,7 @@ class Thing:
 
     def __init__(self, name, **attributes):
         self.name = name
+        self.rendered_name = name
         self.__dict__.update(attributes)
 
     def __repr__(self):
@@ -56,6 +57,7 @@ def make_links(**objects):
 
 COUNTRY = Thing("EmpireOne")
 TARGET = Thing("EmpireTwo")
+THIRD = Thing("The Chosen")
 LEADER = Thing("Jane Doe", leader_class="scientist")
 OTHER_LEADER = Thing("John Roe", leader_class="official")
 SYSTEM = Thing("Sol")
@@ -67,32 +69,34 @@ FACTION = Thing("Free Folk", rendered_name="Free Folk")
 FLEET = Thing("First Fleet", is_civilian_fleet=False, rendered_name="First Fleet")
 SCIENCE_SHIP = Thing("Argo", is_civilian_fleet=True, rendered_name="Argo")
 LINKS = make_links(
-    country=COUNTRY, target=TARGET, leader=LEADER, other=OTHER_LEADER, system=SYSTEM, planet=PLANET,
+    country=COUNTRY, target=TARGET, third=THIRD, leader=LEADER, other=OTHER_LEADER, system=SYSTEM, planet=PLANET,
     planet2=PLANET_WITHOUT_CLASS, war=WAR, war2=UNNAMED_WAR,
 )
 
 BASE = dict(
     country=COUNTRY, war=WAR, planet=PLANET, start_date="2300.01.01", end_date="2310.01.01", is_active=False, description="DESCRIPTION",
-    attackers="<a>A</a>", defenders="<a>B</a>", attacker_victory=True,
+    attackers=[COUNTRY], defenders=[TARGET, THIRD], attacker_victory=True,
     attacker_exhaustion="10.0%", defender_exhaustion="20.0%",
     federation_name="Fed", federation_title='Alliance "Fed"', old_federation_name="OldFed",
-    federation_partners="<a>P</a> and <a>Q</a>", is_associate=False, changed_role=False, federation_member_count=3,
+    federation_partners=[TARGET, THIRD], is_associate=False, changed_role=False, federation_member_count=3,
     faction=FACTION, faction_type="Free Folk", fleet=FLEET,
     old_name="Old", new_name="New", old_class="Barren", new_class="Gaia", policy="Pol", selected="Sel",
     old_choice="Old", new_choice="New", old_age="Steam Age", new_age="Atomic Age", regressed=False,
+    tradition="Discovery Traditions", crisis_level="Risk", crisis_defender=False,
 )
 # optional parts of an event, which select between the variants of a sentence
 OPTIONAL = dict(leader=LEADER, system=SYSTEM, target_country=TARGET)
 # sentences that also work for events without a planet
 PLANET_IS_OPTIONAL = {
     "discovered_anomaly", "researched_anomaly", "excavated_dig_site", "colonization", "capital_relocation",
-    "sector_creation", "ruled_empire",
+    "sector_creation", "ruled_empire", "army_combat", "governed_sector",
 }
-# values of the description_key and related fields that select a variant
+# values of the fields that select a variant
 KEY_VARIANTS = [
-    dict(description_key=key, call_type=key, contact_status=key, cause=key, crisis_key=key)
-    for key in ["", "primary", "overlord", "offensive", "defensive", "alliance", "other", "in_progress", "aborted",
-                "finished", "war", "subject", *GALACTIC_CRISIS_PHRASES]
+    dict(call_type=key, contact_status=key, cause=key, crisis_key=key, tradition_kind=key)
+    for key in ["", "primary", "overlord", "subject", "secret_fealty", "offensive", "defensive", "alliance",
+                "guarantee", "trade_deal", "other", "in_progress", "aborted", "finished", "war", "adopt", "finish",
+                *GALACTIC_CRISIS_PHRASES]
 ]
 OTHER_VARIANTS = [
     {},
@@ -113,6 +117,10 @@ OTHER_VARIANTS = [
     dict(assignment_count=2, leaders=[LEADER, OTHER_LEADER], other_envoy_count=0),
     dict(assignment_count=5, leaders=[LEADER, OTHER_LEADER, LEADER], other_envoy_count=2),
     dict(assignment_count=5, leaders=[LEADER], other_envoy_count=0),
+    dict(selected="Pol"),
+    dict(description="Empty start"),
+    dict(description=""),
+    dict(crisis_defender=True, crisis_level="Aegis"),
 ]
 
 
@@ -123,7 +131,6 @@ def event_variants(event_type):
             if variant.get("planet", True) is None:
                 if event_type not in PLANET_IS_OPTIONAL:
                     continue
-                variant = {"planet": None}
                 event = {k: v for k, v in {**BASE, **optional, "event_type": event_type}.items() if k != "planet"}
                 yield event
                 continue
@@ -134,7 +141,7 @@ def event_variants(event_type):
 
 
 def render(event):
-    return str(render_event(event, LINKS))
+    return str(render_sentence(event, LINKS))
 
 
 def text_of(html):
@@ -147,11 +154,11 @@ SENTENCE_TYPES = [name for name, descriptor in REGISTRY.items() if descriptor.se
 @pytest.mark.parametrize("event_type", SENTENCE_TYPES)
 def test_sentence_renders_in_english(event_type):
     for event in event_variants(event_type):
-        html = render(event)
-        assert "eventtext" in html
-        text = text_of(html)
+        text = text_of(render(event))
+        assert text, event
         assert "%(" not in text and MARKER not in text
         assert "Undefined" not in text
+        assert "the The " not in text and "  " not in text
 
 
 @pytest.mark.parametrize("event_type", SENTENCE_TYPES)
@@ -159,31 +166,53 @@ def test_sentence_is_translated(event_type, pseudo_translation):
     for event in event_variants(event_type):
         html = render(event)
         # the whole sentence goes through the catalog, not just parts of it
-        eventtext = html.split('class="eventtext">', 1)[1].split("</span>", 1)[0]
-        assert MARKER in eventtext, eventtext
+        assert html.startswith(MARKER), html
         assert "%(" not in html
 
 
 def test_english_sentences():
-    event = {**BASE, **OPTIONAL, "event_type": "war", "description_key": "defensive"}
+    event = {**BASE, **OPTIONAL, "event_type": "war", "call_type": "defensive"}
     assert text_of(render(event)) == (
-        "2300.01.01: Under the rule of Scientist Jane Doe, the EmpireOne entered the Great War "
-        "due to their defensive pact with the EmpireTwo."
+        "Under Scientist Jane Doe, the EmpireOne entered the Great War, "
+        "honoring their defensive pact with the EmpireTwo."
     )
     event = {**BASE, "target_country": TARGET, "event_type": "defensive_pact"}
-    assert text_of(render(event)) == (
-        "2300.01.01 - 2310.01.01: The EmpireOne entered a defensive pact with the EmpireTwo."
-    )
+    assert text_of(render(event)) == "The EmpireOne entered a defensive pact with the EmpireTwo."
     event = {**BASE, "event_type": "envoy_improving_relations", "target_country": TARGET,
              "leaders": [LEADER, OTHER_LEADER, LEADER], "other_envoy_count": 2, "assignment_count": 7}
-    assert text_of(render(event)).endswith(
+    assert text_of(render(event)) == (
         "The EmpireOne sent Scientist Jane Doe, Official John Roe, Scientist Jane Doe and 2 other envoys "
         "to improve relations with the EmpireTwo (7 assignments)."
     )
     event["leaders"], event["other_envoy_count"] = [LEADER, OTHER_LEADER], 0
     assert " sent Scientist Jane Doe and Official John Roe to " in text_of(render(event))
     event = {**BASE, "event_type": "leader_died"}
-    assert text_of(render(event)).endswith("An unknown leader died or retired.")
+    assert text_of(render(event)) == "An unknown leader died or retired."
+    event = {**BASE, **OPTIONAL, "event_type": "fleet_combat"}
+    assert text_of(render(event)) == (
+        "The EmpireOne defeated the EmpireTwo and The Chosen in a space battle in the Sol system during the Great War "
+        "(exhaustion: attackers 10.0%, defenders 20.0%)."
+    )
+    event = {**BASE, "event_type": "planet_destroyed", "planet": PLANET}
+    assert text_of(render(event)) == "The planet Terra, owned by the EmpireOne, was destroyed. It is now a Gaia World."
+
+
+@pytest.mark.parametrize("call_type", ["subject", "secret_fealty", "some_new_call_type"])
+def test_war_sentence_names_who_called_the_country_in(call_type):
+    """Also for call types the dashboard does not know, the sentence keeps the empire that called it in."""
+    event = {**BASE, "event_type": "war", "call_type": call_type, "target_country": TARGET}
+    text = text_of(render(event))
+    assert text.startswith("The EmpireOne entered the Great War, called in by")
+    assert text.endswith(" the EmpireTwo.")
+    del event["target_country"]
+    assert text_of(render(event)) == "The EmpireOne entered the Great War."
+    event = {**BASE, "event_type": "war", "call_type": "primary", "war": UNNAMED_WAR}
+    assert text_of(render(event)) == "The EmpireOne entered the A vs B war as a primary party."
+
+
+def test_names_with_their_own_article_keep_it_only_in_english(pseudo_translation):
+    event = {**BASE, "event_type": "defensive_pact", "country": THIRD, "target_country": TARGET}
+    assert text_of(render(event)) == f"{MARKER} The The Chosen entered a defensive pact with the EmpireTwo."
 
 
 GERMAN = r'''msgid ""
@@ -198,8 +227,8 @@ msgctxt "leader with class"
 msgid "%(leader_class)s %(leader)s"
 msgstr "%(leader_class)s %(leader)s"
 
-msgid "Under the rule of %(leader)s, the %(country)s entered a defensive pact with the %(target)s."
-msgstr "Unter der Herrschaft von %(leader)s schloss %(country)s einen Verteidigungspakt mit %(target)s."
+msgid "Under %(leader)s, the %(country)s entered a defensive pact with the %(target)s."
+msgstr "Unter %(leader)s schloss %(country)s einen Verteidigungspakt mit %(target)s."
 
 msgid "The %(country)s entered a defensive pact with the %(target)s."
 msgstr "%(country)s schloss einen Verteidigungspakt mit %(target)s."
@@ -213,6 +242,9 @@ msgid "%(envoys)s and %(num)s other envoy"
 msgid_plural "%(envoys)s and %(num)s other envoys"
 msgstr[0] "%(envoys)s und %(num)s weiterer Gesandter"
 msgstr[1] "%(envoys)s und %(num)s weitere Gesandte"
+
+msgid "The %(country)s entered the %(war)s, called in by the %(target)s."
+msgstr "%(country)s trat %(war)s bei, auf Ruf von %(target)s."
 '''
 
 
@@ -223,17 +255,21 @@ def test_translation_can_reorder_the_sentence(tmp_path, monkeypatch):
     monkeypatch.setattr(i18n, "_translations", lambda: translations)
     event = {**BASE, **OPTIONAL, "event_type": "defensive_pact"}
     assert text_of(render(event)) == (
-        "2300.01.01 - 2310.01.01: Unter der Herrschaft von Wissenschaftler Jane Doe schloss EmpireOne "
-        "einen Verteidigungspakt mit EmpireTwo."
+        "Unter Wissenschaftler Jane Doe schloss EmpireOne einen Verteidigungspakt mit EmpireTwo."
     )
     del event["leader"]
-    assert text_of(render(event)).endswith("EmpireOne schloss einen Verteidigungspakt mit EmpireTwo.")
+    assert text_of(render(event)) == "EmpireOne schloss einen Verteidigungspakt mit EmpireTwo."
+    # translated sentences keep names as they are, also those starting with "The"
+    event["country"] = THIRD
+    assert text_of(render(event)) == "The Chosen schloss einen Verteidigungspakt mit EmpireTwo."
     event = {**BASE, "event_type": "envoy_harming_relations", "target_country": TARGET, "leaders": [LEADER],
              "other_envoy_count": 2, "assignment_count": 4}
-    assert text_of(render(event)).endswith(
+    assert text_of(render(event)) == (
         "EmpireOne entsandte Wissenschaftler Jane Doe und 2 weitere Gesandte, "
         "um die Beziehungen zu EmpireTwo zu schaedigen (4 Auftraege)."
     )
+    event = {**BASE, "event_type": "war", "call_type": "some_new_call_type", "target_country": TARGET}
+    assert text_of(render(event)) == "EmpireOne trat Great War bei, auf Ruf von EmpireTwo."
 
 
 def test_galactic_crisis_phrases_are_sentences_about_the_country():
@@ -276,10 +312,20 @@ def test_storyline_cards(storyline_type, translated, monkeypatch):
                 )
                 html = render(event)
                 text = text_of(html)
-                assert "%(" not in text and "Undefined" not in text
+                assert "%(" not in text and "Undefined" not in text and "the The " not in text
+                rows = [str(event_registry.render_stage(event, stage, LINKS)) for stage in stage_list]
+                assert all(row and "%(" not in row for row in rows)
+                label = event_registry.state_label(event)
+                count = event_registry.stage_count_label(event) if stage_list else ""
                 if translated:
-                    assert MARKER in html
-                    assert f"{MARKER} {descriptor.state_labels.get(state, state)}" in text or state == "failed"
+                    assert html.startswith(MARKER)
+                    assert all(row.startswith(MARKER) for row in rows)
+                    assert label == (f"{MARKER} {descriptor.state_labels[state]}" if state != "failed" else "failed")
+                    assert count.startswith(MARKER) or not stage_list
+                else:
+                    assert label == descriptor.state_labels.get(state, state)
+                    if stage_list:
+                        assert count.startswith("2 ") and rows[0].split()[1] == "1"
 
 
 def _event(event_type, text):
@@ -297,6 +343,10 @@ def test_description_fields_keep_the_parts_of_a_description_apart():
     assert _event("galactic_crisis", "synth_queen_war").description_fields == dict(crisis_key="synth_queen_war")
     fields = _event("pre_ftl_age_change", "atomic_age|stone_age").description_fields
     assert fields["regressed"] is True
+    assert _event("tradition", "tr_x_adopt").description_fields["tradition_kind"] == "adopt"
+    assert _event("tradition", "tr_x_finish").description_fields["tradition_kind"] == "finish"
+    assert _event("tradition", "tr_x_y").description_fields["tradition_kind"] == "single"
+    assert _event("crisis_level_up", "crisis_defender_2").description_fields["crisis_defender"] is True
     assert _event("researched_technology", "tech_x").description_fields == {}
 
 
@@ -312,3 +362,14 @@ def test_government_reform_lines_are_whole_sentences(pseudo_translation):
         f"{MARKER} Abandoned ethics X.",
         f"{MARKER} Embraced ethics Y.",
     ]
+
+
+def test_stages_name_the_country_with_its_article():
+    item = dict(storyline_type="first_contact")
+    assert event_registry.render_stage(item, dict(index=2, country=THIRD), LINKS) == (
+        f"Stage 2 by {LINKS[THIRD]}"
+    )
+    assert event_registry.render_stage(item, dict(detail="contact detected", country=TARGET), LINKS) == (
+        f"Contact detected by the {LINKS[TARGET]}"
+    )
+    assert event_registry.render_stage(dict(storyline_type="dig_site"), dict(index=3, detail="x"), LINKS) == "Chapter 3: x"

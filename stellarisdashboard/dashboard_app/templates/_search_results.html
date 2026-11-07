@@ -1,0 +1,25 @@
+{# Results for the topbar search (ledger_search.py), inserted by assets/search.js. #}
+{% if query.strip() %}
+{% if not groups %}
+<p class="search-empty">{{ _("Nothing named “%(query)s”.", query=query) }}</p>
+{% endif %}
+{% for group in groups %}
+<section class="search-group" role="group" aria-label="{{ group.label }}">
+    <h3 class="search-group-head">{{ group.label }}{% if group.total > group.hits|length or expanded %}<span class="search-group-count">{{ group.total }}</span>{% endif %}</h3>
+    {% for hit in group.hits %}
+    <a class="search-hit" role="option" href="{{ hit.url }}">
+        <span class="search-hit-name">{{ hit.parts[0] }}<mark>{{ hit.parts[1] }}</mark>{{ hit.parts[2] }}</span>
+        <span class="search-hit-meta">{{ hit.meta }}</span>
+    </a>
+    {% endfor %}
+    {% if group.total > group.hits|length and not expanded %}
+    <button type="button" class="search-more" data-search-kind="{{ group.kind }}">{{ group.show_all }}</button>
+    {% elif expanded and group.total > group.hits|length %}
+    <p class="search-note">{{ ngettext("Showing the best %(num)s. Type more to narrow it down.", "Showing the best %(num)s. Type more to narrow it down.", group.hits|length) }}</p>
+    {% endif %}
+</section>
+{% endfor %}
+{% if expanded %}
+<button type="button" class="search-more" data-search-kind="">← {{ _("All kinds") }}</button>
+{% endif %}
+{% endif %}

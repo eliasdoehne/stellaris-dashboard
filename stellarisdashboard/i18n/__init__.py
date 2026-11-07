@@ -263,37 +263,50 @@ def _translations() -> _gettext.NullTranslations:
     return get_translations(current_locale())
 
 
+def translate(message: str) -> str:
+    """The translation of a message, unformatted (the message itself if it has none)."""
+    return _translations().gettext(message)
+
+
+def ntranslate(singular: str, plural: str, n: int) -> str:
+    return _translations().ngettext(singular, plural, n)
+
+
+def ptranslate(context: str, message: str) -> str:
+    return _translations().pgettext(context, message)
+
+
 def gettext(message: str, **variables) -> str:
     """Translate a message. Keyword arguments are substituted for %(name)s placeholders."""
-    translated = _translations().gettext(message)
-    return _format(translated, variables)
+    return format_message(translate(message), variables, fallback=message)
 
 
 def ngettext(singular: str, plural: str, n: int, **variables) -> str:
     """Translate a message with a singular and plural form, chosen for n.
 
     n is available to the message as %(num)s, other keyword arguments by name."""
-    translated = _translations().ngettext(singular, plural, n)
-    return _format(translated, {"num": n, **variables})
+    translated = ntranslate(singular, plural, n)
+    return format_message(translated, {"num": n, **variables}, fallback=singular if n == 1 else plural)
 
 
 def pgettext(context: str, message: str, **variables) -> str:
     """Translate a message in a context, to tell apart identical English texts."""
-    translated = _translations().pgettext(context, message)
-    return _format(translated, variables)
+    return format_message(ptranslate(context, message), variables, fallback=message)
 
 
 def npgettext(context: str, singular: str, plural: str, n: int, **variables) -> str:
     translated = _translations().npgettext(context, singular, plural, n)
-    return _format(translated, {"num": n, **variables})
+    return format_message(translated, {"num": n, **variables}, fallback=singular if n == 1 else plural)
 
 
 _ = gettext
 
 
-def _format(message: str, variables: dict) -> str:
-    # like Jinja's newstyle gettext: only messages with variables are formatted, so a
-    # message without them can contain a plain "%"
+def format_message(message: str, variables: dict, fallback: Optional[str] = None) -> str:
+    """Fill the %(name)s placeholders of a (translated) message. ``fallback`` is its English text.
+
+    Only messages with variables are formatted, so a message without them can contain a
+    plain "%". (Jinja templates format every message, see docs/translating.md.)"""
     if not variables:
         return message
     return message % variables
