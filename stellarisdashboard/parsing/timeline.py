@@ -4877,16 +4877,18 @@ def situation_progress(situation: Dict[str, Any]) -> Tuple[Optional[float], Opti
 
 # a situation that left the save this close to an end of its bar reached it
 SITUATION_COMPLETE_SHARE = 0.95
+# beyond this, the monthly change of the last save says little about where the progress went
+SITUATION_PROJECTED_MONTHS = 3
 
 
 def situation_outcome(
     progress: Optional[float], per_month: Optional[float], months: float
 ) -> datamodel.StorylineState:
     """How a situation that left the save ended: at whichever end of the bar its progress was heading to,
-    else it was aborted or resolved by an event."""
+    else it was aborted or resolved by an event. Long gaps between saves are projected over a few months only."""
     if progress is None:
         return datamodel.StorylineState.abandoned
-    projected = progress + (per_month or 0.0) * max(months, 1.0)
+    projected = progress + (per_month or 0.0) * min(max(months, 1.0), SITUATION_PROJECTED_MONTHS)
     if projected >= SITUATION_COMPLETE_SHARE:
         return datamodel.StorylineState.completed
     if projected <= 1 - SITUATION_COMPLETE_SHARE and (per_month or 0.0) < 0:

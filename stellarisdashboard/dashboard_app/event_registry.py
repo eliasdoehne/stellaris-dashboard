@@ -1064,8 +1064,9 @@ REGISTRY: dict[str, EventDescriptor] = {
         _sentence('The "%(situation)s" situation began for the %(country)s{planet}{target}.',
                   _ON_PLANET, _CONCERNING_TARGET, situation=D, planet=PLANET_AND_CLASS),
     ),
+    # as major as the situation itself, so that its card lists every stage
     "situation_stage": EventDescriptor(
-        Category.STATECRAFT, Tier.ROUTINE, "alert", POINT,
+        Category.STATECRAFT, Tier.MAJOR, "alert", POINT,
         _if(
             'event["stage_name"]',
             _t('The "%(situation)s" situation of the %(country)s reached stage %(stage)s, "%(stage_name)s".',

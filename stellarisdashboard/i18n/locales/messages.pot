@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/eliasdoehne/stellaris-dashboard/issues\n"
-"POT-Creation-Date: 2026-11-08 20:22+0100\n"
+"POT-Creation-Date: 2026-11-08 22:24+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -371,139 +371,139 @@ msgstr ""
 msgid "The %(country)s lost a war, shattering the myth of Fallen Empire invincibility."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1266
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
 msgid "excavating"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1266
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
 msgid "fully excavated"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1266
-#: stellarisdashboard/dashboard_app/event_registry.py:1280
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "paused"
-msgstr ""
-
-#: stellarisdashboard/dashboard_app/event_registry.py:1268
-#, python-format
-msgid "Chapter %(index)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1269
 #, python-format
-msgid "Chapter %(index)s: %(detail)s"
+msgid "Chapter %(index)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1270
 #, python-format
-msgid "Chapter %(index)s by the %(country)s"
+msgid "Chapter %(index)s: %(detail)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1271
 #, python-format
+msgid "Chapter %(index)s by the %(country)s"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1272
+#, python-format
 msgid "Chapter %(index)s: %(detail)s by the %(country)s"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1280
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "exploring"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1280
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "fully explored"
-msgstr ""
-
-#: stellarisdashboard/dashboard_app/event_registry.py:1282
-#, python-format
-msgid "Step %(index)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1283
 #, python-format
-msgid "Step %(index)s: %(detail)s"
+msgid "Step %(index)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1284
 #, python-format
-msgid "Step %(index)s by the %(country)s"
+msgid "Step %(index)s: %(detail)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1285
 #, python-format
+msgid "Step %(index)s by the %(country)s"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1286
+#, python-format
 msgid "Step %(index)s: %(detail)s by the %(country)s"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1293
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
 msgid "contact made"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1293
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
 msgid "abandoned"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1293
-#: stellarisdashboard/dashboard_app/event_registry.py:1307
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
 msgid "in progress"
-msgstr ""
-
-#: stellarisdashboard/dashboard_app/event_registry.py:1295
-#: stellarisdashboard/dashboard_app/event_registry.py:1309
-#, python-format
-msgid "Stage %(index)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1296
 #: stellarisdashboard/dashboard_app/event_registry.py:1310
 #, python-format
-msgid "Stage %(index)s: %(detail)s"
+msgid "Stage %(index)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1297
 #: stellarisdashboard/dashboard_app/event_registry.py:1311
 #, python-format
-msgid "Stage %(index)s by the %(country)s"
+msgid "Stage %(index)s: %(detail)s"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/event_registry.py:1298
 #: stellarisdashboard/dashboard_app/event_registry.py:1312
 #, python-format
+msgid "Stage %(index)s by the %(country)s"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1299
+#: stellarisdashboard/dashboard_app/event_registry.py:1313
+#, python-format
 msgid "Stage %(index)s: %(detail)s by the %(country)s"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1307
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
 msgid "completed"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1307
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
 msgid "failed"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1307
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
 msgid "ended"
 msgstr ""
 
 #. how a harmful situation (a deficit, a revolt) ended: at its worst, or dropped to nothing
-#: stellarisdashboard/dashboard_app/event_registry.py:1315
+#: stellarisdashboard/dashboard_app/event_registry.py:1316
 msgid "escalated"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1315
+#: stellarisdashboard/dashboard_app/event_registry.py:1316
 msgid "averted"
 msgstr ""
 
 #. the state of a situation and how far its progress bar is filled, e.g. "in progress, 62%"
-#: stellarisdashboard/dashboard_app/event_registry.py:1331
+#: stellarisdashboard/dashboard_app/event_registry.py:1332
 #, python-format
 msgid "%(state)s, %(percent)s%%"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1339
+#: stellarisdashboard/dashboard_app/event_registry.py:1340
 #, python-format
 msgid "%(num)s chapter"
 msgid_plural "%(num)s chapters"
 msgstr[0] ""
 msgstr[1] ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1341
+#: stellarisdashboard/dashboard_app/event_registry.py:1342
 #, python-format
 msgid "%(num)s step"
 msgid_plural "%(num)s steps"
@@ -511,13 +511,13 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. the furthest stage a situation reached, e.g. "stage 3"
-#: stellarisdashboard/dashboard_app/event_registry.py:1344
+#: stellarisdashboard/dashboard_app/event_registry.py:1345
 #, python-format
 msgctxt "situation"
 msgid "stage %(num)s"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1345
+#: stellarisdashboard/dashboard_app/event_registry.py:1346
 #, python-format
 msgid "%(num)s stage"
 msgid_plural "%(num)s stages"
@@ -526,7 +526,7 @@ msgstr[1] ""
 
 #. a stage of a first contact and the empire that reached it, e.g.
 #. "Communications established by the United Nations of Earth". %(country)s is the empire (a link)
-#: stellarisdashboard/dashboard_app/event_registry.py:1361
+#: stellarisdashboard/dashboard_app/event_registry.py:1362
 #, python-format
 msgid "%(detail)s by the %(country)s"
 msgstr ""
