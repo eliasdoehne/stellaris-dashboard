@@ -654,6 +654,9 @@ class EventTemplateDictBuilder:
         item["stages"] = []
         if storyline.storyline_type == datamodel.StorylineType.first_contact:
             item["sides"] = [storyline]  # each empire's own process; build_items merges the pair
+        elif storyline.storyline_type == datamodel.StorylineType.situation:
+            definition = game_info.situation_type(storyline.title or "")
+            item["negative"] = definition is not None and definition.negative
         return item
 
     @staticmethod

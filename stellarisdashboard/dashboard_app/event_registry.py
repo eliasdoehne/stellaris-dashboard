@@ -1246,6 +1246,8 @@ class StorylineDescriptor:
     sentence: str  # Jinja: the arc's title; the storyline item dict is named ``event``
     state_labels: dict[str, str]  # marked with N_, translated when shown (see state_label)
     stage_rows: dict[tuple, str]  # marked with N_, see render_stage
+    # labels that replace state_labels for arcs whose full progress is the bad outcome (item["negative"])
+    negative_state_labels: Optional[dict[str, str]] = None
 
 
 _STORYLINE_LEADER = '{% if "leader" in event %} ({{ render_leader(event) }}){% endif %}'
@@ -1309,6 +1311,8 @@ STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
             ("country",): N_("Stage %(index)s by the %(country)s"),
             ("detail", "country"): N_("Stage %(index)s: %(detail)s by the %(country)s"),
         },
+        # Translators: how a harmful situation (a deficit, a revolt) ended: at its worst, or dropped to nothing
+        {"completed": N_("escalated"), "failed": N_("averted")},
     ),
 }
 
@@ -1317,7 +1321,10 @@ def state_label(item) -> str:
     """The state of a storyline item in the dashboard language, e.g. "fully excavated"."""
     descriptor = STORYLINE_REGISTRY.get(item.get("storyline_type"))
     state = item.get("state")
-    label = descriptor.state_labels.get(state) if descriptor else None
+    labels = descriptor.state_labels if descriptor else {}
+    if item.get("negative") and descriptor.negative_state_labels:
+        labels = {**labels, **descriptor.negative_state_labels}
+    label = labels.get(state)
     label = _(label) if label else (state or "")
     if state == "active" and item.get("progress") is not None:
         # Translators: the state of a situation and how far its progress bar is filled, e.g. "in progress, 62%"

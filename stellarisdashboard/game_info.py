@@ -546,6 +546,7 @@ class SituationType:
     title: Optional[str]  # loc key of the name, if it differs from the situation key
     stages: tuple[str, ...]
     show_in_outliner: bool
+    negative: bool  # whether reaching the end of the bar is the bad outcome (a deficit, a revolt)
 
 
 @functools.lru_cache(maxsize=1)
@@ -562,6 +563,7 @@ def _situation_types() -> dict[str, SituationType]:
                 title=_script_text(fields.get("title")),
                 stages=tuple(stage for stage, _ in stages) if isinstance(stages, list) else (),
                 show_in_outliner=fields.get("show_in_outliner") != "no",
+                negative=fields.get("complete_category", fields.get("category")) == "negative",
             )
     return types
 
