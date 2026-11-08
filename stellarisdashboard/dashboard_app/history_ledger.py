@@ -647,6 +647,7 @@ class EventTemplateDictBuilder:
             leader=storyline.leader,
             system=storyline.system,
             planet=storyline.planet,
+            progress=storyline.progress,
         )
         item = {k: v for (k, v) in item.items() if v is not None}
         item["key"] = ledger_timeline.row_key(None, storyline.storyline_id)

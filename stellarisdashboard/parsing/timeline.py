@@ -401,6 +401,8 @@ class TimelineExtractor:
         yield AnomalyProcessor()
         yield ArchaeologyProcessor()
         yield AstralRiftProcessor()
+        yield SituationProcessor()
+        yield SpecialProjectProcessor()
         yield RelicProcessor()
         yield LeviathanProcessor()
         yield MegastructureProcessor()
@@ -4836,6 +4838,270 @@ class FirstContactProcessor(AbstractGamestateDataProcessor):
                         event_is_known_to_player=owner.has_met_player(),
                     )
                 )
+
+
+# bookkeeping situations that players never see, or that restart at every pre-FTL technology age
+HIDDEN_SITUATION_TYPES = frozenset(
+    {
+        "pre_ftl_tech_progress_situation",
+        "fallen_empires_situation",
+        "mercenary_dividends",
+        "mindwardens_dividends",
+        "voidworm_country_situation",
+    }
+)
+
+
+def is_shown_situation(situation_type: str) -> bool:
+    definition = game_info.situation_type(situation_type)
+    return situation_type not in HIDDEN_SITUATION_TYPES and (definition is None or definition.show_in_outliner)
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def situation_progress(situation: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """The filled share of a situation's progress bar and its last monthly change as a share of the bar."""
+    durations = _as_dict_list(situation.get("stage_durations"))
+    progress = situation.get("progress")
+    if not durations or not _is_number(progress):
+        return None, None
+    start, end = durations[0].get("start"), durations[-1].get("end")
+    if not _is_number(start) or not _is_number(end) or end <= start:
+        return None, None
+    change = situation.get("last_month_progress")
+    share = min(max((progress - start) / (end - start), 0.0), 1.0)
+    return share, change / (end - start) if _is_number(change) else 0.0
+
+
+# a situation that left the save this close to an end of its bar reached it
+SITUATION_COMPLETE_SHARE = 0.95
+
+
+def situation_outcome(
+    progress: Optional[float], per_month: Optional[float], months: float
+) -> datamodel.StorylineState:
+    """How a situation that left the save ended: at whichever end of the bar its progress was heading to,
+    else it was aborted or resolved by an event."""
+    if progress is None:
+        return datamodel.StorylineState.abandoned
+    projected = progress + (per_month or 0.0) * max(months, 1.0)
+    if projected >= SITUATION_COMPLETE_SHARE:
+        return datamodel.StorylineState.completed
+    if projected <= 1 - SITUATION_COMPLETE_SHARE and (per_month or 0.0) < 0:
+        return datamodel.StorylineState.failed
+    return datamodel.StorylineState.abandoned
+
+
+class SituationProcessor(AbstractGamestateDataProcessor):
+    """Tracks situations as storylines: when they start, each stage they enter, and how they end."""
+
+    ID = "situations"
+    DEPENDENCIES = [CountryProcessor.ID, SystemProcessor.ID, PlanetProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        systems = dependencies[SystemProcessor.ID]["systems_by_ingame_id"]
+        planets = dependencies[PlanetProcessor.ID]
+        situations = (self._gamestate_dict.get("situations") or {}).get("situations")
+        if not isinstance(situations, dict):
+            return
+        today = self._basic_info.date_in_days
+
+        open_storylines = {
+            storyline.storyline_id_in_game: storyline
+            for storyline in self._session.query(datamodel.Storyline).filter_by(
+                storyline_type=datamodel.StorylineType.situation,
+                state=datamodel.StorylineState.active,
+            )
+        }
+        open_spans = {
+            event.storyline_id: event
+            for event in self._session.query(datamodel.HistoricalEvent).filter(
+                datamodel.HistoricalEvent.event_type == datamodel.HistoricalEventType.situation,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+            )
+        }
+        known_stages = set(
+            self._session.query(
+                datamodel.HistoricalEvent.storyline_id, datamodel.HistoricalEvent.stage_index
+            ).filter(
+                datamodel.HistoricalEvent.event_type == datamodel.HistoricalEventType.situation_stage,
+                datamodel.HistoricalEvent.storyline_id.in_([s.storyline_id for s in open_storylines.values()]),
+            )
+        )
+
+        seen = set()
+        for situation_id, situation in sorted(situations.items()):
+            if not isinstance(situation, dict):
+                continue
+            situation_type = situation.get("type")
+            stage = situation.get("stage")
+            owner = countries.get(_as_game_id(situation.get("country")))
+            if (
+                not isinstance(situation_type, str)
+                or not isinstance(stage, int)
+                or owner is None
+                or not owner.is_real_country()
+                or not is_shown_situation(situation_type)
+            ):
+                continue
+            seen.add(situation_id)
+            progress, per_month = situation_progress(situation)
+            # situation ids carry a generation counter, so they are not reused
+            storyline = open_storylines.get(situation_id)
+            if storyline is None:
+                storyline = self._start_storyline(situation_id, situation, owner, countries, systems, planets)
+            if _set_if_changed(storyline, progress=progress, progress_per_month=per_month):
+                self._session.add(storyline)
+
+            # each stage once, from the one it started in; single-stage situations have no stages to list
+            index = stage + 1
+            if len(_as_dict_list(situation.get("stage_durations"))) < 2 or (
+                storyline.storyline_id is not None and (storyline.storyline_id, index) in known_stages
+            ):
+                continue
+            self._session.add(
+                datamodel.HistoricalEvent(
+                    event_type=datamodel.HistoricalEventType.situation_stage,
+                    country=owner,
+                    target_country=storyline.target_country,
+                    system=storyline.system,
+                    planet=storyline.planet,
+                    start_date_days=today,
+                    db_description=self._get_or_add_shared_description(f"{situation_type}|{stage}"),
+                    storyline=storyline,
+                    stage_index=index,
+                    event_is_known_to_player=owner.has_met_player(),
+                )
+            )
+
+        months = None
+        for situation_id, storyline in open_storylines.items():
+            if situation_id in seen:
+                continue
+            if months is None:
+                months = (today - self._previous_save_day()) / 30
+            storyline.state = situation_outcome(storyline.progress, storyline.progress_per_month, months)
+            storyline.end_date_days = today
+            self._session.add(storyline)
+            span = open_spans.get(storyline.storyline_id)
+            if span is not None:
+                span.end_date_days = today
+                self._session.add(span)
+
+    def _start_storyline(self, situation_id, situation, owner, countries, systems, planets) -> datamodel.Storyline:
+        """A new situation storyline with its span event, about the situation's target."""
+        target = situation.get("target")
+        target_type = target.get("type") if isinstance(target, dict) else None
+        target_id = _as_game_id(target.get("id")) if isinstance(target, dict) else None
+        planet = planets.get(target_id) if target_type in ("colony", "planet") else None
+        system = planet.system if planet is not None else None
+        if target_type in ("galactic_object", "system"):
+            system = systems.get(target_id)
+        target_country = countries.get(target_id) if target_type == "country" else None
+        if target_country is owner:
+            target_country = None
+        storyline = datamodel.Storyline(
+            storyline_type=datamodel.StorylineType.situation,
+            storyline_id_in_game=situation_id,
+            title=situation["type"],
+            country=owner,
+            target_country=target_country,
+            system=system,
+            planet=planet,
+            start_date_days=self._basic_info.date_in_days,
+            state=datamodel.StorylineState.active,
+        )
+        self._session.add(storyline)
+        self._session.add(
+            datamodel.HistoricalEvent(
+                event_type=datamodel.HistoricalEventType.situation,
+                country=owner,
+                target_country=target_country,
+                system=system,
+                planet=planet,
+                start_date_days=self._basic_info.date_in_days,
+                db_description=self._get_or_add_shared_description(situation["type"]),
+                storyline=storyline,
+                event_is_known_to_player=owner.has_met_player(),
+            )
+        )
+        return storyline
+
+    def _previous_save_day(self) -> int:
+        """The date of the latest save before this one; this one's if there is none."""
+        today = self._basic_info.date_in_days
+        previous = (
+            self._session.query(sqlalchemy.func.max(datamodel.GameState.date))
+            .filter(datamodel.GameState.game == self._db_game, datamodel.GameState.date < today)
+            .scalar()
+        )
+        return previous if previous is not None else today
+
+
+class SpecialProjectProcessor(AbstractGamestateDataProcessor):
+    """Tracks each country's special projects from their appearance until they leave the save."""
+
+    ID = "special_projects"
+    DEPENDENCIES = [CountryProcessor.ID]
+
+    def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
+        countries = dependencies[CountryProcessor.ID]
+        today = self._basic_info.date_in_days
+
+        active = collections.Counter()  # (country id, project key) -> count
+        last_completed = {}
+        for country_id, country_dict in self._gamestate_dict["country"].items():
+            if not isinstance(country_dict, dict):
+                continue
+            events = country_dict.get("events")
+            # projects without a key are debris analyses
+            for project in _as_dict_list(events.get("special_project") if isinstance(events, dict) else None):
+                key = project.get("special_project")
+                if isinstance(key, str) and key:
+                    active[(country_id, key)] += 1
+            last_completed[country_id] = country_dict.get("last_completed_special_project")
+
+        open_events = collections.defaultdict(list)  # (country id, project key) -> events, oldest first
+        for event in (
+            self._session.query(datamodel.HistoricalEvent)
+            .filter(
+                datamodel.HistoricalEvent.event_type == datamodel.HistoricalEventType.special_project,
+                datamodel.HistoricalEvent.end_date_days.is_(None),
+            )
+            .options(
+                joinedload(datamodel.HistoricalEvent.country),
+                joinedload(datamodel.HistoricalEvent.db_description),
+            )
+            .order_by(datamodel.HistoricalEvent.start_date_days, datamodel.HistoricalEvent.historical_event_id)
+        ):
+            if event.country is not None and event.db_description is not None:
+                open_events[(event.country.country_id_in_game, event.db_description.text)].append(event)
+
+        for (country_id, key), count in sorted(active.items()):
+            country = countries.get(country_id)
+            if country is None or not country.is_real_country():
+                continue
+            for _ in range(count - len(open_events.get((country_id, key), ()))):
+                self._session.add(
+                    datamodel.HistoricalEvent(
+                        event_type=datamodel.HistoricalEventType.special_project,
+                        country=country,
+                        start_date_days=today,
+                        db_description=self._get_or_add_shared_description(key),
+                        event_is_known_to_player=country.has_met_player(),
+                    )
+                )
+
+        # projects of the same key are interchangeable, so the oldest ones end first
+        for (country_id, key), events in open_events.items():
+            outcome = "completed" if last_completed.get(country_id) == key else "ended"
+            for event in events[: max(len(events) - active[(country_id, key)], 0)]:
+                event.end_date_days = today
+                event.db_description = self._get_or_add_shared_description(f"{key}|{outcome}")
+                self._session.add(event)
 
 
 # operations that restart after completing; others end when they reach full progress

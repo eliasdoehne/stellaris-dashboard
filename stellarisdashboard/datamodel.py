@@ -351,6 +351,11 @@ class HistoricalEventType(enum.Enum):
     crisis_level_up = enum.auto()  # crisis path levels (Become the Crisis, Defender of the Galaxy, ...)
     federation_renamed = enum.auto()  # description: the old name; the federation holds the new one
 
+    # situations and special projects:
+    situation = enum.auto()  # span of a situation storyline; description: the situation type
+    situation_stage = enum.auto()  # description: "<situation type>|<0-based stage>"
+    special_project = enum.auto()  # span; description: the project key, plus "|<outcome>" once it ended
+
     def __str__(self):
         return self.name
 
@@ -436,6 +441,9 @@ class HistoricalEventType(enum.Enum):
             HistoricalEventType.completed_espionage_operation,
             HistoricalEventType.first_contact_stage,
             HistoricalEventType.crisis_level_up,
+            HistoricalEventType.situation,
+            HistoricalEventType.situation_stage,
+            HistoricalEventType.special_project,
         }:
             return HistoricalEventScope.country
         elif self in {
@@ -2247,10 +2255,17 @@ def render_espionage_description(text: str) -> str:
     )
 
 
+def render_special_project(text: str) -> str:
+    """Renders a "<project key>[|<outcome>]" description as the project's name."""
+    key, _ = split_packed_description(text)
+    return game_info.lookup_key_if_known(key) or game_info.convert_id_to_name(key.lower())
+
+
 class StorylineType(enum.Enum):
     dig_site = enum.auto()
     astral_rift = enum.auto()
     first_contact = enum.auto()
+    situation = enum.auto()
 
     def __str__(self):
         return self.name
@@ -2269,7 +2284,7 @@ class StorylineState(enum.Enum):
 
 class Storyline(Base):
     """
-    A multi-stage arc (a dig site, an astral rift, a first contact) that groups historical events.
+    A multi-stage arc (a dig site, an astral rift, a first contact, a situation) that groups historical events.
 
     Its events link back through HistoricalEvent.storyline_id: events with a stage_index are the
     arc's stages (chapters, steps), an event without one is an arc-level record that the
@@ -2280,12 +2295,15 @@ class Storyline(Base):
     storyline_id = Column(Integer, primary_key=True)
 
     storyline_type = Column(Enum(StorylineType), nullable=False, index=True)
-    storyline_id_in_game = Column(Integer, index=True)  # dig site, rift or contact id in the save
-    title = Column(String(80))  # raw key: site type or rift type; rendered by rendered_title
+    storyline_id_in_game = Column(Integer, index=True)  # dig site, rift, contact or situation id in the save
+    title = Column(String(80))  # raw key: site, rift or situation type; rendered by rendered_title
     state = Column(Enum(StorylineState), nullable=False)
     outcome = Column(String(80))  # raw key of the final stage, if known
     start_date_days = Column(Integer, nullable=False, index=True)
     end_date_days = Column(Integer)
+    # situations: the filled share of the progress bar and its last monthly change, as last seen
+    progress = Column(Float)
+    progress_per_month = Column(Float)
 
     country_id = Column(ForeignKey(Country.country_id), index=True)
     target_country_id = Column(ForeignKey(Country.country_id))
@@ -2306,11 +2324,13 @@ class Storyline(Base):
 
     @property
     def rendered_title(self) -> str:
-        """The arc's subject: the dig site or rift name, or the contacted country."""
+        """The arc's subject: the dig site, rift or situation name, or the contacted country."""
         if self.storyline_type == StorylineType.dig_site:
             return game_info.lookup_id_name(self.title or "", remove_prefix="site")
         elif self.storyline_type == StorylineType.astral_rift:
             return render_astral_rift_description(self.title or "")
+        elif self.storyline_type == StorylineType.situation:
+            return game_info.situation_name(self.title or "")
         elif self.storyline_type == StorylineType.first_contact and self.target_country is not None:
             return self.target_country.rendered_name
         return game_info.convert_id_to_name(self.title or str(self.storyline_type))
@@ -2531,6 +2551,10 @@ class HistoricalEvent(Base):
             return render_crisis_level(self.db_description.text)
         elif self.event_type == HistoricalEventType.megastructure_construction:
             return render_megastructure_description(self.db_description.text)
+        elif self.event_type in (HistoricalEventType.situation, HistoricalEventType.situation_stage):
+            return game_info.situation_name(split_packed_description(self.db_description.text)[0])
+        elif self.event_type == HistoricalEventType.special_project:
+            return render_special_project(self.db_description.text)
         elif self.db_description:
             return game_info.lookup_key(self.db_description.text)
         else:
@@ -2576,6 +2600,10 @@ class HistoricalEvent(Base):
             return dict(cause=text)
         elif self.event_type == HistoricalEventType.galactic_crisis:
             return dict(crisis_key=text)
+        elif self.event_type == HistoricalEventType.special_project:
+            return dict(project_outcome=split_packed_description(text)[1])
+        elif self.event_type == HistoricalEventType.situation_stage:
+            return dict(stage_number=self.stage_index, stage_name=self.stage_detail)
         return {}
 
     @property
@@ -2587,6 +2615,9 @@ class HistoricalEvent(Base):
             return game_info.lookup_key_if_known(f"{event_id}.name") if event_id else None
         elif self.event_type == HistoricalEventType.first_contact_stage and text:
             return render_first_contact_stage(text, self._first_contact_loc_values())
+        elif self.event_type == HistoricalEventType.situation_stage:
+            situation_type, stage = split_packed_description(text)
+            return game_info.situation_stage_name(situation_type, int(stage)) if stage.isdigit() else None
         return None
 
     def _first_contact_loc_values(self) -> dict:
