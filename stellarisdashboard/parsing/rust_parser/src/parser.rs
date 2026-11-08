@@ -18,6 +18,7 @@ use pyo3::types::{PyAny, PyDict, PyList};
 use serde::Serialize;
 
 use crate::file_io::SaveFile;
+use crate::key_paths::KeyPathFilter;
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(untagged)]
@@ -48,21 +49,61 @@ pub fn value_to_pyobject<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<
             list.into_any()
         }
         Value::Map(hm) => {
-            // For consistency with the old parser behaviour, attempt to convert each hashmap key
-            // into an integer when building the python dict.
             let dict = PyDict::new(py);
             for (key, val) in hm.iter() {
-                let py_val = value_to_pyobject(py, val)?;
-                match key.parse::<i64>() {
-                    Ok(i) => dict.set_item(i, py_val)?,
-                    Err(_) => dict.set_item(*key, py_val)?,
-                }
+                set_dict_item(&dict, key, value_to_pyobject(py, val)?)?;
             }
             dict.into_any()
         }
         Value::Color(color_tuple) => (*color_tuple).into_pyobject(py)?.into_any(),
     };
     Ok(obj)
+}
+
+/// Like `value_to_pyobject`, but only converts the parts of `value` selected by `filter`.
+///
+/// - Map entries that no key path leads to are skipped without being converted.
+/// - Lists are passed through: the filter is applied to each element, so key paths
+///   reach into the maps of lists produced by repeated keys (`x={...} x={...}`).
+/// - Values that cannot be descended into (strings, numbers, colors, e.g. the `none`
+///   placeholder of a deleted object) are converted in full, even if the key path continues.
+pub fn filtered_value_to_pyobject<'py>(
+    py: Python<'py>,
+    value: &Value,
+    filter: &KeyPathFilter,
+) -> PyResult<Bound<'py, PyAny>> {
+    if filter.selects_all() {
+        return value_to_pyobject(py, value);
+    }
+    let obj = match value {
+        Value::List(vec) => {
+            let list = PyList::empty(py);
+            for v in vec {
+                list.append(filtered_value_to_pyobject(py, v, filter)?)?;
+            }
+            list.into_any()
+        }
+        Value::Map(hm) => {
+            let dict = PyDict::new(py);
+            for (key, val) in hm.iter() {
+                if let Some(child_filter) = filter.child(key) {
+                    set_dict_item(&dict, key, filtered_value_to_pyobject(py, val, child_filter)?)?;
+                }
+            }
+            dict.into_any()
+        }
+        _ => value_to_pyobject(py, value)?,
+    };
+    Ok(obj)
+}
+
+fn set_dict_item<'py>(dict: &Bound<'py, PyDict>, key: &str, value: Bound<'py, PyAny>) -> PyResult<()> {
+    // For consistency with the old parser behaviour, attempt to convert each hashmap key
+    // into an integer when building the python dict.
+    match key.parse::<i64>() {
+        Ok(i) => dict.set_item(i, value),
+        Err(_) => dict.set_item(key, value),
+    }
 }
 
 impl Display for Value<'_> {

@@ -19,7 +19,9 @@ from typing import (
     Iterator,
     Deque,
     Optional,
+    Sequence,
     TypeVar,
+    Union,
 )
 
 import rust_parser
@@ -276,17 +278,23 @@ def _get_parse_result(save_file: pathlib.Path, get_result) -> Optional[Dict[str,
         return None
 
 
-def parse_save(filename) -> Dict[str, Any]:
+def parse_save(
+    filename, key_paths: Optional[Sequence[Union[str, Sequence[Union[str, int]]]]] = None
+) -> Dict[str, Any]:
     """
     Parse a single save file.
 
     :param filename: Path to a .sav file
+    :param key_paths: If given, only these parts of the gamestate are returned (and converted
+        from the parser's internal representation to Python objects, which is much faster for
+        small subsets). Each path is a dot-separated string like "galaxy.name" or a sequence
+        of keys like ["country", "*", "name"]; "*" matches any key. See rust_parser.parse_save_file.
     :return: The gamestate dictionary
     """
 
     logger.info(f"Reading save file {filename}.")
     start = time.time()
-    parsed = rust_parser.parse_save_file(str(filename.absolute()))
+    parsed = rust_parser.parse_save_file(str(filename.absolute()), key_paths=key_paths)
     if not isinstance(parsed, dict):
         raise ValueError(f"Could not parse {filename}")
     dt = time.time() - start

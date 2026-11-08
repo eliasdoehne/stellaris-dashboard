@@ -2000,7 +2000,9 @@ class CountryColors:
     def _parse_map_colors(path: pathlib.Path):
         with open(path, "r") as f:
             prepared_str = re.sub(r"#[^\n]*", "", f.read())  # strip out comments
-            data = rust_parser.parse_save_from_string(prepared_str)
+            data = rust_parser.parse_save_from_string(
+                prepared_str, key_paths=["colors.*.map"]
+            )
 
             colors = data.get("colors", {})
             map_colors = {}

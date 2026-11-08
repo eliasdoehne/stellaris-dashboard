@@ -51,3 +51,89 @@ def test_real_save(tmp_path):
             totals["faction_support"] += con.execute("SELECT COUNT(*) FROM popstats_faction WHERE support > 0").fetchone()[0]
     for name, total in totals.items():
         assert total > 0, f"No {name} were extracted from the test saves"
+
+
+KEY_PATH_TEST_INPUT = """
+date="2300.01.01"
+galaxy={ name="Milky Way" width=100 }
+country={
+    0={ name="Humans" flag={ icon=human } budget={ income=5 } }
+    1=none
+    2={ name="Blorg" budget={ income=3 } }
+}
+fleet={ name="First" ships={ 1 2 } }
+fleet={ name="Second" ships={ 3 } }
+"dotted.key"={ a=1 b=2 }
+"""
+
+
+@pytest.mark.parametrize(
+    "key_paths,expected",
+    [
+        (["date"], {"date": "2300.01.01"}),
+        (["galaxy.name", "date"], {"date": "2300.01.01", "galaxy": {"name": "Milky Way"}}),
+        (
+            ["country.*.name"],
+            # "none" placeholders cannot be descended into and are returned as they are
+            {"country": {0: {"name": "Humans"}, 1: "none", 2: {"name": "Blorg"}}},
+        ),
+        (
+            # explicit keys and wildcards are combined; int keys match integer-like keys
+            [["country", "*", "name"], ["country", 0, "flag"]],
+            {"country": {0: {"name": "Humans", "flag": {"icon": "human"}}, 1: "none", 2: {"name": "Blorg"}}},
+        ),
+        (
+            # a shorter path selects the full value
+            ["country.0.name", "country.0"],
+            {"country": {0: {"name": "Humans", "flag": {"icon": "human"}, "budget": {"income": 5}}}},
+        ),
+        # lists from repeated keys are traversed element by element
+        (["fleet.name"], {"fleet": [{"name": "First"}, {"name": "Second"}]}),
+        ([["dotted.key", "b"]], {"dotted.key": {"b": 2}}),
+        (["does.not.exist", "galaxy.missing"], {"galaxy": {}}),
+        ([], {}),
+    ],
+)
+def test_key_paths(key_paths, expected):
+    result = rust_parser.parse_save_from_string(KEY_PATH_TEST_INPUT, key_paths=key_paths)
+    assert result == expected
+
+
+def test_key_paths_none_or_empty_path_returns_everything():
+    full = rust_parser.parse_save_from_string(KEY_PATH_TEST_INPUT)
+    assert rust_parser.parse_save_from_string(KEY_PATH_TEST_INPUT, key_paths=None) == full
+    assert rust_parser.parse_save_from_string(KEY_PATH_TEST_INPUT, key_paths=[[]]) == full
+    assert rust_parser.parse_save_from_string(KEY_PATH_TEST_INPUT, key_paths=["date", []]) == full
+
+
+@pytest.mark.parametrize(
+    "key_paths,error",
+    [
+        ("date", TypeError),  # a single path must be wrapped in a list
+        ([1], TypeError),
+        ([["country", 1.5]], TypeError),
+        (["country..name"], ValueError),
+    ],
+)
+def test_key_paths_invalid(key_paths, error):
+    with pytest.raises(error):
+        rust_parser.parse_save_from_string(KEY_PATH_TEST_INPUT, key_paths=key_paths)
+
+
+def test_key_paths_real_save():
+    from pathlib import Path
+    from stellarisdashboard.parsing import save_parser
+
+    save_files = sorted(Path("test/saves").glob("**/*.sav"))
+    if not save_files:
+        pytest.skip("test saves are not available (git submodule test/saves)")
+    save_file = save_files[0]
+    full = save_parser.parse_save(save_file)
+    subset = save_parser.parse_save(save_file, key_paths=["date", "country", "fleet.*.name"])
+    assert subset.keys() == {"date", "country", "fleet"}
+    assert subset["date"] == full["date"]
+    assert subset["country"] == full["country"]
+    assert subset["fleet"] == {
+        fleet_id: {k: v for k, v in fleet.items() if k == "name"} if isinstance(fleet, dict) else fleet
+        for fleet_id, fleet in full["fleet"].items()
+    }
