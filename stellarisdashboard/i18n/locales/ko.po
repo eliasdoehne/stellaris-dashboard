@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-07 10:01+0000\n"
+"POT-Creation-Date: 2026-11-08 20:14+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ko\n"
@@ -45,6 +45,39 @@ msgstr "다시 처리할 실패한 세이브의 보관본이 없습니다."
 #, python-format
 msgid "An import of %(game_id)s is already running. Wait for it to finish or cancel it."
 msgstr "%(game_id)s 가져오기가 이미 실행 중입니다. 끝날 때까지 기다리거나 취소하세요."
+
+#. label of a small chart in the hover preview of an empire
+#: stellarisdashboard/dashboard_app/entity_preview.py:33
+msgid "Victory score"
+msgstr "승리 점수"
+
+#. label of a small chart in the hover preview of an empire
+#: stellarisdashboard/dashboard_app/entity_preview.py:35
+msgid "Military power"
+msgstr "군사력"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:56
+msgctxt "ledger detail"
+msgid "System"
+msgstr "항성계"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:58
+#: stellarisdashboard/dashboard_app/history_ledger.py:759
+msgctxt "ledger detail"
+msgid "Owner"
+msgstr "소유자"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:176
+#: stellarisdashboard/dashboard_app/history_ledger.py:923
+msgctxt "ledger detail"
+msgid "Attackers"
+msgstr "공격측"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:177
+#: stellarisdashboard/dashboard_app/history_ledger.py:927
+msgctxt "ledger detail"
+msgid "Defenders"
+msgstr "방어측"
 
 #: stellarisdashboard/dashboard_app/event_registry.py:51
 msgctxt "event category"
@@ -2776,11 +2809,6 @@ msgctxt "ledger detail"
 msgid "Unknown Bypasses"
 msgstr "미확인 우회로"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:759
-msgctxt "ledger detail"
-msgid "Owner"
-msgstr "소유자"
-
 #: stellarisdashboard/dashboard_app/history_ledger.py:761
 msgctxt "ledger detail"
 msgid "Planets"
@@ -2981,20 +3009,10 @@ msgctxt "ledger detail"
 msgid "End date"
 msgstr "종료일"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:923
-msgctxt "ledger detail"
-msgid "Attackers"
-msgstr "공격측"
-
 #: stellarisdashboard/dashboard_app/history_ledger.py:926
 msgctxt "ledger detail"
 msgid "Attacker War Goal"
 msgstr "공격측 전쟁 목표"
-
-#: stellarisdashboard/dashboard_app/history_ledger.py:927
-msgctxt "ledger detail"
-msgid "Defenders"
-msgstr "방어측"
 
 #: stellarisdashboard/dashboard_app/history_ledger.py:930
 msgctxt "ledger detail"
@@ -3406,12 +3424,12 @@ msgstr "게임"
 
 #: stellarisdashboard/dashboard_app/shell.py:20
 #: stellarisdashboard/dashboard_app/templates/import_page.html:6
-#: stellarisdashboard/dashboard_app/templates/layout.html:85
+#: stellarisdashboard/dashboard_app/templates/layout.html:87
 msgid "Import Saves"
 msgstr "세이브 가져오기"
 
 #: stellarisdashboard/dashboard_app/shell.py:21
-#: stellarisdashboard/dashboard_app/templates/layout.html:86
+#: stellarisdashboard/dashboard_app/templates/layout.html:88
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:6
 msgid "Settings"
 msgstr "설정"
@@ -3470,6 +3488,27 @@ msgstr "접두사 \"%(game_name)s\"와(과) 일치하는 게임이 없습니다.
 #: stellarisdashboard/dashboard_app/templates/404_page.html:11
 msgid "Back to all games"
 msgstr "모든 게임으로 돌아가기"
+
+#. marks the event ledger page of the empire controlled by the player
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:4
+#: stellarisdashboard/dashboard_app/templates/ledger_page.html:8
+msgctxt "ledger focus"
+msgid "You"
+msgstr "플레이어"
+
+#. heading of the war exhaustion of both sides in the hover preview of a war
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:32
+msgid "War exhaustion"
+msgstr "전쟁 피로도"
+
+#. heading of the latest events in the hover preview of an empire, leader, war, ...
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:46
+msgid "Latest events"
+msgstr "최근 사건"
+
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:55
+msgid "Open the ledger"
+msgstr "기록 열기"
 
 #: stellarisdashboard/dashboard_app/templates/_ledger_year.html:6
 #, python-format
@@ -3974,91 +4013,91 @@ msgstr "취소"
 msgid "Timeline Graphs"
 msgstr "타임라인 그래프"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:22
+#: stellarisdashboard/dashboard_app/templates/layout.html:24
 msgid "Navigation"
 msgstr "탐색"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:24
+#: stellarisdashboard/dashboard_app/templates/layout.html:26
 msgid "All games"
 msgstr "모든 게임"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:28
+#: stellarisdashboard/dashboard_app/templates/layout.html:30
 msgid "Collapse sidebar"
 msgstr "사이드바 접기"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:36
+#: stellarisdashboard/dashboard_app/templates/layout.html:38
 msgid "Switch game"
 msgstr "게임 전환"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:51
+#: stellarisdashboard/dashboard_app/templates/layout.html:53
 msgid "All games & details"
 msgstr "모든 게임 및 상세 정보"
 
 #. link in the sidebar to the event ledger of the whole galaxy
-#: stellarisdashboard/dashboard_app/templates/layout.html:74
+#: stellarisdashboard/dashboard_app/templates/layout.html:76
 msgctxt "ledger scope"
 msgid "Galaxy"
 msgstr "은하"
 
 #. link in the sidebar to the event ledger of the player's empire
-#: stellarisdashboard/dashboard_app/templates/layout.html:76
+#: stellarisdashboard/dashboard_app/templates/layout.html:78
 msgctxt "ledger scope"
 msgid "Your empire"
 msgstr "내 제국"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:84
+#: stellarisdashboard/dashboard_app/templates/layout.html:86
 msgid "All Games"
 msgstr "모든 게임"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:87
+#: stellarisdashboard/dashboard_app/templates/layout.html:89
 msgid "Stellaris Wiki"
 msgstr "스텔라리스 위키"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:95
+#: stellarisdashboard/dashboard_app/templates/layout.html:97
 msgid "Open navigation"
 msgstr "탐색 열기"
 
 #. last part of the breadcrumb on an event ledger page that shows only the events of one empire,
 #. leader, war, ...
-#: stellarisdashboard/dashboard_app/templates/layout.html:103
+#: stellarisdashboard/dashboard_app/templates/layout.html:105
 msgctxt "breadcrumb"
 msgid "Filtered"
 msgstr "필터 적용됨"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:110
+#: stellarisdashboard/dashboard_app/templates/layout.html:112
 msgid "Search"
 msgstr "검색"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:110
-#: stellarisdashboard/dashboard_app/templates/layout.html:115
+#: stellarisdashboard/dashboard_app/templates/layout.html:112
+#: stellarisdashboard/dashboard_app/templates/layout.html:117
 msgid "Search this game"
 msgstr "이 게임 검색"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:113
+#: stellarisdashboard/dashboard_app/templates/layout.html:115
 msgid "Find an empire, leader, war, system…"
 msgstr "제국, 지도자, 전쟁, 항성계 찾기…"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:117
+#: stellarisdashboard/dashboard_app/templates/layout.html:119
 msgid "Press / to search"
 msgstr "/ 키를 눌러 검색"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:118
+#: stellarisdashboard/dashboard_app/templates/layout.html:120
 msgid "Close search"
 msgstr "검색 닫기"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:120
+#: stellarisdashboard/dashboard_app/templates/layout.html:122
 msgid "Search results"
 msgstr "검색 결과"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:124
+#: stellarisdashboard/dashboard_app/templates/layout.html:126
 msgid "Date of the latest save"
 msgstr "최신 세이브 날짜"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:129
+#: stellarisdashboard/dashboard_app/templates/layout.html:131
 msgid "Graph categories"
 msgstr "그래프 분류"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:140
+#: stellarisdashboard/dashboard_app/templates/layout.html:142
 #, python-format
 msgid ""
 "You may be using an old version of the stellaris dashboard program. You are using version "
@@ -4069,15 +4108,9 @@ msgstr ""
 " href=\"https://github.com/eliasdoehne/stellaris-dashboard\" class=\"textlink\">GitHub에서</a> 받을 수"
 " 있습니다."
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:142
+#: stellarisdashboard/dashboard_app/templates/layout.html:144
 msgid "This update notice can be disabled in the <a href=\"/settings/\" class=\"textlink\">Settings</a>."
 msgstr "이 업데이트 알림은 <a href=\"/settings/\" class=\"textlink\">설정</a>에서 끌 수 있습니다."
-
-#. marks the event ledger page of the empire controlled by the player
-#: stellarisdashboard/dashboard_app/templates/ledger_page.html:8
-msgctxt "ledger focus"
-msgid "You"
-msgstr "플레이어"
 
 #: stellarisdashboard/dashboard_app/templates/ledger_page.html:12
 msgid "The galaxy's history. Your own empire's events count one level higher."
