@@ -10,10 +10,12 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
     {# global rather than per page: hx-boost navigation swaps only the body #}
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='ledger.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='overview.css') }}">
     <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
     <script src="{{ url_for('static', filename='shell.js') }}" defer></script>
     <script src="{{ url_for('static', filename='search.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ledger.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='overview.js') }}" defer></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -43,7 +45,7 @@
                 <ul class="game-switch-menu">
                     {% for g in shell_games() %}
                     <li><a hx-boost="false" class="{% if g.game_id == game_name %}is-active{% endif %}"
-                           href="{{ section_url(active if active in ('graphs', 'galaxy', 'ledger', 'codex') else 'graphs', g.game_id) }}">
+                           href="{{ section_url(active if active in ('overview', 'graphs', 'galaxy', 'ledger', 'codex') else 'overview', g.game_id) }}">
                         <span class="game-switch-name">{{ g.country_name }}</span>
                         <span class="game-switch-meta">{{ g.game_date }} · {{ g.game_id }}</span>
                     </a></li>

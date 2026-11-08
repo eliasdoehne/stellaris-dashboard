@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% from "_icons.html" import icon %}
+
+{% block body %}
+<div class="overview page">
+    {% if not empire %}
+    <div class="page-head"><h1 class="page-title">{{ _("Overview") }}</h1></div>
+    <p class="codex-empty">{{ _("No empires to show yet.") }}</p>
+    {% else %}
+    <div class="page-head">
+        <div>
+            {% if empire.is_player %}<p class="ledger-kind">{# Translators: marks the overview page of the empire controlled by the player #}{{ pgettext("overview", "Your empire") }}</p>{% endif %}
+            <h1 class="page-title">{{ empire.name }}</h1>
+            {% if empire.last_date and empire.last_date != current_date %}
+            <p class="page-subtitle">{{ _("No data since %(date)s", date=empire.last_date) }}</p>
+            {% endif %}
+        </div>
+        <div class="page-actions" hx-boost="true">
+            <nav class="segmented" aria-label="{{ _('Period') }}">
+                {% for label, active, url in spans %}
+                <a class="segmented-option{% if active %} is-active{% endif %}" href="{{ url }}">{{ label }}</a>
+                {% endfor %}
+            </nav>
+            {% if empires | length > 1 %}
+            <details class="overview-pick">
+                <summary>{{ _("Other empire") }} {{ icon("chevron") }}</summary>
+                <ul class="overview-pick-menu">
+                    {% for e in empires %}
+                    <li><a href="{{ e.url }}"{% if e.is_active %} class="is-active" aria-current="page"{% endif %}>{{ e.name }}{% if e.is_player %} <span class="codex-tag">{{ pgettext("codex tag", "You") }}</span>{% endif %}</a></li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+
+    {% for group_label, tiles in groups %}
+    <section class="kpi-group">
+        <h2 class="kpi-group-title">{{ group_label }}</h2>
+        <div class="kpi-grid">
+            {% for t in tiles %}
+            <{{ "a" if t.href else "div" }} class="kpi-tile"{% if t.href %} href="{{ t.href }}" title="{{ _('Open the graph') }}"{% endif %}>
+                <span class="kpi-label">{{ t.label }}</span>
+                {% if t.value is none %}
+                <span class="kpi-value kpi-value--unknown">–</span>
+                <span class="kpi-meta">{{ _("Not known to you") }}</span>
+                {% else %}
+                <span class="kpi-value">{{ t.value }}</span>
+                <span class="kpi-meta">
+                    {% if t.delta %}
+                    <span class="kpi-delta kpi-delta--{{ t.delta.tone }}">{% if t.delta.arrow %}<svg class="kpi-arrow kpi-arrow--{{ t.delta.arrow }}" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.5L9 8.5H1z"/></svg>{% endif %}{{ t.delta.text }}</span>
+                    {# Translators: after the change of a value in the overview, e.g. "+12% since 2340" #}
+                    <span class="kpi-since">{{ _("since %(year)s", year=t.delta.since) }}</span>
+                    {% endif %}
+                </span>
+                {% if t.spark %}
+                <span class="kpi-spark" data-points="{{ t.spark.points }}" aria-hidden="true">
+                    <svg viewBox="0 0 100 32" preserveAspectRatio="none">
+                        {% if t.spark.zero %}<path class="kpi-spark-zero" d="M0 {{ t.spark.zero }}H100"/>{% endif %}
+                        <path class="kpi-spark-line" d="{{ t.spark.path }}"/>
+                    </svg>
+                    <span class="kpi-spark-cursor"></span>
+                    <span class="kpi-spark-dot" style="left: {{ t.spark.end[0] }}%; top: {{ t.spark.end[1] }}%"></span>
+                </span>
+                {% endif %}
+                <span class="kpi-foot">
+                    {# Translators: in an overview tile whose value the player no longer knows #}
+                    <span class="kpi-rank">{% if t.stale %}{{ _("Last known %(date)s", date=t.stale) }}{% else %}{{ t.rank or "" }}{% endif %}</span>
+                    <span class="kpi-readout"></span>
+                </span>
+                {% endif %}
+            </{{ "a" if t.href else "div" }}>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+
+    <p class="overview-note">
+        {{ _("Ranks compare the empires whose numbers you know.") }}
+        <a class="textlink" href="{{ empire.ledger_url }}">{{ _("Open this empire's event ledger") }}</a>
+    </p>
+    {% endif %}
+</div>
+{% endblock %}
