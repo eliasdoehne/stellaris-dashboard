@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-08 20:14+0100\n"
+"POT-Creation-Date: 2026-11-09 20:00+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -62,19 +62,19 @@ msgid "System"
 msgstr "星系"
 
 #: stellarisdashboard/dashboard_app/entity_preview.py:58
-#: stellarisdashboard/dashboard_app/history_ledger.py:759
+#: stellarisdashboard/dashboard_app/history_ledger.py:763
 msgctxt "ledger detail"
 msgid "Owner"
 msgstr "所有者"
 
 #: stellarisdashboard/dashboard_app/entity_preview.py:176
-#: stellarisdashboard/dashboard_app/history_ledger.py:923
+#: stellarisdashboard/dashboard_app/history_ledger.py:927
 msgctxt "ledger detail"
 msgid "Attackers"
 msgstr "进攻方"
 
 #: stellarisdashboard/dashboard_app/entity_preview.py:177
-#: stellarisdashboard/dashboard_app/history_ledger.py:927
+#: stellarisdashboard/dashboard_app/history_ledger.py:931
 msgctxt "ledger detail"
 msgid "Defenders"
 msgstr "防守方"
@@ -405,112 +405,151 @@ msgstr "%(country)s率领不结盟势力联盟向觉醒帝国开战。"
 msgid "The %(country)s lost a war, shattering the myth of Fallen Empire invincibility."
 msgstr "%(country)s输掉了一场战争，打破了失落帝国不可战胜的神话。"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1237
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
 msgid "excavating"
 msgstr "挖掘中"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1237
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
 msgid "fully excavated"
 msgstr "已完全挖掘"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1237
-#: stellarisdashboard/dashboard_app/event_registry.py:1251
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "paused"
 msgstr "已暂停"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1239
+#: stellarisdashboard/dashboard_app/event_registry.py:1269
 #, python-format
 msgid "Chapter %(index)s"
 msgstr "第 %(index)s 章"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1240
+#: stellarisdashboard/dashboard_app/event_registry.py:1270
 #, python-format
 msgid "Chapter %(index)s: %(detail)s"
 msgstr "第 %(index)s 章：%(detail)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1241
+#: stellarisdashboard/dashboard_app/event_registry.py:1271
 #, python-format
 msgid "Chapter %(index)s by the %(country)s"
 msgstr "第 %(index)s 章（%(country)s）"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1242
+#: stellarisdashboard/dashboard_app/event_registry.py:1272
 #, python-format
 msgid "Chapter %(index)s: %(detail)s by the %(country)s"
 msgstr "第 %(index)s 章：%(detail)s（%(country)s）"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1251
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "exploring"
 msgstr "探索中"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1251
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "fully explored"
 msgstr "已完全探索"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1253
+#: stellarisdashboard/dashboard_app/event_registry.py:1283
 #, python-format
 msgid "Step %(index)s"
 msgstr "第 %(index)s 步"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1254
+#: stellarisdashboard/dashboard_app/event_registry.py:1284
 #, python-format
 msgid "Step %(index)s: %(detail)s"
 msgstr "第 %(index)s 步：%(detail)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1255
+#: stellarisdashboard/dashboard_app/event_registry.py:1285
 #, python-format
 msgid "Step %(index)s by the %(country)s"
 msgstr "第 %(index)s 步（%(country)s）"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1256
+#: stellarisdashboard/dashboard_app/event_registry.py:1286
 #, python-format
 msgid "Step %(index)s: %(detail)s by the %(country)s"
 msgstr "第 %(index)s 步：%(detail)s（%(country)s）"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1264
-msgid "in progress"
-msgstr "进行中"
-
-#: stellarisdashboard/dashboard_app/event_registry.py:1264
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
 msgid "contact made"
 msgstr "已建立联系"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1264
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
 msgid "abandoned"
 msgstr "已放弃"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1266
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "in progress"
+msgstr "进行中"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1296
+#: stellarisdashboard/dashboard_app/event_registry.py:1310
 #, python-format
 msgid "Stage %(index)s"
 msgstr "第 %(index)s 阶段"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1267
+#: stellarisdashboard/dashboard_app/event_registry.py:1297
+#: stellarisdashboard/dashboard_app/event_registry.py:1311
 #, python-format
 msgid "Stage %(index)s: %(detail)s"
 msgstr "第 %(index)s 阶段：%(detail)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1268
+#: stellarisdashboard/dashboard_app/event_registry.py:1298
+#: stellarisdashboard/dashboard_app/event_registry.py:1312
 #, python-format
 msgid "Stage %(index)s by the %(country)s"
 msgstr "第 %(index)s 阶段（%(country)s）"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1269
+#: stellarisdashboard/dashboard_app/event_registry.py:1299
+#: stellarisdashboard/dashboard_app/event_registry.py:1313
 #, python-format
 msgid "Stage %(index)s: %(detail)s by the %(country)s"
 msgstr "第 %(index)s 阶段：%(detail)s（%(country)s）"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1287
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "completed"
+msgstr "已完成"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "failed"
+msgstr "已失败"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "ended"
+msgstr "已结束"
+
+#. how a harmful situation (a deficit, a revolt) ended: at its worst, or dropped to nothing
+#: stellarisdashboard/dashboard_app/event_registry.py:1316
+msgid "escalated"
+msgstr "已恶化"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1316
+msgid "averted"
+msgstr "已化解"
+
+#. the state of a situation and how far its progress bar is filled, e.g. "in progress, 62%"
+#: stellarisdashboard/dashboard_app/event_registry.py:1332
+#, python-format
+msgid "%(state)s, %(percent)s%%"
+msgstr "%(state)s，%(percent)s%%"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1340
 #, python-format
 msgid "%(num)s chapter"
 msgid_plural "%(num)s chapters"
 msgstr[0] "%(num)s 个章节"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1289
+#: stellarisdashboard/dashboard_app/event_registry.py:1342
 #, python-format
 msgid "%(num)s step"
 msgid_plural "%(num)s steps"
 msgstr[0] "%(num)s 个步骤"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1290
+#. the furthest stage a situation reached, e.g. "stage 3"
+#: stellarisdashboard/dashboard_app/event_registry.py:1345
+#, python-format
+msgctxt "situation"
+msgid "stage %(num)s"
+msgstr "第 %(num)s 阶段"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1346
 #, python-format
 msgid "%(num)s stage"
 msgid_plural "%(num)s stages"
@@ -518,7 +557,7 @@ msgstr[0] "%(num)s 个阶段"
 
 #. a stage of a first contact and the empire that reached it, e.g.
 #. "Communications established by the United Nations of Earth". %(country)s is the empire (a link)
-#: stellarisdashboard/dashboard_app/event_registry.py:1306
+#: stellarisdashboard/dashboard_app/event_registry.py:1362
 #, python-format
 msgid "%(detail)s by the %(country)s"
 msgstr "%(detail)s（%(country)s）"
@@ -2226,6 +2265,63 @@ msgstr "在%(leader)s的统治下，%(country)s宣布%(target)s为宿敌。"
 msgid "The %(country)s declared the %(target)s a rival."
 msgstr "%(country)s宣布%(target)s为宿敌。"
 
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link). %(target)s: name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:4
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s on %(planet)s concerning the %(target)s."
+msgstr "%(country)s在 %(planet)s 上开始了涉及%(target)s的局势“%(situation)s”。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link)
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:7
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s on %(planet)s."
+msgstr "%(country)s在 %(planet)s 上开始了局势“%(situation)s”。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(target)s:
+#. name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:12
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s concerning the %(target)s."
+msgstr "%(country)s开始了涉及%(target)s的局势“%(situation)s”。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:15
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s."
+msgstr "%(country)s开始了局势“%(situation)s”。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation_stage]:3
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s reached stage %(stage)s, \"%(stage_name)s\"."
+msgstr "%(country)s的局势“%(situation)s”进入了第 %(stage)s 阶段“%(stage_name)s”。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation_stage]:6
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s reached stage %(stage)s."
+msgstr "%(country)s的局势“%(situation)s”进入了第 %(stage)s 阶段。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[special_project]:3
+#, python-format
+msgid "The %(country)s completed the special project \"%(project)s\"."
+msgstr "%(country)s完成了特殊项目“%(project)s”。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[special_project]:6
+#, python-format
+msgid "The special project \"%(project)s\" of the %(country)s ended unfinished."
+msgstr "%(country)s的特殊项目“%(project)s”未完成即告终止。"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[special_project]:9
+#, python-format
+msgid "The %(country)s began the special project \"%(project)s\"."
+msgstr "%(country)s开始了特殊项目“%(project)s”。"
+
 #. %(old_class)s and %(new_class)s are planet classes, e.g. "Barren World". %(country)s: name of an
 #. empire (a link), usually reads like "United Nations of Earth". %(planet)s: name of a planet (a
 #. link). %(system)s: name of a star system (a link). %(leader)s: class and name of a leader (a link),
@@ -2588,6 +2684,33 @@ msgstr "%(country)s与%(target)s在 %(system)s 星系的首次接触"
 msgid "First contact between the %(country)s and the %(target)s"
 msgstr "%(country)s与%(target)s的首次接触"
 
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link). %(target)s: name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:4
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s on %(planet)s concerning the %(target)s"
+msgstr "%(country)s在 %(planet)s 上涉及%(target)s的局势“%(situation)s”"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link)
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:7
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s on %(planet)s"
+msgstr "%(country)s在 %(planet)s 上的局势“%(situation)s”"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(target)s:
+#. name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:12
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s concerning the %(target)s"
+msgstr "%(country)s涉及%(target)s的局势“%(situation)s”"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:15
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s"
+msgstr "%(country)s的局势“%(situation)s”"
+
 #: stellarisdashboard/dashboard_app/galaxy_map.py:234
 msgid "Step size must be a whole number."
 msgstr "步长必须为整数。"
@@ -2779,260 +2902,260 @@ msgid "alliance"
 msgstr "同盟"
 
 #. title of the page of a star system; %(system)s is its name
-#: stellarisdashboard/dashboard_app/history_ledger.py:676
+#: stellarisdashboard/dashboard_app/history_ledger.py:680
 #, python-format
 msgid "%(system)s System"
 msgstr "%(system)s 星系"
 
 #. title of the page of a planet; %(planet)s is its name
-#: stellarisdashboard/dashboard_app/history_ledger.py:683
+#: stellarisdashboard/dashboard_app/history_ledger.py:687
 #, python-format
 msgid "Planet %(planet)s"
 msgstr "行星 %(planet)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:731
+#: stellarisdashboard/dashboard_app/history_ledger.py:735
 msgctxt "ledger detail"
 msgid "Star Class"
 msgstr "恒星类型"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:736
+#: stellarisdashboard/dashboard_app/history_ledger.py:740
 msgctxt "ledger detail"
 msgid "Hyperlanes"
 msgstr "超空间航道"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:756
+#: stellarisdashboard/dashboard_app/history_ledger.py:760
 msgctxt "ledger detail"
 msgid "Unknown Bypasses"
 msgstr "未知旁路"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:761
+#: stellarisdashboard/dashboard_app/history_ledger.py:765
 msgctxt "ledger detail"
 msgid "Planets"
 msgstr "行星"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:771
-#: stellarisdashboard/dashboard_app/history_ledger.py:893
+#: stellarisdashboard/dashboard_app/history_ledger.py:775
+#: stellarisdashboard/dashboard_app/history_ledger.py:897
 msgctxt "ledger detail"
 msgid "Resource Deposits"
 msgstr "资源矿藏"
 
 #. class of a leader and the empire they serve, e.g. "Scientist in the United Nations of Earth".
 #. %(leader_class)s is the leader class, %(country)s is the name of the empire (a link)
-#: stellarisdashboard/dashboard_app/history_ledger.py:783
+#: stellarisdashboard/dashboard_app/history_ledger.py:787
 #, python-format
 msgid "%(leader_class)s in the %(country)s"
 msgstr "%(country)s的%(leader_class)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:788
+#: stellarisdashboard/dashboard_app/history_ledger.py:792
 msgctxt "ledger detail"
 msgid "Leader Name"
 msgstr "领袖姓名"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:789
+#: stellarisdashboard/dashboard_app/history_ledger.py:793
 msgctxt "ledger detail"
 msgid "Class"
 msgstr "职业"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:790
+#: stellarisdashboard/dashboard_app/history_ledger.py:794
 msgctxt "ledger detail"
 msgid "Subclass"
 msgstr "子职业"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:790
-#: stellarisdashboard/dashboard_app/history_ledger.py:796
+#: stellarisdashboard/dashboard_app/history_ledger.py:794
+#: stellarisdashboard/dashboard_app/history_ledger.py:800
 msgid "None"
 msgstr "无"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:791
+#: stellarisdashboard/dashboard_app/history_ledger.py:795
 msgctxt "ledger detail"
 msgid "Traits"
 msgstr "特质"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:792
+#: stellarisdashboard/dashboard_app/history_ledger.py:796
 msgctxt "ledger detail"
 msgid "Species"
 msgstr "物种"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:793
+#: stellarisdashboard/dashboard_app/history_ledger.py:797
 msgctxt "ledger detail"
 msgid "Gender"
 msgstr "性别"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:794
+#: stellarisdashboard/dashboard_app/history_ledger.py:798
 msgctxt "ledger detail"
 msgid "Ethic"
 msgstr "思潮"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:795
+#: stellarisdashboard/dashboard_app/history_ledger.py:799
 msgctxt "ledger detail"
 msgid "Previous Position"
 msgstr "前任职位"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:797
+#: stellarisdashboard/dashboard_app/history_ledger.py:801
 msgctxt "ledger detail"
 msgid "Home Planet"
 msgstr "母星"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:798
+#: stellarisdashboard/dashboard_app/history_ledger.py:802
 msgctxt "ledger detail"
 msgid "Country of Origin"
 msgstr "所属国家"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:799
+#: stellarisdashboard/dashboard_app/history_ledger.py:803
 msgctxt "ledger detail"
 msgid "Born"
 msgstr "出生"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:800
+#: stellarisdashboard/dashboard_app/history_ledger.py:804
 msgctxt "ledger detail"
 msgid "Hired"
 msgstr "雇用"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:801
+#: stellarisdashboard/dashboard_app/history_ledger.py:805
 msgctxt "ledger detail"
 msgid "Last active"
 msgstr "最后活跃"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:806
+#: stellarisdashboard/dashboard_app/history_ledger.py:810
 msgctxt "ledger detail"
 msgid "Status"
 msgstr "状态"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:806
+#: stellarisdashboard/dashboard_app/history_ledger.py:810
 msgid "Active"
 msgstr "在任"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:806
+#: stellarisdashboard/dashboard_app/history_ledger.py:810
 msgid "Dead or retired"
 msgstr "已故或退休"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:812
+#: stellarisdashboard/dashboard_app/history_ledger.py:816
 msgctxt "ledger detail"
 msgid "Country Type"
 msgstr "国家类型"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:818
+#: stellarisdashboard/dashboard_app/history_ledger.py:822
 msgctxt "ledger detail"
 msgid "Personality"
 msgstr "性格"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:819
+#: stellarisdashboard/dashboard_app/history_ledger.py:823
 msgctxt "ledger detail"
 msgid "Government Type"
 msgstr "政府类型"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:820
+#: stellarisdashboard/dashboard_app/history_ledger.py:824
 msgctxt "ledger detail"
 msgid "Authority"
 msgstr "政体"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:821
+#: stellarisdashboard/dashboard_app/history_ledger.py:825
 msgctxt "ledger detail"
 msgid "Ethics"
 msgstr "思潮"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:824
+#: stellarisdashboard/dashboard_app/history_ledger.py:828
 msgctxt "ledger detail"
 msgid "Civics"
 msgstr "国民性"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:827
+#: stellarisdashboard/dashboard_app/history_ledger.py:831
 msgctxt "ledger detail"
 msgid "Origin"
 msgstr "起源"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:828
+#: stellarisdashboard/dashboard_app/history_ledger.py:832
 msgctxt "ledger detail"
 msgid "Ruler"
 msgstr "统治者"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:835
+#: stellarisdashboard/dashboard_app/history_ledger.py:839
 msgctxt "ledger detail"
 msgid "Council"
 msgstr "议会"
 
 #. a council position and the leader holding it, e.g. "Chancellor <leader name>".
 #. %(position)s is the position, %(leader)s is the name of the leader (a link)
-#: stellarisdashboard/dashboard_app/history_ledger.py:843
+#: stellarisdashboard/dashboard_app/history_ledger.py:847
 #, python-format
 msgid "%(position)s %(leader)s"
 msgstr "%(position)s %(leader)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:865
+#: stellarisdashboard/dashboard_app/history_ledger.py:869
 msgid "Destroyed (no trace remains)"
 msgstr "已摧毁（不留任何痕迹）"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:865
-#: stellarisdashboard/dashboard_app/history_ledger.py:867
+#: stellarisdashboard/dashboard_app/history_ledger.py:869
+#: stellarisdashboard/dashboard_app/history_ledger.py:871
 msgctxt "ledger detail"
 msgid "Planet Class"
 msgstr "行星类型"
 
 #. a planet modifier that runs out; %(modifier)s is its name, %(date)s the date it expires
-#: stellarisdashboard/dashboard_app/history_ledger.py:875
+#: stellarisdashboard/dashboard_app/history_ledger.py:879
 #, python-format
 msgid "%(modifier)s (expires %(date)s)"
 msgstr "%(modifier)s（%(date)s 到期）"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:883
+#: stellarisdashboard/dashboard_app/history_ledger.py:887
 msgctxt "ledger detail"
 msgid "Modifiers"
 msgstr "修正"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:895
+#: stellarisdashboard/dashboard_app/history_ledger.py:899
 msgctxt "ledger detail"
 msgid "Blockers and Features"
 msgstr "障碍与特征"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:901
+#: stellarisdashboard/dashboard_app/history_ledger.py:905
 msgctxt "ledger detail"
 msgid "Districts"
 msgstr "区划"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:909
+#: stellarisdashboard/dashboard_app/history_ledger.py:913
 msgctxt "ledger detail"
 msgid "Buildings"
 msgstr "建筑"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:921
+#: stellarisdashboard/dashboard_app/history_ledger.py:925
 msgctxt "ledger detail"
 msgid "Start date"
 msgstr "开始日期"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:922
-#: stellarisdashboard/dashboard_app/history_ledger.py:937
+#: stellarisdashboard/dashboard_app/history_ledger.py:926
+#: stellarisdashboard/dashboard_app/history_ledger.py:941
 msgctxt "ledger detail"
 msgid "End date"
 msgstr "结束日期"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:926
+#: stellarisdashboard/dashboard_app/history_ledger.py:930
 msgctxt "ledger detail"
 msgid "Attacker War Goal"
 msgstr "进攻方战争目标"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:930
+#: stellarisdashboard/dashboard_app/history_ledger.py:934
 msgctxt "ledger detail"
 msgid "Defender War Goal"
 msgstr "防守方战争目标"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:931
+#: stellarisdashboard/dashboard_app/history_ledger.py:935
 msgctxt "ledger detail"
 msgid "Outcome"
 msgstr "结果"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:934
+#: stellarisdashboard/dashboard_app/history_ledger.py:938
 msgctxt "ledger detail"
 msgid "Attacker exhaustion"
 msgstr "进攻方战争疲惫度"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:935
+#: stellarisdashboard/dashboard_app/history_ledger.py:939
 msgctxt "ledger detail"
 msgid "Defender exhaustion"
 msgstr "防守方战争疲惫度"
 
 #. an empire in a war and how it joined, e.g. "United Nations of Earth (primary)".
 #. %(country)s is the name of the empire (a link), %(call_type)s how it entered the war
-#: stellarisdashboard/dashboard_app/history_ledger.py:945
+#: stellarisdashboard/dashboard_app/history_ledger.py:949
 #, python-format
 msgid "%(country)s (%(call_type)s)"
 msgstr "%(country)s（%(call_type)s）"
@@ -4589,146 +4712,146 @@ msgid "Defender Victory"
 msgstr "防守方胜利"
 
 #. a bypass (wormhole, gateway, ...) that is not working; %(bypass)s is its name
-#: stellarisdashboard/datamodel.py:805
+#: stellarisdashboard/datamodel.py:813
 #, python-format
 msgid "%(bypass)s (inactive)"
 msgstr "%(bypass)s（未激活）"
 
 #. the type of a regular country, as opposed to e.g. "Fallen Empire" or "Primitive"
-#: stellarisdashboard/datamodel.py:938
+#: stellarisdashboard/datamodel.py:946
 msgctxt "country type"
 msgid "Empire"
 msgstr "帝国"
 
 #. %(old)s and %(new)s are government types
-#: stellarisdashboard/datamodel.py:1095
+#: stellarisdashboard/datamodel.py:1103
 #, python-format
 msgid "Type changed from \"%(old)s\" to \"%(new)s\"."
 msgstr "类型由“%(old)s”变为“%(new)s”。"
 
 #. %(old)s and %(new)s are authorities, e.g. "Democratic"
-#: stellarisdashboard/datamodel.py:1105
+#: stellarisdashboard/datamodel.py:1113
 #, python-format
 msgid "Authority changed from %(old)s to %(new)s."
 msgstr "政体由%(old)s变为%(new)s。"
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1119
+#: stellarisdashboard/datamodel.py:1127
 #, python-format
 msgid "Removed civics %(civics)s."
 msgstr "移除了国民性：%(civics)s。"
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1123
+#: stellarisdashboard/datamodel.py:1131
 #, python-format
 msgid "Adopted civics %(civics)s."
 msgstr "采纳了国民性：%(civics)s。"
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1127
+#: stellarisdashboard/datamodel.py:1135
 #, python-format
 msgid "Abandoned ethics %(ethics)s."
 msgstr "放弃了思潮：%(ethics)s。"
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1131
+#: stellarisdashboard/datamodel.py:1139
 #, python-format
 msgid "Embraced ethics %(ethics)s."
 msgstr "接纳了思潮：%(ethics)s。"
 
 #. name of a war that several wars share, followed by the main
 #. empires of both sides, e.g. "War in Heaven (Empire A vs Empire B)".
-#: stellarisdashboard/datamodel.py:1592
+#: stellarisdashboard/datamodel.py:1600
 #, python-format
 msgid "%(name)s (%(attackers)s vs %(defenders)s)"
 msgstr "%(name)s（%(attackers)s 对 %(defenders)s）"
 
 #. name of a war without a name in the game: the empires on both sides,
 #. e.g. "Empire A, Empire B vs Empire C". %(attackers)s and %(defenders)s are lists of empires.
-#: stellarisdashboard/datamodel.py:1600
+#: stellarisdashboard/datamodel.py:1608
 #, python-format
 msgid "%(attackers)s vs %(defenders)s"
 msgstr "%(attackers)s 对 %(defenders)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:926
-#: stellarisdashboard/dashboard_app/history_ledger.py:930 stellarisdashboard/datamodel.py:1670
+#: stellarisdashboard/dashboard_app/history_ledger.py:930
+#: stellarisdashboard/dashboard_app/history_ledger.py:934 stellarisdashboard/datamodel.py:1678
 msgid "Unknown"
 msgstr "未知"
 
 #. a dig site and the chapter of its excavation, e.g. "Under the Ice (chapter 3)"
-#: stellarisdashboard/datamodel.py:2104
+#: stellarisdashboard/datamodel.py:2112
 #, python-format
 msgid "%(name)s (chapter %(chapter)s)"
 msgstr "%(name)s（第 %(chapter)s 章）"
 
 #. an astral rift and the name of the event of its exploration, e.g. "The Corridors: Rift Anomaly"
-#: stellarisdashboard/datamodel.py:2133
+#: stellarisdashboard/datamodel.py:2141
 #, python-format
 msgid "%(name)s: %(title)s"
 msgstr "%(name)s：%(title)s"
 
-#: stellarisdashboard/datamodel.py:2165
+#: stellarisdashboard/datamodel.py:2173
 msgid "contact detected"
 msgstr "检测到接触"
 
-#: stellarisdashboard/datamodel.py:2166
+#: stellarisdashboard/datamodel.py:2174
 msgid "investigation progressed"
 msgstr "调查取得进展"
 
-#: stellarisdashboard/datamodel.py:2167
+#: stellarisdashboard/datamodel.py:2175
 msgid "complications arose"
 msgstr "出现了复杂情况"
 
-#: stellarisdashboard/datamodel.py:2168
+#: stellarisdashboard/datamodel.py:2176
 msgid "communications established"
 msgstr "通讯已建立"
 
-#: stellarisdashboard/datamodel.py:2169
+#: stellarisdashboard/datamodel.py:2177
 msgid "communications failed"
 msgstr "通讯失败"
 
-#: stellarisdashboard/datamodel.py:2172
+#: stellarisdashboard/datamodel.py:2180
 msgid "hostile"
 msgstr "敌对"
 
-#: stellarisdashboard/datamodel.py:2173
+#: stellarisdashboard/datamodel.py:2181
 msgid "proactive"
 msgstr "积极"
 
-#: stellarisdashboard/datamodel.py:2174
+#: stellarisdashboard/datamodel.py:2182
 msgid "cautious"
 msgstr "谨慎"
 
 #. a stage of a first contact and the approach taken, e.g. "communications established (cautious)"
-#: stellarisdashboard/datamodel.py:2188
+#: stellarisdashboard/datamodel.py:2196
 #, python-format
 msgid "%(stage)s (%(approach)s)"
 msgstr "%(stage)s（%(approach)s）"
 
 #. a country that is subject of another one, as in "The X became a subject of the Y."
-#: stellarisdashboard/datamodel.py:2206
+#: stellarisdashboard/datamodel.py:2214
 msgid "subject"
 msgstr "附庸"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "..."-rank Defender of the Galaxy."
-#: stellarisdashboard/datamodel.py:2237
+#: stellarisdashboard/datamodel.py:2245
 #, python-format
 msgid "\"%(name)s\"-rank Defender of the Galaxy"
 msgstr "“%(name)s”级银河守护者"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "Risk"-level threat to the galaxy."
-#: stellarisdashboard/datamodel.py:2239
+#: stellarisdashboard/datamodel.py:2247
 #, python-format
 msgid "\"%(name)s\"-level threat to the galaxy"
 msgstr "“%(name)s”级银河威胁"
 
 #. %(name)s is the name of a federation
-#: stellarisdashboard/datamodel.py:2353
+#: stellarisdashboard/datamodel.py:2373
 #, python-format
 msgid "\"%(name)s\" federation"
 msgstr "“%(name)s”联邦"
 
-#: stellarisdashboard/datamodel.py:2537
+#: stellarisdashboard/datamodel.py:2561
 msgid "Unknown Event"
 msgstr "未知事件"
 

@@ -1,3 +1,4 @@
+import dataclasses
 import functools
 import json
 import logging
@@ -538,6 +539,62 @@ def dig_site_stage_count(site_type: str) -> Optional[int]:
     """The number of chapters of an archaeological site type, None if the game files are unavailable."""
     stages = _common_block_fields("archaeological_site_types", "stages").get(site_type)
     return int(stages) if stages is not None and stages.isdigit() else None
+
+
+@dataclasses.dataclass(frozen=True)
+class SituationType:
+    title: Optional[str]  # loc key of the name, if it differs from the situation key
+    stages: tuple[str, ...]
+    show_in_outliner: bool
+    negative: bool  # whether reaching the end of the bar is the bad outcome (a deficit, a revolt)
+
+
+@functools.lru_cache(maxsize=1)
+def _situation_types() -> dict[str, SituationType]:
+    """The situation types of common/situations by key."""
+    types = {}
+    for text in _read_common_scripts("situations"):
+        for key, block in parse_script(text):
+            if not isinstance(block, list):
+                continue
+            fields = dict(block)
+            stages = fields.get("stages")
+            types[key] = SituationType(
+                title=_script_text(fields.get("title")),
+                stages=tuple(stage for stage, _ in stages) if isinstance(stages, list) else (),
+                show_in_outliner=fields.get("show_in_outliner") != "no",
+                negative=fields.get("complete_category", fields.get("category")) == "negative",
+            )
+    return types
+
+
+def situation_type(key: str) -> Optional[SituationType]:
+    """The definition of a situation type, None if unknown."""
+    return _situation_types().get(key)
+
+
+def situation_name(key: str) -> str:
+    """The name of a situation type, e.g. "Planetary Revolt": its own name if that needs no target, else its type name."""
+    definition = situation_type(key)
+    for loc_key in (definition.title if definition else None, key, f"{key}_type"):
+        text = loc_template(loc_key) if loc_key else None
+        if text and "[" not in text:
+            return lookup_key(loc_key)
+    return convert_id_to_name(key, remove_prefix="situation")
+
+
+_GENERIC_STAGE_RE = re.compile(r"stage_\d+(_alt)?|high_level")
+
+
+def situation_stage_name(key: str, stage: int) -> Optional[str]:
+    """The name of a situation's stage (0-based), None for generic ones like "Stage II"."""
+    definition = situation_type(key)
+    if definition is None or not 0 <= stage < len(definition.stages):
+        return None
+    stage_key = definition.stages[stage]
+    if _GENERIC_STAGE_RE.fullmatch(stage_key):
+        return None
+    return lookup_key_if_known(stage_key)
 
 
 @functools.lru_cache(maxsize=1)
