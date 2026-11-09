@@ -13,3 +13,7 @@ classifiers = [
 ]
 
 
+
+[tool.uv]
+# Rebuild on `uv sync` whenever the Rust sources or dependencies change, not only on a version bump.
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }, { file = "src/**/*.rs" }]
