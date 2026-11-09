@@ -1,0 +1,159 @@
+/* Overview page: KPI tiles (overview.py, templates/overview_page.html). */
+
+.overview { max-width: 1180px; }
+
+.overview-pick { position: relative; }
+.overview-pick > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.32rem 0.6rem 0.32rem 0.75rem;
+    font-size: 0.86rem;
+    color: var(--text-dim);
+    background: var(--inset);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.overview-pick > summary::-webkit-details-marker { display: none; }
+.overview-pick > summary:hover { color: var(--text); border-color: var(--amber-deep); }
+.overview-pick[open] > summary .icon { transform: rotate(180deg); }
+.overview-pick .icon { width: 16px; height: 16px; }
+.overview-pick-menu {
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    top: calc(100% + 4px);
+    min-width: 15rem;
+    max-width: min(22rem, calc(100vw - 2rem));
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0.3rem;
+    list-style: none;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.overview-pick-menu a {
+    display: block;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.88rem;
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+}
+.overview-pick-menu a:hover { background: var(--panel-2); text-decoration: none; }
+.overview-pick-menu a.is-active { color: var(--amber-bright); }
+
+.kpi-group { margin: 0 0 1.5rem; }
+.kpi-group-title {
+    margin: 0 0 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.kpi-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.8rem 0.9rem 0.7rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.12s ease;
+}
+a.kpi-tile:hover { border-color: var(--amber-deep); text-decoration: none; }
+a.kpi-tile:focus-visible { outline: 2px solid var(--amber-bright); outline-offset: 2px; }
+
+.kpi-label { font-size: 0.82rem; color: var(--text-dim); }
+.kpi-value {
+    font-size: 1.65rem;
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--text);
+    white-space: nowrap;
+}
+.kpi-value--unknown { color: var(--text-faint); }
+.kpi-meta { min-height: 1.2em; font-size: 0.8rem; color: var(--text-faint); }
+.kpi-delta { font-weight: 600; white-space: nowrap; }
+.kpi-arrow { width: 0.62em; height: 0.62em; margin-right: 0.25em; fill: currentColor; vertical-align: 0.02em; }
+.kpi-arrow--down { transform: rotate(180deg); }
+.kpi-delta--good { color: var(--pos); }
+.kpi-delta--bad { color: var(--neg); }
+.kpi-delta--neutral { color: var(--text-dim); }
+.kpi-since { margin-left: 0.25rem; white-space: nowrap; }
+
+.kpi-spark {
+    position: relative;
+    display: block;
+    height: 34px;
+    margin: 0.35rem 0 0.1rem;
+}
+.kpi-spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.kpi-spark-line {
+    fill: none;
+    stroke: var(--text-dim);
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+}
+.kpi-spark-zero { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.kpi-spark-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    background: var(--amber-bright);
+    border: 1.5px solid var(--panel);
+    border-radius: 50%;
+    box-sizing: content-box;
+    pointer-events: none;
+}
+.kpi-spark-cursor {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--text-faint);
+    pointer-events: none;
+    visibility: hidden;
+}
+.kpi-spark.is-hovered .kpi-spark-cursor { visibility: visible; }
+
+.kpi-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 1.2em;
+    font-size: 0.76rem;
+    color: var(--text-faint);
+}
+.kpi-readout { font-family: var(--font-mono); color: var(--text); white-space: nowrap; }
+.kpi-tile.is-reading .kpi-rank { display: none; }
+
+.overview-note { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--text-faint); }
+.overview-note .textlink { margin-left: 0.4rem; }
+
+@media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+}
+@media (max-width: 400px) {
+    .kpi-tile { padding: 0.7rem 0.7rem 0.6rem; }
+    .kpi-value { font-size: 1.4rem; }
+    .kpi-since { display: block; margin-left: 0; }
+}

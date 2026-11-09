@@ -7,6 +7,7 @@ from stellarisdashboard.i18n import N_, gettext as _, pgettext
 
 # (section key, label, icon, keyboard shortcut); the labels are translated in inject_shell_context
 GAME_SECTIONS = [
+    ("overview", N_("Overview"), "overview", "o"),
     ("graphs", N_("Graphs"), "graphs", "g"),
     ("galaxy", N_("Galaxy Map"), "galaxy", "m"),
     ("ledger", N_("Event Ledger"), "ledger", "l"),
@@ -22,6 +23,7 @@ SECTION_LABELS = {
 }
 
 _ENDPOINT_SECTIONS = {
+    "overview_page": "overview",
     "galaxy_page": "galaxy",
     "history_page": "ledger",
     "codex_page": "codex",
@@ -37,7 +39,7 @@ def section_url(section: str, game_id: str, tab: str = None) -> str:
         if tab:
             args["tab"] = tab
         return flask.url_for("/timeline/", **args)
-    endpoint = {"galaxy": "galaxy_page", "ledger": "history_page", "codex": "codex_page"}[section]
+    endpoint = {"overview": "overview_page", "galaxy": "galaxy_page", "ledger": "history_page", "codex": "codex_page"}[section]
     return flask.url_for(endpoint, game_id=game_id)
 
 

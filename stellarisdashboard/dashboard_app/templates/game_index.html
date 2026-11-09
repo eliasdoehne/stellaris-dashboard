@@ -47,7 +47,7 @@
 <ul class="game-list">
     {% for game in games %}
     <li class="game-card">
-        <a class="game-card-main" href="{{ section_url('graphs', game.game_id) }}">
+        <a class="game-card-main" href="{{ section_url('overview', game.game_id) }}">
             <span class="game-card-name">{{ game.country_name }}</span>
             <span class="game-card-meta">
                 <span class="game-card-date">{{ game.game_date }}</span>

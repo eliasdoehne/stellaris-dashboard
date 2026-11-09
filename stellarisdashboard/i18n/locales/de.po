@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-09 20:00+0100\n"
+"POT-Creation-Date: 2026-11-09 20:06+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -3287,11 +3287,11 @@ msgstr "Anführer"
 msgid "Wars"
 msgstr "Kriege"
 
-#: stellarisdashboard/dashboard_app/ledger_search.py:31
+#: stellarisdashboard/dashboard_app/ledger_search.py:31 stellarisdashboard/dashboard_app/overview.py:76
 msgid "Systems"
 msgstr "Systeme"
 
-#: stellarisdashboard/dashboard_app/ledger_search.py:32
+#: stellarisdashboard/dashboard_app/ledger_search.py:32 stellarisdashboard/dashboard_app/overview.py:77
 msgid "Planets"
 msgstr "Planeten"
 
@@ -3410,6 +3410,99 @@ msgstr "System"
 #: stellarisdashboard/dashboard_app/ledger_timeline.py:50
 msgid "Planet"
 msgstr "Planet"
+
+#: stellarisdashboard/dashboard_app/overview.py:27
+#, fuzzy
+msgid "10 years"
+msgstr "Jahr"
+
+#: stellarisdashboard/dashboard_app/overview.py:28
+#, fuzzy
+msgid "50 years"
+msgstr "Jahr"
+
+#: stellarisdashboard/dashboard_app/overview.py:29
+#, fuzzy
+msgid "Whole game"
+msgstr "Spiel wechseln"
+
+#: stellarisdashboard/dashboard_app/overview.py:55
+#, fuzzy
+msgid "Standing"
+msgstr "Einstellungen"
+
+#: stellarisdashboard/dashboard_app/overview.py:57
+#, fuzzy
+msgid "Victory rank"
+msgstr "Siegrang"
+
+#: stellarisdashboard/dashboard_app/overview.py:58
+#, fuzzy
+msgid "Economic power"
+msgstr "Wirtschaftliche Siegpunktzahl"
+
+#: stellarisdashboard/dashboard_app/overview.py:59
+#, fuzzy
+msgid "Military strength"
+msgstr "Militärstärke"
+
+#: stellarisdashboard/dashboard_app/overview.py:60
+#, fuzzy
+msgid "Technologies"
+msgstr "Erforschte Technologien"
+
+#: stellarisdashboard/dashboard_app/overview.py:64
+#, fuzzy
+msgid "Monthly income"
+msgstr "Nettoeinkommen Legierungen"
+
+#: stellarisdashboard/dashboard_app/overview.py:66
+#, fuzzy
+msgid "Energy"
+msgstr "Geschlecht"
+
+#: stellarisdashboard/dashboard_app/overview.py:67
+#, fuzzy
+msgid "Minerals"
+msgstr "General"
+
+#: stellarisdashboard/dashboard_app/overview.py:68
+#, fuzzy
+msgid "Alloys"
+msgstr "Legierungsbudget"
+
+#: stellarisdashboard/dashboard_app/overview.py:69
+#, fuzzy
+msgid "Research"
+msgstr "Suche"
+
+#: stellarisdashboard/dashboard_app/overview.py:73
+msgid "Realm"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/overview.py:75
+#, fuzzy
+msgid "Pops"
+msgstr "Pops"
+
+#: stellarisdashboard/dashboard_app/overview.py:78
+#, fuzzy
+msgid "Empire size"
+msgstr "Imperiumsgröße"
+
+#. an empire's place among the empires whose value the player knows, e.g. "#3 of 12"
+#: stellarisdashboard/dashboard_app/overview.py:286
+#, fuzzy, python-format
+msgid "#%(rank)s of %(total)s"
+msgstr "%(name)s: %(title)s"
+
+#. change of the victory rank in the overview, shown after an up or down arrow
+#: stellarisdashboard/dashboard_app/overview.py:323
+#, fuzzy, python-format
+msgid "%(num)s place"
+msgid_plural "%(num)s places"
+msgstr[0] "%(num)s Phase"
+msgstr[1] "%(num)s Phasen"
 
 #: stellarisdashboard/dashboard_app/settings.py:24
 msgid "File Locations"
@@ -3660,83 +3753,88 @@ msgid "Settings applied."
 msgstr "Einstellungen übernommen."
 
 #: stellarisdashboard/dashboard_app/shell.py:10
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:7
+msgid "Overview"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/shell.py:11
 msgid "Graphs"
 msgstr "Diagramme"
 
-#: stellarisdashboard/dashboard_app/shell.py:11
+#: stellarisdashboard/dashboard_app/shell.py:12
 msgid "Galaxy Map"
 msgstr "Galaxiekarte"
 
-#: stellarisdashboard/dashboard_app/shell.py:12
+#: stellarisdashboard/dashboard_app/shell.py:13
 #: stellarisdashboard/dashboard_app/templates/import_status.html:52
 #: stellarisdashboard/dashboard_app/templates/ledger_page.html:11
 msgid "Event Ledger"
 msgstr "Ereignisprotokoll"
 
-#: stellarisdashboard/dashboard_app/shell.py:13
+#: stellarisdashboard/dashboard_app/shell.py:14
 #: stellarisdashboard/dashboard_app/templates/codex_page.html:7
 msgid "Codex"
 msgstr "Codex"
 
-#: stellarisdashboard/dashboard_app/shell.py:19
+#: stellarisdashboard/dashboard_app/shell.py:20
 #: stellarisdashboard/dashboard_app/templates/game_index.html:7
 msgid "Games"
 msgstr "Spiele"
 
-#: stellarisdashboard/dashboard_app/shell.py:20
+#: stellarisdashboard/dashboard_app/shell.py:21
 #: stellarisdashboard/dashboard_app/templates/import_page.html:6
-#: stellarisdashboard/dashboard_app/templates/layout.html:87
+#: stellarisdashboard/dashboard_app/templates/layout.html:89
 msgid "Import Saves"
 msgstr "Speicherstände importieren"
 
-#: stellarisdashboard/dashboard_app/shell.py:21
-#: stellarisdashboard/dashboard_app/templates/layout.html:88
+#: stellarisdashboard/dashboard_app/shell.py:22
+#: stellarisdashboard/dashboard_app/templates/layout.html:90
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:6
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: stellarisdashboard/dashboard_app/shell.py:56
+#: stellarisdashboard/dashboard_app/shell.py:58
 msgctxt "graph tab"
 msgid "Markets"
 msgstr "Märkte"
 
-#: stellarisdashboard/dashboard_app/shell.py:57
+#: stellarisdashboard/dashboard_app/shell.py:59
 msgctxt "graph tab"
 msgid "Budget"
 msgstr "Budget"
 
-#: stellarisdashboard/dashboard_app/shell.py:58
+#: stellarisdashboard/dashboard_app/shell.py:60
 msgctxt "graph tab"
 msgid "Economy"
 msgstr "Wirtschaft"
 
-#: stellarisdashboard/dashboard_app/shell.py:59
+#: stellarisdashboard/dashboard_app/shell.py:61
 msgctxt "graph tab"
 msgid "Demographics"
 msgstr "Demografie"
 
 #. name of a tab with graphs about the pops (population units)
-#: stellarisdashboard/dashboard_app/shell.py:61
+#: stellarisdashboard/dashboard_app/shell.py:63
 msgctxt "graph tab"
 msgid "Pops"
 msgstr "Pops"
 
-#: stellarisdashboard/dashboard_app/shell.py:62
+#: stellarisdashboard/dashboard_app/shell.py:64
 msgctxt "graph tab"
 msgid "Planets"
 msgstr "Planeten"
 
-#: stellarisdashboard/dashboard_app/shell.py:63
+#: stellarisdashboard/dashboard_app/shell.py:65
 msgctxt "graph tab"
 msgid "Science"
 msgstr "Wissenschaft"
 
-#: stellarisdashboard/dashboard_app/shell.py:64
+#: stellarisdashboard/dashboard_app/shell.py:66
 msgctxt "graph tab"
 msgid "Military"
 msgstr "Militär"
 
-#: stellarisdashboard/dashboard_app/shell.py:65
+#: stellarisdashboard/dashboard_app/shell.py:67
 msgctxt "graph tab"
 msgid "Victory"
 msgstr "Sieg"
@@ -3836,11 +3934,13 @@ msgstr ""
 
 #. tag marking the empire controlled by the player
 #: stellarisdashboard/dashboard_app/templates/codex_page.html:20
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:29
 msgctxt "codex tag"
 msgid "You"
 msgstr "Spieler"
 
 #: stellarisdashboard/dashboard_app/templates/codex_page.html:27
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:8
 msgid "No empires to show yet."
 msgstr "Noch keine Imperien vorhanden."
 
@@ -4339,91 +4439,91 @@ msgstr "Abbrechen"
 msgid "Timeline Graphs"
 msgstr "Zeitverlaufsdiagramme"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:24
+#: stellarisdashboard/dashboard_app/templates/layout.html:26
 msgid "Navigation"
 msgstr "Navigation"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:26
+#: stellarisdashboard/dashboard_app/templates/layout.html:28
 msgid "All games"
 msgstr "Alle Spiele"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:30
+#: stellarisdashboard/dashboard_app/templates/layout.html:32
 msgid "Collapse sidebar"
 msgstr "Seitenleiste einklappen"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:38
+#: stellarisdashboard/dashboard_app/templates/layout.html:40
 msgid "Switch game"
 msgstr "Spiel wechseln"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:53
+#: stellarisdashboard/dashboard_app/templates/layout.html:55
 msgid "All games & details"
 msgstr "Alle Spiele & Details"
 
 #. link in the sidebar to the event ledger of the whole galaxy
-#: stellarisdashboard/dashboard_app/templates/layout.html:76
+#: stellarisdashboard/dashboard_app/templates/layout.html:78
 msgctxt "ledger scope"
 msgid "Galaxy"
 msgstr "Galaxis"
 
 #. link in the sidebar to the event ledger of the player's empire
-#: stellarisdashboard/dashboard_app/templates/layout.html:78
+#: stellarisdashboard/dashboard_app/templates/layout.html:80
 msgctxt "ledger scope"
 msgid "Your empire"
 msgstr "Dein Imperium"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:86
+#: stellarisdashboard/dashboard_app/templates/layout.html:88
 msgid "All Games"
 msgstr "Alle Spiele"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:89
+#: stellarisdashboard/dashboard_app/templates/layout.html:91
 msgid "Stellaris Wiki"
 msgstr "Stellaris-Wiki"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:97
+#: stellarisdashboard/dashboard_app/templates/layout.html:99
 msgid "Open navigation"
 msgstr "Navigation öffnen"
 
 #. last part of the breadcrumb on an event ledger page that shows only the events of one empire,
 #. leader, war, ...
-#: stellarisdashboard/dashboard_app/templates/layout.html:105
+#: stellarisdashboard/dashboard_app/templates/layout.html:107
 msgctxt "breadcrumb"
 msgid "Filtered"
 msgstr "Gefiltert"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:112
+#: stellarisdashboard/dashboard_app/templates/layout.html:114
 msgid "Search"
 msgstr "Suche"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:112
-#: stellarisdashboard/dashboard_app/templates/layout.html:117
+#: stellarisdashboard/dashboard_app/templates/layout.html:114
+#: stellarisdashboard/dashboard_app/templates/layout.html:119
 msgid "Search this game"
 msgstr "Dieses Spiel durchsuchen"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:115
+#: stellarisdashboard/dashboard_app/templates/layout.html:117
 msgid "Find an empire, leader, war, system…"
 msgstr "Imperium, Anführer, Krieg, System finden …"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:119
+#: stellarisdashboard/dashboard_app/templates/layout.html:121
 msgid "Press / to search"
 msgstr "Zum Suchen / drücken"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:120
+#: stellarisdashboard/dashboard_app/templates/layout.html:122
 msgid "Close search"
 msgstr "Suche schließen"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:122
+#: stellarisdashboard/dashboard_app/templates/layout.html:124
 msgid "Search results"
 msgstr "Suchergebnisse"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:126
+#: stellarisdashboard/dashboard_app/templates/layout.html:128
 msgid "Date of the latest save"
 msgstr "Datum des neuesten Speicherstands"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:131
+#: stellarisdashboard/dashboard_app/templates/layout.html:133
 msgid "Graph categories"
 msgstr "Diagrammkategorien"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:142
+#: stellarisdashboard/dashboard_app/templates/layout.html:144
 #, python-format
 msgid ""
 "You may be using an old version of the stellaris dashboard program. You are using version "
@@ -4434,7 +4534,7 @@ msgstr ""
 "%(version)s, angefordert wurde %(update_version_id)s. Die aktuelle Version gibt es <a "
 "href=\"https://github.com/eliasdoehne/stellaris-dashboard\" class=\"textlink\">auf Github.</a>"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:144
+#: stellarisdashboard/dashboard_app/templates/layout.html:146
 msgid "This update notice can be disabled in the <a href=\"/settings/\" class=\"textlink\">Settings</a>."
 msgstr ""
 "Dieser Update-Hinweis kann in den <a href=\"/settings/\" class=\"textlink\">Einstellungen</a> "
@@ -4491,6 +4591,57 @@ msgstr "Zu Jahrzehnt springen"
 #, python-format
 msgid "%(decade)ss"
 msgstr "%(decade)ser"
+
+#. marks the overview page of the empire controlled by the player
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:12
+#, fuzzy
+msgctxt "overview"
+msgid "Your empire"
+msgstr "Dein Imperium"
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:15
+#, fuzzy, python-format
+msgid "No data since %(date)s"
+msgstr "aktuelles Datum %(date)s"
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:19
+msgid "Period"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:26
+#, fuzzy
+msgid "Other empire"
+msgstr "Dein Imperium"
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:42
+#, fuzzy
+msgid "Open the graph"
+msgstr "Ereignisprotokoll öffnen"
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:46
+msgid "Not known to you"
+msgstr ""
+
+#. after the change of a value in the overview, e.g. "+12% since 2340"
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:53
+#, fuzzy, python-format
+msgid "since %(year)s"
+msgstr "seit %(start)s"
+
+#. in an overview tile whose value the player no longer knows
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:68
+#, fuzzy, python-format
+msgid "Last known %(date)s"
+msgstr "%(category)s einblenden"
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:79
+msgid "Ranks compare the empires whose numbers you know."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/overview_page.html:80
+#, fuzzy
+msgid "Open this empire's event ledger"
+msgstr "Ereignisprotokoll öffnen"
 
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:7
 msgid "Settings marked * apply after a restart."
