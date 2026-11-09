@@ -647,12 +647,16 @@ class EventTemplateDictBuilder:
             leader=storyline.leader,
             system=storyline.system,
             planet=storyline.planet,
+            progress=storyline.progress,
         )
         item = {k: v for (k, v) in item.items() if v is not None}
         item["key"] = ledger_timeline.row_key(None, storyline.storyline_id)
         item["stages"] = []
         if storyline.storyline_type == datamodel.StorylineType.first_contact:
             item["sides"] = [storyline]  # each empire's own process; build_items merges the pair
+        elif storyline.storyline_type == datamodel.StorylineType.situation:
+            definition = game_info.situation_type(storyline.title or "")
+            item["negative"] = definition is not None and definition.negative
         return item
 
     @staticmethod

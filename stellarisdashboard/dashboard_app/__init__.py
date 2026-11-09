@@ -25,6 +25,7 @@ from stellarisdashboard.dashboard_app import (
     shell,
     ledger_search,
     overview,
+    entity_preview,
 )
 
 

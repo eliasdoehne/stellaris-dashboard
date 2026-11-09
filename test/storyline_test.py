@@ -4,7 +4,20 @@ from stellarisdashboard.parsing.timeline import (
     FIRST_CONTACT_STORYLINE_STATES,
     astral_rift_state,
     dig_site_state,
+    situation_outcome,
 )
+
+
+def test_situation_outcome_follows_the_progress_to_an_end_of_the_bar():
+    assert situation_outcome(0.99, 0.02, 1) == StorylineState.completed
+    assert situation_outcome(0.03, -0.05, 1) == StorylineState.failed
+    assert situation_outcome(0.5, 0.01, 1) == StorylineState.abandoned
+    assert situation_outcome(None, None, 1) == StorylineState.abandoned
+
+
+def test_situation_outcome_projects_long_save_gaps_over_a_few_months_only():
+    assert situation_outcome(0.4, 0.05, 12) == StorylineState.abandoned
+    assert situation_outcome(0.85, 0.05, 12) == StorylineState.completed
 
 
 def test_dig_site_state_completed_when_all_chapters_done():

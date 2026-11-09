@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-08 20:15+0100\n"
+"POT-Creation-Date: 2026-11-09 20:06+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pt_BR\n"
@@ -45,6 +45,39 @@ msgstr "Não há cópias guardadas de saves com falha para reprocessar."
 #, python-format
 msgid "An import of %(game_id)s is already running. Wait for it to finish or cancel it."
 msgstr "Já há uma importação de %(game_id)s em andamento. Aguarde o término ou cancele-a."
+
+#. label of a small chart in the hover preview of an empire
+#: stellarisdashboard/dashboard_app/entity_preview.py:33
+msgid "Victory score"
+msgstr "Pontuação de vitória"
+
+#. label of a small chart in the hover preview of an empire
+#: stellarisdashboard/dashboard_app/entity_preview.py:35
+msgid "Military power"
+msgstr "Poder militar"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:56
+msgctxt "ledger detail"
+msgid "System"
+msgstr "Sistema"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:58
+#: stellarisdashboard/dashboard_app/history_ledger.py:763
+msgctxt "ledger detail"
+msgid "Owner"
+msgstr "Proprietário"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:176
+#: stellarisdashboard/dashboard_app/history_ledger.py:927
+msgctxt "ledger detail"
+msgid "Attackers"
+msgstr "Atacantes"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:177
+#: stellarisdashboard/dashboard_app/history_ledger.py:931
+msgctxt "ledger detail"
+msgid "Defenders"
+msgstr "Defensores"
 
 #: stellarisdashboard/dashboard_app/event_registry.py:51
 msgctxt "event category"
@@ -387,114 +420,153 @@ msgstr ""
 msgid "The %(country)s lost a war, shattering the myth of Fallen Empire invincibility."
 msgstr "O império %(country)s perdeu uma guerra, destruindo o mito da invencibilidade dos Impérios Caídos."
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1237
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
 msgid "excavating"
 msgstr "em escavação"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1237
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
 msgid "fully excavated"
 msgstr "totalmente escavado"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1237
-#: stellarisdashboard/dashboard_app/event_registry.py:1251
+#: stellarisdashboard/dashboard_app/event_registry.py:1267
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "paused"
 msgstr "pausado"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1239
+#: stellarisdashboard/dashboard_app/event_registry.py:1269
 #, python-format
 msgid "Chapter %(index)s"
 msgstr "Capítulo %(index)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1240
+#: stellarisdashboard/dashboard_app/event_registry.py:1270
 #, python-format
 msgid "Chapter %(index)s: %(detail)s"
 msgstr "Capítulo %(index)s: %(detail)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1241
+#: stellarisdashboard/dashboard_app/event_registry.py:1271
 #, python-format
 msgid "Chapter %(index)s by the %(country)s"
 msgstr "Capítulo %(index)s pelo império %(country)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1242
+#: stellarisdashboard/dashboard_app/event_registry.py:1272
 #, python-format
 msgid "Chapter %(index)s: %(detail)s by the %(country)s"
 msgstr "Capítulo %(index)s: %(detail)s pelo império %(country)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1251
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "exploring"
 msgstr "em exploração"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1251
+#: stellarisdashboard/dashboard_app/event_registry.py:1281
 msgid "fully explored"
 msgstr "totalmente explorado"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1253
+#: stellarisdashboard/dashboard_app/event_registry.py:1283
 #, python-format
 msgid "Step %(index)s"
 msgstr "Etapa %(index)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1254
+#: stellarisdashboard/dashboard_app/event_registry.py:1284
 #, python-format
 msgid "Step %(index)s: %(detail)s"
 msgstr "Etapa %(index)s: %(detail)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1255
+#: stellarisdashboard/dashboard_app/event_registry.py:1285
 #, python-format
 msgid "Step %(index)s by the %(country)s"
 msgstr "Etapa %(index)s pelo império %(country)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1256
+#: stellarisdashboard/dashboard_app/event_registry.py:1286
 #, python-format
 msgid "Step %(index)s: %(detail)s by the %(country)s"
 msgstr "Etapa %(index)s: %(detail)s pelo império %(country)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1264
-msgid "in progress"
-msgstr "em andamento"
-
-#: stellarisdashboard/dashboard_app/event_registry.py:1264
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
 msgid "contact made"
 msgstr "contato estabelecido"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1264
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
 msgid "abandoned"
 msgstr "abandonado"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1266
+#: stellarisdashboard/dashboard_app/event_registry.py:1294
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "in progress"
+msgstr "em andamento"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1296
+#: stellarisdashboard/dashboard_app/event_registry.py:1310
 #, python-format
 msgid "Stage %(index)s"
 msgstr "Fase %(index)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1267
+#: stellarisdashboard/dashboard_app/event_registry.py:1297
+#: stellarisdashboard/dashboard_app/event_registry.py:1311
 #, python-format
 msgid "Stage %(index)s: %(detail)s"
 msgstr "Fase %(index)s: %(detail)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1268
+#: stellarisdashboard/dashboard_app/event_registry.py:1298
+#: stellarisdashboard/dashboard_app/event_registry.py:1312
 #, python-format
 msgid "Stage %(index)s by the %(country)s"
 msgstr "Fase %(index)s pelo império %(country)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1269
+#: stellarisdashboard/dashboard_app/event_registry.py:1299
+#: stellarisdashboard/dashboard_app/event_registry.py:1313
 #, python-format
 msgid "Stage %(index)s: %(detail)s by the %(country)s"
 msgstr "Fase %(index)s: %(detail)s pelo império %(country)s"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1287
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "completed"
+msgstr "concluída"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "failed"
+msgstr "fracassada"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1308
+msgid "ended"
+msgstr "encerrada"
+
+#. how a harmful situation (a deficit, a revolt) ended: at its worst, or dropped to nothing
+#: stellarisdashboard/dashboard_app/event_registry.py:1316
+msgid "escalated"
+msgstr "agravada"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1316
+msgid "averted"
+msgstr "evitada"
+
+#. the state of a situation and how far its progress bar is filled, e.g. "in progress, 62%"
+#: stellarisdashboard/dashboard_app/event_registry.py:1332
+#, python-format
+msgid "%(state)s, %(percent)s%%"
+msgstr "%(state)s, %(percent)s%%"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1340
 #, python-format
 msgid "%(num)s chapter"
 msgid_plural "%(num)s chapters"
 msgstr[0] "%(num)s capítulo"
 msgstr[1] "%(num)s capítulos"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1289
+#: stellarisdashboard/dashboard_app/event_registry.py:1342
 #, python-format
 msgid "%(num)s step"
 msgid_plural "%(num)s steps"
 msgstr[0] "%(num)s etapa"
 msgstr[1] "%(num)s etapas"
 
-#: stellarisdashboard/dashboard_app/event_registry.py:1290
+#. the furthest stage a situation reached, e.g. "stage 3"
+#: stellarisdashboard/dashboard_app/event_registry.py:1345
+#, python-format
+msgctxt "situation"
+msgid "stage %(num)s"
+msgstr "fase %(num)s"
+
+#: stellarisdashboard/dashboard_app/event_registry.py:1346
 #, python-format
 msgid "%(num)s stage"
 msgid_plural "%(num)s stages"
@@ -503,7 +575,7 @@ msgstr[1] "%(num)s fases"
 
 #. a stage of a first contact and the empire that reached it, e.g.
 #. "Communications established by the United Nations of Earth". %(country)s is the empire (a link)
-#: stellarisdashboard/dashboard_app/event_registry.py:1306
+#: stellarisdashboard/dashboard_app/event_registry.py:1362
 #, python-format
 msgid "%(detail)s by the %(country)s"
 msgstr "%(detail)s pelo império %(country)s"
@@ -2307,6 +2379,65 @@ msgstr "Sob o governo de %(leader)s, o império %(country)s declarou o império 
 msgid "The %(country)s declared the %(target)s a rival."
 msgstr "O império %(country)s declarou o império %(target)s seu rival."
 
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link). %(target)s: name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:4
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s on %(planet)s concerning the %(target)s."
+msgstr ""
+"A situação \"%(situation)s\" começou para o império %(country)s em %(planet)s, envolvendo o "
+"império %(target)s."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link)
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:7
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s on %(planet)s."
+msgstr "A situação \"%(situation)s\" começou para o império %(country)s em %(planet)s."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(target)s:
+#. name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:12
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s concerning the %(target)s."
+msgstr "A situação \"%(situation)s\" começou para o império %(country)s, envolvendo o império %(target)s."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation]:15
+#, python-format
+msgid "The \"%(situation)s\" situation began for the %(country)s."
+msgstr "A situação \"%(situation)s\" começou para o império %(country)s."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation_stage]:3
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s reached stage %(stage)s, \"%(stage_name)s\"."
+msgstr "A situação \"%(situation)s\" do império %(country)s chegou à fase %(stage)s, \"%(stage_name)s\"."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[situation_stage]:6
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s reached stage %(stage)s."
+msgstr "A situação \"%(situation)s\" do império %(country)s chegou à fase %(stage)s."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[special_project]:3
+#, python-format
+msgid "The %(country)s completed the special project \"%(project)s\"."
+msgstr "O império %(country)s concluiu o projeto especial \"%(project)s\"."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[special_project]:6
+#, python-format
+msgid "The special project \"%(project)s\" of the %(country)s ended unfinished."
+msgstr "O projeto especial \"%(project)s\" do império %(country)s terminou sem ser concluído."
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:REGISTRY[special_project]:9
+#, python-format
+msgid "The %(country)s began the special project \"%(project)s\"."
+msgstr "O império %(country)s iniciou o projeto especial \"%(project)s\"."
+
 #. %(old_class)s and %(new_class)s are planet classes, e.g. "Barren World". %(country)s: name of an
 #. empire (a link), usually reads like "United Nations of Earth". %(planet)s: name of a planet (a
 #. link). %(system)s: name of a star system (a link). %(leader)s: class and name of a leader (a link),
@@ -2705,6 +2836,33 @@ msgstr "Primeiro contato entre o império %(country)s e o império %(target)s no
 msgid "First contact between the %(country)s and the %(target)s"
 msgstr "Primeiro contato entre o império %(country)s e o império %(target)s"
 
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link). %(target)s: name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:4
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s on %(planet)s concerning the %(target)s"
+msgstr "Situação \"%(situation)s\" do império %(country)s em %(planet)s, envolvendo o império %(target)s"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(planet)s:
+#. name of a planet (a link)
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:7
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s on %(planet)s"
+msgstr "Situação \"%(situation)s\" do império %(country)s em %(planet)s"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth". %(target)s:
+#. name of another empire (a link), like %(country)s
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:12
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s concerning the %(target)s"
+msgstr "Situação \"%(situation)s\" do império %(country)s, envolvendo o império %(target)s"
+
+#. %(country)s: name of an empire (a link), usually reads like "United Nations of Earth"
+#: stellarisdashboard/dashboard_app/event_registry.py:STORYLINE_REGISTRY[situation]:15
+#, python-format
+msgid "The \"%(situation)s\" situation of the %(country)s"
+msgstr "Situação \"%(situation)s\" do império %(country)s"
+
 #: stellarisdashboard/dashboard_app/galaxy_map.py:234
 msgid "Step size must be a whole number."
 msgstr "O tamanho do passo deve ser um número inteiro."
@@ -2898,275 +3056,260 @@ msgid "alliance"
 msgstr "aliança"
 
 #. title of the page of a star system; %(system)s is its name
-#: stellarisdashboard/dashboard_app/history_ledger.py:676
+#: stellarisdashboard/dashboard_app/history_ledger.py:680
 #, python-format
 msgid "%(system)s System"
 msgstr "Sistema %(system)s"
 
 #. title of the page of a planet; %(planet)s is its name
-#: stellarisdashboard/dashboard_app/history_ledger.py:683
+#: stellarisdashboard/dashboard_app/history_ledger.py:687
 #, python-format
 msgid "Planet %(planet)s"
 msgstr "Planeta %(planet)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:731
+#: stellarisdashboard/dashboard_app/history_ledger.py:735
 msgctxt "ledger detail"
 msgid "Star Class"
 msgstr "Classe estelar"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:736
+#: stellarisdashboard/dashboard_app/history_ledger.py:740
 msgctxt "ledger detail"
 msgid "Hyperlanes"
 msgstr "Hiperrotas"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:756
+#: stellarisdashboard/dashboard_app/history_ledger.py:760
 msgctxt "ledger detail"
 msgid "Unknown Bypasses"
 msgstr "Desvios desconhecidos"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:759
-msgctxt "ledger detail"
-msgid "Owner"
-msgstr "Proprietário"
-
-#: stellarisdashboard/dashboard_app/history_ledger.py:761
+#: stellarisdashboard/dashboard_app/history_ledger.py:765
 msgctxt "ledger detail"
 msgid "Planets"
 msgstr "Planetas"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:771
-#: stellarisdashboard/dashboard_app/history_ledger.py:893
+#: stellarisdashboard/dashboard_app/history_ledger.py:775
+#: stellarisdashboard/dashboard_app/history_ledger.py:897
 msgctxt "ledger detail"
 msgid "Resource Deposits"
 msgstr "Depósitos de recursos"
 
 #. class of a leader and the empire they serve, e.g. "Scientist in the United Nations of Earth".
 #. %(leader_class)s is the leader class, %(country)s is the name of the empire (a link)
-#: stellarisdashboard/dashboard_app/history_ledger.py:783
+#: stellarisdashboard/dashboard_app/history_ledger.py:787
 #, python-format
 msgid "%(leader_class)s in the %(country)s"
 msgstr "%(leader_class)s do império %(country)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:788
+#: stellarisdashboard/dashboard_app/history_ledger.py:792
 msgctxt "ledger detail"
 msgid "Leader Name"
 msgstr "Nome do líder"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:789
+#: stellarisdashboard/dashboard_app/history_ledger.py:793
 msgctxt "ledger detail"
 msgid "Class"
 msgstr "Classe"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:790
+#: stellarisdashboard/dashboard_app/history_ledger.py:794
 msgctxt "ledger detail"
 msgid "Subclass"
 msgstr "Subclasse"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:790
-#: stellarisdashboard/dashboard_app/history_ledger.py:796
+#: stellarisdashboard/dashboard_app/history_ledger.py:794
+#: stellarisdashboard/dashboard_app/history_ledger.py:800
 msgid "None"
 msgstr "Nenhum"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:791
+#: stellarisdashboard/dashboard_app/history_ledger.py:795
 msgctxt "ledger detail"
 msgid "Traits"
 msgstr "Traços"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:792
+#: stellarisdashboard/dashboard_app/history_ledger.py:796
 msgctxt "ledger detail"
 msgid "Species"
 msgstr "Espécie"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:793
+#: stellarisdashboard/dashboard_app/history_ledger.py:797
 msgctxt "ledger detail"
 msgid "Gender"
 msgstr "Gênero"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:794
+#: stellarisdashboard/dashboard_app/history_ledger.py:798
 msgctxt "ledger detail"
 msgid "Ethic"
 msgstr "Ética"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:795
+#: stellarisdashboard/dashboard_app/history_ledger.py:799
 msgctxt "ledger detail"
 msgid "Previous Position"
 msgstr "Posição anterior"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:797
+#: stellarisdashboard/dashboard_app/history_ledger.py:801
 msgctxt "ledger detail"
 msgid "Home Planet"
 msgstr "Planeta natal"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:798
+#: stellarisdashboard/dashboard_app/history_ledger.py:802
 msgctxt "ledger detail"
 msgid "Country of Origin"
 msgstr "Império de origem"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:799
+#: stellarisdashboard/dashboard_app/history_ledger.py:803
 msgctxt "ledger detail"
 msgid "Born"
 msgstr "Nascimento"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:800
+#: stellarisdashboard/dashboard_app/history_ledger.py:804
 msgctxt "ledger detail"
 msgid "Hired"
 msgstr "Contratação"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:801
+#: stellarisdashboard/dashboard_app/history_ledger.py:805
 msgctxt "ledger detail"
 msgid "Last active"
 msgstr "Última atividade"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:806
+#: stellarisdashboard/dashboard_app/history_ledger.py:810
 msgctxt "ledger detail"
 msgid "Status"
 msgstr "Situação"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:806
+#: stellarisdashboard/dashboard_app/history_ledger.py:810
 msgid "Active"
 msgstr "Ativo"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:806
+#: stellarisdashboard/dashboard_app/history_ledger.py:810
 msgid "Dead or retired"
 msgstr "Morto ou aposentado"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:812
+#: stellarisdashboard/dashboard_app/history_ledger.py:816
 msgctxt "ledger detail"
 msgid "Country Type"
 msgstr "Tipo de império"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:818
+#: stellarisdashboard/dashboard_app/history_ledger.py:822
 msgctxt "ledger detail"
 msgid "Personality"
 msgstr "Personalidade"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:819
+#: stellarisdashboard/dashboard_app/history_ledger.py:823
 msgctxt "ledger detail"
 msgid "Government Type"
 msgstr "Tipo de governo"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:820
+#: stellarisdashboard/dashboard_app/history_ledger.py:824
 msgctxt "ledger detail"
 msgid "Authority"
 msgstr "Autoridade"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:821
+#: stellarisdashboard/dashboard_app/history_ledger.py:825
 msgctxt "ledger detail"
 msgid "Ethics"
 msgstr "Éticas"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:824
+#: stellarisdashboard/dashboard_app/history_ledger.py:828
 msgctxt "ledger detail"
 msgid "Civics"
 msgstr "Cívicas"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:827
+#: stellarisdashboard/dashboard_app/history_ledger.py:831
 msgctxt "ledger detail"
 msgid "Origin"
 msgstr "Origem"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:828
+#: stellarisdashboard/dashboard_app/history_ledger.py:832
 msgctxt "ledger detail"
 msgid "Ruler"
 msgstr "Governante"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:835
+#: stellarisdashboard/dashboard_app/history_ledger.py:839
 msgctxt "ledger detail"
 msgid "Council"
 msgstr "Conselho"
 
 #. a council position and the leader holding it, e.g. "Chancellor <leader name>".
 #. %(position)s is the position, %(leader)s is the name of the leader (a link)
-#: stellarisdashboard/dashboard_app/history_ledger.py:843
+#: stellarisdashboard/dashboard_app/history_ledger.py:847
 #, python-format
 msgid "%(position)s %(leader)s"
 msgstr "%(position)s %(leader)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:865
+#: stellarisdashboard/dashboard_app/history_ledger.py:869
 msgid "Destroyed (no trace remains)"
 msgstr "Destruído (sem vestígios)"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:865
-#: stellarisdashboard/dashboard_app/history_ledger.py:867
+#: stellarisdashboard/dashboard_app/history_ledger.py:869
+#: stellarisdashboard/dashboard_app/history_ledger.py:871
 msgctxt "ledger detail"
 msgid "Planet Class"
 msgstr "Classe do planeta"
 
 #. a planet modifier that runs out; %(modifier)s is its name, %(date)s the date it expires
-#: stellarisdashboard/dashboard_app/history_ledger.py:875
+#: stellarisdashboard/dashboard_app/history_ledger.py:879
 #, python-format
 msgid "%(modifier)s (expires %(date)s)"
 msgstr "%(modifier)s (expira em %(date)s)"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:883
+#: stellarisdashboard/dashboard_app/history_ledger.py:887
 msgctxt "ledger detail"
 msgid "Modifiers"
 msgstr "Modificadores"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:895
+#: stellarisdashboard/dashboard_app/history_ledger.py:899
 msgctxt "ledger detail"
 msgid "Blockers and Features"
 msgstr "Bloqueadores e características"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:901
+#: stellarisdashboard/dashboard_app/history_ledger.py:905
 msgctxt "ledger detail"
 msgid "Districts"
 msgstr "Distritos"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:909
+#: stellarisdashboard/dashboard_app/history_ledger.py:913
 msgctxt "ledger detail"
 msgid "Buildings"
 msgstr "Edifícios"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:921
+#: stellarisdashboard/dashboard_app/history_ledger.py:925
 msgctxt "ledger detail"
 msgid "Start date"
 msgstr "Data de início"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:922
-#: stellarisdashboard/dashboard_app/history_ledger.py:937
+#: stellarisdashboard/dashboard_app/history_ledger.py:926
+#: stellarisdashboard/dashboard_app/history_ledger.py:941
 msgctxt "ledger detail"
 msgid "End date"
 msgstr "Data de término"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:923
-msgctxt "ledger detail"
-msgid "Attackers"
-msgstr "Atacantes"
-
-#: stellarisdashboard/dashboard_app/history_ledger.py:926
+#: stellarisdashboard/dashboard_app/history_ledger.py:930
 msgctxt "ledger detail"
 msgid "Attacker War Goal"
 msgstr "Objetivo de guerra do atacante"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:927
-msgctxt "ledger detail"
-msgid "Defenders"
-msgstr "Defensores"
-
-#: stellarisdashboard/dashboard_app/history_ledger.py:930
+#: stellarisdashboard/dashboard_app/history_ledger.py:934
 msgctxt "ledger detail"
 msgid "Defender War Goal"
 msgstr "Objetivo de guerra do defensor"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:931
+#: stellarisdashboard/dashboard_app/history_ledger.py:935
 msgctxt "ledger detail"
 msgid "Outcome"
 msgstr "Resultado"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:934
+#: stellarisdashboard/dashboard_app/history_ledger.py:938
 msgctxt "ledger detail"
 msgid "Attacker exhaustion"
 msgstr "Exaustão do atacante"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:935
+#: stellarisdashboard/dashboard_app/history_ledger.py:939
 msgctxt "ledger detail"
 msgid "Defender exhaustion"
 msgstr "Exaustão do defensor"
 
 #. an empire in a war and how it joined, e.g. "United Nations of Earth (primary)".
 #. %(country)s is the name of the empire (a link), %(call_type)s how it entered the war
-#: stellarisdashboard/dashboard_app/history_ledger.py:945
+#: stellarisdashboard/dashboard_app/history_ledger.py:949
 #, python-format
 msgid "%(country)s (%(call_type)s)"
 msgstr "%(country)s (%(call_type)s)"
@@ -3678,12 +3821,12 @@ msgstr "Jogos"
 
 #: stellarisdashboard/dashboard_app/shell.py:21
 #: stellarisdashboard/dashboard_app/templates/import_page.html:6
-#: stellarisdashboard/dashboard_app/templates/layout.html:87
+#: stellarisdashboard/dashboard_app/templates/layout.html:89
 msgid "Import Saves"
 msgstr "Importar saves"
 
 #: stellarisdashboard/dashboard_app/shell.py:22
-#: stellarisdashboard/dashboard_app/templates/layout.html:88
+#: stellarisdashboard/dashboard_app/templates/layout.html:90
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:6
 msgid "Settings"
 msgstr "Configurações"
@@ -3742,6 +3885,27 @@ msgstr "Nenhum jogo corresponde ao prefixo \"%(game_name)s\"."
 #: stellarisdashboard/dashboard_app/templates/404_page.html:11
 msgid "Back to all games"
 msgstr "Voltar a todos os jogos"
+
+#. marks the event ledger page of the empire controlled by the player
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:4
+#: stellarisdashboard/dashboard_app/templates/ledger_page.html:8
+msgctxt "ledger focus"
+msgid "You"
+msgstr "Você"
+
+#. heading of the war exhaustion of both sides in the hover preview of a war
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:32
+msgid "War exhaustion"
+msgstr "Exaustão de guerra"
+
+#. heading of the latest events in the hover preview of an empire, leader, war, ...
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:46
+msgid "Latest events"
+msgstr "Eventos recentes"
+
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:55
+msgid "Open the ledger"
+msgstr "Abrir o registro"
 
 #: stellarisdashboard/dashboard_app/templates/_ledger_year.html:6
 #, python-format
@@ -4298,91 +4462,91 @@ msgstr "Cancelar"
 msgid "Timeline Graphs"
 msgstr "Gráficos da linha do tempo"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:24
+#: stellarisdashboard/dashboard_app/templates/layout.html:26
 msgid "Navigation"
 msgstr "Navegação"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:26
+#: stellarisdashboard/dashboard_app/templates/layout.html:28
 msgid "All games"
 msgstr "Todos os jogos"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:30
+#: stellarisdashboard/dashboard_app/templates/layout.html:32
 msgid "Collapse sidebar"
 msgstr "Recolher a barra lateral"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:38
+#: stellarisdashboard/dashboard_app/templates/layout.html:40
 msgid "Switch game"
 msgstr "Trocar de jogo"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:53
+#: stellarisdashboard/dashboard_app/templates/layout.html:55
 msgid "All games & details"
 msgstr "Todos os jogos e detalhes"
 
 #. link in the sidebar to the event ledger of the whole galaxy
-#: stellarisdashboard/dashboard_app/templates/layout.html:76
+#: stellarisdashboard/dashboard_app/templates/layout.html:78
 msgctxt "ledger scope"
 msgid "Galaxy"
 msgstr "Galáxia"
 
 #. link in the sidebar to the event ledger of the player's empire
-#: stellarisdashboard/dashboard_app/templates/layout.html:78
+#: stellarisdashboard/dashboard_app/templates/layout.html:80
 msgctxt "ledger scope"
 msgid "Your empire"
 msgstr "Seu império"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:86
+#: stellarisdashboard/dashboard_app/templates/layout.html:88
 msgid "All Games"
 msgstr "Todos os jogos"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:89
+#: stellarisdashboard/dashboard_app/templates/layout.html:91
 msgid "Stellaris Wiki"
 msgstr "Wiki de Stellaris"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:97
+#: stellarisdashboard/dashboard_app/templates/layout.html:99
 msgid "Open navigation"
 msgstr "Abrir a navegação"
 
 #. last part of the breadcrumb on an event ledger page that shows only the events of one empire,
 #. leader, war, ...
-#: stellarisdashboard/dashboard_app/templates/layout.html:105
+#: stellarisdashboard/dashboard_app/templates/layout.html:107
 msgctxt "breadcrumb"
 msgid "Filtered"
 msgstr "Filtrado"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:112
+#: stellarisdashboard/dashboard_app/templates/layout.html:114
 msgid "Search"
 msgstr "Pesquisar"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:112
-#: stellarisdashboard/dashboard_app/templates/layout.html:117
+#: stellarisdashboard/dashboard_app/templates/layout.html:114
+#: stellarisdashboard/dashboard_app/templates/layout.html:119
 msgid "Search this game"
 msgstr "Pesquisar neste jogo"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:115
+#: stellarisdashboard/dashboard_app/templates/layout.html:117
 msgid "Find an empire, leader, war, system…"
 msgstr "Encontre um império, líder, guerra, sistema…"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:119
+#: stellarisdashboard/dashboard_app/templates/layout.html:121
 msgid "Press / to search"
 msgstr "Pressione / para pesquisar"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:120
+#: stellarisdashboard/dashboard_app/templates/layout.html:122
 msgid "Close search"
 msgstr "Fechar a pesquisa"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:122
+#: stellarisdashboard/dashboard_app/templates/layout.html:124
 msgid "Search results"
 msgstr "Resultados da pesquisa"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:126
+#: stellarisdashboard/dashboard_app/templates/layout.html:128
 msgid "Date of the latest save"
 msgstr "Data do save mais recente"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:131
+#: stellarisdashboard/dashboard_app/templates/layout.html:133
 msgid "Graph categories"
 msgstr "Categorias de gráficos"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:142
+#: stellarisdashboard/dashboard_app/templates/layout.html:144
 #, python-format
 msgid ""
 "You may be using an old version of the stellaris dashboard program. You are using version "
@@ -4394,17 +4558,11 @@ msgstr ""
 "atual <a href=\"https://github.com/eliasdoehne/stellaris-dashboard\" class=\"textlink\">no "
 "GitHub.</a>"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:144
+#: stellarisdashboard/dashboard_app/templates/layout.html:146
 msgid "This update notice can be disabled in the <a href=\"/settings/\" class=\"textlink\">Settings</a>."
 msgstr ""
 "Este aviso de atualização pode ser desativado nas <a href=\"/settings/\" "
 "class=\"textlink\">Configurações</a>."
-
-#. marks the event ledger page of the empire controlled by the player
-#: stellarisdashboard/dashboard_app/templates/ledger_page.html:8
-msgctxt "ledger focus"
-msgid "You"
-msgstr "Você"
 
 #: stellarisdashboard/dashboard_app/templates/ledger_page.html:12
 msgid "The galaxy's history. Your own empire's events count one level higher."
@@ -4480,8 +4638,9 @@ msgid "Other empire"
 msgstr "Seu império"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:42
+#, fuzzy
 msgid "Open the graph"
-msgstr ""
+msgstr "Abrir o registro"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:46
 msgid "Not known to you"
@@ -4504,8 +4663,9 @@ msgid "Ranks compare the empires whose numbers you know."
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:80
+#, fuzzy
 msgid "Open this empire's event ledger"
-msgstr ""
+msgstr "Abrir o registro"
 
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:7
 msgid "Settings marked * apply after a restart."
@@ -4953,146 +5113,146 @@ msgid "Defender Victory"
 msgstr "Vitória do defensor"
 
 #. a bypass (wormhole, gateway, ...) that is not working; %(bypass)s is its name
-#: stellarisdashboard/datamodel.py:805
+#: stellarisdashboard/datamodel.py:813
 #, python-format
 msgid "%(bypass)s (inactive)"
 msgstr "%(bypass)s (inativo)"
 
 #. the type of a regular country, as opposed to e.g. "Fallen Empire" or "Primitive"
-#: stellarisdashboard/datamodel.py:938
+#: stellarisdashboard/datamodel.py:946
 msgctxt "country type"
 msgid "Empire"
 msgstr "Império"
 
 #. %(old)s and %(new)s are government types
-#: stellarisdashboard/datamodel.py:1095
+#: stellarisdashboard/datamodel.py:1103
 #, python-format
 msgid "Type changed from \"%(old)s\" to \"%(new)s\"."
 msgstr "Tipo alterado de \"%(old)s\" para \"%(new)s\"."
 
 #. %(old)s and %(new)s are authorities, e.g. "Democratic"
-#: stellarisdashboard/datamodel.py:1105
+#: stellarisdashboard/datamodel.py:1113
 #, python-format
 msgid "Authority changed from %(old)s to %(new)s."
 msgstr "Autoridade alterada de %(old)s para %(new)s."
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1119
+#: stellarisdashboard/datamodel.py:1127
 #, python-format
 msgid "Removed civics %(civics)s."
 msgstr "Cívicas removidas: %(civics)s."
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1123
+#: stellarisdashboard/datamodel.py:1131
 #, python-format
 msgid "Adopted civics %(civics)s."
 msgstr "Cívicas adotadas: %(civics)s."
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1127
+#: stellarisdashboard/datamodel.py:1135
 #, python-format
 msgid "Abandoned ethics %(ethics)s."
 msgstr "Éticas abandonadas: %(ethics)s."
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1131
+#: stellarisdashboard/datamodel.py:1139
 #, python-format
 msgid "Embraced ethics %(ethics)s."
 msgstr "Éticas adotadas: %(ethics)s."
 
 #. name of a war that several wars share, followed by the main
 #. empires of both sides, e.g. "War in Heaven (Empire A vs Empire B)".
-#: stellarisdashboard/datamodel.py:1592
+#: stellarisdashboard/datamodel.py:1600
 #, python-format
 msgid "%(name)s (%(attackers)s vs %(defenders)s)"
 msgstr "%(name)s (%(attackers)s vs %(defenders)s)"
 
 #. name of a war without a name in the game: the empires on both sides,
 #. e.g. "Empire A, Empire B vs Empire C". %(attackers)s and %(defenders)s are lists of empires.
-#: stellarisdashboard/datamodel.py:1600
+#: stellarisdashboard/datamodel.py:1608
 #, python-format
 msgid "%(attackers)s vs %(defenders)s"
 msgstr "%(attackers)s vs %(defenders)s"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:926
-#: stellarisdashboard/dashboard_app/history_ledger.py:930 stellarisdashboard/datamodel.py:1670
+#: stellarisdashboard/dashboard_app/history_ledger.py:930
+#: stellarisdashboard/dashboard_app/history_ledger.py:934 stellarisdashboard/datamodel.py:1678
 msgid "Unknown"
 msgstr "Desconhecido"
 
 #. a dig site and the chapter of its excavation, e.g. "Under the Ice (chapter 3)"
-#: stellarisdashboard/datamodel.py:2104
+#: stellarisdashboard/datamodel.py:2112
 #, python-format
 msgid "%(name)s (chapter %(chapter)s)"
 msgstr "%(name)s (capítulo %(chapter)s)"
 
 #. an astral rift and the name of the event of its exploration, e.g. "The Corridors: Rift Anomaly"
-#: stellarisdashboard/datamodel.py:2133
+#: stellarisdashboard/datamodel.py:2141
 #, python-format
 msgid "%(name)s: %(title)s"
 msgstr "%(name)s: %(title)s"
 
-#: stellarisdashboard/datamodel.py:2165
+#: stellarisdashboard/datamodel.py:2173
 msgid "contact detected"
 msgstr "contato detectado"
 
-#: stellarisdashboard/datamodel.py:2166
+#: stellarisdashboard/datamodel.py:2174
 msgid "investigation progressed"
 msgstr "investigação avançou"
 
-#: stellarisdashboard/datamodel.py:2167
+#: stellarisdashboard/datamodel.py:2175
 msgid "complications arose"
 msgstr "surgiram complicações"
 
-#: stellarisdashboard/datamodel.py:2168
+#: stellarisdashboard/datamodel.py:2176
 msgid "communications established"
 msgstr "comunicações estabelecidas"
 
-#: stellarisdashboard/datamodel.py:2169
+#: stellarisdashboard/datamodel.py:2177
 msgid "communications failed"
 msgstr "falha nas comunicações"
 
-#: stellarisdashboard/datamodel.py:2172
+#: stellarisdashboard/datamodel.py:2180
 msgid "hostile"
 msgstr "hostil"
 
-#: stellarisdashboard/datamodel.py:2173
+#: stellarisdashboard/datamodel.py:2181
 msgid "proactive"
 msgstr "proativa"
 
-#: stellarisdashboard/datamodel.py:2174
+#: stellarisdashboard/datamodel.py:2182
 msgid "cautious"
 msgstr "cautelosa"
 
 #. a stage of a first contact and the approach taken, e.g. "communications established (cautious)"
-#: stellarisdashboard/datamodel.py:2188
+#: stellarisdashboard/datamodel.py:2196
 #, python-format
 msgid "%(stage)s (%(approach)s)"
 msgstr "%(stage)s (%(approach)s)"
 
 #. a country that is subject of another one, as in "The X became a subject of the Y."
-#: stellarisdashboard/datamodel.py:2206
+#: stellarisdashboard/datamodel.py:2214
 msgid "subject"
 msgstr "subordinado"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "..."-rank Defender of the Galaxy."
-#: stellarisdashboard/datamodel.py:2237
+#: stellarisdashboard/datamodel.py:2245
 #, python-format
 msgid "\"%(name)s\"-rank Defender of the Galaxy"
 msgstr "um Defensor da Galáxia de nível \"%(name)s\""
 
 #. %(name)s is the name of a crisis level, as in "The X became a "Risk"-level threat to the galaxy."
-#: stellarisdashboard/datamodel.py:2239
+#: stellarisdashboard/datamodel.py:2247
 #, python-format
 msgid "\"%(name)s\"-level threat to the galaxy"
 msgstr "uma ameaça de nível \"%(name)s\" à galáxia"
 
 #. %(name)s is the name of a federation
-#: stellarisdashboard/datamodel.py:2353
+#: stellarisdashboard/datamodel.py:2373
 #, python-format
 msgid "\"%(name)s\" federation"
 msgstr "federação \"%(name)s\""
 
-#: stellarisdashboard/datamodel.py:2537
+#: stellarisdashboard/datamodel.py:2561
 msgid "Unknown Event"
 msgstr "Evento desconhecido"
 

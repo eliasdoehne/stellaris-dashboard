@@ -320,12 +320,13 @@ def test_storyline_cards(storyline_type, translated, monkeypatch):
                 if translated:
                     assert html.startswith(MARKER)
                     assert all(row.startswith(MARKER) for row in rows)
-                    assert label == (f"{MARKER} {descriptor.state_labels[state]}" if state != "failed" else "failed")
+                    known = state in descriptor.state_labels
+                    assert label == (f"{MARKER} {descriptor.state_labels[state]}" if known else state)
                     assert count.startswith(MARKER) or not stage_list
                 else:
                     assert label == descriptor.state_labels.get(state, state)
                     if stage_list:
-                        assert count.startswith("2 ") and rows[0].split()[1] == "1"
+                        assert "2" in count.split() and rows[0].split()[1] == "1"
 
 
 def _event(event_type, text):

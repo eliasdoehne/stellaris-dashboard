@@ -688,6 +688,8 @@ def _tradition_sentence() -> str:
 
 
 _FROM_COUNTRY = Part("from", '"target_country" in event', " from the %(target)s")
+_ON_PLANET = Part("planet", '"planet" in event', " on %(planet)s")
+_CONCERNING_TARGET = Part("target", '"target_country" in event', " concerning the %(target)s")
 _SECTOR_CAPITAL = Part("capital", '"planet" in event', " with its capital on %(planet)s")
 _SYSTEM_OF_PLANET = Part("system", '"planet" in event and "system" in event', " in the %(system)s system", "capital")
 
@@ -1038,6 +1040,16 @@ REGISTRY: dict[str, EventDescriptor] = {
         Category.EXPLORATION, Tier.MAJOR, "gem", POINT,
         _t('The %(country)s acquired the "%(relic)s" relic.', relic=D),
     ),
+    "special_project": EventDescriptor(
+        Category.EXPLORATION, Tier.ROUTINE, "flask", SPAN,
+        _cases(
+            ('event["project_outcome"] == "completed"',
+             _t('The %(country)s completed the special project "%(project)s".', project=D)),
+            ('event["project_outcome"]',
+             _t('The special project "%(project)s" of the %(country)s ended unfinished.', project=D)),
+            default=_t('The %(country)s began the special project "%(project)s".', project=D),
+        ),
+    ),
     "destroyed_leviathan": EventDescriptor(
         Category.EXPLORATION, Tier.MAJOR, "skull", POINT,
         _if(
@@ -1047,6 +1059,22 @@ REGISTRY: dict[str, EventDescriptor] = {
         ),
     ),
     # ---- Statecraft -----------------------------------------------------
+    "situation": EventDescriptor(
+        Category.STATECRAFT, Tier.MAJOR, "alert", SPAN,
+        _sentence('The "%(situation)s" situation began for the %(country)s{planet}{target}.',
+                  _ON_PLANET, _CONCERNING_TARGET, situation=D, planet=PLANET_AND_CLASS),
+    ),
+    # as major as the situation itself, so that its card lists every stage
+    "situation_stage": EventDescriptor(
+        Category.STATECRAFT, Tier.MAJOR, "alert", POINT,
+        _if(
+            'event["stage_name"]',
+            _t('The "%(situation)s" situation of the %(country)s reached stage %(stage)s, "%(stage_name)s".',
+               situation=D, stage='event["stage_number"]', stage_name='event["stage_name"]'),
+            _t('The "%(situation)s" situation of the %(country)s reached stage %(stage)s.',
+               situation=D, stage='event["stage_number"]'),
+        ),
+    ),
     "crisis_level_up": EventDescriptor(
         Category.STATECRAFT, Tier.MAJOR, "star", POINT,
         _crisis_level_sentence(),
@@ -1219,6 +1247,8 @@ class StorylineDescriptor:
     sentence: str  # Jinja: the arc's title; the storyline item dict is named ``event``
     state_labels: dict[str, str]  # marked with N_, translated when shown (see state_label)
     stage_rows: dict[tuple, str]  # marked with N_, see render_stage
+    # labels that replace state_labels for arcs whose full progress is the bad outcome (item["negative"])
+    negative_state_labels: Optional[dict[str, str]] = None
 
 
 _STORYLINE_LEADER = '{% if "leader" in event %} ({{ render_leader(event) }}){% endif %}'
@@ -1269,6 +1299,22 @@ STORYLINE_REGISTRY: dict[str, StorylineDescriptor] = {
             ("detail", "country"): N_("Stage %(index)s: %(detail)s by the %(country)s"),
         },
     ),
+    "situation": StorylineDescriptor(
+        Category.STATECRAFT, Tier.MAJOR, "alert",
+        _sentence(
+            'The "%(situation)s" situation of the %(country)s{planet}{target}', _ON_PLANET, _CONCERNING_TARGET,
+            situation='event["title"]', planet=PLANET_AND_CLASS,
+        ),
+        {"active": N_("in progress"), "completed": N_("completed"), "failed": N_("failed"), "abandoned": N_("ended")},
+        {
+            (): N_("Stage %(index)s"),
+            ("detail",): N_("Stage %(index)s: %(detail)s"),
+            ("country",): N_("Stage %(index)s by the %(country)s"),
+            ("detail", "country"): N_("Stage %(index)s: %(detail)s by the %(country)s"),
+        },
+        # Translators: how a harmful situation (a deficit, a revolt) ended: at its worst, or dropped to nothing
+        {"completed": N_("escalated"), "failed": N_("averted")},
+    ),
 }
 
 
@@ -1276,8 +1322,15 @@ def state_label(item) -> str:
     """The state of a storyline item in the dashboard language, e.g. "fully excavated"."""
     descriptor = STORYLINE_REGISTRY.get(item.get("storyline_type"))
     state = item.get("state")
-    label = descriptor.state_labels.get(state) if descriptor else None
-    return _(label) if label else (state or "")
+    labels = descriptor.state_labels if descriptor else {}
+    if item.get("negative") and descriptor.negative_state_labels:
+        labels = {**labels, **descriptor.negative_state_labels}
+    label = labels.get(state)
+    label = _(label) if label else (state or "")
+    if state == "active" and item.get("progress") is not None:
+        # Translators: the state of a situation and how far its progress bar is filled, e.g. "in progress, 62%"
+        return _("%(state)s, %(percent)s%%", state=label, percent=round(100 * item["progress"]))
+    return label
 
 
 def stage_count_label(item) -> str:
@@ -1287,6 +1340,9 @@ def stage_count_label(item) -> str:
         return ngettext("%(num)s chapter", "%(num)s chapters", count)
     if item["storyline_type"] == "astral_rift":
         return ngettext("%(num)s step", "%(num)s steps", count)
+    if item["storyline_type"] == "situation":
+        # Translators: the furthest stage a situation reached, e.g. "stage 3"
+        return pgettext("situation", "stage %(num)s", num=count)
     return ngettext("%(num)s stage", "%(num)s stages", count)
 
 

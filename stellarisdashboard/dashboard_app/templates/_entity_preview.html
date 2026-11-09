@@ -1,0 +1,56 @@
+{# The hover preview of an entity (entity_preview.py), inserted by assets/preview.js. #}
+<div class="preview preview--{{ kind }}">
+    <div class="preview-head">
+        <p class="preview-kind">{{ kind_label }}{% if is_player %} · {{ pgettext("ledger focus", "You") }}{% endif %}</p>
+        <a class="preview-name" href="{{ ledger_url }}">{{ name }}</a>
+    </div>
+
+    {% if facts %}
+    <dl class="preview-facts">
+        {% for label, value in facts %}
+        <div class="preview-fact"><dt>{{ label }}</dt><dd>{{ value | safe }}</dd></div>
+        {% endfor %}
+    </dl>
+    {% endif %}
+
+    {% if sparks %}
+    <div class="preview-sparks">
+        {% for spark in sparks %}
+        <figure class="spark" title="{{ spark.label }}, {{ spark.first_year }}–{{ spark.last_year }}">
+            <figcaption><span>{{ spark.label }}</span><b>{{ spark.value }}</b></figcaption>
+            <svg viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="{{ spark.path }}" vector-effect="non-scaling-stroke"></polyline>
+            </svg>
+            <span class="spark-range"><span>{{ spark.first_year }}</span><span>{{ spark.last_year }}</span></span>
+        </figure>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if exhaustion %}
+    {# Translators: heading of the war exhaustion of both sides in the hover preview of a war #}
+    <p class="preview-section-head">{{ _("War exhaustion") }}</p>
+    <div class="preview-meters">
+        {% for label, percent in exhaustion %}
+        <div class="meter">
+            <span class="meter-label">{{ label }}</span><b>{{ percent }}%</b>
+            <span class="meter-bar"><span style="width: {{ percent }}%"></span></span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if recent %}
+    <div class="preview-recent">
+        {# Translators: heading of the latest events in the hover preview of an empire, leader, war, ... #}
+        <p class="preview-section-head">{{ _("Latest events") }}</p>
+        <ol>
+            {% for date, item in recent %}
+            <li><time>{{ date }}</time><span>{{ render_sentence(item, links) }}</span></li>
+            {% endfor %}
+        </ol>
+    </div>
+    {% endif %}
+
+    <a class="preview-open" href="{{ ledger_url }}">{{ _("Open the ledger") }} →</a>
+</div>
