@@ -3494,97 +3494,82 @@ msgid "Planet"
 msgstr "Planète"
 
 #: stellarisdashboard/dashboard_app/overview.py:27
-#, fuzzy
 msgid "10 years"
-msgstr "Année"
+msgstr "10 ans"
 
 #: stellarisdashboard/dashboard_app/overview.py:28
-#, fuzzy
 msgid "50 years"
-msgstr "Année"
+msgstr "50 ans"
 
 #: stellarisdashboard/dashboard_app/overview.py:29
-#, fuzzy
 msgid "Whole game"
-msgstr "Changer de partie"
+msgstr "Toute la partie"
 
 #: stellarisdashboard/dashboard_app/overview.py:55
-#, fuzzy
 msgid "Standing"
-msgstr "Paramètres"
+msgstr "Classement"
 
 #: stellarisdashboard/dashboard_app/overview.py:57
-#, fuzzy
 msgid "Victory rank"
 msgstr "Rang de victoire"
 
 #: stellarisdashboard/dashboard_app/overview.py:58
-#, fuzzy
 msgid "Economic power"
-msgstr "Score économique de victoire"
+msgstr "Puissance économique"
 
 #: stellarisdashboard/dashboard_app/overview.py:59
-#, fuzzy
 msgid "Military strength"
-msgstr "Puissance militaire"
+msgstr "Force militaire"
 
 #: stellarisdashboard/dashboard_app/overview.py:60
-#, fuzzy
 msgid "Technologies"
-msgstr "Technologies recherchées"
+msgstr "Technologies"
 
 #: stellarisdashboard/dashboard_app/overview.py:64
-#, fuzzy
 msgid "Monthly income"
-msgstr "Revenu net d'alliages"
+msgstr "Revenu mensuel"
 
 #: stellarisdashboard/dashboard_app/overview.py:66
-#, fuzzy
 msgid "Energy"
-msgstr "Genre"
+msgstr "Énergie"
 
 #: stellarisdashboard/dashboard_app/overview.py:67
-#, fuzzy
 msgid "Minerals"
-msgstr "Général"
+msgstr "Minéraux"
 
 #: stellarisdashboard/dashboard_app/overview.py:68
-#, fuzzy
 msgid "Alloys"
-msgstr "Budget d'alliages"
+msgstr "Alliages"
 
 #: stellarisdashboard/dashboard_app/overview.py:69
-#, fuzzy
 msgid "Research"
-msgstr "Rechercher"
+msgstr "Recherche"
 
 #: stellarisdashboard/dashboard_app/overview.py:73
 msgid "Realm"
-msgstr ""
+msgstr "Royaume"
 
 #: stellarisdashboard/dashboard_app/overview.py:75
-#, fuzzy
 msgid "Pops"
 msgstr "Pops"
 
 #: stellarisdashboard/dashboard_app/overview.py:78
-#, fuzzy
 msgid "Empire size"
 msgstr "Taille de l'empire"
 
 #. an empire's place among the empires whose value the player knows, e.g. "#3 of 12"
 #: stellarisdashboard/dashboard_app/overview.py:286
-#, fuzzy, python-format
+#, python-format
 msgid "#%(rank)s of %(total)s"
-msgstr "%(name)s : %(title)s"
+msgstr "n° %(rank)s sur %(total)s"
 
 #. change of the victory rank in the overview, shown after an up or down arrow
 #: stellarisdashboard/dashboard_app/overview.py:323
-#, fuzzy, python-format
+#, python-format
 msgid "%(num)s place"
 msgid_plural "%(num)s places"
-msgstr[0] "%(num)s phase"
-msgstr[1] "%(num)s phases"
+msgstr[0] "%(num)s place"
+msgstr[1] "%(num)s places"
 
 #: stellarisdashboard/dashboard_app/settings.py:24
 msgid "File Locations"
@@ -3839,7 +3824,7 @@ msgstr "Paramètres appliqués."
 #: stellarisdashboard/dashboard_app/shell.py:10
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:7
 msgid "Overview"
-msgstr ""
+msgstr "Aperçu"
 
 #: stellarisdashboard/dashboard_app/shell.py:11
 msgid "Graphs"
@@ -4674,54 +4659,50 @@ msgstr "Années %(decade)s"
 
 #. marks the overview page of the empire controlled by the player
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:12
-#, fuzzy
 msgctxt "overview"
 msgid "Your empire"
 msgstr "Votre empire"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:15
-#, fuzzy, python-format
+#, python-format
 msgid "No data since %(date)s"
-msgstr "date actuelle : %(date)s"
+msgstr "Aucune donnée depuis %(date)s"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:19
 msgid "Period"
-msgstr ""
+msgstr "Période"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:26
-#, fuzzy
 msgid "Other empire"
-msgstr "Votre empire"
+msgstr "Autre empire"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:42
-#, fuzzy
 msgid "Open the graph"
-msgstr "Ouvrir le journal"
+msgstr "Ouvrir le graphique"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:46
 msgid "Not known to you"
-msgstr ""
+msgstr "Inconnu de vous"
 
 #. after the change of a value in the overview, e.g. "+12% since 2340"
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:53
-#, fuzzy, python-format
+#, python-format
 msgid "since %(year)s"
-msgstr "depuis %(start)s"
+msgstr "depuis %(year)s"
 
 #. in an overview tile whose value the player no longer knows
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:68
-#, fuzzy, python-format
+#, python-format
 msgid "Last known %(date)s"
-msgstr "Afficher %(category)s"
+msgstr "Dernière valeur connue : %(date)s"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:79
 msgid "Ranks compare the empires whose numbers you know."
-msgstr ""
+msgstr "Les rangs comparent les empires dont vous connaissez les chiffres."
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:80
-#, fuzzy
 msgid "Open this empire's event ledger"
-msgstr "Ouvrir le journal"
+msgstr "Ouvrir le journal des événements de cet empire"
 
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:7
 msgid "Settings marked * apply after a restart."
