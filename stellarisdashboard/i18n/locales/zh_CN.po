@@ -3294,96 +3294,81 @@ msgid "Planet"
 msgstr "行星"
 
 #: stellarisdashboard/dashboard_app/overview.py:27
-#, fuzzy
 msgid "10 years"
-msgstr "年份"
+msgstr "10 年"
 
 #: stellarisdashboard/dashboard_app/overview.py:28
-#, fuzzy
 msgid "50 years"
-msgstr "年份"
+msgstr "50 年"
 
 #: stellarisdashboard/dashboard_app/overview.py:29
-#, fuzzy
 msgid "Whole game"
-msgstr "切换游戏"
+msgstr "整局游戏"
 
 #: stellarisdashboard/dashboard_app/overview.py:55
-#, fuzzy
 msgid "Standing"
-msgstr "设置"
+msgstr "现状"
 
 #: stellarisdashboard/dashboard_app/overview.py:57
-#, fuzzy
 msgid "Victory rank"
 msgstr "胜利排名"
 
 #: stellarisdashboard/dashboard_app/overview.py:58
-#, fuzzy
 msgid "Economic power"
-msgstr "胜利经济分数"
+msgstr "经济实力"
 
 #: stellarisdashboard/dashboard_app/overview.py:59
-#, fuzzy
 msgid "Military strength"
 msgstr "军事实力"
 
 #: stellarisdashboard/dashboard_app/overview.py:60
-#, fuzzy
 msgid "Technologies"
-msgstr "已研究的科技"
+msgstr "科技"
 
 #: stellarisdashboard/dashboard_app/overview.py:64
-#, fuzzy
 msgid "Monthly income"
-msgstr "合金净收入"
+msgstr "每月收入"
 
 #: stellarisdashboard/dashboard_app/overview.py:66
-#, fuzzy
 msgid "Energy"
-msgstr "性别"
+msgstr "能量币"
 
 #: stellarisdashboard/dashboard_app/overview.py:67
-#, fuzzy
 msgid "Minerals"
-msgstr "将军"
+msgstr "矿物"
 
 #: stellarisdashboard/dashboard_app/overview.py:68
-#, fuzzy
 msgid "Alloys"
-msgstr "合金预算"
+msgstr "合金"
 
 #: stellarisdashboard/dashboard_app/overview.py:69
-#, fuzzy
 msgid "Research"
-msgstr "搜索"
+msgstr "研究"
 
 #: stellarisdashboard/dashboard_app/overview.py:73
 msgid "Realm"
-msgstr ""
+msgstr "领土"
 
 #: stellarisdashboard/dashboard_app/overview.py:75
-#, fuzzy
 msgid "Pops"
 msgstr "人口"
 
 #: stellarisdashboard/dashboard_app/overview.py:78
-#, fuzzy
 msgid "Empire size"
 msgstr "帝国规模"
 
 #. an empire's place among the empires whose value the player knows, e.g. "#3 of 12"
 #: stellarisdashboard/dashboard_app/overview.py:286
-#, fuzzy, python-format
+#, python-format
 msgid "#%(rank)s of %(total)s"
-msgstr "%(name)s：%(title)s"
+msgstr "第 %(rank)s 名，共 %(total)s 个"
 
 #. change of the victory rank in the overview, shown after an up or down arrow
 #: stellarisdashboard/dashboard_app/overview.py:323
-#, fuzzy, python-format
+#, python-format
 msgid "%(num)s place"
 msgid_plural "%(num)s places"
-msgstr[0] "%(num)s 个阶段"
+msgstr[0] "%(num)s 位"
 
 #: stellarisdashboard/dashboard_app/settings.py:24
 msgid "File Locations"
@@ -3606,7 +3591,7 @@ msgstr "设置已应用。"
 #: stellarisdashboard/dashboard_app/shell.py:10
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:7
 msgid "Overview"
-msgstr ""
+msgstr "概览"
 
 #: stellarisdashboard/dashboard_app/shell.py:11
 msgid "Graphs"
@@ -4367,54 +4352,50 @@ msgstr "%(decade)s 年代"
 
 #. marks the overview page of the empire controlled by the player
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:12
-#, fuzzy
 msgctxt "overview"
 msgid "Your empire"
 msgstr "你的帝国"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:15
-#, fuzzy, python-format
+#, python-format
 msgid "No data since %(date)s"
-msgstr "当前日期 %(date)s"
+msgstr "自 %(date)s 起无数据"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:19
 msgid "Period"
-msgstr ""
+msgstr "时段"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:26
-#, fuzzy
 msgid "Other empire"
-msgstr "你的帝国"
+msgstr "其他帝国"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:42
-#, fuzzy
 msgid "Open the graph"
-msgstr "打开记录"
+msgstr "打开图表"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:46
 msgid "Not known to you"
-msgstr ""
+msgstr "你尚未获知"
 
 #. after the change of a value in the overview, e.g. "+12% since 2340"
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:53
-#, fuzzy, python-format
+#, python-format
 msgid "since %(year)s"
-msgstr "自 %(start)s 起"
+msgstr "自 %(year)s 年起"
 
 #. in an overview tile whose value the player no longer knows
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:68
-#, fuzzy, python-format
+#, python-format
 msgid "Last known %(date)s"
-msgstr "显示%(category)s"
+msgstr "最后已知：%(date)s"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:79
 msgid "Ranks compare the empires whose numbers you know."
-msgstr ""
+msgstr "排名仅比较你已掌握数据的帝国。"
 
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:80
-#, fuzzy
 msgid "Open this empire's event ledger"
-msgstr "打开记录"
+msgstr "打开该帝国的事件记录"
 
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:7
 msgid "Settings marked * apply after a restart."
