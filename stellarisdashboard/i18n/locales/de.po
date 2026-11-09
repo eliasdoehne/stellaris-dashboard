@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-08 22:24+0100\n"
+"POT-Creation-Date: 2026-11-09 20:00+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -47,6 +47,39 @@ msgid "An import of %(game_id)s is already running. Wait for it to finish or can
 msgstr ""
 "Ein Import von %(game_id)s läuft bereits. Bitte warten, bis er abgeschlossen ist, oder ihn "
 "abbrechen."
+
+#. label of a small chart in the hover preview of an empire
+#: stellarisdashboard/dashboard_app/entity_preview.py:33
+msgid "Victory score"
+msgstr "Siegpunkte"
+
+#. label of a small chart in the hover preview of an empire
+#: stellarisdashboard/dashboard_app/entity_preview.py:35
+msgid "Military power"
+msgstr "Militärstärke"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:56
+msgctxt "ledger detail"
+msgid "System"
+msgstr "System"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:58
+#: stellarisdashboard/dashboard_app/history_ledger.py:763
+msgctxt "ledger detail"
+msgid "Owner"
+msgstr "Besitzer"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:176
+#: stellarisdashboard/dashboard_app/history_ledger.py:927
+msgctxt "ledger detail"
+msgid "Attackers"
+msgstr "Angreifer"
+
+#: stellarisdashboard/dashboard_app/entity_preview.py:177
+#: stellarisdashboard/dashboard_app/history_ledger.py:931
+msgctxt "ledger detail"
+msgid "Defenders"
+msgstr "Verteidiger"
 
 #: stellarisdashboard/dashboard_app/event_registry.py:51
 msgctxt "event category"
@@ -3008,11 +3041,6 @@ msgctxt "ledger detail"
 msgid "Unknown Bypasses"
 msgstr "Unbekannte Umgehungen"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:763
-msgctxt "ledger detail"
-msgid "Owner"
-msgstr "Besitzer"
-
 #: stellarisdashboard/dashboard_app/history_ledger.py:765
 msgctxt "ledger detail"
 msgid "Planets"
@@ -3213,20 +3241,10 @@ msgctxt "ledger detail"
 msgid "End date"
 msgstr "Enddatum"
 
-#: stellarisdashboard/dashboard_app/history_ledger.py:927
-msgctxt "ledger detail"
-msgid "Attackers"
-msgstr "Angreifer"
-
 #: stellarisdashboard/dashboard_app/history_ledger.py:930
 msgctxt "ledger detail"
 msgid "Attacker War Goal"
 msgstr "Kriegsziel des Angreifers"
-
-#: stellarisdashboard/dashboard_app/history_ledger.py:931
-msgctxt "ledger detail"
-msgid "Defenders"
-msgstr "Verteidiger"
 
 #: stellarisdashboard/dashboard_app/history_ledger.py:934
 msgctxt "ledger detail"
@@ -3667,12 +3685,12 @@ msgstr "Spiele"
 
 #: stellarisdashboard/dashboard_app/shell.py:20
 #: stellarisdashboard/dashboard_app/templates/import_page.html:6
-#: stellarisdashboard/dashboard_app/templates/layout.html:85
+#: stellarisdashboard/dashboard_app/templates/layout.html:87
 msgid "Import Saves"
 msgstr "Speicherstände importieren"
 
 #: stellarisdashboard/dashboard_app/shell.py:21
-#: stellarisdashboard/dashboard_app/templates/layout.html:86
+#: stellarisdashboard/dashboard_app/templates/layout.html:88
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:6
 msgid "Settings"
 msgstr "Einstellungen"
@@ -3731,6 +3749,27 @@ msgstr "Kein Spiel passt zum Präfix „%(game_name)s“."
 #: stellarisdashboard/dashboard_app/templates/404_page.html:11
 msgid "Back to all games"
 msgstr "Zurück zu allen Spielen"
+
+#. marks the event ledger page of the empire controlled by the player
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:4
+#: stellarisdashboard/dashboard_app/templates/ledger_page.html:8
+msgctxt "ledger focus"
+msgid "You"
+msgstr "Spieler"
+
+#. heading of the war exhaustion of both sides in the hover preview of a war
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:32
+msgid "War exhaustion"
+msgstr "Kriegsmüdigkeit"
+
+#. heading of the latest events in the hover preview of an empire, leader, war, ...
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:46
+msgid "Latest events"
+msgstr "Neueste Ereignisse"
+
+#: stellarisdashboard/dashboard_app/templates/_entity_preview.html:55
+msgid "Open the ledger"
+msgstr "Ereignisprotokoll öffnen"
 
 #: stellarisdashboard/dashboard_app/templates/_ledger_year.html:6
 #, python-format
@@ -4300,91 +4339,91 @@ msgstr "Abbrechen"
 msgid "Timeline Graphs"
 msgstr "Zeitverlaufsdiagramme"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:22
+#: stellarisdashboard/dashboard_app/templates/layout.html:24
 msgid "Navigation"
 msgstr "Navigation"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:24
+#: stellarisdashboard/dashboard_app/templates/layout.html:26
 msgid "All games"
 msgstr "Alle Spiele"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:28
+#: stellarisdashboard/dashboard_app/templates/layout.html:30
 msgid "Collapse sidebar"
 msgstr "Seitenleiste einklappen"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:36
+#: stellarisdashboard/dashboard_app/templates/layout.html:38
 msgid "Switch game"
 msgstr "Spiel wechseln"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:51
+#: stellarisdashboard/dashboard_app/templates/layout.html:53
 msgid "All games & details"
 msgstr "Alle Spiele & Details"
 
 #. link in the sidebar to the event ledger of the whole galaxy
-#: stellarisdashboard/dashboard_app/templates/layout.html:74
+#: stellarisdashboard/dashboard_app/templates/layout.html:76
 msgctxt "ledger scope"
 msgid "Galaxy"
 msgstr "Galaxis"
 
 #. link in the sidebar to the event ledger of the player's empire
-#: stellarisdashboard/dashboard_app/templates/layout.html:76
+#: stellarisdashboard/dashboard_app/templates/layout.html:78
 msgctxt "ledger scope"
 msgid "Your empire"
 msgstr "Dein Imperium"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:84
+#: stellarisdashboard/dashboard_app/templates/layout.html:86
 msgid "All Games"
 msgstr "Alle Spiele"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:87
+#: stellarisdashboard/dashboard_app/templates/layout.html:89
 msgid "Stellaris Wiki"
 msgstr "Stellaris-Wiki"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:95
+#: stellarisdashboard/dashboard_app/templates/layout.html:97
 msgid "Open navigation"
 msgstr "Navigation öffnen"
 
 #. last part of the breadcrumb on an event ledger page that shows only the events of one empire,
 #. leader, war, ...
-#: stellarisdashboard/dashboard_app/templates/layout.html:103
+#: stellarisdashboard/dashboard_app/templates/layout.html:105
 msgctxt "breadcrumb"
 msgid "Filtered"
 msgstr "Gefiltert"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:110
+#: stellarisdashboard/dashboard_app/templates/layout.html:112
 msgid "Search"
 msgstr "Suche"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:110
-#: stellarisdashboard/dashboard_app/templates/layout.html:115
+#: stellarisdashboard/dashboard_app/templates/layout.html:112
+#: stellarisdashboard/dashboard_app/templates/layout.html:117
 msgid "Search this game"
 msgstr "Dieses Spiel durchsuchen"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:113
+#: stellarisdashboard/dashboard_app/templates/layout.html:115
 msgid "Find an empire, leader, war, system…"
 msgstr "Imperium, Anführer, Krieg, System finden …"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:117
+#: stellarisdashboard/dashboard_app/templates/layout.html:119
 msgid "Press / to search"
 msgstr "Zum Suchen / drücken"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:118
+#: stellarisdashboard/dashboard_app/templates/layout.html:120
 msgid "Close search"
 msgstr "Suche schließen"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:120
+#: stellarisdashboard/dashboard_app/templates/layout.html:122
 msgid "Search results"
 msgstr "Suchergebnisse"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:124
+#: stellarisdashboard/dashboard_app/templates/layout.html:126
 msgid "Date of the latest save"
 msgstr "Datum des neuesten Speicherstands"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:129
+#: stellarisdashboard/dashboard_app/templates/layout.html:131
 msgid "Graph categories"
 msgstr "Diagrammkategorien"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:140
+#: stellarisdashboard/dashboard_app/templates/layout.html:142
 #, python-format
 msgid ""
 "You may be using an old version of the stellaris dashboard program. You are using version "
@@ -4395,17 +4434,11 @@ msgstr ""
 "%(version)s, angefordert wurde %(update_version_id)s. Die aktuelle Version gibt es <a "
 "href=\"https://github.com/eliasdoehne/stellaris-dashboard\" class=\"textlink\">auf Github.</a>"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:142
+#: stellarisdashboard/dashboard_app/templates/layout.html:144
 msgid "This update notice can be disabled in the <a href=\"/settings/\" class=\"textlink\">Settings</a>."
 msgstr ""
 "Dieser Update-Hinweis kann in den <a href=\"/settings/\" class=\"textlink\">Einstellungen</a> "
 "deaktiviert werden."
-
-#. marks the event ledger page of the empire controlled by the player
-#: stellarisdashboard/dashboard_app/templates/ledger_page.html:8
-msgctxt "ledger focus"
-msgid "You"
-msgstr "Spieler"
 
 #: stellarisdashboard/dashboard_app/templates/ledger_page.html:12
 msgid "The galaxy's history. Your own empire's events count one level higher."

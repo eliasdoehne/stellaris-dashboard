@@ -10,10 +10,12 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
     {# global rather than per page: hx-boost navigation swaps only the body #}
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='ledger.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='preview.css') }}">
     <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
     <script src="{{ url_for('static', filename='shell.js') }}" defer></script>
     <script src="{{ url_for('static', filename='search.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ledger.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='preview.js') }}" defer></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body>
