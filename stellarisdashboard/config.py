@@ -849,7 +849,7 @@ class Config:
         settings_dict = self.get_persisted_dict()
         content = SETTINGS_FILE_HEADER
         if settings_dict:
-            content += yaml.dump(settings_dict, default_flow_style=False, sort_keys=False)
+            content += yaml.dump(settings_dict, default_flow_style=False, sort_keys=False, allow_unicode=True)
         _keep_copy_of_unreadable_settings_file(fname)
         fname.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(dir=fname.parent, prefix=f".{fname.name}.", suffix=".tmp")
