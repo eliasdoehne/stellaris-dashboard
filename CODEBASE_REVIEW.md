@@ -224,7 +224,10 @@ Python's `str`/`frozenset` hashing is randomized per process (`PYTHONHASHSEED`).
 
 **Fix:** the shared cache (`GAME_COUNTRY_COLORS`) and its `clear_cached_country_colors` hook now live in a new dependency-free module `stellarisdashboard/country_color_cache.py`. `visualization_data` imports the dict from there (it still owns the cache contents via `get_color_vals`); `timeline` imports only the clear hook. Verified that importing `parsing.timeline` no longer pulls in `visualization_data`, `networkx`, or `scipy`.
 
-### 3.2 Import-time side effects in `config.py` — ⏭️ OUT OF SCOPE (own follow-up, §7)
+### 3.2 Import-time side effects in `config.py` — ⚠️ PARTIALLY FIXED (§7)
+
+*Importing `config.py` still runs `initialize()`, which reads the settings file, but it no longer writes `config.yml` or creates directories; see §7.4.*
+
 `config.py:568` runs `initialize()` at import: reads `./config.yml` (CWD-dependent), **creates directories**, and **writes `config.yml`** — on any import of the package (including tests and tooling). Prefer explicit initialization from the entry points (`__main__.py`, `cli.py`) and lazy `CONFIG` access.
 
 **Deliberately deferred:** this is the configuration-handling rework and is intentionally *not* part of this PR. It gets its own follow-up, tracked in full in §7.
@@ -347,6 +350,9 @@ and `BatchSavePathMonitor` reuses a single process pool across chunks (§2.7).
 
 This expands on follow-up item 11. It is a design proposal, not part of the fix
 PR — the migration is incremental and each step is independently shippable.
+
+**Status:** steps 1 and 3 are done, steps 2 and 4 partially, and the uniform
+validation of §7.3(f) is done; see the table in §7.4.
 
 ### 7.1 Pain points in the current design
 
@@ -484,13 +490,13 @@ mix of crash / silent reset / log-only.
 
 ### 7.4 Incremental migration plan
 
-| Step | Change | Risk |
-|------|--------|------|
-| 1 | Introduce `SettingSpec` registry; generate `DEFAULT_SETTINGS`, the `*_KEYS` sets, and `_build_settings_dict` from it. Pure refactor, no behavior change; add a test asserting registry ↔ dataclass consistency. | Low |
-| 2 | Split `initialize()` into `load()`/`save()`; call `load()` from the entry points; keep `config.CONFIG` as an alias; stop rewriting `config.yml` at startup. | Low–Med (startup ordering) |
-| 3 | Move runtime-only flags (`normalize_stacked_plots`, `debug_mode`, CLI overrides) off the persisted object. | Low |
-| 4 | Add the config-file resolution order (env var → CWD → platformdirs). | Low |
-| 5 | Freeze `Config`, swap atomically on apply; migrate consumers to snapshot semantics. | Med |
+| Step | Change | Risk | Status |
+|------|--------|------|--------|
+| 1 | Introduce `SettingSpec` registry; generate `DEFAULT_SETTINGS`, the `*_KEYS` sets, and `_build_settings_dict` from it. Pure refactor, no behavior change; add a test asserting registry ↔ dataclass consistency. | Low | ✅ Done: `config.SETTINGS` declares every setting; `Config` gets its attributes from it (no separate dataclass to keep in sync), and the settings page view model (`settings.settings_view()`) and form parsing (`config.settings_from_form()`) are derived from it. Labels stay in `dashboard_app/settings.py` (translated text); a test checks they match the registry. Validation goes through one path with feedback (§7.3(f)). |
+| 2 | Split `initialize()` into `load()`/`save()`; call `load()` from the entry points; keep `config.CONFIG` as an alias; stop rewriting `config.yml` at startup. | Low–Med (startup ordering) | ⚠️ Partially: loading is read-only (no file writes, no directory creation), and `write_to_file()` only writes customized settings, atomically, when settings are applied. `initialize()` still runs at import (spawned Windows workers rely on it). |
+| 3 | Move runtime-only flags (`normalize_stacked_plots`, `debug_mode`, CLI overrides) off the persisted object. | Low | ⚠️ Partially: `debug_mode` and `normalize_stacked_plots` are runtime state outside the registry (`RUNTIME_STATE_DEFAULTS`) and are never persisted, but they are still attributes of `config.CONFIG`; the CLI `--threads` override still sets `config.CONFIG.threads` (harmless, the CLI never saves settings). |
+| 4 | Add the config-file resolution order (env var → CWD → platformdirs). | Low | ⚠️ Partially: `STELLARIS_DASHBOARD_CONFIG`, else `./config.yml` (`config.settings_file_path()`); no per-user location (no new dependency). |
+| 5 | Freeze `Config`, swap atomically on apply; migrate consumers to snapshot semantics. | Med | Not started. |
 
 Steps 1–3 remove the concrete bugs and drift this review found; steps 4–5 are
 quality-of-life and concurrency hardening that can wait.

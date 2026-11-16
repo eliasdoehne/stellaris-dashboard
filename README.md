@@ -57,6 +57,20 @@ Most users should just download a prebuilt release from the [releases page](http
 
 # Other information
 
+## Settings
+
+Most settings can be changed on the dashboard's **Settings** page (`localhost:28053/settings/`). Settings marked `*` only apply after restarting the dashboard. If a value is invalid (for example a folder that does not exist, or a number out of range), the settings page says so and keeps the previous value. The server and logging settings (host, port, log level, writing the log to a file) and some import settings are in the advanced part of the page. `Open in browser on start` opens the dashboard in your browser when the app starts.
+
+The settings are saved to `config.yml` in the folder the dashboard is started from, or to the file named by the `STELLARIS_DASHBOARD_CONFIG` environment variable. The file is created when you first apply settings, and it only lists the settings that differ from their default, so that improved defaults in new versions also reach you. Settings files written by older versions, which list every setting, still work.
+
+A few settings can only be changed by editing `config.yml` (create it if it does not exist, and restart the dashboard afterwards):
+
+- `tab_layout`: the graphs on each tab of the graph pages, see [configure_layout.md](configure_layout.md).
+- `market_resources` and `market_fee`: see [Market Price Graphs](#market-price-graphs).
+- `base_output_path`: the folder for the databases, failed saves and exports (default: `output` in the folder the dashboard is started from).
+
+An invalid value in `config.yml` is reported in the dashboard output and the default is used instead. The dashboard rewrites `config.yml` when you apply settings on the settings page, keeping the values of these settings but not comments. The settings `polling_interval`, `include_id_in_names` and `plot_width` were removed; they are ignored if your `config.yml` still contains them.
+
 ## Save File Location
 
 If the dashboard is not showing any data, first make sure that you play the game until at least one autosave is triggered while the dashboard is running in the background. If the dashboard does not react to the new save file, the most likely explanation is that it cannot find it. 
@@ -73,7 +87,7 @@ The `Back up all saves` setting (off by default) copies every save the dashboard
 
 ## Language
 
-Names from the game (empires, leaders, systems, technologies, ...) are shown in the language set by the `Stellaris language` setting (for example `l_german`), using the game's own localisation files. The dashboard's own text (menus, settings, graph titles and the sentences of the event ledger) follows the same language by default; the `Dashboard language` setting can pick a different one. Translations of the dashboard's text are welcome: see [docs/translating.md](docs/translating.md).
+Names from the game (empires, leaders, systems, technologies, ...) are shown in the language set by the `Stellaris language` setting, using the game's own localisation files. The dashboard's own text (menus, settings, graph titles and the sentences of the event ledger) follows the same language by default; the `Dashboard language` setting can pick a different one. Translations of the dashboard's text are welcome: see [docs/translating.md](docs/translating.md).
 
 ## Visibility Settings
 
@@ -97,17 +111,15 @@ The form offers some additional parameters to customize the speed of the animati
 
 ## Market Price Graphs
 
-The dashboard includes graphs of market prices for each resource in the game. To get the correct values, you will need to manually configure some things in the file `config.yml`, as these settings are not available in the built-in settings page. 
+The dashboard includes graphs of market prices for each resource in the game. To get the correct values, you will need to manually configure some things in the file `config.yml` (see [Settings](#settings)), as these settings are not available in the built-in settings page. If the file does not exist yet, create it, or apply settings once on the settings page.
 
-If `config.yml` does not exist, go to the settings page linked at the top (or `localhost:28053/settings/`) and hit "Apply Settings". This will create the file with all of your current settings.
-
-These configurations are applied only when preparing the graph, so you can adjust them at any time in the configuration without reprocessing any data.
+`config.yml` only lists settings that differ from their default, so add the whole `market_fee` or `market_resources` section as shown below. These configurations are applied only when preparing the graph, so you can adjust them at any time in the configuration without reprocessing any data. To return to the default, remove the section.
 
 ### Market fees
 
 Currently, there is no easy way to get the market fee information from the save files. To still get the correct numbers in the graph, you can add the fee manually in the configuration by creating additional entries in the `market_fee` section. By default, a constant fee of 30% is assumed.
 
-For example, to configure a game where the market_fee changed to 20% in 2240 and 5% in 2300, you could change the market_fee section like this:
+For example, to configure a game where the market_fee changed to 20% in 2240 and 5% in 2300, you could add this market_fee section:
 ```
 market_fee:
 - {date: 2200.01.01, fee: 0.3}
@@ -121,7 +133,34 @@ The default resource configuration should be correct for the current vanilla Ste
 
 When using mods that change resources in the game (or if Stellaris is updated in the future), you might need to manually adjust the resource configuration in `config.yml` to have the data collected for the additional resources.
   
-These values must be configured in the correct order, for vanilla Stellaris, this is the same order in which they are defined in the game file `common/strategic_resources/00_strategic_resources.txt`.
+These values must be configured in the correct order, for vanilla Stellaris, this is the same order in which they are defined in the game file `common/strategic_resources/00_strategic_resources.txt`. Each resource has a `name` and the `base_price` of one unit on the market; use `null` for resources that cannot be traded (they must still be listed, because the order matters). This is the default configuration, which you can copy into `config.yml` and extend:
+```yaml
+market_resources:
+- {name: energy, base_price: 1}
+- {name: minerals, base_price: 1}
+- {name: food, base_price: 1}
+- {name: physics_research, base_price: null}
+- {name: society_research, base_price: null}
+- {name: engineering_research, base_price: null}
+- {name: influence, base_price: null}
+- {name: unity, base_price: null}
+- {name: trade, base_price: null}
+- {name: consumer_goods, base_price: 2}
+- {name: alloys, base_price: 4}
+- {name: volatile_motes, base_price: 10}
+- {name: exotic_gases, base_price: 10}
+- {name: rare_crystals, base_price: 10}
+- {name: sr_living_metal, base_price: 20}
+- {name: sr_zro, base_price: 20}
+- {name: sr_dark_matter, base_price: 20}
+- {name: nanites, base_price: null}
+- {name: minor_artifacts, base_price: null}
+- {name: astral_threads, base_price: null}
+- {name: biomass, base_price: null}
+- {name: menace, base_price: null}
+- {name: advanced_logic, base_price: null}
+- {name: feral_insight, base_price: null}
+```
 
 ### Names and Localizations
 
@@ -138,7 +177,7 @@ when using the dashboard.
 
 If you installed Stellaris in the default location at (`C:/Program Files (x86)/Steam/steamapps/common/Stellaris/` on windows), there is a good chance that everything will work without any additional actions. If your game (or Steam library) is not in the default location, you will need to change the "Stellaris install folder" setting and restart the dashboard.
 
-If you play the game in another language, you can change the "Stellaris language" and restart the dashboard. Note that this setting should be the language code used by the game (ie `l_braz_por`, `l_english`, `l_french`, `l_german`, `l_japanese`, `l_korean`, `l_polish`, `l_russian`, `l_simp_chinese`, `l_spanish`).
+If you play the game in another language, you can change the "Stellaris language" and restart the dashboard. The setting offers the languages of the game; a language added by a mod can be set in `config.yml` with its language code (like `stellaris_language: l_mylanguage`).
 
 If you use mods that add new names, the dashboard *should* automatically find the required files. Note that if you change your mod list, any new modded names will not be loaded until you restart the dashboard. If modded names are not working at all, you might need to change your "Stellaris user data folder" setting and restart the dashboard. This should be the folder containing the `dlc_load.json` file as well as the `mod/` folder.
 

@@ -17,7 +17,9 @@ This will make the graph dashboard appear like this:
 
 ![Custom Tab Layout](img/custom_tab_layout.png)
 
-I recommend to make a backup copy of the config.yml after customizing it, since the dashboard may overwrite changes.
+If there is no config.yml yet, create it (see [Settings](README.md#settings) for where it is). The `tab_layout` section lists the complete layout: tabs that are not listed are not shown.
+
+The dashboard keeps your `tab_layout` when it saves settings from the settings page, but it rewrites the file without comments, so I recommend to make a backup copy of the config.yml after customizing it. An invalid `tab_layout` is reported in the dashboard output, and the default layout is used instead.
 
 To reset the default layout, simply delete the `tab_layout` section from your config.yml or delete the entire file to reset all default settings.
 
