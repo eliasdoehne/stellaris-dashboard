@@ -480,6 +480,7 @@ body {
     animation: toast-in-out 3.6s ease forwards;
 }
 .toast--success { border-left: 3px solid var(--pos); }
+.toast--error { border-left: 3px solid var(--neg); animation-duration: 8s; }
 
 @keyframes toast-in-out {
     0%   { opacity: 0; transform: translateY(-8px); }

@@ -1,19 +1,20 @@
+import copy
 import dataclasses
 import itertools
 import json
 import logging
 import multiprocessing
+import os
 import pathlib
 import platform
 import re
 import sys
-import traceback
-from collections import defaultdict
-from typing import List, Dict, Any
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 import yaml
 
 from stellarisdashboard import i18n, legacy_config_defaults
+from stellarisdashboard.i18n import N_
 
 LOG_LEVELS = {
     "CRITICAL": logging.CRITICAL,
@@ -26,7 +27,9 @@ LOG_LEVELS = {
 LOG_FORMAT = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 CONFIG: "Config" = None
-logger: logging.Logger = None
+# what loading config.yml at startup did, including the values it rejected
+LOAD_RESULT: "ApplyResult" = None
+logger: logging.Logger = logging.getLogger()
 
 
 def initialize_logger():
@@ -188,263 +191,639 @@ DEFAULT_MARKET_RESOURCES = [
 DEFAULT_MARKET_FEE = [{"date": "2200.01.01", "fee": 0.3}]
 
 
-DEFAULT_SETTINGS = dict(
-    save_file_path=_get_default_save_path(),
-    stellaris_install_path=_get_default_stellaris_install_path(),
-    stellaris_user_data_path=_get_default_stellaris_user_data_path(),
-    stellaris_language="l_english",
-    dashboard_language="auto",
-    mp_username="",
-    hide_other_players=True,
-    base_output_path=_get_default_base_output_path(),
-    threads=1,
-    host="127.0.0.1",
-    port=28053,
-    polling_interval=0.5,
-    check_version=True,
-    log_level="INFO",
-    include_id_in_names=True,  # TODO handle duplicate keys in legend entries in a better way
-    show_everything=False,
-    filter_events_by_type=True,
-    show_all_country_types=False,
-    save_name_filter="",
-    plot_time_resolution=500,
-    skip_saves=0,
-    log_to_file=False,
-    plot_width=1150,
-    plot_height=640,
-    tab_layout=DEFAULT_TAB_LAYOUT,
-    market_resources=DEFAULT_MARKET_RESOURCES,
-    market_fee=DEFAULT_MARKET_FEE,
-    keep_failed_saves=True,
-    failed_saves_max_size_mb=1000,
-    backup_saves=False,
-    production=False,
+STELLARIS_LANGUAGES = (
+    # the languages the game ships, by their key in the localisation files
+    "l_braz_por",
+    "l_english",
+    "l_french",
+    "l_german",
+    "l_japanese",
+    "l_korean",
+    "l_polish",
+    "l_russian",
+    "l_simp_chinese",
+    "l_spanish",
 )
+# Mods can add languages; any key of this form is accepted.
+_STELLARIS_LANGUAGE_PATTERN = re.compile(r"^l_\w+$")
+
+# Settings that were removed. They are ignored (with a warning) when an old config.yml contains them.
+REMOVED_SETTINGS = {
+    "read_all_countries",
+}
 
 
-def _comparable_setting(key, value):
+class InvalidSettingValue(ValueError):
+    """Raised by a setting's parser when a value is rejected.
+
+    ``reason`` is an English message, marked for translation with N_ and formatted
+    with ``params``, so the settings page can show it in the dashboard's language.
     """
-    Bring a setting into a form in which it can be compared to a default value.
 
+    def __init__(self, reason: str, **params):
+        self.reason = reason
+        self.params = params
+        super().__init__(i18n.format_message(reason, params))
+
+
+def _display_value(value) -> str:
+    text = repr(value) if isinstance(value, str) else str(value)
+    return text if len(text) <= 80 else text[:77] + "..."
+
+
+# Kinds of settings, which decide how values are parsed and how the settings page shows them.
+BOOL = "bool"
+INT = "int"
+FLOAT = "float"
+STR = "str"
+PATH = "path"
+CHOICE = "choice"
+STRUCTURED = "structured"  # a YAML list or mapping, only editable in config.yml
+
+_TRUE_STRINGS = {"true", "on", "yes", "1"}
+_FALSE_STRINGS = {"false", "off", "no", "0"}
+
+# Returned by SettingSpec.parse for an empty value, which means "use the default".
+USE_DEFAULT = object()
+
+
+@dataclasses.dataclass(frozen=True)
+class SettingSpec:
+    """The declaration of a setting: its type, default, validation and how it is shown.
+
+    Labels and descriptions are translated interface text, so they are kept in
+    dashboard_app/settings.py (keyed by setting key); this module does not depend on
+    the interface language.
+    """
+
+    key: str
+    kind: str
+    default: Any = None
+    # for defaults that depend on the system (detected paths); called once at import
+    default_factory: Optional[Callable[[], Any]] = None
+    # stable id of the settings page section, see CATEGORIES
+    category: str = "interface"
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    # CHOICE settings: returns {value: display name}. Names that need translation are
+    # translated by the settings page.
+    choices: Optional[Callable[[], Dict[str, str]]] = None
+    # Called with the value after it was converted to the setting's kind. Returns the
+    # final value (e.g. normalized), raises InvalidSettingValue to reject it.
+    validate: Optional[Callable[[Any], Any]] = None
+    requires_restart: bool = False
+    # shown in a collapsed section of the settings page
+    advanced: bool = False
+    # False for settings that can only be changed in config.yml
+    in_ui: bool = True
+    # False for runtime-only state that is never written to config.yml
+    persisted: bool = True
+    # UI hint: the setting only matters if this other setting is set
+    depends_on: Optional[str] = None
+    # PATH settings: the folder must exist
+    must_exist: bool = False
+    # Defaults of previous versions. A stored value equal to one of them is treated as
+    # not customized, so that the current default applies.
+    legacy_defaults: Tuple[Any, ...] = ()
+    # brings a value into a form in which it can be compared to a default
+    comparable: Optional[Callable[[Any], Any]] = None
+
+    def make_default(self):
+        if self.default_factory is not None:
+            return self.default_factory()
+        return copy.deepcopy(self.default)
+
+    def comparable_value(self, value):
+        return self.comparable(value) if self.comparable is not None else value
+
+    def get_choices(self) -> Dict[str, str]:
+        return dict(self.choices()) if self.choices is not None else {}
+
+    def parse(self, raw):
+        """Convert a value from config.yml or the settings form to this setting's type.
+
+        Returns USE_DEFAULT for an empty value (None or blank text), raises
+        InvalidSettingValue if the value is rejected."""
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return USE_DEFAULT
+        value = _KIND_PARSERS[self.kind](self, raw)
+        if self.validate is not None:
+            value = self.validate(value)
+        return value
+
+
+def _parse_bool(spec: SettingSpec, raw):
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        if raw.strip().lower() in _TRUE_STRINGS:
+            return True
+        if raw.strip().lower() in _FALSE_STRINGS:
+            return False
+    raise InvalidSettingValue(N_("Expected true or false, got %(value)s."), value=_display_value(raw))
+
+
+def _check_bounds(spec: SettingSpec, value):
+    too_small = spec.min_value is not None and value < spec.min_value
+    too_large = spec.max_value is not None and value > spec.max_value
+    if not (too_small or too_large):
+        return value
+    if spec.min_value is not None and spec.max_value is not None:
+        raise InvalidSettingValue(
+            N_("Must be between %(min)s and %(max)s."), min=spec.min_value, max=spec.max_value
+        )
+    if too_small:
+        raise InvalidSettingValue(N_("Must be at least %(min)s."), min=spec.min_value)
+    raise InvalidSettingValue(N_("Must be at most %(max)s."), max=spec.max_value)
+
+
+def _parse_int(spec: SettingSpec, raw):
+    value = None
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        value = raw
+    elif isinstance(raw, float) and raw.is_integer():
+        value = int(raw)
+    elif isinstance(raw, str):
+        try:
+            value = int(raw.strip())
+        except ValueError:
+            pass
+    if value is None:
+        raise InvalidSettingValue(N_("%(value)s is not a whole number."), value=_display_value(raw))
+    return _check_bounds(spec, value)
+
+
+def _parse_float(spec: SettingSpec, raw):
+    value = None
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        value = float(raw)
+    elif isinstance(raw, str):
+        try:
+            value = float(raw.strip())
+        except ValueError:
+            pass
+    if value is None or value != value:  # NaN
+        raise InvalidSettingValue(N_("%(value)s is not a number."), value=_display_value(raw))
+    return _check_bounds(spec, value)
+
+
+def _parse_str(spec: SettingSpec, raw):
+    if isinstance(raw, str):
+        return raw.strip()
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return str(raw)
+    raise InvalidSettingValue(N_("Expected text, got %(value)s."), value=_display_value(raw))
+
+
+def _parse_path(spec: SettingSpec, raw):
+    if not isinstance(raw, (str, os.PathLike)):
+        raise InvalidSettingValue(N_("Expected a folder path, got %(value)s."), value=_display_value(raw))
+    path = pathlib.Path(raw).expanduser()
+    if path == DEFAULT_SETTINGS.get(spec.key):
+        # the detected default is always accepted, even if it does not exist (yet)
+        return path
+    if spec.must_exist and not path.is_dir():
+        if path.exists():
+            raise InvalidSettingValue(N_("%(value)s is not a folder."), value=str(path))
+        raise InvalidSettingValue(N_("The folder %(value)s does not exist."), value=str(path))
+    if path.exists() and not path.is_dir():
+        raise InvalidSettingValue(N_("%(value)s is not a folder."), value=str(path))
+    return path
+
+
+def _parse_choice(spec: SettingSpec, raw):
+    value = _parse_str(spec, raw)
+    if spec.validate is None and value not in spec.get_choices():
+        raise InvalidSettingValue(N_("%(value)s is not one of the available options."), value=_display_value(raw))
+    return value
+
+
+def _parse_structured(spec: SettingSpec, raw):
+    # the shape is checked by the setting's validate function
+    return copy.deepcopy(raw)
+
+
+_KIND_PARSERS = {
+    BOOL: _parse_bool,
+    INT: _parse_int,
+    FLOAT: _parse_float,
+    STR: _parse_str,
+    PATH: _parse_path,
+    CHOICE: _parse_choice,
+    STRUCTURED: _parse_structured,
+}
+
+
+def _not_one_of_the_options(value):
+    return InvalidSettingValue(N_("%(value)s is not one of the available options."), value=_display_value(value))
+
+
+def _validate_dashboard_language(value):
+    locale = i18n.normalize_dashboard_language(value)
+    if locale is None:
+        raise _not_one_of_the_options(value)
+    return locale
+
+
+def _validate_stellaris_language(value):
+    if value in STELLARIS_LANGUAGES or _STELLARIS_LANGUAGE_PATTERN.match(value):
+        return value
+    raise InvalidSettingValue(
+        N_("%(value)s is not a Stellaris language key, such as l_english."), value=_display_value(value)
+    )
+
+
+def _validate_log_level(value):
+    if value.upper() not in LOG_LEVELS:
+        raise _not_one_of_the_options(value)
+    return value.upper()
+
+
+def _validate_host(value):
+    if any(c.isspace() for c in value):
+        raise InvalidSettingValue(N_("%(value)s is not a valid host name or address."), value=_display_value(value))
+    return value
+
+
+def _stellaris_language_choices():
+    return {
+        key: i18n.LANGUAGE_NAMES.get(i18n.STELLARIS_LANGUAGE_TO_LOCALE.get(key), key)
+        for key in STELLARIS_LANGUAGES
+    }
+
+
+def _dashboard_language_choices():
+    # the name of AUTO is translated by the settings page
+    return {i18n.AUTO: i18n.AUTO, **i18n.LANGUAGE_NAMES}
+
+
+def _log_level_choices():
+    return {level: level for level in LOG_LEVELS}
+
+
+def _comparable_tab_layout(value):
+    """
     For tab layouts, the graph list of the Markets tab is blanked, because it is filled
     dynamically from the market resources and is ignored when applying the settings.
     The tab order and the order of the graphs in each tab are kept, because the
     dashboard displays them in that order (so a reordered layout is a customization).
     """
-    if key == "tab_layout" and isinstance(value, dict):
-        return [
-            (tab, [] if tab == MARKET_TAB else graphs) for tab, graphs in value.items()
-        ]
+    if isinstance(value, dict):
+        return [(tab, [] if tab == MARKET_TAB else graphs) for tab, graphs in value.items()]
     return value
+
+
+def _validate_tab_layout(layout_dict):
+    if not isinstance(layout_dict, dict):
+        raise InvalidSettingValue(N_("Expected a mapping of tab names to lists of graph IDs."))
+    processed = {}
+    for tab, plot_list in layout_dict.items():
+        if tab == GALAXY_MAP_TAB:
+            logger.warning(f"Ignoring tab {tab}, it is reserved for the galaxy map")
+            continue
+        if tab == MARKET_TAB:
+            if plot_list:
+                logger.warning(f"Ignoring values for tab {tab}, it is filled dynamically")
+            processed[tab] = []
+            continue
+        if not isinstance(plot_list, list):
+            logger.warning(f"Ignoring invalid graph list for tab {tab}")
+            continue
+        graphs = processed.setdefault(tab, [])
+        for g in plot_list:
+            if not isinstance(g, str):
+                logger.warning(f"Ignoring invalid graph ID {g}")
+                continue
+            graphs.append(g)
+    return processed
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _validate_market_resources(resources):
+    if not isinstance(resources, list):
+        raise InvalidSettingValue(N_("Expected a list of resources."))
+    for entry in resources:
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("name"), str)
+            or "base_price" not in entry
+            or not (entry["base_price"] is None or _is_number(entry["base_price"]))
+        ):
+            raise InvalidSettingValue(
+                N_("Every resource needs a name and a base_price (a number, or null if it cannot be traded), got %(value)s."),
+                value=_display_value(entry),
+            )
+    return resources
+
+
+_GAME_DATE_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def _validate_market_fee(fees):
+    if not isinstance(fees, list):
+        raise InvalidSettingValue(N_("Expected a list of market fees."))
+    for entry in fees:
+        if (
+            not isinstance(entry, dict)
+            or not _GAME_DATE_PATTERN.match(str(entry.get("date", "")))
+            or not _is_number(entry.get("fee"))
+        ):
+            raise InvalidSettingValue(
+                N_("Every market fee needs a date (like 2200.01.01) and a fee (like 0.3), got %(value)s."),
+                value=_display_value(entry),
+            )
+    return fees
+
+
+# Sections of the settings page, in display order. The labels are in dashboard_app/settings.py.
+CATEGORIES = ("game_files", "visibility", "multiplayer", "import", "interface", "server")
+
+
+def _settings(*specs: SettingSpec) -> Dict[str, SettingSpec]:
+    return {spec.key: spec for spec in specs}
+
+
+# All settings, in the order in which the settings page shows them.
+SETTINGS: Dict[str, SettingSpec] = _settings(
+    # --- game files
+    SettingSpec(
+        "save_file_path", PATH, default_factory=_get_default_save_path,
+        category="game_files", must_exist=True, requires_restart=True,
+    ),
+    SettingSpec(
+        "stellaris_user_data_path", PATH, default_factory=_get_default_stellaris_user_data_path,
+        category="game_files", must_exist=True, requires_restart=True,
+    ),
+    SettingSpec(
+        "stellaris_install_path", PATH, default_factory=_get_default_stellaris_install_path,
+        category="game_files", must_exist=True, requires_restart=True,
+    ),
+    SettingSpec(
+        "stellaris_language", CHOICE, default="l_english", category="game_files",
+        choices=_stellaris_language_choices, validate=_validate_stellaris_language,
+        requires_restart=True,
+    ),
+    # --- visibility
+    SettingSpec("show_everything", BOOL, default=False, category="visibility"),
+    SettingSpec("show_all_country_types", BOOL, default=False, category="visibility"),
+    SettingSpec("filter_events_by_type", BOOL, default=True, category="visibility"),
+    # --- multiplayer
+    SettingSpec("mp_username", STR, default="", category="multiplayer"),
+    SettingSpec("hide_other_players", BOOL, default=True, category="multiplayer", depends_on="mp_username"),
+    # --- importing saves
+    SettingSpec("save_name_filter", STR, default="", category="import"),
+    SettingSpec("skip_saves", INT, default=0, category="import", min_value=0, max_value=100),
+    SettingSpec("keep_failed_saves", BOOL, default=True, category="import"),
+    SettingSpec(
+        "failed_saves_max_size_mb", INT, default=1000, category="import", min_value=1,
+        advanced=True, depends_on="keep_failed_saves",
+    ),
+    SettingSpec("backup_saves", BOOL, default=False, category="import"),
+    SettingSpec(
+        "threads", INT, default=1, category="import", min_value=1,
+        requires_restart=True, advanced=True,
+    ),
+    # --- interface
+    SettingSpec(
+        "dashboard_language", CHOICE, default=i18n.AUTO, category="interface",
+        choices=_dashboard_language_choices, validate=_validate_dashboard_language,
+    ),
+    SettingSpec("plot_height", INT, default=640, category="interface", min_value=300, max_value=2000),
+    SettingSpec("plot_width", INT, default=1150, category="interface", min_value=300, max_value=2000),
+    SettingSpec("plot_time_resolution", INT, default=500, category="interface", min_value=0, max_value=10000),
+    SettingSpec("check_version", BOOL, default=True, category="interface"),
+    SettingSpec("include_id_in_names", BOOL, default=True, category="interface", in_ui=False),
+    SettingSpec(
+        "tab_layout", STRUCTURED, default=DEFAULT_TAB_LAYOUT, category="interface", in_ui=False,
+        validate=_validate_tab_layout, comparable=_comparable_tab_layout,
+        legacy_defaults=legacy_config_defaults.LEGACY_TAB_LAYOUTS,
+    ),
+    SettingSpec(
+        "market_resources", STRUCTURED, default=DEFAULT_MARKET_RESOURCES, category="interface",
+        in_ui=False, validate=_validate_market_resources,
+        legacy_defaults=legacy_config_defaults.LEGACY_MARKET_RESOURCES,
+    ),
+    SettingSpec(
+        "market_fee", STRUCTURED, default=DEFAULT_MARKET_FEE, category="interface",
+        in_ui=False, validate=_validate_market_fee,
+    ),
+    # --- server
+    SettingSpec(
+        "host", STR, default="127.0.0.1", category="server", validate=_validate_host,
+        requires_restart=True, advanced=True,
+    ),
+    SettingSpec(
+        "port", INT, default=28053, category="server", min_value=1024, max_value=65535,
+        requires_restart=True, advanced=True,
+    ),
+    SettingSpec(
+        "log_level", CHOICE, default="INFO", category="server", choices=_log_level_choices,
+        validate=_validate_log_level, advanced=True,
+    ),
+    SettingSpec("log_to_file", BOOL, default=False, category="server", advanced=True),
+    SettingSpec("polling_interval", FLOAT, default=0.5, category="server", min_value=0.1, in_ui=False),
+    SettingSpec(
+        "base_output_path", PATH, default_factory=_get_default_base_output_path,
+        category="server", in_ui=False, requires_restart=True,
+    ),
+    SettingSpec("production", BOOL, default=False, category="server", in_ui=False),
+)
+
+# Runtime-only state, which is reset on every start and never written to config.yml.
+RUNTIME_STATE_DEFAULTS = dict(
+    debug_mode=False,
+    # toggled from the graph pages
+    normalize_stacked_plots=False,
+)
+
+# The default of each setting. Detected paths are resolved once, at import.
+DEFAULT_SETTINGS: Dict[str, Any] = {key: spec.make_default() for key, spec in SETTINGS.items()}
+
+
+def default_value(key: str):
+    """A fresh copy of the default value of a setting."""
+    return copy.deepcopy(DEFAULT_SETTINGS[key])
+
+
+def _comparable_setting(key, value):
+    """Bring a setting into a form in which it can be compared to a default value."""
+    return SETTINGS[key].comparable_value(value)
 
 
 def _is_legacy_default(key, value):
     """True if value was the default for this setting in some previous version."""
-    legacy_values = {
-        "tab_layout": legacy_config_defaults.LEGACY_TAB_LAYOUTS,
-        "market_resources": legacy_config_defaults.LEGACY_MARKET_RESOURCES,
-    }[key]
     value = _comparable_setting(key, value)
-    return any(value == _comparable_setting(key, legacy) for legacy in legacy_values)
+    return any(value == _comparable_setting(key, legacy) for legacy in SETTINGS[key].legacy_defaults)
 
 
 def _is_current_default(key, value):
-    return _comparable_setting(key, value) == _comparable_setting(
-        key, DEFAULT_SETTINGS[key]
-    )
+    return _comparable_setting(key, value) == _comparable_setting(key, DEFAULT_SETTINGS[key])
+
+
+def _to_yaml_value(key, value):
+    return str(value) if SETTINGS[key].kind == PATH else value
+
+
+# Where a settings dict comes from: config.yml, or the settings page.
+SOURCE_FILE = "file"
+SOURCE_FORM = "form"
+
+
+@dataclasses.dataclass(frozen=True)
+class RejectedSetting:
+    """A setting value that was rejected. Unpacks as (key, raw_value, reason)."""
+
+    key: str
+    raw_value: Any
+    # English, see InvalidSettingValue
+    reason: str
+    reason_template: str = ""
+    reason_params: Dict[str, Any] = dataclasses.field(default_factory=dict)
+
+    def __iter__(self) -> Iterator:
+        return iter((self.key, self.raw_value, self.reason))
+
+    def translated_reason(self) -> str:
+        """The reason in the dashboard's language."""
+        if not self.reason_template:
+            return self.reason
+        return i18n.gettext(self.reason_template, **self.reason_params)
+
+    @classmethod
+    def from_error(cls, key, raw_value, error: ValueError) -> "RejectedSetting":
+        if isinstance(error, InvalidSettingValue):
+            return cls(key, raw_value, str(error), error.reason, dict(error.params))
+        return cls(key, raw_value, str(error))
 
 
 @dataclasses.dataclass
+class ApplyResult:
+    """What applying a dict of settings did."""
+
+    # keys whose value changed, in the order they were applied
+    changed: List[str] = dataclasses.field(default_factory=list)
+    # rejected values: the previous value (from the settings form) or the default (from config.yml) was kept
+    rejected: List[RejectedSetting] = dataclasses.field(default_factory=list)
+    # unknown or removed keys
+    ignored: List[str] = dataclasses.field(default_factory=list)
+
+    @property
+    def restart_required(self) -> List[str]:
+        """Changed settings that only take effect after restarting the dashboard."""
+        return [key for key in self.changed if SETTINGS[key].requires_restart]
+
+    @property
+    def ok(self) -> bool:
+        return not self.rejected
+
+
+def settings_from_form(form: Mapping[str, Any]) -> Dict[str, Any]:
+    """The settings submitted by the settings page form.
+
+    Only settings shown in the settings page (in_ui) are taken from the form. The form
+    must contain all of them: an unchecked checkbox is not submitted, so a missing BOOL
+    setting means False."""
+    settings = {}
+    for key, spec in SETTINGS.items():
+        if not spec.in_ui:
+            continue
+        if key in form:
+            settings[key] = form[key]
+        elif spec.kind == BOOL:
+            settings[key] = False
+    return settings
+
+
 class Config:
-    """Stores the settings for the dashboard."""
+    """Stores the settings for the dashboard.
 
-    save_file_path: pathlib.Path = None
-    stellaris_install_path: pathlib.Path = None
-    stellaris_user_data_path: pathlib.Path = None
-    stellaris_language: str = None
-    # locale of the dashboard's own text; "auto" follows stellaris_language
-    dashboard_language: str = None
-    mp_username: str = None
-    base_output_path: pathlib.Path = None
-    threads: int = None
+    Every setting of SETTINGS is a plain attribute, initialized to its default. So is the
+    runtime-only state of RUNTIME_STATE_DEFAULTS, which is never persisted.
+    """
 
-    port: int = None
-    host: str = None
-    log_level: str = None
-    plot_height: int = None
-    plot_width: int = None
+    def __init__(self, **settings):
+        for key in SETTINGS:
+            setattr(self, key, default_value(key))
+        for key, value in RUNTIME_STATE_DEFAULTS.items():
+            setattr(self, key, value)
+        for key, value in settings.items():
+            if key not in SETTINGS and key not in RUNTIME_STATE_DEFAULTS:
+                raise TypeError(f"Unknown setting {key}")
+            setattr(self, key, value)
 
-    polling_interval: float = None
+    def __eq__(self, other):
+        return isinstance(other, Config) and vars(self) == vars(other)
 
-    check_version: bool = None
-    filter_events_by_type: bool = None
-    show_everything: bool = None
-    hide_other_players: bool = None
-    show_all_country_types: bool = None
-    include_id_in_names: bool = None
-    keep_failed_saves: bool = None
-    backup_saves: bool = None
+    def __repr__(self):
+        return f"Config({', '.join(f'{k}={v!r}' for k, v in vars(self).items())})"
 
-    save_name_filter: str = None
-    skip_saves: int = None
-    plot_time_resolution: int = None
-    failed_saves_max_size_mb: int = None
+    def apply_dict(self, settings_dict: Mapping[str, Any], source: str = SOURCE_FORM) -> ApplyResult:
+        """Validate and apply settings. Keys not in settings_dict are left unchanged.
 
-    log_to_file: bool = False
-    debug_mode: bool = False
-
-    # runtime-only UI state, toggled from the dashboard; not persisted to config.yml
-    normalize_stacked_plots: bool = False
-
-    tab_layout: Dict[str, List[str]] = None
-    market_resources: List[Dict[str, Any]] = None
-    market_fee: List[Dict[str, float]] = None
-
-    production: bool = False
-
-    EXISTING_PATH_KEYS = {
-        # these paths should already exist
-        # if not, the setting is reset to default
-        # this helps with issues related to OneDrive
-        "save_file_path",
-        "stellaris_install_path",
-        "stellaris_user_data_path",
-    }
-    PATH_KEYS = EXISTING_PATH_KEYS | {
-        "base_output_path",
-    }
-    BOOL_KEYS = {
-        "check_version",
-        "filter_events_by_type",
-        "show_everything",
-        "hide_other_players",
-        "show_all_country_types",
-        "log_to_file",
-        "include_id_in_names",
-        "keep_failed_saves",
-        "backup_saves",
-        "production",
-    }
-    INT_KEYS = {
-        "port",
-        "plot_time_resolution",
-        "skip_saves",
-        "threads",
-        "plot_width",
-        "plot_height",
-        "failed_saves_max_size_mb",
-    }
-    FLOAT_KEYS = {
-        "polling_interval",
-    }
-    STR_KEYS = {
-        "host",
-        "mp_username",
-        "save_name_filter",
-        "log_level",
-        "stellaris_language",
-        "dashboard_language",
-    }
-    DICT_KEYS = {
-        "tab_layout",
-    }
-    LIST_KEYS = {"market_resources", "market_fee"}
-    # These settings are only written to config.yml if they were customized. Otherwise
-    # the file would freeze the defaults of the version that created it, hiding
-    # changes to the defaults (e.g. newly added graphs) from existing installs.
-    ONLY_PERSISTED_IF_CUSTOMIZED_KEYS = {"tab_layout", "market_resources"}
-    ALL_KEYS = (
-        PATH_KEYS | BOOL_KEYS | INT_KEYS | FLOAT_KEYS | STR_KEYS | DICT_KEYS | LIST_KEYS
-    )
-
-    def apply_dict(self, settings_dict):
+        An invalid value is rejected and reported in the result. From config.yml
+        (SOURCE_FILE), the default is used instead; from the settings page
+        (SOURCE_FORM), the previous value is kept. Unknown and removed keys are ignored.
+        """
         logger.info("Updating settings")
-        tab_layout = self._preprocess_tab_layout(settings_dict)
-        settings_dict["tab_layout"] = tab_layout
-        for key, val in settings_dict.items():
-            if key not in Config.ALL_KEYS:
-                logger.info(f"Ignoring unknown setting {key} with value {val}.")
+        result = ApplyResult()
+        for key, raw in settings_dict.items():
+            if key in REMOVED_SETTINGS:
+                logger.warning(f"Ignoring setting {key}: it is no longer used and can be removed from the settings file.")
+                result.ignored.append(key)
                 continue
-            old_val = self.__dict__.get(key)
-            if key in Config.BOOL_KEYS:
-                val = self._preprocess_bool(val)
-            if key in Config.PATH_KEYS:
-                val = self._process_path_keys(key, val)
-                if val is None:
+            spec = SETTINGS.get(key)
+            if spec is None:
+                logger.info(f"Ignoring unknown setting {key} with value {raw!r}.")
+                result.ignored.append(key)
+                continue
+            old_val = getattr(self, key)
+            try:
+                val = spec.parse(raw)
+            except ValueError as error:
+                rejected = RejectedSetting.from_error(key, raw, error)
+                result.rejected.append(rejected)
+                if source == SOURCE_FILE:
+                    val = default_value(key)
+                    logger.warning(
+                        f"Invalid value {_display_value(raw)} for setting {key}: {rejected.reason} "
+                        f"Using the default {_display_value(_to_yaml_value(key, val))} instead."
+                    )
+                else:
+                    logger.warning(
+                        f"Invalid value {_display_value(raw)} for setting {key}: {rejected.reason} "
+                        f"Keeping {_display_value(_to_yaml_value(key, old_val))}."
+                    )
                     continue
-            if key == "dashboard_language":
-                val = self._process_dashboard_language(val)
-
-            self.__setattr__(key, val)
+            if val is USE_DEFAULT:
+                val = default_value(key)
+            setattr(self, key, val)
             if val != old_val:
+                result.changed.append(key)
                 logger.info(
                     f"Updated setting {key.ljust(28)} {str(old_val).rjust(8)} -> {str(val).ljust(8)}"
                 )
+        return result
 
-    @staticmethod
-    def _process_dashboard_language(val):
-        locale = i18n.normalize_dashboard_language(val)
-        if locale is None:
-            logger.warning(
-                f"Ignoring unknown dashboard language {val!r}, using {i18n.AUTO!r} "
-                f"(one of: {', '.join([i18n.AUTO, *i18n.LANGUAGE_NAMES])})"
-            )
-            return i18n.AUTO
-        return locale
+    def reset_to_defaults(self, keys: Optional[Iterable[str]] = None) -> ApplyResult:
+        """Reset the given settings (default: all) to their defaults."""
+        result = ApplyResult()
+        for key in SETTINGS if keys is None else keys:
+            if key not in SETTINGS:
+                result.ignored.append(key)
+                continue
+            val = default_value(key)
+            if getattr(self, key) != val:
+                result.changed.append(key)
+            setattr(self, key, val)
+        return result
 
-    def _process_path_keys(self, key, val):
-        if val == "":
-            val = DEFAULT_SETTINGS[key]
-        else:
-            val = pathlib.Path(val)
-            if key in Config.EXISTING_PATH_KEYS and not val.exists():
-                val = DEFAULT_SETTINGS[key]
-        if key == "base_output_path":
-            try:
-                if not val.exists():
-                    logger.info(f"Creating new {key} directory at {val}")
-                    val.mkdir(parents=True)
-                elif not val.is_dir():
-                    logger.warning(
-                        f"Ignoring setting {key} with value {val}: Path exists and is not a directory"
-                    )
-                    return
-            except Exception:
-                logger.warning(
-                    f"Error during path creation while updating {key} with value {val}:"
-                )
-                logger.error(traceback.format_exc())
-                logger.info(f"Ignoring setting {key} with value {val}.")
-                return
-        return val
-
-    def _preprocess_tab_layout(self, settings_dict):
-        layout_dict = settings_dict.get("tab_layout", DEFAULT_TAB_LAYOUT)
-        if not isinstance(layout_dict, dict):
-            logger.error(f"Invalid tab layout configuration: {layout_dict}")
-            logger.info(f"Falling back to default tab layout.")
-            return DEFAULT_SETTINGS["tab_layout"]
-        processed = defaultdict(list)
-        for tab, plot_list in layout_dict.items():
-            if tab == GALAXY_MAP_TAB:
-                logger.warning(f"Ignoring tab {tab}, it is reserved for the galaxy map")
-                continue
-            if tab == MARKET_TAB:
-                logger.warning(
-                    f"Ignoring values for tab {tab}, it is filled dynamically"
-                )
-                processed[tab] = []
-                continue
-            if not isinstance(plot_list, list):
-                logger.warning(f"Ignoring invalid graph list for tab {tab}")
-                continue
-            for g in plot_list:
-                if not isinstance(g, str):
-                    logger.warning(f"Ignoring invalid graph ID {g}")
-                    continue
-                processed[tab].append(g)
-        return dict(processed)
+    def is_customized(self, key: str) -> bool:
+        """True if a setting differs from its current default (and from the defaults of earlier versions)."""
+        value = getattr(self, key)
+        return not (_is_current_default(key, value) or _is_legacy_default(key, value))
 
     def write_to_file(self):
         fname = _get_settings_file_path()
@@ -453,23 +832,22 @@ class Config:
         logger.info(f"Writing settings to {fname}")
         with open(fname, "w") as f:
             settings_dict = self.get_dict()
-            for key in Config.ONLY_PERSISTED_IF_CUSTOMIZED_KEYS:
-                value = settings_dict[key]
-                if _is_current_default(key, value) or _is_legacy_default(key, value):
+            for key, spec in SETTINGS.items():
+                if spec.legacy_defaults and not self.is_customized(key):
                     del settings_dict[key]
             yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
 
-    def get_dict(self):
-        result = dict(**DEFAULT_SETTINGS)
-        for key, val in self.__dict__.items():
-            if key in Config.ALL_KEYS:
-                if key in Config.PATH_KEYS:
-                    val = str(val)
-                result[key] = val
-        return result
+    def get_dict(self) -> Dict[str, Any]:
+        """All persisted settings, as written to config.yml."""
+        return {
+            key: _to_yaml_value(key, getattr(self, key))
+            for key, spec in SETTINGS.items()
+            if spec.persisted
+        }
 
-    def get_adjustable_settings_dict(self):
-        return dataclasses.asdict(self)
+    def get_adjustable_settings_dict(self) -> Dict[str, Any]:
+        """The current value of every setting."""
+        return {key: getattr(self, key) for key in SETTINGS}
 
     def __str__(self):
         lines = [
@@ -482,17 +860,6 @@ class Config:
             f"  show_all_country_types: {repr(self.show_all_country_types)}",
         ]
         return "\n".join(lines)
-
-    def _preprocess_bool(self, val):
-        if isinstance(val, bool):
-            return val
-        elif val == "true":
-            return True
-        elif val == "false":
-            return False
-        raise ValueError(
-            f"Expected either true or false for bool value, received {val}."
-        )
 
     @property
     def db_path(self) -> pathlib.Path:
@@ -586,30 +953,47 @@ def _localization_file_matches_language(file_path: pathlib.Path, language: str):
         return match is not None
 
 
-def _apply_existing_settings(config: Config):
-    settings = dict(DEFAULT_SETTINGS)
-    settings_file = _get_settings_file_path()
-    if settings_file.exists() and settings_file.is_file():
-        logger.info(f"Reading settings from {settings_file}...")
+def _read_settings_file(settings_file: pathlib.Path) -> Dict[str, Any]:
+    """The settings stored in config.yml; empty if it does not exist or cannot be read."""
+    if not settings_file.is_file():
+        return {}
+    logger.info(f"Reading settings from {settings_file}...")
+    try:
         with open(settings_file, "r") as f:
-            file_settings = yaml.load(f, Loader=yaml.SafeLoader) or {}
-            for key in Config.ONLY_PERSISTED_IF_CUSTOMIZED_KEYS:
-                if key in file_settings and _is_legacy_default(key, file_settings[key]):
-                    logger.info(
-                        f"Ignoring stored setting {key}: it is an outdated default, "
-                        f"using the current default instead."
-                    )
-                    del file_settings[key]
-            settings.update(file_settings)
-    config.apply_dict(settings)
+            file_settings = yaml.load(f, Loader=yaml.SafeLoader)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        logger.error(f"Could not read the settings file {settings_file}, using the default settings: {error}")
+        return {}
+    if file_settings is None:
+        return {}
+    if not isinstance(file_settings, dict):
+        logger.error(f"The settings file {settings_file} does not contain a mapping of settings, using the default settings.")
+        return {}
+    for key in list(file_settings):
+        if key in SETTINGS and SETTINGS[key].legacy_defaults and _is_legacy_default(key, file_settings[key]):
+            logger.info(
+                f"Ignoring stored setting {key}: it is an outdated default, "
+                f"using the current default instead."
+            )
+            del file_settings[key]
+    return file_settings
 
 
-def _get_settings_file_path() -> pathlib.Path:
+def _apply_existing_settings(config: Config) -> ApplyResult:
+    """Apply the settings stored in config.yml. Invalid values are replaced by their default."""
+    return config.apply_dict(_read_settings_file(_get_settings_file_path()), source=SOURCE_FILE)
+
+
+def settings_file_path() -> pathlib.Path:
+    """The location of config.yml."""
     return pathlib.Path.cwd() / "config.yml"
 
 
+_get_settings_file_path = settings_file_path
+
+
 def initialize():
-    global CONFIG
+    global CONFIG, LOAD_RESULT
     if CONFIG is not None:
         return
     global logger
@@ -620,7 +1004,7 @@ def initialize():
     if is_worker_process:
         logger.setLevel(logging.WARNING)
     CONFIG = Config()
-    _apply_existing_settings(CONFIG)
+    LOAD_RESULT = _apply_existing_settings(CONFIG)
 
     # Initialize output paths
     if not CONFIG.base_output_path.exists():
