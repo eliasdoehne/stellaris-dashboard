@@ -15,7 +15,7 @@
             <h2>⚠️ {{ _("Save files folder is invalid") }}</h2>
             <p>{% trans trimmed %}This folder should contain folders for each game, which each contain <code>.sav</code> files.{% endtrans %}</p>
             <p><small>{{ _("(Usually, this means you use cloud saves, which you need to configure manually. If the folder is correct, but you simply do not have any saved games, you can ignore this warning.)") }}</small></p>
-            <p><a href="/settings">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
+            <p><a href="/settings/#setting-save_file_path">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
         </li>
     {% endif %}
     {% if not stellaris_install_path_is_valid %}
@@ -23,14 +23,14 @@
             <h2>⚠️ {{ _("Stellaris install folder is invalid") }}</h2>
             <p>{% trans trimmed %}This folder should contain the Stellaris install data, such as the <code>localisation</code> and <code>flags</code> folders.{% endtrans %}</p>
             <p><small>{{ _("(Usually this means your game is not installed in the default Steam location of your main drive.)") }}</small></p>
-            <p><a href="/settings">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
+            <p><a href="/settings/#setting-stellaris_install_path">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
         </li>
     {% endif %}
     {% if not stellaris_user_data_path_is_valid %}
         <li class="warning">
             <h2>⚠️ {{ _("Stellaris user data folder is invalid") }}</h2>
             <p>{% trans trimmed %}This folder should contain the <code>dlc_load.json</code> file.{% endtrans %}</p>
-            <p><a href="/settings">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
+            <p><a href="/settings/#setting-stellaris_user_data_path">{{ _("Go to Settings to change it, then restart the dashboard.") }}</a></p>
         </li>
     {% endif %}
     {% if games|length == 0 %}
