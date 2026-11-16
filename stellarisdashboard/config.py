@@ -212,6 +212,9 @@ _STELLARIS_LANGUAGE_PATTERN = re.compile(r"^l_\w+$")
 # Settings that were removed. They are ignored (with a warning) when an old config.yml contains them.
 REMOVED_SETTINGS = {
     "read_all_countries",
+    "polling_interval",  # now a constant in cli.py
+    "include_id_in_names",  # the ID is always included, it tells apart countries with the same name
+    "plot_width",  # graphs fill the available width
 }
 
 
@@ -594,10 +597,8 @@ SETTINGS: Dict[str, SettingSpec] = _settings(
         choices=_dashboard_language_choices, validate=_validate_dashboard_language,
     ),
     SettingSpec("plot_height", INT, default=640, category="interface", min_value=300, max_value=2000),
-    SettingSpec("plot_width", INT, default=1150, category="interface", min_value=300, max_value=2000),
     SettingSpec("plot_time_resolution", INT, default=500, category="interface", min_value=0, max_value=10000),
     SettingSpec("check_version", BOOL, default=True, category="interface"),
-    SettingSpec("include_id_in_names", BOOL, default=True, category="interface", in_ui=False),
     SettingSpec(
         "tab_layout", STRUCTURED, default=DEFAULT_TAB_LAYOUT, category="interface", in_ui=False,
         validate=_validate_tab_layout, comparable=_comparable_tab_layout,
@@ -626,7 +627,6 @@ SETTINGS: Dict[str, SettingSpec] = _settings(
         validate=_validate_log_level, advanced=True,
     ),
     SettingSpec("log_to_file", BOOL, default=False, category="server", advanced=True),
-    SettingSpec("polling_interval", FLOAT, default=0.5, category="server", min_value=0.1, in_ui=False),
     SettingSpec(
         "base_output_path", PATH, default_factory=_get_default_base_output_path,
         category="server", in_ui=False, requires_restart=True,

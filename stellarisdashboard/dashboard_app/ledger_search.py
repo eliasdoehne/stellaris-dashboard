@@ -148,7 +148,7 @@ def _index_key(session) -> tuple:
                                   sqlalchemy.func.max(datamodel.GameState.date)).one()
     c = config.CONFIG
     return (count, latest, c.show_everything, c.hide_other_players, c.show_all_country_types,
-            c.include_id_in_names, c.stellaris_language, i18n.current_locale())
+            c.stellaris_language, i18n.current_locale())
 
 
 def get_index(game_id: str) -> List[Entry]:

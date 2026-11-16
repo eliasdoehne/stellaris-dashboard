@@ -34,6 +34,9 @@ showeverything_help_string = (
     "Use this flag if you want to include all empires regardless of visibility."
 )
 
+# seconds between checks for new save files
+POLLING_INTERVAL = 0.5
+
 threads_help_string = (
     "The number of threads that run in parallel when reading save games."
 )
@@ -66,7 +69,6 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
         save_path = config.CONFIG.save_file_path
     if stop_event is None:
         stop_event = threading.Event()
-    polling_interval = config.CONFIG.polling_interval
     save_reader = save_parser.ContinuousSavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
 
@@ -95,7 +97,7 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
             if show_wait_message:
                 show_wait_message = False
                 logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
-            stop_event.wait(polling_interval)
+            stop_event.wait(POLLING_INTERVAL)
 
 
 @cli.command()

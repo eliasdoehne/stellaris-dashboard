@@ -32,7 +32,7 @@
     --tl-shadow-sm: 0 2px 8px hsl(200 30% 3% / 0.35);
     --tl-font: var(--font-body);
 
-    /* Set per-request from config.plot_width (fallback below) */
+    /* Max width of the fluid content */
     --tl-content-max: 1150px;
 }
 
