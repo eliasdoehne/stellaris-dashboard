@@ -215,6 +215,7 @@ REMOVED_SETTINGS = {
     "polling_interval",  # now a constant in cli.py
     "include_id_in_names",  # the ID is always included, it tells apart countries with the same name
     "plot_width",  # graphs fill the available width
+    "save_name_filter",  # use skip_saves to import fewer saves
 }
 
 
@@ -579,7 +580,6 @@ SETTINGS: Dict[str, SettingSpec] = _settings(
     SettingSpec("mp_username", STR, default="", category="multiplayer"),
     SettingSpec("hide_other_players", BOOL, default=True, category="multiplayer", depends_on="mp_username"),
     # --- importing saves
-    SettingSpec("save_name_filter", STR, default="", category="import"),
     SettingSpec("skip_saves", INT, default=0, category="import", min_value=0, max_value=100),
     SettingSpec("keep_failed_saves", BOOL, default=True, category="import"),
     SettingSpec(

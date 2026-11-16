@@ -34,7 +34,6 @@ def isolated_state(monkeypatch, tmp_path, tmp_path_factory):
     monkeypatch.setattr(bulk_import, "_imported_dates", lambda game_id: set())
     monkeypatch.setattr(config.CONFIG, "save_file_path", tmp_path)
     monkeypatch.setattr(config.CONFIG, "skip_saves", 0)
-    monkeypatch.setattr(config.CONFIG, "save_name_filter", "")
     monkeypatch.setattr(config.CONFIG, "threads", 1)
     # outside the save folder, so kept copies of failed saves are not picked up as saves
     monkeypatch.setattr(config.CONFIG, "base_output_path", tmp_path_factory.mktemp("output"))
@@ -174,17 +173,6 @@ def test_plan_skip_saves(tmp_path, monkeypatch):
     assert _dates(plan.to_import) == ["2200.02.01", "2200.04.01"]
     assert plan.num_filtered_out == 2
     assert plan.num_saves == 4
-
-
-def test_plan_save_name_filter(tmp_path, monkeypatch):
-    game = tmp_path / "gameA"
-    make_save(game, "autosave_1.sav", "2200.01.01")
-    make_save(game, "manual.sav", "2200.02.01")
-    make_save(game, "AUTOSAVE_2.sav", "2200.03.01")
-    monkeypatch.setattr(config.CONFIG, "save_name_filter", "autosave")
-    plan = bulk_import.get_import_plan("gameA", tmp_path)
-    assert _dates(plan.to_import) == ["2200.01.01", "2200.03.01"]
-    assert plan.num_filtered_out == 1
 
 
 # --- list_save_games ---

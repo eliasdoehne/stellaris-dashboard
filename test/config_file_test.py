@@ -274,7 +274,12 @@ def test_plain_post_redirects_to_the_settings_page(client):
 
 @pytest.mark.parametrize(
     "removed_key,old_value",
-    [("polling_interval", 0.5), ("include_id_in_names", False), ("plot_width", 1150)],
+    [
+        ("polling_interval", 0.5),
+        ("include_id_in_names", False),
+        ("plot_width", 1150),
+        ("save_name_filter", ".01.01"),
+    ],
 )
 def test_settings_file_with_a_removed_setting_still_loads(settings_file, caplog, removed_key, old_value):
     _write(settings_file, **{removed_key: old_value, "port": 4321})

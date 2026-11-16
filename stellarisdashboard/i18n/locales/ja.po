@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-16 10:11+0000\n"
+"POT-Creation-Date: 2026-11-16 10:12+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -46,91 +46,91 @@ msgstr "再処理できる、失敗したセーブの保存済みコピーはあ
 msgid "An import of %(game_id)s is already running. Wait for it to finish or cancel it."
 msgstr "%(game_id)s のインポートはすでに実行中です。完了を待つか、キャンセルしてください。"
 
-#: stellarisdashboard/config.py:328
+#: stellarisdashboard/config.py:329
 #, python-format
 msgid "Expected true or false, got %(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:338
+#: stellarisdashboard/config.py:339
 #, python-format
 msgid "Must be between %(min)s and %(max)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:341
+#: stellarisdashboard/config.py:342
 #, fuzzy, python-format
 msgid "Must be at least %(min)s."
 msgstr "DPIは1以上にしてください。"
 
-#: stellarisdashboard/config.py:342
+#: stellarisdashboard/config.py:343
 #, fuzzy, python-format
 msgid "Must be at most %(max)s."
 msgstr "DPIは1以上にしてください。"
 
-#: stellarisdashboard/config.py:357
+#: stellarisdashboard/config.py:358
 #, fuzzy, python-format
 msgid "%(value)s is not a whole number."
 msgstr "DPIは整数で指定してください。"
 
-#: stellarisdashboard/config.py:371
+#: stellarisdashboard/config.py:372
 #, python-format
 msgid "%(value)s is not a number."
 msgstr ""
 
-#: stellarisdashboard/config.py:380
+#: stellarisdashboard/config.py:381
 #, python-format
 msgid "Expected text, got %(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:385
+#: stellarisdashboard/config.py:386
 #, python-format
 msgid "Expected a folder path, got %(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:392 stellarisdashboard/config.py:395
+#: stellarisdashboard/config.py:393 stellarisdashboard/config.py:396
 #, python-format
 msgid "%(value)s is not a folder."
 msgstr ""
 
-#: stellarisdashboard/config.py:393
+#: stellarisdashboard/config.py:394
 #, fuzzy, python-format
 msgid "The folder %(value)s does not exist."
 msgstr "%(country)sは消滅した。"
 
-#: stellarisdashboard/config.py:402 stellarisdashboard/config.py:423
+#: stellarisdashboard/config.py:403 stellarisdashboard/config.py:424
 #, python-format
 msgid "%(value)s is not one of the available options."
 msgstr ""
 
-#: stellarisdashboard/config.py:437
+#: stellarisdashboard/config.py:438
 #, python-format
 msgid "%(value)s is not a Stellaris language key, such as l_english."
 msgstr ""
 
-#: stellarisdashboard/config.py:449
+#: stellarisdashboard/config.py:450
 #, python-format
 msgid "%(value)s is not a valid host name or address."
 msgstr ""
 
-#: stellarisdashboard/config.py:483
+#: stellarisdashboard/config.py:484
 msgid "Expected a mapping of tab names to lists of graph IDs."
 msgstr ""
 
-#: stellarisdashboard/config.py:512
+#: stellarisdashboard/config.py:513
 msgid "Expected a list of resources."
 msgstr ""
 
-#: stellarisdashboard/config.py:521
+#: stellarisdashboard/config.py:522
 #, python-format
 msgid ""
 "Every resource needs a name and a base_price (a number, or null if it cannot be traded), got "
 "%(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:532
+#: stellarisdashboard/config.py:533
 msgid "Expected a list of market fees."
 msgstr ""
 
-#: stellarisdashboard/config.py:540
+#: stellarisdashboard/config.py:541
 #, python-format
 msgid "Every market fee needs a date (like 2200.01.01) and a fee (like 0.3), got %(value)s."
 msgstr ""
@@ -3525,33 +3525,21 @@ msgid ""
 msgstr "有効にすると、上のマルチプレイのユーザー名と一致しないプレイヤーが操作する国家の情報を非表示にします。"
 
 #: stellarisdashboard/dashboard_app/settings.py:66
-msgid "Save file name filter"
-msgstr "セーブファイル名フィルター"
-
-#. "Skip saves after processing" must match the name of that setting.
-#: stellarisdashboard/dashboard_app/settings.py:68
-msgid ""
-"Only save files whose file names contain this string are processed. For example, you could use "
-"\".01.01\" so only saves from the start of the year are processed. Alternatively, use \"Skip "
-"saves after processing\" below"
-msgstr "ファイル名にこの文字列を含むセーブファイルのみを処理します。たとえば「.01.01」を指定すると、年初のセーブのみが処理されます。または、下の「処理後にセーブをスキップ」を使用してください。"
-
-#: stellarisdashboard/dashboard_app/settings.py:71
 msgid "Skip saves after processing"
 msgstr "処理後にセーブをスキップ"
 
-#. "Save name filter" refers to the setting "Save file name filter".
-#: stellarisdashboard/dashboard_app/settings.py:73
+#: stellarisdashboard/dashboard_app/settings.py:67
+#, fuzzy
 msgid ""
 "After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up "
-"with autosaves. Alternatively, use the \"Save name filter\" above."
+"with autosaves."
 msgstr "セーブを1つ処理するたびに、続くX個のセーブをスキップします。ダッシュボードがオートセーブに追いつけない場合に使用してください。または、上の「セーブ名フィルター」を使用してください。"
 
-#: stellarisdashboard/dashboard_app/settings.py:76
+#: stellarisdashboard/dashboard_app/settings.py:70
 msgid "Keep copies of failed saves"
 msgstr "失敗したセーブのコピーを保持"
 
-#: stellarisdashboard/dashboard_app/settings.py:77
+#: stellarisdashboard/dashboard_app/settings.py:71
 msgid ""
 "Copy saves that fail to import (fully or partially) to the failed_saves folder in the output "
 "folder, with a record of the error, so they can be imported again after a fix with "
@@ -3560,144 +3548,144 @@ msgstr ""
 "インポートに失敗（完全または部分的に）したセーブを、エラーの記録とともに出力フォルダー内のfailed_savesフォルダーにコピーします。修正後に「stellarisdashboardcli "
 "reprocess-failed-saves」で再インポートできます。"
 
-#: stellarisdashboard/dashboard_app/settings.py:80
+#: stellarisdashboard/dashboard_app/settings.py:74
 msgid "Failed saves folder size limit (MB)"
 msgstr "失敗セーブフォルダーのサイズ上限（MB）"
 
-#: stellarisdashboard/dashboard_app/settings.py:81
+#: stellarisdashboard/dashboard_app/settings.py:75
 msgid "When the failed_saves folder grows beyond this size, the oldest copies are deleted."
 msgstr "failed_savesフォルダーがこのサイズを超えると、古いコピーから削除されます。"
 
-#: stellarisdashboard/dashboard_app/settings.py:84
+#: stellarisdashboard/dashboard_app/settings.py:78
 msgid "Back up all saves"
 msgstr "すべてのセーブをバックアップ"
 
-#: stellarisdashboard/dashboard_app/settings.py:85
+#: stellarisdashboard/dashboard_app/settings.py:79
 msgid ""
 "Copy every save file the dashboard reads to the save_backups folder in the output folder, so the "
 "full history can be imported again later. WARNING: This folder has no size limit and grows by one"
 " save file per autosave."
 msgstr "ダッシュボードが読み込むすべてのセーブファイルを出力フォルダー内のsave_backupsフォルダーにコピーし、後で全履歴を再インポートできるようにします。警告：このフォルダーにはサイズ制限がなく、オートセーブのたびにセーブファイルが1つ増えます。"
 
-#: stellarisdashboard/dashboard_app/settings.py:88
+#: stellarisdashboard/dashboard_app/settings.py:82
 msgid "Number of threads"
 msgstr "スレッド数"
 
-#: stellarisdashboard/dashboard_app/settings.py:89
+#: stellarisdashboard/dashboard_app/settings.py:83
 msgid "Number of threads for reading save files."
 msgstr "セーブファイルの読み込みに使用するスレッド数です。"
 
-#: stellarisdashboard/dashboard_app/settings.py:92
+#: stellarisdashboard/dashboard_app/settings.py:86
 msgid "Dashboard language"
 msgstr "ダッシュボードの言語"
 
-#: stellarisdashboard/dashboard_app/settings.py:93
+#: stellarisdashboard/dashboard_app/settings.py:87
 msgid "The language of the dashboard's own text. By default, the same language as the game."
 msgstr "ダッシュボード独自のテキストの言語です。デフォルトではゲームと同じ言語になります。"
 
-#: stellarisdashboard/dashboard_app/settings.py:96
+#: stellarisdashboard/dashboard_app/settings.py:90
 msgid "Graph height"
 msgstr "グラフの高さ"
 
-#: stellarisdashboard/dashboard_app/settings.py:97
+#: stellarisdashboard/dashboard_app/settings.py:91
 msgid "Height of graphs in pixels."
 msgstr "グラフの高さ（ピクセル）です。"
 
-#: stellarisdashboard/dashboard_app/settings.py:100
+#: stellarisdashboard/dashboard_app/settings.py:94
 msgid "Initial graph resolution"
 msgstr "グラフの初期解像度"
 
-#: stellarisdashboard/dashboard_app/settings.py:101
+#: stellarisdashboard/dashboard_app/settings.py:95
 msgid "Number of points used when first loading the graphs. Set to 0 to load full data."
 msgstr "グラフの初回読み込み時に使用するポイント数です。0にすると全データを読み込みます。"
 
-#: stellarisdashboard/dashboard_app/settings.py:104
+#: stellarisdashboard/dashboard_app/settings.py:98
 msgid "Check for new versions"
 msgstr "新バージョンを確認"
 
-#: stellarisdashboard/dashboard_app/settings.py:105
+#: stellarisdashboard/dashboard_app/settings.py:99
 msgid ""
 "When using the Workshop mod for in-game access, a message will be displayed if a newer version of"
 " the separate dashboard app is available."
 msgstr "ゲーム内アクセス用のWorkshop MODを使用している場合、別アプリ版ダッシュボードの新しいバージョンがあるとメッセージが表示されます。"
 
-#: stellarisdashboard/dashboard_app/settings.py:108
+#: stellarisdashboard/dashboard_app/settings.py:102
 msgid "Open in browser on start"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:109
+#: stellarisdashboard/dashboard_app/settings.py:103
 msgid "Open the dashboard in your default web browser when the dashboard app starts."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:112
+#: stellarisdashboard/dashboard_app/settings.py:106
 #, fuzzy
 msgid "Host"
 msgstr "敵対的"
 
-#: stellarisdashboard/dashboard_app/settings.py:113
+#: stellarisdashboard/dashboard_app/settings.py:107
 msgid ""
 "The network address the dashboard listens on. The default, 127.0.0.1, only allows access from "
 "this computer. Use 0.0.0.0 to allow access from other devices in your network."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:116
+#: stellarisdashboard/dashboard_app/settings.py:110
 #, fuzzy
 msgid "Port"
 msgstr "インポート済み"
 
-#: stellarisdashboard/dashboard_app/settings.py:117
+#: stellarisdashboard/dashboard_app/settings.py:111
 msgid "The port the dashboard listens on, as in http://localhost:28053/."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:120
+#: stellarisdashboard/dashboard_app/settings.py:114
 #, fuzzy
 msgid "Log level"
 msgstr "詳細度"
 
-#: stellarisdashboard/dashboard_app/settings.py:121
+#: stellarisdashboard/dashboard_app/settings.py:115
 msgid "How much detail is written to the console log. Use DEBUG when reporting a problem."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:124
+#: stellarisdashboard/dashboard_app/settings.py:118
 msgid "Write log to file"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:125
+#: stellarisdashboard/dashboard_app/settings.py:119
 msgid "Also write the log to log.txt in the output folder."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:133
+#: stellarisdashboard/dashboard_app/settings.py:127
 msgid "Same as Stellaris language"
 msgstr "Stellarisの言語と同じ"
 
-#: stellarisdashboard/dashboard_app/settings.py:142
+#: stellarisdashboard/dashboard_app/settings.py:136
 #, fuzzy
 msgid ""
 "No save files found. This folder should contain a folder for each game, which each contain .sav "
 "files."
 msgstr "セーブファイルのフォルダーには、ゲームごとのフォルダーがあり、その中に<code>.sav</code>ファイルが入っている必要があります。"
 
-#: stellarisdashboard/dashboard_app/settings.py:146
+#: stellarisdashboard/dashboard_app/settings.py:140
 msgid ""
 "The Stellaris game files were not found. This folder should contain the localisation and flags "
 "folders."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:150
+#: stellarisdashboard/dashboard_app/settings.py:144
 #, fuzzy
 msgid "This folder should contain the dlc_load.json file."
 msgstr "このフォルダーには<code>dlc_load.json</code>ファイルが入っている必要があります。"
 
-#: stellarisdashboard/dashboard_app/settings.py:249
+#: stellarisdashboard/dashboard_app/settings.py:243
 #, fuzzy
 msgid "Some settings were not applied:"
 msgstr "設定を適用しました。"
 
-#: stellarisdashboard/dashboard_app/settings.py:252
+#: stellarisdashboard/dashboard_app/settings.py:246
 msgid "Settings applied."
 msgstr "設定を適用しました。"
 
-#: stellarisdashboard/dashboard_app/settings.py:256
+#: stellarisdashboard/dashboard_app/settings.py:250
 #, python-format
 msgid "Restart the dashboard to apply: %(settings)s"
 msgstr ""
@@ -4150,31 +4138,7 @@ msgid_plural ""
 "import</strong>%(date_range)s."
 msgstr[0] "フォルダー内のセーブ%(num)s件、インポート済み%(imported)s件、<strong>インポート対象%(to_import)s件</strong>%(date_range)s。"
 
-#: stellarisdashboard/dashboard_app/templates/import_plan.html:23
-#, python-format
-msgid ""
-"%(num)s save is left out by the save file name filter \"%(name_filter)s\" and the \"skip saves\" "
-"setting (%(skip)s) in the <a class=\"textlink\" href=\"/settings/\">Settings</a>."
-msgid_plural ""
-"%(num)s saves are left out by the save file name filter \"%(name_filter)s\" and the \"skip "
-"saves\" setting (%(skip)s) in the <a class=\"textlink\" href=\"/settings/\">Settings</a>."
-msgstr[0] ""
-"<a class=\"textlink\" "
-"href=\"/settings/\">設定</a>のセーブファイル名フィルター「%(name_filter)s」と「セーブをスキップ」設定（%(skip)s）により、%(num)s件のセーブが除外されています。"
-
-#: stellarisdashboard/dashboard_app/templates/import_plan.html:25
-#, python-format
-msgid ""
-"%(num)s save is left out by the save file name filter \"%(name_filter)s\" in the <a "
-"class=\"textlink\" href=\"/settings/\">Settings</a>."
-msgid_plural ""
-"%(num)s saves are left out by the save file name filter \"%(name_filter)s\" in the <a "
-"class=\"textlink\" href=\"/settings/\">Settings</a>."
-msgstr[0] ""
-"<a class=\"textlink\" "
-"href=\"/settings/\">設定</a>のセーブファイル名フィルター「%(name_filter)s」により、%(num)s件のセーブが除外されています。"
-
-#: stellarisdashboard/dashboard_app/templates/import_plan.html:27
+#: stellarisdashboard/dashboard_app/templates/import_plan.html:22
 #, python-format
 msgid ""
 "%(num)s save is left out by the \"skip saves\" setting (%(skip)s) in the <a class=\"textlink\" "
@@ -4184,7 +4148,7 @@ msgid_plural ""
 "href=\"/settings/\">Settings</a>."
 msgstr[0] "<a class=\"textlink\" href=\"/settings/\">設定</a>の「セーブをスキップ」設定（%(skip)s）により、%(num)s件のセーブが除外されています。"
 
-#: stellarisdashboard/dashboard_app/templates/import_plan.html:33
+#: stellarisdashboard/dashboard_app/templates/import_plan.html:27
 #, python-format
 msgid ""
 "%(num)s of these saves is older than the newest imported save (%(date)s). Importing a save after "
@@ -4194,7 +4158,7 @@ msgid_plural ""
 " newer ones can make some events in the history inaccurate."
 msgstr[0] "これらのうち%(num)s件のセーブは、最新のインポート済みセーブ（%(date)s）より古いものです。新しいセーブの後に古いセーブをインポートすると、履歴の一部のイベントが不正確になる場合があります。"
 
-#: stellarisdashboard/dashboard_app/templates/import_plan.html:40
+#: stellarisdashboard/dashboard_app/templates/import_plan.html:34
 #, python-format
 msgid "Import %(num)s save"
 msgid_plural "Import %(num)s saves"

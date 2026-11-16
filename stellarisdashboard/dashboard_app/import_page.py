@@ -56,7 +56,6 @@ def import_plan(game_id):
         "import_plan.html",
         plan=plan,
         error="",
-        save_name_filter=config.CONFIG.save_name_filter,
         skip_saves=config.CONFIG.skip_saves,
     )
 

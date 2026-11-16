@@ -131,7 +131,7 @@ class ImportPlan:
     empire_name: str
     saves: List[SaveInfo]  # all considered save files of the game, in chronological order
     num_imported: int  # of those, saves whose date is already in the database
-    num_filtered_out: int  # not imported due to the save_name_filter / skip_saves settings
+    num_filtered_out: int  # not imported due to the skip_saves setting
     to_import: List[SaveInfo]  # in chronological order
     newest_imported_date: Optional[int]
 
@@ -163,8 +163,8 @@ def get_import_plan(
 ) -> ImportPlan:
     """
     Work out which saves of the game still need to be imported. Saves are selected with the same
-    save_name_filter and skip_saves settings as the CLI, then saves whose date is already in the
-    database are dropped (one save per date).
+    skip_saves setting as the CLI, then saves whose date is already in the database are dropped
+    (one save per date).
 
     :param exclude: Save files to ignore entirely, e.g. those already seen by a running import.
     :param save_filter: Monitor that applies the settings; reuse one so skip_saves counts across calls.
