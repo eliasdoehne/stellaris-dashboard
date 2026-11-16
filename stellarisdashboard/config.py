@@ -1048,7 +1048,7 @@ def _read_settings_file(settings_file: pathlib.Path) -> Dict[str, Any]:
         return {}
     logger.info(f"Reading settings from {settings_file}...")
     try:
-        with open(settings_file, "r") as f:
+        with open(settings_file, "r", encoding="utf-8") as f:
             file_settings = yaml.load(f, Loader=yaml.SafeLoader)
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
         logger.error(f"Could not read the settings file {settings_file}, using the default settings: {error}")
