@@ -59,7 +59,7 @@ Most users should just download a prebuilt release from the [releases page](http
 
 ## Settings
 
-Most settings can be changed on the dashboard's **Settings** page (`localhost:28053/settings/`). Settings marked `*` only apply after restarting the dashboard. If a value is invalid (for example a folder that does not exist, or a number out of range), the settings page says so and keeps the previous value. The server and logging settings (host, port, log level, writing the log to a file) and some import settings are in the advanced part of the page. `Open in browser on start` opens the dashboard in your browser when the app starts.
+Most settings can be changed on the dashboard's **Settings** page (`localhost:28053/settings/`). Each setting has a short description; settings that differ from their default are marked *Modified* and have a *Reset* button, and *Reset all to defaults* at the bottom of the page resets every setting of the page (the settings that are only in `config.yml` are kept). Changes apply when you select *Save settings*. Settings marked *Needs restart* only apply after restarting the dashboard: after changing one, the settings page shows a reminder until you restart. While you type a game folder, the page checks whether it contains the expected files. If a value is invalid (for example a folder that does not exist, or a number out of range), the settings page shows the error at that setting and keeps the previous value. The server and logging settings (host, port, log level, writing the log to a file) and some import settings are in the *Advanced* parts of the page. `Open in browser on start` opens the dashboard in your browser when the app starts.
 
 The settings are saved to `config.yml` in the folder the dashboard is started from, or to the file named by the `STELLARIS_DASHBOARD_CONFIG` environment variable. The file is created when you first apply settings, and it only lists the settings that differ from their default, so that improved defaults in new versions also reach you. Settings files written by older versions, which list every setting, still work.
 
@@ -69,7 +69,7 @@ A few settings can only be changed by editing `config.yml` (create it if it does
 - `market_resources` and `market_fee`: see [Market Price Graphs](#market-price-graphs).
 - `base_output_path`: the folder for the databases, failed saves and exports (default: `output` in the folder the dashboard is started from).
 
-An invalid value in `config.yml` is reported in the dashboard output and the default is used instead. The dashboard rewrites `config.yml` when you apply settings on the settings page, keeping the values of these settings but not comments. The settings `polling_interval`, `include_id_in_names`, `plot_width` and `save_name_filter` were removed (use `Skip saves` instead of the save file name filter); they are ignored if your `config.yml` still contains them.
+An invalid value in `config.yml` is reported in the dashboard output and at the top of the settings page, and the default is used instead. The dashboard rewrites `config.yml` when you apply settings on the settings page, keeping the values of these settings but not comments. The settings `polling_interval`, `include_id_in_names`, `plot_width` and `save_name_filter` were removed (use `Skip saves` instead of the save file name filter); they are ignored if your `config.yml` still contains them.
 
 ## Save File Location
 
