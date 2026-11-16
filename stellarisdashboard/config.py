@@ -948,22 +948,78 @@ class Config:
     
     @property
     def save_file_path_is_valid(self):
-        return self.save_file_path is not None\
-            and self.save_file_path.is_dir()\
-            and next(self.save_file_path.glob("*/*.sav"), None) is not None
-    
+        return folder_looks_right("save_file_path", self.save_file_path)
+
     @property
     def stellaris_install_path_is_valid(self):
-        return self.stellaris_install_path is not None\
-            and self.stellaris_install_path.is_dir()\
-            and (self.stellaris_install_path / "localisation").is_dir()\
-            and (self.stellaris_install_path / "flags/colors.txt").is_file()
-    
+        return folder_looks_right("stellaris_install_path", self.stellaris_install_path)
+
     @property
     def stellaris_user_data_path_is_valid(self):
-        return self.stellaris_user_data_path is not None\
-            and self.stellaris_user_data_path.is_dir()\
-            and (self.stellaris_user_data_path / "dlc_load.json").is_file()
+        return folder_looks_right("stellaris_user_data_path", self.stellaris_user_data_path)
+
+
+def _contains_save_files(path: pathlib.Path) -> bool:
+    # a folder per game, each with .sav files
+    return next(path.glob("*/*.sav"), None) is not None
+
+
+def _contains_game_files(path: pathlib.Path) -> bool:
+    return (path / "localisation").is_dir() and (path / "flags/colors.txt").is_file()
+
+
+def _contains_user_data(path: pathlib.Path) -> bool:
+    return (path / "dlc_load.json").is_file()
+
+
+# How to tell that a game folder setting points to the right folder (not just to any folder).
+_FOLDER_CHECKS: Dict[str, Callable[[pathlib.Path], bool]] = {
+    "save_file_path": _contains_save_files,
+    "stellaris_install_path": _contains_game_files,
+    "stellaris_user_data_path": _contains_user_data,
+}
+
+
+def has_folder_check(key: str) -> bool:
+    return key in _FOLDER_CHECKS
+
+
+def folder_looks_right(key: str, path: Optional[pathlib.Path]) -> bool:
+    """True if path is a folder with the contents expected for the folder setting key.
+
+    Works for any candidate path, not only the saved one, so that the settings page
+    can check a path before it is saved."""
+    if path is None:
+        return False
+    try:
+        return path.is_dir() and _FOLDER_CHECKS[key](path)
+    except (OSError, ValueError):  # e.g. no permission, or a null byte in the path
+        return False
+
+
+@dataclasses.dataclass(frozen=True)
+class FolderCheck:
+    """The result of check_folder. Says only whether the folder would be accepted and looks right."""
+
+    # the folder that would be used (the default for a blank value); None if rejected
+    path: Optional[pathlib.Path]
+    # why the value would be rejected when saved, or None
+    rejected: Optional[RejectedSetting]
+    looks_right: bool
+
+
+def check_folder(key: str, raw) -> FolderCheck:
+    """Check a candidate value for a folder setting, without applying it.
+
+    Uses the same validation as saving the setting, then the setting's folder check."""
+    spec = SETTINGS[key]
+    try:
+        path = spec.parse(raw)
+    except ValueError as error:
+        return FolderCheck(None, RejectedSetting.from_error(key, raw, error), False)
+    if path is USE_DEFAULT:
+        path = default_value(key)
+    return FolderCheck(path, None, folder_looks_right(key, path))
 
 
 def _get_mod_data_dir(mod_descriptor_path: pathlib.Path):
