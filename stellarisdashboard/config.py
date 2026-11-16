@@ -599,6 +599,8 @@ SETTINGS: Dict[str, SettingSpec] = _settings(
     SettingSpec("plot_height", INT, default=640, category="interface", min_value=300, max_value=2000),
     SettingSpec("plot_time_resolution", INT, default=500, category="interface", min_value=0, max_value=10000),
     SettingSpec("check_version", BOOL, default=True, category="interface"),
+    # open the dashboard in the browser when it is started (not from the CLI)
+    SettingSpec("open_browser", BOOL, default=False, category="interface"),
     SettingSpec(
         "tab_layout", STRUCTURED, default=DEFAULT_TAB_LAYOUT, category="interface", in_ui=False,
         validate=_validate_tab_layout, comparable=_comparable_tab_layout,
