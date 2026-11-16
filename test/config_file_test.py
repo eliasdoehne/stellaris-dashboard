@@ -270,3 +270,16 @@ def test_plain_post_redirects_to_the_settings_page(client):
     response = client.post("/applysettings/", data=_form())
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/settings/")
+
+
+@pytest.mark.parametrize(
+    "removed_key,old_value",
+    [("polling_interval", 0.5), ("include_id_in_names", False), ("plot_width", 1150)],
+)
+def test_settings_file_with_a_removed_setting_still_loads(settings_file, caplog, removed_key, old_value):
+    _write(settings_file, **{removed_key: old_value, "port": 4321})
+    cfg, result = _load()
+    assert result.rejected == [] and result.ignored == [removed_key]
+    assert cfg.port == 4321
+    assert not hasattr(cfg, removed_key)
+    assert f"Ignoring setting {removed_key}: it is no longer used" in caplog.text

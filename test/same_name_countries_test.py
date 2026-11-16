@@ -35,7 +35,6 @@ def same_name_countries(monkeypatch):
     # names are plain strings here; avoids needing the game's localization files
     monkeypatch.setattr(game_info, "render_name", lambda name: name)
     monkeypatch.setattr(config.CONFIG, "show_all_country_types", True)
-    monkeypatch.setattr(config.CONFIG, "include_id_in_names", True)
     return _country(1), _country(2)
 
 
@@ -55,18 +54,6 @@ def test_same_name_countries_are_separate_series(same_name_countries):
     assert set(traces) == {1, 2}
     assert traces[1] == ("Mirrored Empire (1)", [10, 10])
     assert traces[2] == ("Mirrored Empire (2)", [20, 20])
-
-
-def test_same_name_countries_keep_separate_series_without_id_suffix(
-    same_name_countries, monkeypatch
-):
-    monkeypatch.setattr(config.CONFIG, "include_id_in_names", False)
-    container = _planet_count_container(same_name_countries)
-
-    traces = list(container.iterate_traces())
-    assert [key for key, _, _, _ in traces] == [1, 2]
-    assert [label for _, label, _, _ in traces] == ["Mirrored Empire"] * 2
-    assert [values for _, _, _, values in traces] == [[10, 10], [20, 20]]
 
 
 def test_same_name_countries_get_distinct_colors(same_name_countries, monkeypatch):

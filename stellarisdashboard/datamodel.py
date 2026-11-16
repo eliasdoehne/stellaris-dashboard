@@ -934,10 +934,8 @@ class Country(Base):
 
     @property
     def rendered_name(self):
-        rendered = game_info.render_name_or_prettify(self.country_name)
-        if config.CONFIG.include_id_in_names:
-            rendered += f" ({self.country_id_in_game})"
-        return rendered
+        # the ID tells apart countries with the same name
+        return f"{game_info.render_name_or_prettify(self.country_name)} ({self.country_id_in_game})"
 
     @property
     def rendered_type(self) -> str:

@@ -96,10 +96,6 @@ def setting_texts() -> Dict[str, Dict[str, str]]:
             label=_("Graph height"),
             description=_("Height of graphs in pixels."),
         ),
-        "plot_width": dict(
-            label=_("Graph width"),
-            description=_("Width of graphs in pixels."),
-        ),
         "plot_time_resolution": dict(
             label=_("Initial graph resolution"),
             description=_("Number of points used when first loading the graphs. Set to 0 to load full data."),

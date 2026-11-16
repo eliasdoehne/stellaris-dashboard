@@ -144,7 +144,7 @@ def _with_color_alpha(color, alpha):
 
 def _get_player_legend_label(game_id) -> Optional[str]:
     """Legend label of the player's country, as rendered for its per-country series
-    (including the ID suffix if include_id_in_names is set)."""
+    (including the ID suffix)."""
     with datamodel.get_db_session(game_id) as session:
         player = session.query(datamodel.Country).filter_by(is_player=True).first()
         return dict_key_to_legend_label(player.rendered_name) if player else None
@@ -614,8 +614,6 @@ def get_layout():
 
     main = html.Div(
         className="tl-main",
-        # plot_width is a user setting; honor it as the fluid content's max width.
-        style={"--tl-content-max": f"{config.CONFIG.plot_width}px"},
         children=[
             page_head,
             html.Div(id="tab-content", className="tl-content"),

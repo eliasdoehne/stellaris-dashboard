@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-16 10:06+0000\n"
+"POT-Creation-Date: 2026-11-16 10:10+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ko\n"
@@ -46,91 +46,91 @@ msgstr "다시 처리할 실패한 세이브의 보관본이 없습니다."
 msgid "An import of %(game_id)s is already running. Wait for it to finish or cancel it."
 msgstr "%(game_id)s 가져오기가 이미 실행 중입니다. 끝날 때까지 기다리거나 취소하세요."
 
-#: stellarisdashboard/config.py:323
+#: stellarisdashboard/config.py:328
 #, python-format
 msgid "Expected true or false, got %(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:333
+#: stellarisdashboard/config.py:338
 #, python-format
 msgid "Must be between %(min)s and %(max)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:336
+#: stellarisdashboard/config.py:341
 #, fuzzy, python-format
 msgid "Must be at least %(min)s."
 msgstr "DPI는 1 이상이어야 합니다."
 
-#: stellarisdashboard/config.py:337
+#: stellarisdashboard/config.py:342
 #, fuzzy, python-format
 msgid "Must be at most %(max)s."
 msgstr "DPI는 1 이상이어야 합니다."
 
-#: stellarisdashboard/config.py:352
+#: stellarisdashboard/config.py:357
 #, fuzzy, python-format
 msgid "%(value)s is not a whole number."
 msgstr "DPI는 정수여야 합니다."
 
-#: stellarisdashboard/config.py:366
+#: stellarisdashboard/config.py:371
 #, python-format
 msgid "%(value)s is not a number."
 msgstr ""
 
-#: stellarisdashboard/config.py:375
+#: stellarisdashboard/config.py:380
 #, python-format
 msgid "Expected text, got %(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:380
+#: stellarisdashboard/config.py:385
 #, python-format
 msgid "Expected a folder path, got %(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:387 stellarisdashboard/config.py:390
+#: stellarisdashboard/config.py:392 stellarisdashboard/config.py:395
 #, python-format
 msgid "%(value)s is not a folder."
 msgstr ""
 
-#: stellarisdashboard/config.py:388
+#: stellarisdashboard/config.py:393
 #, fuzzy, python-format
 msgid "The folder %(value)s does not exist."
 msgstr "%(country)s은(는) 소멸했다."
 
-#: stellarisdashboard/config.py:397 stellarisdashboard/config.py:418
+#: stellarisdashboard/config.py:402 stellarisdashboard/config.py:423
 #, python-format
 msgid "%(value)s is not one of the available options."
 msgstr ""
 
-#: stellarisdashboard/config.py:432
+#: stellarisdashboard/config.py:437
 #, python-format
 msgid "%(value)s is not a Stellaris language key, such as l_english."
 msgstr ""
 
-#: stellarisdashboard/config.py:444
+#: stellarisdashboard/config.py:449
 #, python-format
 msgid "%(value)s is not a valid host name or address."
 msgstr ""
 
-#: stellarisdashboard/config.py:478
+#: stellarisdashboard/config.py:483
 msgid "Expected a mapping of tab names to lists of graph IDs."
 msgstr ""
 
-#: stellarisdashboard/config.py:507
+#: stellarisdashboard/config.py:512
 msgid "Expected a list of resources."
 msgstr ""
 
-#: stellarisdashboard/config.py:516
+#: stellarisdashboard/config.py:521
 #, python-format
 msgid ""
 "Every resource needs a name and a base_price (a number, or null if it cannot be traded), got "
 "%(value)s."
 msgstr ""
 
-#: stellarisdashboard/config.py:527
+#: stellarisdashboard/config.py:532
 msgid "Expected a list of market fees."
 msgstr ""
 
-#: stellarisdashboard/config.py:535
+#: stellarisdashboard/config.py:540
 #, python-format
 msgid "Every market fee needs a date (like 2200.01.01) and a fee (like 0.3), got %(value)s."
 msgstr ""
@@ -2904,7 +2904,7 @@ msgstr "은하 기본값"
 msgid "Normalize stacked plots"
 msgstr "누적 그래프 정규화"
 
-#: stellarisdashboard/dashboard_app/graph_ledger.py:641
+#: stellarisdashboard/dashboard_app/graph_ledger.py:639
 msgid "Close"
 msgstr "닫기"
 
@@ -3662,100 +3662,92 @@ msgid "Height of graphs in pixels."
 msgstr "그래프의 높이(픽셀)입니다."
 
 #: stellarisdashboard/dashboard_app/settings.py:100
-msgid "Graph width"
-msgstr "그래프 너비"
-
-#: stellarisdashboard/dashboard_app/settings.py:101
-msgid "Width of graphs in pixels."
-msgstr "그래프의 너비(픽셀)입니다."
-
-#: stellarisdashboard/dashboard_app/settings.py:104
 msgid "Initial graph resolution"
 msgstr "초기 그래프 해상도"
 
-#: stellarisdashboard/dashboard_app/settings.py:105
+#: stellarisdashboard/dashboard_app/settings.py:101
 msgid "Number of points used when first loading the graphs. Set to 0 to load full data."
 msgstr "그래프를 처음 불러올 때 사용하는 점의 개수입니다. 0으로 설정하면 전체 데이터를 불러옵니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:108
+#: stellarisdashboard/dashboard_app/settings.py:104
 msgid "Check for new versions"
 msgstr "새 버전 확인"
 
-#: stellarisdashboard/dashboard_app/settings.py:109
+#: stellarisdashboard/dashboard_app/settings.py:105
 msgid ""
 "When using the Workshop mod for in-game access, a message will be displayed if a newer version of"
 " the separate dashboard app is available."
 msgstr "게임 내 접근용 워크숍 모드를 사용할 때, 별도의 대시보드 앱에 새 버전이 있으면 메시지가 표시됩니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:112
+#: stellarisdashboard/dashboard_app/settings.py:108
 #, fuzzy
 msgid "Host"
 msgstr "적대적"
 
-#: stellarisdashboard/dashboard_app/settings.py:113
+#: stellarisdashboard/dashboard_app/settings.py:109
 msgid ""
 "The network address the dashboard listens on. The default, 127.0.0.1, only allows access from "
 "this computer. Use 0.0.0.0 to allow access from other devices in your network."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:116
+#: stellarisdashboard/dashboard_app/settings.py:112
 #, fuzzy
 msgid "Port"
 msgstr "가져옴"
 
-#: stellarisdashboard/dashboard_app/settings.py:117
+#: stellarisdashboard/dashboard_app/settings.py:113
 msgid "The port the dashboard listens on, as in http://localhost:28053/."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:120
+#: stellarisdashboard/dashboard_app/settings.py:116
 #, fuzzy
 msgid "Log level"
 msgstr "상세 수준"
 
-#: stellarisdashboard/dashboard_app/settings.py:121
+#: stellarisdashboard/dashboard_app/settings.py:117
 msgid "How much detail is written to the console log. Use DEBUG when reporting a problem."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:124
+#: stellarisdashboard/dashboard_app/settings.py:120
 msgid "Write log to file"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:125
+#: stellarisdashboard/dashboard_app/settings.py:121
 msgid "Also write the log to log.txt in the output folder."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:133
+#: stellarisdashboard/dashboard_app/settings.py:129
 msgid "Same as Stellaris language"
 msgstr "스텔라리스 언어와 동일"
 
-#: stellarisdashboard/dashboard_app/settings.py:142
+#: stellarisdashboard/dashboard_app/settings.py:138
 #, fuzzy
 msgid ""
 "No save files found. This folder should contain a folder for each game, which each contain .sav "
 "files."
 msgstr "세이브 파일 폴더에는 게임마다 폴더가 있어야 하며, 각 폴더에는 <code>.sav</code> 파일이 들어 있어야 합니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:146
+#: stellarisdashboard/dashboard_app/settings.py:142
 msgid ""
 "The Stellaris game files were not found. This folder should contain the localisation and flags "
 "folders."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:150
+#: stellarisdashboard/dashboard_app/settings.py:146
 #, fuzzy
 msgid "This folder should contain the dlc_load.json file."
 msgstr "이 폴더에는 <code>dlc_load.json</code> 파일이 들어 있어야 합니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:249
+#: stellarisdashboard/dashboard_app/settings.py:245
 #, fuzzy
 msgid "Some settings were not applied:"
 msgstr "설정이 적용되었습니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:252
+#: stellarisdashboard/dashboard_app/settings.py:248
 msgid "Settings applied."
 msgstr "설정이 적용되었습니다."
 
-#: stellarisdashboard/dashboard_app/settings.py:256
+#: stellarisdashboard/dashboard_app/settings.py:252
 #, python-format
 msgid "Restart the dashboard to apply: %(settings)s"
 msgstr ""
@@ -5026,140 +5018,140 @@ msgid "%(bypass)s (inactive)"
 msgstr "%(bypass)s (비활성)"
 
 #. the type of a regular country, as opposed to e.g. "Fallen Empire" or "Primitive"
-#: stellarisdashboard/datamodel.py:946
+#: stellarisdashboard/datamodel.py:944
 msgctxt "country type"
 msgid "Empire"
 msgstr "제국"
 
 #. %(old)s and %(new)s are government types
-#: stellarisdashboard/datamodel.py:1103
+#: stellarisdashboard/datamodel.py:1101
 #, python-format
 msgid "Type changed from \"%(old)s\" to \"%(new)s\"."
 msgstr "유형이 \"%(old)s\"에서 \"%(new)s\"(으)로 변경되었다."
 
 #. %(old)s and %(new)s are authorities, e.g. "Democratic"
-#: stellarisdashboard/datamodel.py:1113
+#: stellarisdashboard/datamodel.py:1111
 #, python-format
 msgid "Authority changed from %(old)s to %(new)s."
 msgstr "통치 체제가 %(old)s에서 %(new)s(으)로 변경되었다."
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1127
+#: stellarisdashboard/datamodel.py:1125
 #, python-format
 msgid "Removed civics %(civics)s."
 msgstr "신조 %(civics)s을(를) 제거했다."
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1131
+#: stellarisdashboard/datamodel.py:1129
 #, python-format
 msgid "Adopted civics %(civics)s."
 msgstr "신조 %(civics)s을(를) 채택했다."
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1135
+#: stellarisdashboard/datamodel.py:1133
 #, python-format
 msgid "Abandoned ethics %(ethics)s."
 msgstr "성향 %(ethics)s을(를) 버렸다."
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1139
+#: stellarisdashboard/datamodel.py:1137
 #, python-format
 msgid "Embraced ethics %(ethics)s."
 msgstr "성향 %(ethics)s을(를) 받아들였다."
 
 #. name of a war that several wars share, followed by the main
 #. empires of both sides, e.g. "War in Heaven (Empire A vs Empire B)".
-#: stellarisdashboard/datamodel.py:1600
+#: stellarisdashboard/datamodel.py:1598
 #, python-format
 msgid "%(name)s (%(attackers)s vs %(defenders)s)"
 msgstr "%(name)s (%(attackers)s 대 %(defenders)s)"
 
 #. name of a war without a name in the game: the empires on both sides,
 #. e.g. "Empire A, Empire B vs Empire C". %(attackers)s and %(defenders)s are lists of empires.
-#: stellarisdashboard/datamodel.py:1608
+#: stellarisdashboard/datamodel.py:1606
 #, python-format
 msgid "%(attackers)s vs %(defenders)s"
 msgstr "%(attackers)s 대 %(defenders)s"
 
 #: stellarisdashboard/dashboard_app/history_ledger.py:930
-#: stellarisdashboard/dashboard_app/history_ledger.py:934 stellarisdashboard/datamodel.py:1678
+#: stellarisdashboard/dashboard_app/history_ledger.py:934 stellarisdashboard/datamodel.py:1676
 msgid "Unknown"
 msgstr "알 수 없음"
 
 #. a dig site and the chapter of its excavation, e.g. "Under the Ice (chapter 3)"
-#: stellarisdashboard/datamodel.py:2112
+#: stellarisdashboard/datamodel.py:2110
 #, python-format
 msgid "%(name)s (chapter %(chapter)s)"
 msgstr "%(name)s (%(chapter)s장)"
 
 #. an astral rift and the name of the event of its exploration, e.g. "The Corridors: Rift Anomaly"
-#: stellarisdashboard/datamodel.py:2141
+#: stellarisdashboard/datamodel.py:2139
 #, python-format
 msgid "%(name)s: %(title)s"
 msgstr "%(name)s: %(title)s"
 
-#: stellarisdashboard/datamodel.py:2173
+#: stellarisdashboard/datamodel.py:2171
 msgid "contact detected"
 msgstr "접촉 감지"
 
-#: stellarisdashboard/datamodel.py:2174
+#: stellarisdashboard/datamodel.py:2172
 msgid "investigation progressed"
 msgstr "조사 진전"
 
-#: stellarisdashboard/datamodel.py:2175
+#: stellarisdashboard/datamodel.py:2173
 msgid "complications arose"
 msgstr "문제 발생"
 
-#: stellarisdashboard/datamodel.py:2176
+#: stellarisdashboard/datamodel.py:2174
 msgid "communications established"
 msgstr "교신 수립"
 
-#: stellarisdashboard/datamodel.py:2177
+#: stellarisdashboard/datamodel.py:2175
 msgid "communications failed"
 msgstr "교신 실패"
 
-#: stellarisdashboard/datamodel.py:2180
+#: stellarisdashboard/datamodel.py:2178
 msgid "hostile"
 msgstr "적대적"
 
-#: stellarisdashboard/datamodel.py:2181
+#: stellarisdashboard/datamodel.py:2179
 msgid "proactive"
 msgstr "적극적"
 
-#: stellarisdashboard/datamodel.py:2182
+#: stellarisdashboard/datamodel.py:2180
 msgid "cautious"
 msgstr "신중한"
 
 #. a stage of a first contact and the approach taken, e.g. "communications established (cautious)"
-#: stellarisdashboard/datamodel.py:2196
+#: stellarisdashboard/datamodel.py:2194
 #, python-format
 msgid "%(stage)s (%(approach)s)"
 msgstr "%(stage)s (%(approach)s)"
 
 #. a country that is subject of another one, as in "The X became a subject of the Y."
-#: stellarisdashboard/datamodel.py:2214
+#: stellarisdashboard/datamodel.py:2212
 msgid "subject"
 msgstr "속국"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "..."-rank Defender of the Galaxy."
-#: stellarisdashboard/datamodel.py:2245
+#: stellarisdashboard/datamodel.py:2243
 #, python-format
 msgid "\"%(name)s\"-rank Defender of the Galaxy"
 msgstr "\"%(name)s\" 등급의 은하 수호자"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "Risk"-level threat to the galaxy."
-#: stellarisdashboard/datamodel.py:2247
+#: stellarisdashboard/datamodel.py:2245
 #, python-format
 msgid "\"%(name)s\"-level threat to the galaxy"
 msgstr "은하에 대한 \"%(name)s\" 등급 위협"
 
 #. %(name)s is the name of a federation
-#: stellarisdashboard/datamodel.py:2373
+#: stellarisdashboard/datamodel.py:2371
 #, python-format
 msgid "\"%(name)s\" federation"
 msgstr "\"%(name)s\" 연방"
 
-#: stellarisdashboard/datamodel.py:2561
+#: stellarisdashboard/datamodel.py:2559
 msgid "Unknown Event"
 msgstr "알 수 없는 사건"
 
