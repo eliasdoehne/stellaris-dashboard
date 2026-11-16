@@ -183,6 +183,13 @@ def client(settings_file, monkeypatch, tmp_path):
     cfg, result = _load()
     assert result.rejected == []
     monkeypatch.setattr(config, "CONFIG", cfg)
+    monkeypatch.setattr(config, "LOAD_RESULT", result)
+    from stellarisdashboard.dashboard_app import settings
+
+    # the values of this test's config are the ones "in use", as if the dashboard had just started
+    monkeypatch.setattr(settings, "_running_values", {})
+    settings.remember_running_values()
+    monkeypatch.setattr(settings, "_startup_notice_dismissed", False)
     return dashboard_app.flask_app.test_client()
 
 
@@ -288,3 +295,193 @@ def test_settings_file_with_a_removed_setting_still_loads(settings_file, caplog,
     assert cfg.port == 4321
     assert not hasattr(cfg, removed_key)
     assert f"Ignoring setting {removed_key}: it is no longer used" in caplog.text
+
+
+# --- the settings page: errors, folder checks, reset, restart, dependencies, startup problems
+
+
+def _input_tag(page, key):
+    """The opening tag of the form field of a setting."""
+    start = page.index(f'id="{key}" name="{key}"')
+    start = page.rindex("<", 0, start)
+    return page[start:page.index(">", start) + 1]
+
+
+def test_rejected_value_is_shown_at_its_field(client):
+    body = _post(client, _form(plot_height="50", skip_saves="2")).get_data(as_text=True)
+    # the settings are re-rendered in place, with the toast out of band
+    assert 'id="settings-content"' in body and 'hx-swap-oob="innerHTML"' in body and "toast--error" in body
+    tag = _input_tag(body, "plot_height")
+    assert 'value="50"' in tag and 'aria-invalid="true"' in tag and "autofocus" in tag
+    assert "plot_height-error" in tag  # aria-describedby
+    assert 'id="plot_height-error"' in body and "Must be between 300 and 2000." in body
+    assert 'id="settings-errors"' in body
+    # the valid change of the same submission was saved and is shown as saved
+    assert 'value="2"' in _input_tag(body, "skip_saves") and config.CONFIG.skip_saves == 2
+    assert config.CONFIG.plot_height == 640
+
+
+def test_rejected_value_without_js_renders_the_page_with_errors(client):
+    response = client.post("/applysettings/", data=_form(port="80"))
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "<html" in page and 'id="settings-errors"' in page
+    tag = _input_tag(page, "port")
+    assert 'value="80"' in tag and 'aria-invalid="true"' in tag
+    assert "Must be between 1024 and 65535." in page
+    assert config.CONFIG.port == config.DEFAULT_SETTINGS["port"]
+
+
+def test_successful_save_says_so(client):
+    body = _post(client, _form(skip_saves="1")).get_data(as_text=True)
+    assert "toast--success" in body and "Settings saved." in body
+    assert "aria-invalid" not in body and 'id="settings-errors"' not in body
+
+
+def _check(client, key, value):
+    return client.post("/settings/check-path/", data={"key": key, key: value}, headers={"HX-Request": "true"})
+
+
+def test_check_path_reports_without_saving(client, settings_file, tmp_path):
+    good = tmp_path / "other_saves"
+    (good / "game").mkdir(parents=True)
+    (good / "game" / "autosave.sav").write_text("")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    file_before = settings_file.read_text()
+    previous = config.CONFIG.save_file_path
+
+    body = _check(client, "save_file_path", str(good)).get_data(as_text=True)
+    assert 'id="save_file_path-status"' in body and "setting-status--ok" in body
+    # only the verdict: nothing about the contents of the folder
+    assert "autosave" not in body
+
+    body = _check(client, "save_file_path", str(empty)).get_data(as_text=True)
+    assert "setting-status--warning" in body and "No save files found" in body
+
+    body = _check(client, "save_file_path", str(tmp_path / "missing")).get_data(as_text=True)
+    assert "setting-status--error" in body and "does not exist" in body
+
+    body = _check(client, "stellaris_user_data_path", str(empty)).get_data(as_text=True)
+    assert "setting-status--warning" in body and "dlc_load.json" in body
+    (empty / "dlc_load.json").write_text("{}")
+    assert "setting-status--ok" in _check(client, "stellaris_user_data_path", str(empty)).get_data(as_text=True)
+
+    # blank means the default folder
+    assert _check(client, "save_file_path", "").status_code == 200
+
+    assert config.CONFIG.save_file_path == previous
+    assert settings_file.read_text() == file_before
+
+
+def test_check_path_only_checks_folder_settings(client):
+    assert _check(client, "port", "/").status_code == 400
+    assert _check(client, "base_output_path", "/").status_code == 400
+    assert _check(client, "nonsense", "/").status_code == 400
+    assert client.get("/settings/check-path/?key=save_file_path&save_file_path=/").status_code == 405
+
+
+def test_reset_all_keeps_the_settings_only_in_config_yml(client, settings_file):
+    _post(client, _form(port="4321", skip_saves="3", show_everything="on"))
+    body = client.post("/settings/reset/", headers={"HX-Request": "true"}).get_data(as_text=True)
+    assert "toast--success" in body and 'id="settings-content"' in body
+    for key, spec in config.SETTINGS.items():
+        if spec.in_ui:
+            assert getattr(config.CONFIG, key) == config.DEFAULT_SETTINGS[key], key
+    written = _read(settings_file)
+    assert written == {
+        "tab_layout": {"Budget": ["energy_budget"], "Economy": ["net_energy_income_graph"]},
+        "market_fee": [{"date": "2250.01.01", "fee": 0.1}],
+    }
+    assert config.CONFIG.tab_layout == written["tab_layout"]
+
+
+def test_reset_all_without_js_redirects(client):
+    config.CONFIG.skip_saves = 5
+    response = client.post("/settings/reset/")
+    assert response.status_code == 302 and response.headers["Location"].endswith("/settings/")
+    assert config.CONFIG.skip_saves == 0
+    assert client.get("/settings/reset/").status_code == 405
+
+
+def test_restart_notice_stays_until_the_value_in_use_is_back(client):
+    body = _post(client, _form(port="4321")).get_data(as_text=True)
+    assert 'id="restart-notice"' in body
+    assert "Restart the dashboard to apply: Port" in body
+    # it is shown on every visit of the page, not only right after saving
+    assert 'id="restart-notice"' in client.get("/settings/").get_data(as_text=True)
+    # an unrelated save keeps it, without repeating the restart message in the toast
+    body = _post(client, _form(skip_saves="2")).get_data(as_text=True)
+    assert 'id="restart-notice"' in body
+    assert "Restart" not in body[body.index('id="toast-slot"'):]
+    # changed back to the value the dashboard runs with: nothing to restart for
+    body = _post(client, _form(port=str(config.DEFAULT_SETTINGS["port"]))).get_data(as_text=True)
+    assert 'id="restart-notice"' not in body
+    assert "Restart the dashboard" not in body
+    assert 'id="restart-notice"' not in client.get("/settings/").get_data(as_text=True)
+
+
+def test_settings_that_apply_immediately_need_no_restart(client):
+    body = _post(client, _form(plot_height="700", show_everything="on")).get_data(as_text=True)
+    assert 'id="restart-notice"' not in body
+
+
+def test_inactive_dependent_setting_keeps_its_value(client, settings_file):
+    config.CONFIG.mp_username = ""
+    config.CONFIG.hide_other_players = True
+    page = client.get("/settings/").get_data(as_text=True)
+    tag = _input_tag(page, "hide_other_players")
+    # shown as unavailable, but not disabled: a disabled checkbox is not submitted (= false)
+    assert 'aria-disabled="true"' in tag and "checked" in tag and "disabled " not in tag.replace("aria-disabled", "")
+    assert "hide_other_players-note" in tag
+    assert "Only applies when" in page
+    # the page submits it as it is shown
+    _post(client, _form(mp_username=""))
+    assert config.CONFIG.hide_other_players is True
+    config.CONFIG.mp_username = "Me"
+    tag = _input_tag(client.get("/settings/").get_data(as_text=True), "hide_other_players")
+    assert "aria-disabled" not in tag
+
+
+def test_startup_problems_are_listed_until_dismissed(client, monkeypatch):
+    result = config.Config().apply_dict({"threads": "lots", "tab_layout": ["Budget"]}, source=config.SOURCE_FILE)
+    monkeypatch.setattr(config, "LOAD_RESULT", result)
+    page = client.get("/settings/").get_data(as_text=True)
+    assert 'id="startup-notice"' in page
+    assert "Number of threads" in page and "is not a whole number" in page
+    assert "tab_layout" in page
+    response = client.post("/settings/dismiss-startup-notice/", headers={"HX-Request": "true"})
+    assert response.status_code == 200 and response.get_data(as_text=True) == ""
+    assert 'id="startup-notice"' not in client.get("/settings/").get_data(as_text=True)
+
+
+def test_no_startup_notice_without_problems(client):
+    assert 'id="startup-notice"' not in client.get("/settings/").get_data(as_text=True)
+
+
+def test_settings_page_shows_where_settings_are_stored(client, settings_file):
+    page = client.get("/settings/").get_data(as_text=True)
+    assert str(settings_file) in page
+    assert str(config.CONFIG.base_output_path) in page
+    assert "github.com/eliasdoehne/stellaris-dashboard#readme" in page
+
+
+def test_advanced_part_opens_for_customized_settings(client):
+    page = client.get("/settings/").get_data(as_text=True)
+    assert page.count("<details class=\"settings-advanced\" open") == 0
+    config.CONFIG.port = 4321
+    page = client.get("/settings/").get_data(as_text=True)
+    assert page.count("<details class=\"settings-advanced\" open") == 1
+
+
+def test_games_page_links_to_the_invalid_folder_setting(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(config.CONFIG, "stellaris_install_path", tmp_path / "nothing")
+    page = client.get("/").get_data(as_text=True)
+    assert 'href="/settings/#setting-stellaris_install_path"' in page
+
+
+def test_restart_message_in_the_success_toast_is_markup(client):
+    body = _post(client, _form(port="4321")).get_data(as_text=True)
+    toast = body[body.index('id="toast-slot"'):]
+    assert "<p>Restart the dashboard to apply: Port</p>" in toast
+    assert "&lt;p&gt;" not in toast

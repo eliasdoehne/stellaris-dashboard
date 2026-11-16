@@ -1,0 +1,176 @@
+{# The settings page below its title: on the page, and as the htmx reply to saving or resetting
+   the settings, which replaces #settings-content (with any errors shown at their fields).
+   The structure of `sections` is documented in settings.settings_view(); assets/settings.js
+   adds the live parts (unsaved changes, per-setting reset, dependent settings). #}
+{% macro setting_row(s) %}
+{% set key = s.key %}
+{% set described = [key ~ "-help"] %}
+{% if s.inactive %}{% set described = described + [key ~ "-note"] %}{% endif %}
+{% if s.error %}{% set described = described + [key ~ "-error"] %}{% endif %}
+{% if s.checks_folder %}{% set described = described + [key ~ "-status"] %}{% endif %}
+{% set focus = errors and errors[0].key == key %}
+<div class="setting setting--{{ s.kind }}{% if not s.is_default %} is-modified{% endif %}{% if s.error %} has-error{% endif %}{% if s.depends_on %} setting--dependent{% endif %}{% if s.inactive %} is-inactive{% endif %}"
+     id="setting-{{ key }}" data-setting="{{ key }}" data-kind="{{ s.kind }}"
+     data-default="{{ s.default }}" data-saved="{{ s.saved }}"
+     {% if s.depends_on %}data-depends-on="{{ s.depends_on }}"{% endif %}>
+    <div class="setting-text">
+        <div class="setting-head">
+            <label class="setting-label" for="{{ key }}">{{ s.label }}</label>
+            {# Translators: badge on a setting whose value differs from the default #}
+            <span class="badge badge--modified" data-modified-badge {% if s.is_default %}hidden{% endif %}>{{ _("Modified") }}</span>
+            {% if s.requires_restart %}
+            {# Translators: badge on a setting that only applies after restarting the dashboard app #}
+            <span class="badge badge--restart{% if s.pending_restart %} is-pending{% endif %}" title="{{ _('Changes to this setting apply after restarting the dashboard.') }}">{{ _("Needs restart") }}</span>
+            {% endif %}
+        </div>
+        <p class="setting-help" id="{{ key }}-help">{{ s.description }}</p>
+        {% if s.inactive_note %}
+        <p class="setting-note" id="{{ key }}-note" {% if not s.inactive %}hidden{% endif %}>{{ s.inactive_note }}</p>
+        {% endif %}
+    </div>
+    <div class="setting-control">
+        <div class="setting-input">
+        {% if s.kind == "bool" %}
+            <input id="{{ key }}" name="{{ key }}" type="checkbox" class="toggle" role="switch"
+                   aria-describedby="{{ described | join(' ') }}"
+                   {% if s.value %}checked{% endif %} {% if s.inactive %}aria-disabled="true"{% endif %}>
+        {% elif s.kind in ("int", "float") %}
+            <input id="{{ key }}" name="{{ key }}" type="number" class="input-number" inputmode="{{ 'numeric' if s.kind == 'int' else 'decimal' }}"
+                   {% if s.min is not none %}min="{{ s.min }}"{% endif %}
+                   {% if s.max is not none %}max="{{ s.max }}"{% endif %}
+                   step="{{ 1 if s.kind == 'int' else 'any' }}" value="{{ s.value }}"
+                   aria-describedby="{{ described | join(' ') }}"
+                   {% if s.error %}aria-invalid="true"{% endif %}{% if focus %} autofocus{% endif %} {% if s.inactive %}aria-disabled="true"{% endif %}>
+            {% if s.unit %}<span class="setting-unit" aria-hidden="true">{{ s.unit }}</span>{% endif %}
+        {% elif s.kind == "choice" %}
+            <select id="{{ key }}" name="{{ key }}" aria-describedby="{{ described | join(' ') }}"
+                    {% if s.error %}aria-invalid="true"{% endif %}{% if focus %} autofocus{% endif %}>
+                {% for option_value, option_name in s.choices %}
+                <option value="{{ option_value }}" {% if option_value == s.value %}selected{% endif %}>{{ option_name }}</option>
+                {% endfor %}
+            </select>
+        {% elif s.kind == "path" %}
+            <input id="{{ key }}" name="{{ key }}" type="text" class="input-path" value="{{ s.value }}"
+                   placeholder="{{ s.placeholder }}" spellcheck="false" autocomplete="off" autocapitalize="off"
+                   aria-describedby="{{ described | join(' ') }}"
+                   {% if s.error %}aria-invalid="true"{% endif %}{% if focus %} autofocus{% endif %}
+                   {% if s.checks_folder %}
+                   hx-post="{{ url_for('check_path') }}" hx-trigger="change, input changed delay:600ms"
+                   hx-vals='{"key": "{{ key }}"}' hx-params="key,{{ key }}"
+                   hx-target="#{{ key }}-status" hx-swap="outerHTML"
+                   {% endif %}>
+        {% else %}
+            <input id="{{ key }}" name="{{ key }}" type="text" class="input-text" value="{{ s.value }}"
+                   spellcheck="false" autocomplete="off"
+                   aria-describedby="{{ described | join(' ') }}"
+                   {% if s.error %}aria-invalid="true"{% endif %}{% if focus %} autofocus{% endif %} {% if s.inactive %}aria-disabled="true"{% endif %}>
+        {% endif %}
+            {# shown by settings.js; puts the default back into the field, saving still applies it #}
+            <button type="button" class="setting-reset" data-reset hidden
+                    aria-label="{{ _('Reset %(setting)s to its default', setting=s.label) }}">{{ _("Reset") }}</button>
+        </div>
+        {% if s.error %}
+        <p class="setting-error" id="{{ key }}-error"><span aria-hidden="true">⚠</span> {{ s.error }}</p>
+        {% endif %}
+        {% if s.status %}
+        {% with status = s.status %}{% include "_setting_status.html" %}{% endwith %}
+        {% elif s.checks_folder %}
+        {# the live check of the typed folder replaces this #}
+        <p class="setting-status" id="{{ key }}-status" aria-live="polite" hidden></p>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+<div id="settings-content" class="settings-content">
+    {% if startup_problems %}
+    <section class="settings-banner settings-banner--warning" id="startup-notice" aria-labelledby="startup-notice-title">
+        <div class="settings-banner-body">
+            <h2 class="settings-banner-title" id="startup-notice-title">{{ _("Some settings in config.yml were invalid") }}</h2>
+            <p>{{ _("When the dashboard started, it used the default instead of these values:") }}</p>
+            <ul class="settings-banner-list">
+                {% for p in startup_problems %}
+                <li><strong>{{ p.label }}</strong>: {{ p.reason }}</li>
+                {% endfor %}
+            </ul>
+            <p>{{ _("Saving the settings replaces these values in config.yml.") }}</p>
+        </div>
+        <form action="{{ url_for('dismiss_startup_notice') }}" method="POST"
+              hx-post="{{ url_for('dismiss_startup_notice') }}" hx-target="#startup-notice" hx-swap="outerHTML">
+            <button type="submit" class="button button--quiet">{{ _("Dismiss") }}</button>
+        </form>
+    </section>
+    {% endif %}
+
+    {% if restart_labels %}
+    <section class="settings-banner settings-banner--restart" id="restart-notice" role="status">
+        <span class="settings-banner-icon" aria-hidden="true">↻</span>
+        <div class="settings-banner-body">
+            <p class="settings-banner-title">{{ _("Restart the dashboard to apply: %(settings)s", settings=restart_labels) }}</p>
+            <p>{{ _("Close the dashboard app and start it again. Until then, it keeps using the previous values.") }}</p>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if errors %}
+    <section class="settings-banner settings-banner--error" id="settings-errors" aria-labelledby="settings-errors-title">
+        <div class="settings-banner-body">
+            <h2 class="settings-banner-title" id="settings-errors-title">{{ ngettext("%(num)s setting was not saved", "%(num)s settings were not saved", errors|length) }}</h2>
+            <p>{{ _("Your other changes were saved. Fix the values below and save again.") }}</p>
+            <ul class="settings-banner-list">
+                {% for s in errors %}
+                <li><a href="#{{ s.key }}">{{ s.label }}</a>: {{ s.error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </section>
+    {% endif %}
+
+    <form id="settings-form" class="settings-form" action="{{ url_for('apply_settings') }}" method="POST" novalidate
+          hx-post="{{ url_for('apply_settings') }}" hx-target="#settings-content" hx-swap="outerHTML">
+        {% for section in sections %}
+        <section class="settings-section" id="section-{{ section.id }}" aria-labelledby="section-{{ section.id }}-title">
+            <header class="settings-section-head">
+                <h2 class="settings-section-title" id="section-{{ section.id }}-title">{{ section.label }}</h2>
+                <p class="settings-section-intro">{{ section.intro }}</p>
+            </header>
+            {% for s in section.basic %}{{ setting_row(s) }}{% endfor %}
+            {% if section.advanced %}
+            <details class="settings-advanced" {% if section.advanced_open %}open{% endif %}>
+                <summary>
+                    <span class="settings-advanced-label">{{ _("Advanced") }}</span>
+                    <span class="settings-advanced-count">{{ ngettext("%(num)s setting", "%(num)s settings", section.advanced|length) }}</span>
+                </summary>
+                {% for s in section.advanced %}{{ setting_row(s) }}{% endfor %}
+            </details>
+            {% endif %}
+        </section>
+        {% endfor %}
+
+        <div class="settings-actions">
+            <p class="settings-dirty" data-dirty-hint hidden>{{ _("You have unsaved changes") }}</p>
+            <button type="reset" class="button button--quiet" data-discard>{{ _("Discard changes") }}</button>
+            <button type="submit" class="button button--primary" data-save>{{ _("Save settings") }}</button>
+        </div>
+    </form>
+
+    <section class="settings-files" aria-labelledby="settings-files-title">
+        <h2 class="settings-section-title" id="settings-files-title">{{ _("Files") }}</h2>
+        <dl class="settings-files-list">
+            <dt>{{ _("Settings file") }}</dt>
+            <dd><code>{{ settings_file }}</code></dd>
+            <dt>{{ _("Output folder") }}</dt>
+            <dd><code>{{ output_folder }}</code></dd>
+        </dl>
+        <p>{% trans trimmed url=readme_url %}The layout of the graph tabs and the market prices are not on this page: they are set in the settings file, as described in the <a href="{{ url }}" target="_blank" rel="noopener">README</a>.{% endtrans %}</p>
+
+        <details class="settings-reset-all">
+            <summary>{{ _("Reset all to defaults…") }}</summary>
+            <form action="{{ url_for('reset_settings') }}" method="POST"
+                  hx-post="{{ url_for('reset_settings') }}" hx-target="#settings-content" hx-swap="outerHTML">
+                <p>{{ _("This puts every setting on this page back to its default and saves it right away. The graph layout and market prices in the settings file are kept.") }}</p>
+                <button type="submit" class="button button--danger">{{ _("Reset all settings") }}</button>
+            </form>
+        </details>
+    </section>
+</div>

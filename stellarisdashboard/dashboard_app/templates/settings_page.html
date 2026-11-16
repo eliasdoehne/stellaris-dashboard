@@ -1,59 +1,12 @@
 {% extends "layout.html" %}
 {% block body %}
-<div class="page page--narrow">
+<div class="page page--narrow settings-page">
 <div class="page-head">
     <div>
         <h1 class="page-title">{{ _("Settings") }}</h1>
-        <p class="page-subtitle">{{ _("Settings marked * apply after a restart.") }}</p>
+        <p class="page-subtitle">{{ _("Changes are saved to the settings file when you select Save settings.") }}</p>
     </div>
 </div>
-
-<!-- htmx: save in place and confirm via an out-of-band toast (apply_settings
-     returns just the #toast-slot fragment on HX-Request, leaving this form as-is).
-     With JS off, the plain POST redirects back here.
-     The structure of `sections` is documented in settings.settings_view(). -->
-<form class="settingsform" action="/applysettings/" method="POST"
-      hx-post="/applysettings/" hx-swap="none">
-    <div class="settings">
-        {% for section in sections %}
-            <h2>{{ section.label }}</h2>
-            {% for setting in section.settings %}
-            {% set key = setting.key %}
-            <div class="setting">
-                <span class="settingname">
-                    <label for="{{ key }}"> {{ setting.label }}{% if setting.requires_restart %} *{% endif %}: </label>
-                    <span class="settinginfo" title="{{ setting.description }}">🛈</span>
-                </span>
-                <span class="settinginput">
-                    {% if setting.kind == "bool" %}
-                    <input id="{{ key }}" type="checkbox" title="{{ setting.description }}" name="{{ key }}" {% if setting.value %} checked {% endif %}> <br>
-                    {% elif setting.kind in ("int", "float") %}
-                    <input id="{{ key }}" type="number" title="{{ setting.description }}" name="{{ key }}"
-                           {% if setting.min is not none %}min="{{ setting.min }}"{% endif %}
-                           {% if setting.max is not none %}max="{{ setting.max }}"{% endif %}
-                           step="{{ 1 if setting.kind == 'int' else 'any' }}" value="{{ setting.value }}"> <br>
-                    {% elif setting.kind == "choice" %}
-                    <select id="{{ key }}" title="{{ setting.description }}" name="{{ key }}">
-                        {% for option_value, option_name in setting.choices %}
-                        <option value="{{ option_value }}" {% if option_value == setting.value %} selected {% endif %}>{{ option_name }}</option>
-                        {% endfor %}
-                    </select> <br>
-                    {% else %}
-                    <input id="{{ key }}" type="text" title="{{ setting.description }}" name="{{ key }}" value="{{ setting.value }}"> <br>
-                    {% endif %}
-                    {% if setting.status and setting.status.level == "warning" %}
-                    <small>{{ setting.status.message }}</small>
-                    {% endif %}
-                </span>
-            </div>
-            {% endfor %}
-        {% endfor %}
-    </div>
-
-    <div class="settingsbuttons">
-        <button type="submit" class="button">{{ _("Apply Settings") }}</button>
-        <button type="reset" class="button">{{ _("Reset Values") }}</button>
-    </div>
-</form>
+{% include "_settings_content.html" %}
 </div>
 {% endblock %}

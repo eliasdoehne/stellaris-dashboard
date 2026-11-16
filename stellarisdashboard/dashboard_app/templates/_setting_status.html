@@ -1,0 +1,5 @@
+{# The status line of a game folder setting: on the page, and as the reply of /settings/check-path/. #}
+<p class="setting-status setting-status--{{ status.level }}" id="{{ key }}-status" aria-live="polite">
+    <span class="setting-status-mark" aria-hidden="true">{% if status.level == "ok" %}✓{% else %}⚠{% endif %}</span>
+    <span class="setting-status-text">{{ status.message }}</span>
+</p>

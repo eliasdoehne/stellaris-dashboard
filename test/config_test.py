@@ -303,10 +303,17 @@ def test_settings_view_shape():
     assert by_key["save_file_path"]["status"]["level"] in ("ok", "warning")
     assert by_key["show_everything"]["status"] is None
     assert by_key["show_everything"]["default"] == "false"
+    assert by_key["save_file_path"]["placeholder"] == str(config.DEFAULT_SETTINGS["save_file_path"])
+    assert by_key["failed_saves_max_size_mb"]["unit"] == "MB"
+    assert all(s["error"] is None for s in by_key.values())
+    server = next(s for s in sections if s["id"] == "server")
+    assert server["intro"] and server["basic"] == [] and {s["key"] for s in server["advanced"]} >= {"port", "host"}
     assert ("auto", "Same as Stellaris language") in by_key["dashboard_language"]["choices"]
     expected_keys = {
         "key", "kind", "value", "default", "is_default", "label", "description", "min", "max",
         "choices", "requires_restart", "advanced", "depends_on", "status",
+        "saved", "unit", "placeholder", "pending_restart", "inactive", "inactive_note",
+        "checks_folder", "error",
     }
     for setting in by_key.values():
         assert set(setting) == expected_keys

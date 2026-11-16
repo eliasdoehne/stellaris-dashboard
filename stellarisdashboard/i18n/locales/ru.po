@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-16 10:12+0000\n"
+"POT-Creation-Date: 2026-11-16 10:27+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -3616,52 +3616,78 @@ msgstr[0] "%(num)s место"
 msgstr[1] "%(num)s места"
 msgstr[2] "%(num)s мест"
 
-#: stellarisdashboard/dashboard_app/settings.py:17
+#: stellarisdashboard/dashboard_app/settings.py:18
 #, fuzzy
 msgid "Game Files"
 msgstr "Игры"
 
-#: stellarisdashboard/dashboard_app/settings.py:18
+#: stellarisdashboard/dashboard_app/settings.py:19
 msgid "Data Visibility"
 msgstr "Видимость данных"
 
-#: stellarisdashboard/dashboard_app/settings.py:19
+#: stellarisdashboard/dashboard_app/settings.py:20
 #, fuzzy
 msgid "Multiplayer"
 msgstr "Ваше имя пользователя в мультиплеере"
 
-#: stellarisdashboard/dashboard_app/settings.py:20 stellarisdashboard/dashboard_app/shell.py:21
+#: stellarisdashboard/dashboard_app/settings.py:21 stellarisdashboard/dashboard_app/shell.py:21
 #: stellarisdashboard/dashboard_app/templates/import_page.html:6
-#: stellarisdashboard/dashboard_app/templates/layout.html:89
+#: stellarisdashboard/dashboard_app/templates/layout.html:90
 msgid "Import Saves"
 msgstr "Импорт сохранений"
 
-#: stellarisdashboard/dashboard_app/settings.py:21
+#: stellarisdashboard/dashboard_app/settings.py:22
 msgid "Interface"
 msgstr "Интерфейс"
 
-#: stellarisdashboard/dashboard_app/settings.py:22
+#: stellarisdashboard/dashboard_app/settings.py:23
 msgid "Server"
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/settings.py:30
+msgid "Where the dashboard finds your saves and the files of the game."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:31
+msgid "How much the dashboard shows about other empires."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:32
+msgid "Keep the empires of other players hidden in multiplayer games."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:33
+msgid "How the dashboard reads new saves while you play."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:34
+msgid "Language, graphs and other display options."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:35
+msgid "Network and logging options of the dashboard app."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:43
 msgid "Save files folder"
 msgstr "Папка с сохранениями"
 
-#: stellarisdashboard/dashboard_app/settings.py:31
+#: stellarisdashboard/dashboard_app/settings.py:44
+#, fuzzy
 msgid ""
-"Where the dashboard will look for new Stellaris save files. Should contain a folder for each "
-"game, and each of those folder should contain one or .sav files. Leave blank to reset to default."
+"Where the dashboard will look for new Stellaris save files. It should contain a folder for each "
+"game, and each of those folders should contain one or more .sav files. Leave blank to reset to "
+"default."
 msgstr ""
 "Где панель будет искать новые файлы сохранений Stellaris. Должна содержать папку для каждой игры,"
 " а в каждой из них — один или несколько файлов .sav. Оставьте пустым, чтобы вернуть значение по "
 "умолчанию."
 
-#: stellarisdashboard/dashboard_app/settings.py:34
+#: stellarisdashboard/dashboard_app/settings.py:47
 msgid "Stellaris user data folder"
 msgstr "Папка пользовательских данных Stellaris"
 
-#: stellarisdashboard/dashboard_app/settings.py:35
+#: stellarisdashboard/dashboard_app/settings.py:48
 msgid ""
 "Where the dashboard will look for user data such as enabled mods. It should contain the "
 "dlc_load.json file. Leave blank to reset to default."
@@ -3669,48 +3695,48 @@ msgstr ""
 "Где панель будет искать пользовательские данные, например список включённых модов. Должна "
 "содержать файл dlc_load.json. Оставьте пустым, чтобы вернуть значение по умолчанию."
 
-#: stellarisdashboard/dashboard_app/settings.py:38
+#: stellarisdashboard/dashboard_app/settings.py:51
 msgid "Stellaris install folder"
 msgstr "Папка установки Stellaris"
 
-#: stellarisdashboard/dashboard_app/settings.py:39
+#: stellarisdashboard/dashboard_app/settings.py:52
 msgid "Where the dashboard will look for Stellaris game data. Leave blank to reset to default."
 msgstr ""
 "Где панель будет искать игровые данные Stellaris. Оставьте пустым, чтобы вернуть значение по "
 "умолчанию."
 
-#: stellarisdashboard/dashboard_app/settings.py:42
+#: stellarisdashboard/dashboard_app/settings.py:55
 msgid "Stellaris language"
 msgstr "Язык Stellaris"
 
-#: stellarisdashboard/dashboard_app/settings.py:43
+#: stellarisdashboard/dashboard_app/settings.py:56
 #, fuzzy
 msgid ""
 "The language to use for the names of empires, technologies and other text from the game. Use the "
 "same language as in the game."
 msgstr "Язык собственных текстов панели. По умолчанию совпадает с языком игры."
 
-#: stellarisdashboard/dashboard_app/settings.py:46
+#: stellarisdashboard/dashboard_app/settings.py:59
 msgid "Show information for all countries"
 msgstr "Показывать информацию обо всех государствах"
 
-#: stellarisdashboard/dashboard_app/settings.py:47
+#: stellarisdashboard/dashboard_app/settings.py:60
 msgid "Show information for all countries, including unknown ones."
 msgstr "Показывать информацию обо всех государствах, включая неизвестные."
 
-#: stellarisdashboard/dashboard_app/settings.py:50
+#: stellarisdashboard/dashboard_app/settings.py:63
 msgid "Show all country types"
 msgstr "Показывать все типы государств"
 
-#: stellarisdashboard/dashboard_app/settings.py:51
+#: stellarisdashboard/dashboard_app/settings.py:64
 msgid "Check to include special countries like enclaves, leviathans or the shroud."
 msgstr "Включите, чтобы показывать особые государства, например анклавы, левиафанов или Пелену."
 
-#: stellarisdashboard/dashboard_app/settings.py:54
+#: stellarisdashboard/dashboard_app/settings.py:67
 msgid "Filter history ledger by event type"
 msgstr "Фильтровать журнал событий по типу события"
 
-#: stellarisdashboard/dashboard_app/settings.py:55
+#: stellarisdashboard/dashboard_app/settings.py:68
 msgid ""
 "If enabled, only a selection of relevant historical events are shown in the event ledger, "
 "depending on the page."
@@ -3718,11 +3744,11 @@ msgstr ""
 "Если включено, в журнале событий показывается только подборка важных исторических событий (в "
 "зависимости от страницы)."
 
-#: stellarisdashboard/dashboard_app/settings.py:58
+#: stellarisdashboard/dashboard_app/settings.py:71
 msgid "Your multiplayer username"
 msgstr "Ваше имя пользователя в мультиплеере"
 
-#: stellarisdashboard/dashboard_app/settings.py:59
+#: stellarisdashboard/dashboard_app/settings.py:72
 msgid ""
 "By default, data for countries controlled by players with any other username are hidden (see "
 "below setting). This setting does not affect single-player games."
@@ -3730,11 +3756,11 @@ msgstr ""
 "По умолчанию данные государств, которыми управляют игроки с другим именем, скрыты (см. настройку "
 "ниже). Эта настройка не влияет на одиночные игры."
 
-#: stellarisdashboard/dashboard_app/settings.py:62
+#: stellarisdashboard/dashboard_app/settings.py:75
 msgid "Hide other players"
 msgstr "Скрывать других игроков"
 
-#: stellarisdashboard/dashboard_app/settings.py:63
+#: stellarisdashboard/dashboard_app/settings.py:76
 msgid ""
 "If enabled, hides information for countries controlled by players that do not match the above "
 "multiplayer Username"
@@ -3742,11 +3768,11 @@ msgstr ""
 "Если включено, скрывает данные государств, которыми управляют игроки, чьё имя не совпадает с "
 "именем пользователя в мультиплеере, указанным выше."
 
-#: stellarisdashboard/dashboard_app/settings.py:66
+#: stellarisdashboard/dashboard_app/settings.py:79
 msgid "Skip saves after processing"
 msgstr "Пропускать сохранения после обработки"
 
-#: stellarisdashboard/dashboard_app/settings.py:67
+#: stellarisdashboard/dashboard_app/settings.py:80
 #, fuzzy
 msgid ""
 "After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up "
@@ -3756,11 +3782,11 @@ msgstr ""
 "успевает за автосохранениями. Также можно использовать настройку «Фильтр имён файлов сохранений» "
 "выше."
 
-#: stellarisdashboard/dashboard_app/settings.py:70
+#: stellarisdashboard/dashboard_app/settings.py:83
 msgid "Keep copies of failed saves"
 msgstr "Хранить копии неудачных сохранений"
 
-#: stellarisdashboard/dashboard_app/settings.py:71
+#: stellarisdashboard/dashboard_app/settings.py:84
 msgid ""
 "Copy saves that fail to import (fully or partially) to the failed_saves folder in the output "
 "folder, with a record of the error, so they can be imported again after a fix with "
@@ -3770,19 +3796,20 @@ msgstr ""
 "failed_saves внутри папки вывода вместе с записью об ошибке, чтобы их можно было импортировать "
 "повторно после исправления командой «stellarisdashboardcli reprocess-failed-saves»."
 
-#: stellarisdashboard/dashboard_app/settings.py:74
-msgid "Failed saves folder size limit (MB)"
+#: stellarisdashboard/dashboard_app/settings.py:87
+#, fuzzy
+msgid "Failed saves folder size limit"
 msgstr "Ограничение размера папки неудачных сохранений (МБ)"
 
-#: stellarisdashboard/dashboard_app/settings.py:75
+#: stellarisdashboard/dashboard_app/settings.py:88
 msgid "When the failed_saves folder grows beyond this size, the oldest copies are deleted."
 msgstr "Когда папка failed_saves превышает этот размер, самые старые копии удаляются."
 
-#: stellarisdashboard/dashboard_app/settings.py:78
+#: stellarisdashboard/dashboard_app/settings.py:91
 msgid "Back up all saves"
 msgstr "Резервное копирование всех сохранений"
 
-#: stellarisdashboard/dashboard_app/settings.py:79
+#: stellarisdashboard/dashboard_app/settings.py:92
 msgid ""
 "Copy every save file the dashboard reads to the save_backups folder in the output folder, so the "
 "full history can be imported again later. WARNING: This folder has no size limit and grows by one"
@@ -3792,43 +3819,43 @@ msgstr ""
 " чтобы полную историю можно было импортировать повторно позже. ВНИМАНИЕ: размер этой папки не "
 "ограничен и увеличивается на один файл сохранения при каждом автосохранении."
 
-#: stellarisdashboard/dashboard_app/settings.py:82
+#: stellarisdashboard/dashboard_app/settings.py:95
 msgid "Number of threads"
 msgstr "Количество потоков"
 
-#: stellarisdashboard/dashboard_app/settings.py:83
+#: stellarisdashboard/dashboard_app/settings.py:96
 msgid "Number of threads for reading save files."
 msgstr "Количество потоков для чтения файлов сохранений."
 
-#: stellarisdashboard/dashboard_app/settings.py:86
+#: stellarisdashboard/dashboard_app/settings.py:99
 msgid "Dashboard language"
 msgstr "Язык панели"
 
-#: stellarisdashboard/dashboard_app/settings.py:87
+#: stellarisdashboard/dashboard_app/settings.py:100
 msgid "The language of the dashboard's own text. By default, the same language as the game."
 msgstr "Язык собственных текстов панели. По умолчанию совпадает с языком игры."
 
-#: stellarisdashboard/dashboard_app/settings.py:90
+#: stellarisdashboard/dashboard_app/settings.py:103
 msgid "Graph height"
 msgstr "Высота графиков"
 
-#: stellarisdashboard/dashboard_app/settings.py:91
+#: stellarisdashboard/dashboard_app/settings.py:104
 msgid "Height of graphs in pixels."
 msgstr "Высота графиков в пикселях."
 
-#: stellarisdashboard/dashboard_app/settings.py:94
+#: stellarisdashboard/dashboard_app/settings.py:107
 msgid "Initial graph resolution"
 msgstr "Начальное разрешение графиков"
 
-#: stellarisdashboard/dashboard_app/settings.py:95
+#: stellarisdashboard/dashboard_app/settings.py:108
 msgid "Number of points used when first loading the graphs. Set to 0 to load full data."
 msgstr "Количество точек при первой загрузке графиков. Укажите 0, чтобы загружать все данные."
 
-#: stellarisdashboard/dashboard_app/settings.py:98
+#: stellarisdashboard/dashboard_app/settings.py:111
 msgid "Check for new versions"
 msgstr "Проверять наличие новых версий"
 
-#: stellarisdashboard/dashboard_app/settings.py:99
+#: stellarisdashboard/dashboard_app/settings.py:112
 msgid ""
 "When using the Workshop mod for in-game access, a message will be displayed if a newer version of"
 " the separate dashboard app is available."
@@ -3836,56 +3863,92 @@ msgstr ""
 "При использовании мода из Мастерской для доступа из игры будет показано сообщение, если доступна "
 "новая версия отдельного приложения панели."
 
-#: stellarisdashboard/dashboard_app/settings.py:102
+#: stellarisdashboard/dashboard_app/settings.py:115
 msgid "Open in browser on start"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:103
+#: stellarisdashboard/dashboard_app/settings.py:116
 msgid "Open the dashboard in your default web browser when the dashboard app starts."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:106
+#: stellarisdashboard/dashboard_app/settings.py:119
 #, fuzzy
 msgid "Host"
 msgstr "враждебный"
 
-#: stellarisdashboard/dashboard_app/settings.py:107
+#: stellarisdashboard/dashboard_app/settings.py:120
 msgid ""
 "The network address the dashboard listens on. The default, 127.0.0.1, only allows access from "
 "this computer. Use 0.0.0.0 to allow access from other devices in your network."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:110
+#: stellarisdashboard/dashboard_app/settings.py:123
 #, fuzzy
 msgid "Port"
 msgstr "Импортировано"
 
-#: stellarisdashboard/dashboard_app/settings.py:111
+#: stellarisdashboard/dashboard_app/settings.py:124
 msgid "The port the dashboard listens on, as in http://localhost:28053/."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:114
+#: stellarisdashboard/dashboard_app/settings.py:127
 #, fuzzy
 msgid "Log level"
 msgstr "Уровень подробности"
 
-#: stellarisdashboard/dashboard_app/settings.py:115
+#: stellarisdashboard/dashboard_app/settings.py:128
 msgid "How much detail is written to the console log. Use DEBUG when reporting a problem."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:118
+#: stellarisdashboard/dashboard_app/settings.py:131
 msgid "Write log to file"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:119
+#: stellarisdashboard/dashboard_app/settings.py:132
 msgid "Also write the log to log.txt in the output folder."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:127
+#. unit after a number input, short for megabytes
+#: stellarisdashboard/dashboard_app/settings.py:143
+msgid "MB"
+msgstr ""
+
+#. unit after a number input, short for pixels
+#: stellarisdashboard/dashboard_app/settings.py:145
+msgid "px"
+msgstr ""
+
+#. unit after a number input: "Skip saves after processing: [3] saves"
+#: stellarisdashboard/dashboard_app/settings.py:147
+#, fuzzy
+msgid "saves"
+msgstr "Сохранения"
+
+#. unit after a number input: the number of data points loaded per graph
+#: stellarisdashboard/dashboard_app/settings.py:149
+#, fuzzy
+msgid "points"
+msgstr "Планеты"
+
+#: stellarisdashboard/dashboard_app/settings.py:156
 msgid "Same as Stellaris language"
 msgstr "Как язык Stellaris"
 
-#: stellarisdashboard/dashboard_app/settings.py:136
+#: stellarisdashboard/dashboard_app/settings.py:162
+#, fuzzy
+msgid "Save files found in this folder."
+msgstr "Папка с сохранениями"
+
+#: stellarisdashboard/dashboard_app/settings.py:163
+#, fuzzy
+msgid "The Stellaris game files are in this folder."
+msgstr "Папка пользовательских данных Stellaris"
+
+#: stellarisdashboard/dashboard_app/settings.py:164
+msgid "The dlc_load.json file is in this folder."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:170
 #, fuzzy
 msgid ""
 "No save files found. This folder should contain a folder for each game, which each contain .sav "
@@ -3894,29 +3957,50 @@ msgstr ""
 "В папке с сохранениями должна находиться папка для каждой игры, а в каждой из них — файлы "
 "<code>.sav</code>."
 
-#: stellarisdashboard/dashboard_app/settings.py:140
+#: stellarisdashboard/dashboard_app/settings.py:171
 msgid ""
 "The Stellaris game files were not found. This folder should contain the localisation and flags "
 "folders."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:144
+#: stellarisdashboard/dashboard_app/settings.py:172
 #, fuzzy
 msgid "This folder should contain the dlc_load.json file."
 msgstr "В этой папке должен находиться файл <code>dlc_load.json</code>."
 
-#: stellarisdashboard/dashboard_app/settings.py:243
+#: stellarisdashboard/dashboard_app/settings.py:192
+#, fuzzy, python-format
+msgid "This folder does not exist."
+msgstr "Империя %(country)s прекратила существование."
+
+#: stellarisdashboard/dashboard_app/settings.py:362
+#, python-format
+msgid "Only applies when “%(setting)s” is turned on."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:364
+#, python-format
+msgid "Only applies when “%(setting)s” is filled in."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:423
 #, fuzzy
 msgid "Some settings were not applied:"
 msgstr "Настройки применены."
 
-#: stellarisdashboard/dashboard_app/settings.py:246
-msgid "Settings applied."
-msgstr "Настройки применены."
-
-#: stellarisdashboard/dashboard_app/settings.py:250
+#: stellarisdashboard/dashboard_app/settings.py:431
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:109
 #, python-format
 msgid "Restart the dashboard to apply: %(settings)s"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:474
+#, fuzzy
+msgid "Settings saved."
+msgstr "Настройки применены."
+
+#: stellarisdashboard/dashboard_app/settings.py:486
+msgid "All settings were reset to their defaults."
 msgstr ""
 
 #: stellarisdashboard/dashboard_app/shell.py:10
@@ -3949,7 +4033,7 @@ msgid "Games"
 msgstr "Игры"
 
 #: stellarisdashboard/dashboard_app/shell.py:22
-#: stellarisdashboard/dashboard_app/templates/layout.html:90
+#: stellarisdashboard/dashboard_app/templates/layout.html:91
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:6
 msgid "Settings"
 msgstr "Настройки"
@@ -4091,6 +4175,131 @@ msgstr[2] "Показаны %(num)s лучших результатов. Уто�
 #: stellarisdashboard/dashboard_app/templates/_search_results.html:23
 msgid "All kinds"
 msgstr "Все типы"
+
+#. badge on a setting whose value differs from the default
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:20
+#, fuzzy
+msgid "Modified"
+msgstr "Модификаторы"
+
+#. badge on a setting that only applies after restarting the dashboard app
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:23
+#, fuzzy
+msgid "Changes to this setting apply after restarting the dashboard."
+msgstr "Перейдите в «Настройки», чтобы изменить её, затем перезапустите панель."
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:23
+#, fuzzy
+msgid "Needs restart"
+msgstr "Итог"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:70
+#, python-format
+msgid "Reset %(setting)s to its default"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:70
+#, fuzzy
+msgid "Reset"
+msgstr "Исследования"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:89
+#, fuzzy
+msgid "Some settings in config.yml were invalid"
+msgstr "Настройки применены."
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:90
+msgid "When the dashboard started, it used the default instead of these values:"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:96
+msgid "Saving the settings replaces these values in config.yml."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:100
+#, fuzzy
+msgid "Dismiss"
+msgstr "Районы"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:110
+msgid "Close the dashboard app and start it again. Until then, it keeps using the previous values."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:118
+#, fuzzy, python-format
+msgid "%(num)s setting was not saved"
+msgid_plural "%(num)s settings were not saved"
+msgstr[0] "Настройки применены."
+msgstr[1] ""
+msgstr[2] ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:119
+msgid "Your other changes were saved. Fix the values below and save again."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:141
+#, fuzzy
+msgid "Advanced"
+msgstr "призыв союзника"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:142
+#, fuzzy, python-format
+msgid "%(num)s setting"
+msgid_plural "%(num)s settings"
+msgstr[0] "%(num)s стадия"
+msgstr[1] "%(num)s стадии"
+msgstr[2] "%(num)s стадий"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:151
+msgid "You have unsaved changes"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:152
+#, fuzzy
+msgid "Discard changes"
+msgstr "Язык панели"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:153
+#, fuzzy
+msgid "Save settings"
+msgstr "Настройки"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:158
+#, fuzzy
+msgid "Files"
+msgstr "Файл"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:160
+#, fuzzy
+msgid "Settings file"
+msgstr "Настройки"
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:162
+msgid "Output folder"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:165
+#, python-format
+msgid ""
+"The layout of the graph tabs and the market prices are not on this page: they are set in the "
+"settings file, as described in the <a href=\"%(url)s\" target=\"_blank\" "
+"rel=\"noopener\">README</a>."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:168
+msgid "Reset all to defaults…"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:171
+msgid ""
+"This puts every setting on this page back to its default and saves it right away. The graph "
+"layout and market prices in the settings file are kept."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/templates/_settings_content.html:172
+#, fuzzy
+msgid "Reset all settings"
+msgstr "Применить настройки"
 
 #: stellarisdashboard/dashboard_app/templates/codex_page.html:8
 msgid "A browsable index of this game's entities. Select one to open its event ledger."
@@ -4572,91 +4781,91 @@ msgstr "Отмена"
 msgid "Timeline Graphs"
 msgstr "Графики по времени"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:26
+#: stellarisdashboard/dashboard_app/templates/layout.html:27
 msgid "Navigation"
 msgstr "Навигация"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:28
+#: stellarisdashboard/dashboard_app/templates/layout.html:29
 msgid "All games"
 msgstr "Все игры"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:32
+#: stellarisdashboard/dashboard_app/templates/layout.html:33
 msgid "Collapse sidebar"
 msgstr "Свернуть боковую панель"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:40
+#: stellarisdashboard/dashboard_app/templates/layout.html:41
 msgid "Switch game"
 msgstr "Сменить игру"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:55
+#: stellarisdashboard/dashboard_app/templates/layout.html:56
 msgid "All games & details"
 msgstr "Все игры и подробности"
 
 #. link in the sidebar to the event ledger of the whole galaxy
-#: stellarisdashboard/dashboard_app/templates/layout.html:78
+#: stellarisdashboard/dashboard_app/templates/layout.html:79
 msgctxt "ledger scope"
 msgid "Galaxy"
 msgstr "Галактика"
 
 #. link in the sidebar to the event ledger of the player's empire
-#: stellarisdashboard/dashboard_app/templates/layout.html:80
+#: stellarisdashboard/dashboard_app/templates/layout.html:81
 msgctxt "ledger scope"
 msgid "Your empire"
 msgstr "Ваша империя"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:88
+#: stellarisdashboard/dashboard_app/templates/layout.html:89
 msgid "All Games"
 msgstr "Все игры"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:91
+#: stellarisdashboard/dashboard_app/templates/layout.html:92
 msgid "Stellaris Wiki"
 msgstr "Вики Stellaris"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:99
+#: stellarisdashboard/dashboard_app/templates/layout.html:100
 msgid "Open navigation"
 msgstr "Открыть навигацию"
 
 #. last part of the breadcrumb on an event ledger page that shows only the events of one empire,
 #. leader, war, ...
-#: stellarisdashboard/dashboard_app/templates/layout.html:107
+#: stellarisdashboard/dashboard_app/templates/layout.html:108
 msgctxt "breadcrumb"
 msgid "Filtered"
 msgstr "С фильтром"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:114
+#: stellarisdashboard/dashboard_app/templates/layout.html:115
 msgid "Search"
 msgstr "Поиск"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:114
-#: stellarisdashboard/dashboard_app/templates/layout.html:119
+#: stellarisdashboard/dashboard_app/templates/layout.html:115
+#: stellarisdashboard/dashboard_app/templates/layout.html:120
 msgid "Search this game"
 msgstr "Поиск по этой игре"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:117
+#: stellarisdashboard/dashboard_app/templates/layout.html:118
 msgid "Find an empire, leader, war, system…"
 msgstr "Найти империю, лидера, войну, систему…"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:121
+#: stellarisdashboard/dashboard_app/templates/layout.html:122
 msgid "Press / to search"
 msgstr "Нажмите / для поиска"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:122
+#: stellarisdashboard/dashboard_app/templates/layout.html:123
 msgid "Close search"
 msgstr "Закрыть поиск"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:124
+#: stellarisdashboard/dashboard_app/templates/layout.html:125
 msgid "Search results"
 msgstr "Результаты поиска"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:128
+#: stellarisdashboard/dashboard_app/templates/layout.html:129
 msgid "Date of the latest save"
 msgstr "Дата последнего сохранения"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:133
+#: stellarisdashboard/dashboard_app/templates/layout.html:134
 msgid "Graph categories"
 msgstr "Категории графиков"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:144
+#: stellarisdashboard/dashboard_app/templates/layout.html:145
 #, python-format
 msgid ""
 "You may be using an old version of the stellaris dashboard program. You are using version "
@@ -4667,7 +4876,7 @@ msgstr ""
 "запрошенная — %(update_version_id)s. Актуальную версию можно скачать <a "
 "href=\"https://github.com/eliasdoehne/stellaris-dashboard\" class=\"textlink\">на GitHub.</a>"
 
-#: stellarisdashboard/dashboard_app/templates/layout.html:146
+#: stellarisdashboard/dashboard_app/templates/layout.html:147
 msgid "This update notice can be disabled in the <a href=\"/settings/\" class=\"textlink\">Settings</a>."
 msgstr ""
 "Это уведомление об обновлении можно отключить в <a href=\"/settings/\" "
@@ -4773,16 +4982,8 @@ msgid "Open this empire's event ledger"
 msgstr "Открыть журнал событий этой империи"
 
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:7
-msgid "Settings marked * apply after a restart."
-msgstr "Настройки, отмеченные *, применяются после перезапуска."
-
-#: stellarisdashboard/dashboard_app/templates/settings_page.html:54
-msgid "Apply Settings"
-msgstr "Применить настройки"
-
-#: stellarisdashboard/dashboard_app/templates/settings_page.html:55
-msgid "Reset Values"
-msgstr "Сбросить значения"
+msgid "Changes are saved to the settings file when you select Save settings."
+msgstr ""
 
 #. label of the time axis of the graphs
 #: stellarisdashboard/dashboard_app/visualization_data.py:58
