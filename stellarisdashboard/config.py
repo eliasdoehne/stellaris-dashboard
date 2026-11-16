@@ -8,7 +8,9 @@ import os
 import pathlib
 import platform
 import re
+import shutil
 import sys
+import tempfile
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 import yaml
@@ -667,6 +669,14 @@ def _to_yaml_value(key, value):
     return str(value) if SETTINGS[key].kind == PATH else value
 
 
+SETTINGS_FILE_HEADER = """\
+# Settings of the Stellaris Dashboard. This file is managed by the dashboard: it is
+# rewritten when you apply settings on the settings page, and comments are not kept.
+# Only settings that differ from their default are listed. Settings that are not on
+# the settings page (tab_layout, market_resources, market_fee, ...) are described in
+# the README: https://github.com/eliasdoehne/stellaris-dashboard#readme
+"""
+
 # Where a settings dict comes from: config.yml, or the settings page.
 SOURCE_FILE = "file"
 SOURCE_FORM = "form"
@@ -825,17 +835,38 @@ class Config:
         value = getattr(self, key)
         return not (_is_current_default(key, value) or _is_legacy_default(key, value))
 
-    def write_to_file(self):
-        fname = _get_settings_file_path()
+    def write_to_file(self, path: Optional[pathlib.Path] = None):
+        """Save the customized settings to config.yml (or path), replacing the file atomically.
+
+        Only settings that differ from their current default are written, so that a
+        changed default reaches every install that did not customize the setting."""
+        fname = path or settings_file_path()
         if fname.exists() and not fname.is_file():
             raise ValueError(f"Settings file {fname} exists and is not a file!")
         logger.info(f"Writing settings to {fname}")
-        with open(fname, "w") as f:
-            settings_dict = self.get_dict()
-            for key, spec in SETTINGS.items():
-                if spec.legacy_defaults and not self.is_customized(key):
-                    del settings_dict[key]
-            yaml.dump(settings_dict, f, default_flow_style=False, sort_keys=False)
+        settings_dict = self.get_persisted_dict()
+        content = SETTINGS_FILE_HEADER
+        if settings_dict:
+            content += yaml.dump(settings_dict, default_flow_style=False, sort_keys=False)
+        _keep_copy_of_unreadable_settings_file(fname)
+        fname.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=fname.parent, prefix=f".{fname.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.chmod(tmp_name, fname.stat().st_mode if fname.exists() else 0o644)
+            os.replace(tmp_name, fname)
+        except BaseException:
+            pathlib.Path(tmp_name).unlink(missing_ok=True)
+            raise
+
+    def get_persisted_dict(self) -> Dict[str, Any]:
+        """The customized settings, as written to config.yml."""
+        return {
+            key: _to_yaml_value(key, getattr(self, key))
+            for key, spec in SETTINGS.items()
+            if spec.persisted and self.is_customized(key)
+        }
 
     def get_dict(self) -> Dict[str, Any]:
         """All persisted settings, as written to config.yml."""
@@ -963,11 +994,13 @@ def _read_settings_file(settings_file: pathlib.Path) -> Dict[str, Any]:
             file_settings = yaml.load(f, Loader=yaml.SafeLoader)
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
         logger.error(f"Could not read the settings file {settings_file}, using the default settings: {error}")
+        _UNREADABLE_SETTINGS_FILES.add(settings_file)
         return {}
     if file_settings is None:
         return {}
     if not isinstance(file_settings, dict):
         logger.error(f"The settings file {settings_file} does not contain a mapping of settings, using the default settings.")
+        _UNREADABLE_SETTINGS_FILES.add(settings_file)
         return {}
     for key in list(file_settings):
         if key in SETTINGS and SETTINGS[key].legacy_defaults and _is_legacy_default(key, file_settings[key]):
@@ -979,20 +1012,37 @@ def _read_settings_file(settings_file: pathlib.Path) -> Dict[str, Any]:
     return file_settings
 
 
+# settings files that could not be read; they are kept as a copy before they are overwritten
+_UNREADABLE_SETTINGS_FILES = set()
+
+
+def _keep_copy_of_unreadable_settings_file(settings_file: pathlib.Path):
+    if settings_file in _UNREADABLE_SETTINGS_FILES and settings_file.is_file():
+        backup = settings_file.with_name(settings_file.name + ".unreadable")
+        logger.warning(f"Keeping a copy of the unreadable settings file at {backup}")
+        shutil.copy2(settings_file, backup)
+    _UNREADABLE_SETTINGS_FILES.discard(settings_file)
+
+
 def _apply_existing_settings(config: Config) -> ApplyResult:
     """Apply the settings stored in config.yml. Invalid values are replaced by their default."""
-    return config.apply_dict(_read_settings_file(_get_settings_file_path()), source=SOURCE_FILE)
+    return config.apply_dict(_read_settings_file(settings_file_path()), source=SOURCE_FILE)
+
+
+# Environment variable with the location of the settings file, instead of ./config.yml
+SETTINGS_FILE_ENV_VAR = "STELLARIS_DASHBOARD_CONFIG"
 
 
 def settings_file_path() -> pathlib.Path:
-    """The location of config.yml."""
+    """The location of the settings file: $STELLARIS_DASHBOARD_CONFIG, or config.yml in the working directory."""
+    from_env = os.environ.get(SETTINGS_FILE_ENV_VAR)
+    if from_env:
+        return pathlib.Path(from_env).expanduser().absolute()
     return pathlib.Path.cwd() / "config.yml"
 
 
-_get_settings_file_path = settings_file_path
-
-
 def initialize():
+    """Load the settings into CONFIG (once). Reads config.yml, but never writes files or creates folders."""
     global CONFIG, LOAD_RESULT
     if CONFIG is not None:
         return
@@ -1005,27 +1055,33 @@ def initialize():
         logger.setLevel(logging.WARNING)
     CONFIG = Config()
     LOAD_RESULT = _apply_existing_settings(CONFIG)
-
-    # Initialize output paths
-    if not CONFIG.base_output_path.exists():
-        (CONFIG.base_output_path / "db").mkdir(parents=True)
-        (CONFIG.base_output_path / "output").mkdir(parents=True)
-
     configure_logger()
-    if not is_worker_process:
-        CONFIG.write_to_file()
+
+
+_log_file_handler: Optional[logging.Handler] = None
 
 
 def configure_logger():
-    global logger
-    logger.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
+    """Apply the log_level and log_to_file settings. Can be called again after they changed."""
+    global _log_file_handler
+    level = LOG_LEVELS.get(CONFIG.log_level, logging.INFO)
+    logger.setLevel(level)
     for h in logger.handlers:
-        h.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.INFO))
-    if CONFIG.log_to_file:
-        file_ch = logging.FileHandler(CONFIG.base_output_path / "log.txt")
-        file_ch.setLevel(LOG_LEVELS.get(CONFIG.log_level, logging.WARN))
-        file_ch.setFormatter(LOG_FORMAT)
-        logger.addHandler(file_ch)
+        h.setLevel(level)
+    if CONFIG.log_to_file and _log_file_handler is None:
+        try:
+            CONFIG.base_output_path.mkdir(parents=True, exist_ok=True)
+            _log_file_handler = logging.FileHandler(CONFIG.base_output_path / "log.txt")
+        except OSError as error:
+            logger.warning(f"Could not open the log file in {CONFIG.base_output_path}: {error}")
+            return
+        _log_file_handler.setLevel(level)
+        _log_file_handler.setFormatter(LOG_FORMAT)
+        logger.addHandler(_log_file_handler)
+    elif not CONFIG.log_to_file and _log_file_handler is not None:
+        logger.removeHandler(_log_file_handler)
+        _log_file_handler.close()
+        _log_file_handler = None
 
 
 initialize()
