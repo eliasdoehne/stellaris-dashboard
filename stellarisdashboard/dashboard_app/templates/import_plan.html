@@ -19,13 +19,7 @@
     </p>
     {% if plan.num_filtered_out %}
         <p class="import-meta">
-            {% if save_name_filter and skip_saves %}
-                {% trans trimmed num=plan.num_filtered_out, name_filter=save_name_filter, skip=skip_saves %}{{ num }} save is left out by the save file name filter "{{ name_filter }}" and the "skip saves" setting ({{ skip }}) in the <a class="textlink" href="/settings/">Settings</a>.{% pluralize num %}{{ num }} saves are left out by the save file name filter "{{ name_filter }}" and the "skip saves" setting ({{ skip }}) in the <a class="textlink" href="/settings/">Settings</a>.{% endtrans %}
-            {% elif save_name_filter %}
-                {% trans trimmed num=plan.num_filtered_out, name_filter=save_name_filter %}{{ num }} save is left out by the save file name filter "{{ name_filter }}" in the <a class="textlink" href="/settings/">Settings</a>.{% pluralize num %}{{ num }} saves are left out by the save file name filter "{{ name_filter }}" in the <a class="textlink" href="/settings/">Settings</a>.{% endtrans %}
-            {% else %}
-                {% trans trimmed num=plan.num_filtered_out, skip=skip_saves %}{{ num }} save is left out by the "skip saves" setting ({{ skip }}) in the <a class="textlink" href="/settings/">Settings</a>.{% pluralize num %}{{ num }} saves are left out by the "skip saves" setting ({{ skip }}) in the <a class="textlink" href="/settings/">Settings</a>.{% endtrans %}
-            {% endif %}
+            {% trans trimmed num=plan.num_filtered_out, skip=skip_saves %}{{ num }} save is left out by the "skip saves" setting ({{ skip }}) in the <a class="textlink" href="/settings/">Settings</a>.{% pluralize num %}{{ num }} saves are left out by the "skip saves" setting ({{ skip }}) in the <a class="textlink" href="/settings/">Settings</a>.{% endtrans %}
         </p>
     {% endif %}
     {% if plan.num_older_than_imported %}

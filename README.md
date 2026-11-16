@@ -36,8 +36,8 @@ The packaged app tracks new saves as they appear while it runs. To import the sa
 a game already has, open the **Import Saves** page, select the game and start the
 import. It runs in the background, shows its progress and errors, can be cancelled,
 and skips saves that are already imported. New saves of the same game written
-during the import are imported after the others. The "Save file name filter" and
-"Skip saves" settings apply to the import as well. From a source checkout, the same
+during the import are imported after the others. The "Skip saves" setting applies
+to the import as well. From a source checkout, the same
 import is available as `uv run stellarisdashboardcli parse-saves`.
 
 ### Building from source (developer setup)
@@ -69,7 +69,7 @@ A few settings can only be changed by editing `config.yml` (create it if it does
 - `market_resources` and `market_fee`: see [Market Price Graphs](#market-price-graphs).
 - `base_output_path`: the folder for the databases, failed saves and exports (default: `output` in the folder the dashboard is started from).
 
-An invalid value in `config.yml` is reported in the dashboard output and the default is used instead. The dashboard rewrites `config.yml` when you apply settings on the settings page, keeping the values of these settings but not comments. The settings `polling_interval`, `include_id_in_names` and `plot_width` were removed; they are ignored if your `config.yml` still contains them.
+An invalid value in `config.yml` is reported in the dashboard output and the default is used instead. The dashboard rewrites `config.yml` when you apply settings on the settings page, keeping the values of these settings but not comments. The settings `polling_interval`, `include_id_in_names`, `plot_width` and `save_name_filter` were removed (use `Skip saves` instead of the save file name filter); they are ignored if your `config.yml` still contains them.
 
 ## Save File Location
 

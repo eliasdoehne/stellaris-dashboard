@@ -211,9 +211,9 @@ def f_reprocess_failed_saves(threads=None, game_name_prefix="") -> None:
     if not failed_dir.is_dir():
         logger.info(f"No failed saves to reprocess in {failed_dir}")
         return
-    # every kept copy should be reprocessed, regardless of the save filters
-    save_name_filter, skip_saves = config.CONFIG.save_name_filter, config.CONFIG.skip_saves
-    config.CONFIG.save_name_filter, config.CONFIG.skip_saves = "", 0
+    # every kept copy should be reprocessed, regardless of the skip_saves setting
+    skip_saves = config.CONFIG.skip_saves
+    config.CONFIG.skip_saves = 0
     try:
         f_parse_saves(
             threads,
@@ -222,7 +222,7 @@ def f_reprocess_failed_saves(threads=None, game_name_prefix="") -> None:
             replace_existing=True,
         )
     finally:
-        config.CONFIG.save_name_filter, config.CONFIG.skip_saves = save_name_filter, skip_saves
+        config.CONFIG.skip_saves = skip_saves
 
 
 if __name__ == "__main__":

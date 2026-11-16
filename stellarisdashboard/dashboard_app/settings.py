@@ -62,15 +62,9 @@ def setting_texts() -> Dict[str, Dict[str, str]]:
             label=_("Hide other players"),
             description=_("If enabled, hides information for countries controlled by players that do not match the above multiplayer Username"),
         ),
-        "save_name_filter": dict(
-            label=_("Save file name filter"),
-            # Translators: "Skip saves after processing" must match the name of that setting.
-            description=_("Only save files whose file names contain this string are processed. For example, you could use \".01.01\" so only saves from the start of the year are processed. Alternatively, use \"Skip saves after processing\" below"),
-        ),
         "skip_saves": dict(
             label=_("Skip saves after processing"),
-            # Translators: "Save name filter" refers to the setting "Save file name filter".
-            description=_("After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up with autosaves. Alternatively, use the \"Save name filter\" above."),
+            description=_("After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up with autosaves."),
         ),
         "keep_failed_saves": dict(
             label=_("Keep copies of failed saves"),

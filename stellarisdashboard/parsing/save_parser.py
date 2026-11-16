@@ -67,27 +67,12 @@ class SavePathMonitor(abc.ABC):
         pass
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
-        """Get a list of all new save files, filtered by the save_name_filter and skip_saves settings."""
+        """Get a list of all new save files, filtered by the skip_saves setting."""
         return self.apply_save_filters(self._valid_save_files())
 
     def apply_save_filters(self, save_files: List[pathlib.Path]) -> List[pathlib.Path]:
-        """Apply the save_name_filter and skip_saves settings to the given save files."""
-        save_files = self._apply_filename_filter(save_files)
+        """Apply the skip_saves setting to the given save files."""
         return self._apply_skip_savefiles_filter(save_files)
-
-    @staticmethod
-    def _apply_filename_filter(new_files: List[pathlib.Path]) -> List[pathlib.Path]:
-        if new_files:
-            unfiltered_count = len(new_files)
-            filter_string = config.CONFIG.save_name_filter
-            if filter_string:
-                new_files = [
-                    f for f in new_files if filter_string.lower() in f.stem.lower()
-                ]
-                logger.info(
-                    f'Applying filename filter: "{filter_string}", reduced from {unfiltered_count} to {len(new_files)} files.'
-                )
-        return new_files
 
     def _apply_skip_savefiles_filter(
         self, new_files: List[pathlib.Path]
