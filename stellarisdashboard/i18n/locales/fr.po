@@ -49,75 +49,76 @@ msgstr "Un import de %(game_id)s est déjà en cours. Attendez qu'il se termine 
 #: stellarisdashboard/config.py:329
 #, python-format
 msgid "Expected true or false, got %(value)s."
-msgstr ""
+msgstr "Booléen (true ou false) attendu, reçu : %(value)s."
 
 #: stellarisdashboard/config.py:339
 #, python-format
 msgid "Must be between %(min)s and %(max)s."
-msgstr ""
+msgstr "Doit être compris entre %(min)s et %(max)s."
 
 #: stellarisdashboard/config.py:342
-#, fuzzy, python-format
+#, python-format
 msgid "Must be at least %(min)s."
-msgstr "Le DPI doit être d'au moins 1."
+msgstr "Doit être au moins %(min)s."
 
 #: stellarisdashboard/config.py:343
-#, fuzzy, python-format
+#, python-format
 msgid "Must be at most %(max)s."
-msgstr "Le DPI doit être d'au moins 1."
+msgstr "Doit être au plus %(max)s."
 
 #: stellarisdashboard/config.py:358
-#, fuzzy, python-format
+#, python-format
 msgid "%(value)s is not a whole number."
-msgstr "Le DPI doit être un nombre entier."
+msgstr "%(value)s n'est pas un nombre entier."
 
 #: stellarisdashboard/config.py:372
 #, python-format
 msgid "%(value)s is not a number."
-msgstr ""
+msgstr "%(value)s n'est pas un nombre."
 
 #: stellarisdashboard/config.py:381
 #, python-format
 msgid "Expected text, got %(value)s."
-msgstr ""
+msgstr "Texte attendu, reçu : %(value)s."
 
 #: stellarisdashboard/config.py:386
 #, python-format
 msgid "Expected a folder path, got %(value)s."
-msgstr ""
+msgstr "Chemin de dossier attendu, reçu : %(value)s."
 
 #: stellarisdashboard/config.py:393 stellarisdashboard/config.py:396
 #, python-format
 msgid "%(value)s is not a folder."
-msgstr ""
+msgstr "%(value)s n'est pas un dossier."
 
 #: stellarisdashboard/config.py:394
-#, fuzzy, python-format
+#, python-format
 msgid "The folder %(value)s does not exist."
-msgstr "L'empire %(country)s a cessé d'exister."
+msgstr "Le dossier %(value)s n'existe pas."
 
 #: stellarisdashboard/config.py:403 stellarisdashboard/config.py:424
 #, python-format
 msgid "%(value)s is not one of the available options."
-msgstr ""
+msgstr "%(value)s ne fait pas partie des options disponibles."
 
 #: stellarisdashboard/config.py:438
 #, python-format
 msgid "%(value)s is not a Stellaris language key, such as l_english."
-msgstr ""
+msgstr "%(value)s n'est pas une clé de langue de Stellaris, comme l_english."
 
 #: stellarisdashboard/config.py:450
 #, python-format
 msgid "%(value)s is not a valid host name or address."
-msgstr ""
+msgstr "%(value)s n'est pas un nom d'hôte ou une adresse valide."
 
 #: stellarisdashboard/config.py:484
 msgid "Expected a mapping of tab names to lists of graph IDs."
 msgstr ""
+"Une correspondance entre des noms d'onglets et des listes d'ID de graphiques était attendue."
 
 #: stellarisdashboard/config.py:513
 msgid "Expected a list of resources."
-msgstr ""
+msgstr "Une liste de ressources était attendue."
 
 #: stellarisdashboard/config.py:522
 #, python-format
@@ -125,15 +126,19 @@ msgid ""
 "Every resource needs a name and a base_price (a number, or null if it cannot be traded), got "
 "%(value)s."
 msgstr ""
+"Chaque ressource doit avoir un nom et un base_price (un nombre, ou null si elle ne peut pas "
+"être échangée), reçu : %(value)s."
 
 #: stellarisdashboard/config.py:533
 msgid "Expected a list of market fees."
-msgstr ""
+msgstr "Une liste de frais de marché était attendue."
 
 #: stellarisdashboard/config.py:541
 #, python-format
 msgid "Every market fee needs a date (like 2200.01.01) and a fee (like 0.3), got %(value)s."
 msgstr ""
+"Chaque frais de marché doit avoir une date (comme 2200.01.01) et un montant (comme 0.3), reçu : "
+"%(value)s."
 
 #. label of a small chart in the hover preview of an empire
 #: stellarisdashboard/dashboard_app/entity_preview.py:33
@@ -3661,18 +3666,16 @@ msgstr[0] "%(num)s place"
 msgstr[1] "%(num)s places"
 
 #: stellarisdashboard/dashboard_app/settings.py:18
-#, fuzzy
 msgid "Game Files"
-msgstr "Parties"
+msgstr "Fichiers du jeu"
 
 #: stellarisdashboard/dashboard_app/settings.py:19
 msgid "Data Visibility"
 msgstr "Visibilité des données"
 
 #: stellarisdashboard/dashboard_app/settings.py:20
-#, fuzzy
 msgid "Multiplayer"
-msgstr "Votre nom d'utilisateur multijoueur"
+msgstr "Multijoueur"
 
 #: stellarisdashboard/dashboard_app/settings.py:21 stellarisdashboard/dashboard_app/shell.py:21
 #: stellarisdashboard/dashboard_app/templates/import_page.html:6
@@ -3686,46 +3689,47 @@ msgstr "Interface"
 
 #: stellarisdashboard/dashboard_app/settings.py:23
 msgid "Server"
-msgstr ""
+msgstr "Serveur"
 
 #: stellarisdashboard/dashboard_app/settings.py:30
 msgid "Where the dashboard finds your saves and the files of the game."
-msgstr ""
+msgstr "Où le tableau de bord trouve vos sauvegardes et les fichiers du jeu."
 
 #: stellarisdashboard/dashboard_app/settings.py:31
 msgid "How much the dashboard shows about other empires."
 msgstr ""
+"La quantité d'informations que le tableau de bord affiche sur les autres empires."
 
 #: stellarisdashboard/dashboard_app/settings.py:32
 msgid "Keep the empires of other players hidden in multiplayer games."
-msgstr ""
+msgstr "Garder masqués les empires des autres joueurs dans les parties multijoueurs."
 
 #: stellarisdashboard/dashboard_app/settings.py:33
 msgid "How the dashboard reads new saves while you play."
 msgstr ""
+"Comment le tableau de bord lit les nouvelles sauvegardes pendant que vous jouez."
 
 #: stellarisdashboard/dashboard_app/settings.py:34
 msgid "Language, graphs and other display options."
-msgstr ""
+msgstr "Langue, graphiques et autres options d'affichage."
 
 #: stellarisdashboard/dashboard_app/settings.py:35
 msgid "Network and logging options of the dashboard app."
-msgstr ""
+msgstr "Options réseau et de journalisation de l'application du tableau de bord."
 
 #: stellarisdashboard/dashboard_app/settings.py:43
 msgid "Save files folder"
 msgstr "Dossier des sauvegardes"
 
 #: stellarisdashboard/dashboard_app/settings.py:44
-#, fuzzy
 msgid ""
 "Where the dashboard will look for new Stellaris save files. It should contain a folder for each "
 "game, and each of those folders should contain one or more .sav files. Leave blank to reset to "
 "default."
 msgstr ""
 "Où le tableau de bord cherchera les nouveaux fichiers de sauvegarde de Stellaris. Il doit "
-"contenir un dossier par partie, chacun contenant un ou plusieurs fichiers .sav. Laissez vide pour"
-" rétablir la valeur par défaut."
+"contenir un dossier par partie, et chacun de ces dossiers doit contenir un ou plusieurs "
+"fichiers .sav. Laissez vide pour rétablir la valeur par défaut."
 
 #: stellarisdashboard/dashboard_app/settings.py:47
 msgid "Stellaris user data folder"
@@ -3754,11 +3758,12 @@ msgid "Stellaris language"
 msgstr "Langue de Stellaris"
 
 #: stellarisdashboard/dashboard_app/settings.py:56
-#, fuzzy
 msgid ""
 "The language to use for the names of empires, technologies and other text from the game. Use the "
 "same language as in the game."
-msgstr "La langue des textes propres au tableau de bord. Par défaut, la même que celle du jeu."
+msgstr ""
+"La langue à utiliser pour les noms des empires, des technologies et les autres textes du jeu. "
+"Utilisez la même langue que dans le jeu."
 
 #: stellarisdashboard/dashboard_app/settings.py:59
 msgid "Show information for all countries"
@@ -3817,14 +3822,12 @@ msgid "Skip saves after processing"
 msgstr "Ignorer des sauvegardes après traitement"
 
 #: stellarisdashboard/dashboard_app/settings.py:80
-#, fuzzy
 msgid ""
 "After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up "
 "with autosaves."
 msgstr ""
-"Après le traitement d'une sauvegarde, les X suivantes sont ignorées. À utiliser si le tableau de "
-"bord ne suit pas le rythme des sauvegardes automatiques. Vous pouvez aussi utiliser « Filtre sur "
-"le nom des fichiers de sauvegarde » ci-dessus."
+"Après le traitement d'une sauvegarde, les X sauvegardes suivantes sont ignorées. À utiliser si "
+"le tableau de bord ne parvient pas à suivre les sauvegardes automatiques."
 
 #: stellarisdashboard/dashboard_app/settings.py:83
 msgid "Keep copies of failed saves"
@@ -3841,9 +3844,8 @@ msgstr ""
 "nouveau après un correctif avec « stellarisdashboardcli reprocess-failed-saves »."
 
 #: stellarisdashboard/dashboard_app/settings.py:87
-#, fuzzy
 msgid "Failed saves folder size limit"
-msgstr "Taille maximale du dossier des sauvegardes en échec (Mo)"
+msgstr "Taille maximale du dossier des sauvegardes en échec"
 
 #: stellarisdashboard/dashboard_app/settings.py:88
 msgid "When the failed_saves folder grows beyond this size, the oldest copies are deleted."
@@ -3914,143 +3916,142 @@ msgstr ""
 
 #: stellarisdashboard/dashboard_app/settings.py:115
 msgid "Open in browser on start"
-msgstr ""
+msgstr "Ouvrir dans le navigateur au démarrage"
 
 #: stellarisdashboard/dashboard_app/settings.py:116
 msgid "Open the dashboard in your default web browser when the dashboard app starts."
 msgstr ""
+"Ouvre le tableau de bord dans votre navigateur web par défaut au démarrage de l'application du "
+"tableau de bord."
 
 #: stellarisdashboard/dashboard_app/settings.py:119
-#, fuzzy
 msgid "Host"
-msgstr "hostile"
+msgstr "Hôte"
 
 #: stellarisdashboard/dashboard_app/settings.py:120
 msgid ""
 "The network address the dashboard listens on. The default, 127.0.0.1, only allows access from "
 "this computer. Use 0.0.0.0 to allow access from other devices in your network."
 msgstr ""
+"L'adresse réseau sur laquelle le tableau de bord écoute. La valeur par défaut, 127.0.0.1, "
+"n'autorise l'accès que depuis cet ordinateur. Utilisez 0.0.0.0 pour autoriser l'accès depuis "
+"d'autres appareils de votre réseau."
 
 #: stellarisdashboard/dashboard_app/settings.py:123
-#, fuzzy
 msgid "Port"
-msgstr "Importées"
+msgstr "Port"
 
 #: stellarisdashboard/dashboard_app/settings.py:124
 msgid "The port the dashboard listens on, as in http://localhost:28053/."
 msgstr ""
+"Le port sur lequel le tableau de bord écoute, comme dans http://localhost:28053/."
 
 #: stellarisdashboard/dashboard_app/settings.py:127
-#, fuzzy
 msgid "Log level"
-msgstr "Niveau de détail"
+msgstr "Niveau de journalisation"
 
 #: stellarisdashboard/dashboard_app/settings.py:128
 msgid "How much detail is written to the console log. Use DEBUG when reporting a problem."
 msgstr ""
+"Le niveau de détail écrit dans le journal de la console. Utilisez DEBUG pour signaler un "
+"problème."
 
 #: stellarisdashboard/dashboard_app/settings.py:131
 msgid "Write log to file"
-msgstr ""
+msgstr "Écrire le journal dans un fichier"
 
 #: stellarisdashboard/dashboard_app/settings.py:132
 msgid "Also write the log to log.txt in the output folder."
-msgstr ""
+msgstr "Écrit aussi le journal dans log.txt, dans le dossier de sortie."
 
 #. unit after a number input, short for megabytes
 #: stellarisdashboard/dashboard_app/settings.py:143
 msgid "MB"
-msgstr ""
+msgstr "MB"
 
 #. unit after a number input, short for pixels
 #: stellarisdashboard/dashboard_app/settings.py:145
 msgid "px"
-msgstr ""
+msgstr "px"
 
 #. unit after a number input: "Skip saves after processing: [3] saves"
 #: stellarisdashboard/dashboard_app/settings.py:147
-#, fuzzy
 msgid "saves"
-msgstr "Sauvegardes"
+msgstr "sauvegardes"
 
 #. unit after a number input: the number of data points loaded per graph
 #: stellarisdashboard/dashboard_app/settings.py:149
-#, fuzzy
 msgid "points"
-msgstr "Planètes"
+msgstr "points"
 
 #: stellarisdashboard/dashboard_app/settings.py:156
 msgid "Same as Stellaris language"
 msgstr "Identique à la langue de Stellaris"
 
 #: stellarisdashboard/dashboard_app/settings.py:162
-#, fuzzy
 msgid "Save files found in this folder."
-msgstr "Dossier des sauvegardes"
+msgstr "Des fichiers de sauvegarde ont été trouvés dans ce dossier."
 
 #: stellarisdashboard/dashboard_app/settings.py:163
-#, fuzzy
 msgid "The Stellaris game files are in this folder."
-msgstr "Dossier des données utilisateur de Stellaris"
+msgstr "Les fichiers du jeu Stellaris se trouvent dans ce dossier."
 
 #: stellarisdashboard/dashboard_app/settings.py:164
 msgid "The dlc_load.json file is in this folder."
-msgstr ""
+msgstr "Le fichier dlc_load.json se trouve dans ce dossier."
 
 #: stellarisdashboard/dashboard_app/settings.py:170
-#, fuzzy
 msgid ""
 "No save files found. This folder should contain a folder for each game, which each contain .sav "
 "files."
 msgstr ""
-"Le dossier des sauvegardes doit contenir un dossier par partie, chacun contenant des fichiers "
-"<code>.sav</code>."
+"Aucun fichier de sauvegarde trouvé. Ce dossier doit contenir un dossier par partie, contenant "
+"chacun des fichiers .sav."
 
 #: stellarisdashboard/dashboard_app/settings.py:171
 msgid ""
 "The Stellaris game files were not found. This folder should contain the localisation and flags "
 "folders."
 msgstr ""
+"Les fichiers du jeu Stellaris sont introuvables. Ce dossier doit contenir les dossiers "
+"localisation et flags."
 
 #: stellarisdashboard/dashboard_app/settings.py:172
-#, fuzzy
 msgid "This folder should contain the dlc_load.json file."
-msgstr "Ce dossier doit contenir le fichier <code>dlc_load.json</code>."
+msgstr "Ce dossier doit contenir le fichier dlc_load.json."
 
 #: stellarisdashboard/dashboard_app/settings.py:192
-#, fuzzy, python-format
+#, python-format
 msgid "This folder does not exist."
-msgstr "L'empire %(country)s a cessé d'exister."
+msgstr "Ce dossier n'existe pas."
 
 #: stellarisdashboard/dashboard_app/settings.py:362
 #, python-format
 msgid "Only applies when “%(setting)s” is turned on."
-msgstr ""
+msgstr "S'applique uniquement lorsque « %(setting)s » est activé."
 
 #: stellarisdashboard/dashboard_app/settings.py:364
 #, python-format
 msgid "Only applies when “%(setting)s” is filled in."
-msgstr ""
+msgstr "S'applique uniquement lorsque « %(setting)s » est renseigné."
 
 #: stellarisdashboard/dashboard_app/settings.py:423
-#, fuzzy
 msgid "Some settings were not applied:"
-msgstr "Paramètres appliqués."
+msgstr "Certains paramètres n'ont pas été appliqués :"
 
 #: stellarisdashboard/dashboard_app/settings.py:431
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:109
 #, python-format
 msgid "Restart the dashboard to apply: %(settings)s"
-msgstr ""
+msgstr "Redémarrez le tableau de bord pour appliquer : %(settings)s"
 
 #: stellarisdashboard/dashboard_app/settings.py:474
-#, fuzzy
 msgid "Settings saved."
-msgstr "Paramètres appliqués."
+msgstr "Paramètres enregistrés."
 
 #: stellarisdashboard/dashboard_app/settings.py:486
 msgid "All settings were reset to their defaults."
-msgstr ""
+msgstr "Tous les paramètres ont été rétablis à leurs valeurs par défaut."
 
 #: stellarisdashboard/dashboard_app/shell.py:10
 #: stellarisdashboard/dashboard_app/templates/overview_page.html:7
@@ -4222,103 +4223,98 @@ msgstr "Tous les types"
 
 #. badge on a setting whose value differs from the default
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:20
-#, fuzzy
 msgid "Modified"
-msgstr "Modificateurs"
+msgstr "Modifié"
 
 #. badge on a setting that only applies after restarting the dashboard app
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:23
-#, fuzzy
 msgid "Changes to this setting apply after restarting the dashboard."
-msgstr "Rendez-vous dans les Paramètres pour le modifier, puis redémarrez le tableau de bord."
+msgstr ""
+"Les modifications de ce paramètre s'appliquent après le redémarrage du tableau de bord."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:23
-#, fuzzy
 msgid "Needs restart"
-msgstr "Résultat net"
+msgstr "Redémarrage nécessaire"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:70
 #, python-format
 msgid "Reset %(setting)s to its default"
-msgstr ""
+msgstr "Rétablir %(setting)s à sa valeur par défaut"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:70
-#, fuzzy
 msgid "Reset"
-msgstr "Recherche"
+msgstr "Rétablir"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:89
-#, fuzzy
 msgid "Some settings in config.yml were invalid"
-msgstr "Paramètres appliqués."
+msgstr "Certains paramètres de config.yml étaient invalides"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:90
 msgid "When the dashboard started, it used the default instead of these values:"
 msgstr ""
+"Au démarrage, le tableau de bord a utilisé la valeur par défaut au lieu de ces valeurs :"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:96
 msgid "Saving the settings replaces these values in config.yml."
-msgstr ""
+msgstr "L'enregistrement des paramètres remplace ces valeurs dans config.yml."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:100
-#, fuzzy
 msgid "Dismiss"
-msgstr "Districts"
+msgstr "Fermer"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:110
 msgid "Close the dashboard app and start it again. Until then, it keeps using the previous values."
 msgstr ""
+"Fermez l'application du tableau de bord et relancez-la. D'ici là, elle continue d'utiliser les "
+"valeurs précédentes."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:118
-#, fuzzy, python-format
+#, python-format
 msgid "%(num)s setting was not saved"
 msgid_plural "%(num)s settings were not saved"
-msgstr[0] "Paramètres appliqués."
-msgstr[1] ""
+msgstr[0] "%(num)s paramètre n'a pas été enregistré"
+msgstr[1] "%(num)s paramètres n'ont pas été enregistrés"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:119
 msgid "Your other changes were saved. Fix the values below and save again."
 msgstr ""
+"Vos autres modifications ont été enregistrées. Corrigez les valeurs ci-dessous et enregistrez à "
+"nouveau."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:141
-#, fuzzy
 msgid "Advanced"
-msgstr "alliance"
+msgstr "Avancé"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:142
-#, fuzzy, python-format
+#, python-format
 msgid "%(num)s setting"
 msgid_plural "%(num)s settings"
-msgstr[0] "%(num)s phase"
-msgstr[1] "%(num)s phases"
+msgstr[0] "%(num)s paramètre"
+msgstr[1] "%(num)s paramètres"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:151
 msgid "You have unsaved changes"
-msgstr ""
+msgstr "Vous avez des modifications non enregistrées"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:152
-#, fuzzy
 msgid "Discard changes"
-msgstr "Langue du tableau de bord"
+msgstr "Annuler les modifications"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:153
-#, fuzzy
 msgid "Save settings"
-msgstr "Paramètres"
+msgstr "Enregistrer les paramètres"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:158
-#, fuzzy
 msgid "Files"
-msgstr "Fichier"
+msgstr "Fichiers"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:160
-#, fuzzy
 msgid "Settings file"
-msgstr "Paramètres"
+msgstr "Fichier de paramètres"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:162
 msgid "Output folder"
-msgstr ""
+msgstr "Dossier de sortie"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:165
 #, python-format
@@ -4327,21 +4323,26 @@ msgid ""
 "settings file, as described in the <a href=\"%(url)s\" target=\"_blank\" "
 "rel=\"noopener\">README</a>."
 msgstr ""
+"La disposition des onglets de graphiques et les prix du marché ne figurent pas sur cette page : "
+"ils se définissent dans le fichier de paramètres, comme décrit dans le <a href=\"%(url)s\" "
+"target=\"_blank\" rel=\"noopener\">README</a>."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:168
 msgid "Reset all to defaults…"
-msgstr ""
+msgstr "Tout rétablir par défaut…"
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:171
 msgid ""
 "This puts every setting on this page back to its default and saves it right away. The graph "
 "layout and market prices in the settings file are kept."
 msgstr ""
+"Cela remet tous les paramètres de cette page à leur valeur par défaut et les enregistre "
+"immédiatement. La disposition des graphiques et les prix du marché du fichier de paramètres "
+"sont conservés."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:172
-#, fuzzy
 msgid "Reset all settings"
-msgstr "Appliquer les paramètres"
+msgstr "Rétablir tous les paramètres"
 
 #: stellarisdashboard/dashboard_app/templates/codex_page.html:8
 msgid "A browsable index of this game's entities. Select one to open its event ledger."
@@ -5023,6 +5024,8 @@ msgstr "Ouvrir le journal des événements de cet empire"
 #: stellarisdashboard/dashboard_app/templates/settings_page.html:7
 msgid "Changes are saved to the settings file when you select Save settings."
 msgstr ""
+"Les modifications sont enregistrées dans le fichier de paramètres lorsque vous sélectionnez "
+"« Enregistrer les paramètres »."
 
 #. label of the time axis of the graphs
 #: stellarisdashboard/dashboard_app/visualization_data.py:58
