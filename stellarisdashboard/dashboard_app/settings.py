@@ -104,6 +104,10 @@ def setting_texts() -> Dict[str, Dict[str, str]]:
             label=_("Check for new versions"),
             description=_("When using the Workshop mod for in-game access, a message will be displayed if a newer version of the separate dashboard app is available."),
         ),
+        "open_browser": dict(
+            label=_("Open in browser on start"),
+            description=_("Open the dashboard in your default web browser when the dashboard app starts."),
+        ),
         "host": dict(
             label=_("Host"),
             description=_("The network address the dashboard listens on. The default, 127.0.0.1, only allows access from this computer. Use 0.0.0.0 to allow access from other devices in your network."),

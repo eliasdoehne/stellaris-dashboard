@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-16 10:10+0000\n"
+"POT-Creation-Date: 2026-11-16 10:11+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -3622,74 +3622,82 @@ msgid ""
 msgstr "ゲーム内アクセス用のWorkshop MODを使用している場合、別アプリ版ダッシュボードの新しいバージョンがあるとメッセージが表示されます。"
 
 #: stellarisdashboard/dashboard_app/settings.py:108
+msgid "Open in browser on start"
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:109
+msgid "Open the dashboard in your default web browser when the dashboard app starts."
+msgstr ""
+
+#: stellarisdashboard/dashboard_app/settings.py:112
 #, fuzzy
 msgid "Host"
 msgstr "敵対的"
 
-#: stellarisdashboard/dashboard_app/settings.py:109
+#: stellarisdashboard/dashboard_app/settings.py:113
 msgid ""
 "The network address the dashboard listens on. The default, 127.0.0.1, only allows access from "
 "this computer. Use 0.0.0.0 to allow access from other devices in your network."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:112
+#: stellarisdashboard/dashboard_app/settings.py:116
 #, fuzzy
 msgid "Port"
 msgstr "インポート済み"
 
-#: stellarisdashboard/dashboard_app/settings.py:113
+#: stellarisdashboard/dashboard_app/settings.py:117
 msgid "The port the dashboard listens on, as in http://localhost:28053/."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:116
+#: stellarisdashboard/dashboard_app/settings.py:120
 #, fuzzy
 msgid "Log level"
 msgstr "詳細度"
 
-#: stellarisdashboard/dashboard_app/settings.py:117
+#: stellarisdashboard/dashboard_app/settings.py:121
 msgid "How much detail is written to the console log. Use DEBUG when reporting a problem."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:120
+#: stellarisdashboard/dashboard_app/settings.py:124
 msgid "Write log to file"
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:121
+#: stellarisdashboard/dashboard_app/settings.py:125
 msgid "Also write the log to log.txt in the output folder."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:129
+#: stellarisdashboard/dashboard_app/settings.py:133
 msgid "Same as Stellaris language"
 msgstr "Stellarisの言語と同じ"
 
-#: stellarisdashboard/dashboard_app/settings.py:138
+#: stellarisdashboard/dashboard_app/settings.py:142
 #, fuzzy
 msgid ""
 "No save files found. This folder should contain a folder for each game, which each contain .sav "
 "files."
 msgstr "セーブファイルのフォルダーには、ゲームごとのフォルダーがあり、その中に<code>.sav</code>ファイルが入っている必要があります。"
 
-#: stellarisdashboard/dashboard_app/settings.py:142
+#: stellarisdashboard/dashboard_app/settings.py:146
 msgid ""
 "The Stellaris game files were not found. This folder should contain the localisation and flags "
 "folders."
 msgstr ""
 
-#: stellarisdashboard/dashboard_app/settings.py:146
+#: stellarisdashboard/dashboard_app/settings.py:150
 #, fuzzy
 msgid "This folder should contain the dlc_load.json file."
 msgstr "このフォルダーには<code>dlc_load.json</code>ファイルが入っている必要があります。"
 
-#: stellarisdashboard/dashboard_app/settings.py:245
+#: stellarisdashboard/dashboard_app/settings.py:249
 #, fuzzy
 msgid "Some settings were not applied:"
 msgstr "設定を適用しました。"
 
-#: stellarisdashboard/dashboard_app/settings.py:248
+#: stellarisdashboard/dashboard_app/settings.py:252
 msgid "Settings applied."
 msgstr "設定を適用しました。"
 
-#: stellarisdashboard/dashboard_app/settings.py:252
+#: stellarisdashboard/dashboard_app/settings.py:256
 #, python-format
 msgid "Restart the dashboard to apply: %(settings)s"
 msgstr ""
