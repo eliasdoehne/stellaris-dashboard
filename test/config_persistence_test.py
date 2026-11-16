@@ -13,6 +13,7 @@ OLD_TAB_LAYOUTS = legacy_config_defaults.LEGACY_TAB_LAYOUTS
 def settings_dir(tmp_path, monkeypatch):
     """Run in an empty directory, so that config.yml is read from and written to tmp_path."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(config.SETTINGS_FILE_ENV_VAR, str(tmp_path / "config.yml"))
     return tmp_path
 
 
@@ -116,12 +117,8 @@ def test_reordered_tab_layout_is_a_customization(settings_dir):
 def test_defaults_are_not_written_to_file(settings_dir):
     cfg = _load_config()
     cfg.write_to_file()
-    written = _read_written_settings(settings_dir)
-    assert "market_resources" not in written
-    assert "tab_layout" not in written
-    # other settings are still persisted
-    assert written["port"] == config.DEFAULT_SETTINGS["port"]
-    assert "market_fee" in written
+    # only customized settings are persisted, and nothing is customized
+    assert _read_written_settings(settings_dir) is None
 
 
 def test_old_defaults_are_removed_from_file_on_next_write(settings_dir):
