@@ -35,7 +35,9 @@ def main():
     t = time.perf_counter()
     cli.f_parse_saves(threads=threads, save_path=saves_dir, game_name_prefix=game, on_save_processed=count)
     el = time.perf_counter() - t
-    print(f"game={game} threads={threads} saves={n} wall={el:.1f}s -> {el/n:.2f} s/save")
+    import resource
+    rss = max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
+    print(f"game={game} threads={threads} saves={n} wall={el:.1f}s -> {el/n:.2f} s/save, peak RSS of one process {rss/1024:.0f} MB")
 
 
 if __name__ == "__main__":
