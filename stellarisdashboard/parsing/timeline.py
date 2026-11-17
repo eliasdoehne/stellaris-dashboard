@@ -2,6 +2,7 @@ import abc
 import collections
 import dataclasses
 import datetime
+import gc
 import itertools
 import json
 import logging
@@ -240,6 +241,16 @@ class TimelineExtractor:
         self, game_id: str, gamestate_dict: Dict[str, Any], replace_existing: bool = False
     ):
         """Import a gamestate. With replace_existing, a gamestate of the same date is deleted and imported again."""
+        # The gamestate is millions of objects that stay alive throughout. Each full pass of the
+        # cyclic garbage collector, triggered by the many objects allocated here, would traverse
+        # all of them: exclude everything allocated so far from collection for the import.
+        gc.freeze()
+        try:
+            self._import_gamestate(game_id, gamestate_dict, replace_existing)
+        finally:
+            gc.unfreeze()
+
+    def _import_gamestate(self, game_id: str, gamestate_dict: Dict[str, Any], replace_existing: bool):
         self.failures = []
         self._gamestate_dict = gamestate_dict
         self._read_basic_game_info(game_id)
