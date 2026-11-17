@@ -16,6 +16,9 @@ nom = "7.1.1"
 zip = { version = "9.5", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 serde_json = "1.0"
 chrono = "0.4"
+# prototype (tools/perf): one-shot inflate into a pre-sized buffer
+libdeflater = "1.25"
+crc32fast = "1.4"
 serde = { version = "1.0.143", features = ["derive"] }
 
 [profile.dev]

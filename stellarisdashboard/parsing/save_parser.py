@@ -286,7 +286,7 @@ def parse_save(filename) -> Dict[str, Any]:
 
     logger.info(f"Reading save file {filename}.")
     start = time.time()
-    parsed = rust_parser.parse_save_file(str(filename.absolute()))
+    parsed = rust_parser.parse_save_file_fast(str(filename.absolute()))
     if not isinstance(parsed, dict):
         raise ValueError(f"Could not parse {filename}")
     dt = time.time() - start

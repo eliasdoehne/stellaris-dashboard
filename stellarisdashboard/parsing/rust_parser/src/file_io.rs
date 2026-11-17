@@ -62,3 +62,52 @@ pub fn read_file_from_archive(archive: &mut ZipArchive<std::fs::File>, fname: &s
     );
     Ok(content)
 }
+
+
+/// Read one member of the save's zip archive into a pre-sized buffer.
+///
+/// `fast`: read the whole archive into memory and inflate the raw deflate stream with libdeflate
+/// (verifying the CRC); otherwise (or for members that are not deflated) use the zip crate's
+/// streaming reader.
+pub fn read_member_bytes(filename: &str, member: &str, fast: bool) -> Result<Vec<u8>, String> {
+    let archive_bytes = std::fs::read(filename).map_err(|e| format!("Failed to open file: {e}"))?;
+    let mut archive = ZipArchive::new(std::io::Cursor::new(archive_bytes.as_slice()))
+        .map_err(|e| format!("Failed to read zip archive: {e}"))?;
+    let (start, csize, size, crc, deflated) = {
+        let file = archive
+            .by_name(member)
+            .map_err(|_| format!("Could not locate {member} in zip archive"))?;
+        (
+            file.data_start(),
+            file.compressed_size() as usize,
+            file.size() as usize,
+            file.crc32(),
+            file.compression() == zip::CompressionMethod::Deflated,
+        )
+    };
+    if fast && deflated {
+        if let Some(start) = start {
+            let start = start as usize;
+            if start + csize <= archive_bytes.len() {
+                let mut out = vec![0u8; size];
+                let mut d = libdeflater::Decompressor::new();
+                let n = d
+                    .deflate_decompress(&archive_bytes[start..start + csize], &mut out)
+                    .map_err(|e| format!("Failed to inflate {member}: {e}"))?;
+                if n != size {
+                    return Err(format!("Unexpected size of {member}"));
+                }
+                if crc32fast::hash(&out) != crc {
+                    return Err(format!("CRC mismatch in {member}"));
+                }
+                return Ok(out);
+            }
+        }
+    }
+    let mut file = archive
+        .by_name(member)
+        .map_err(|_| format!("Could not locate {member} in zip archive"))?;
+    let mut out = Vec::with_capacity(size + 1);
+    file.read_to_end(&mut out).map_err(|e| format!("Failed to read {member}: {e}"))?;
+    Ok(out)
+}
