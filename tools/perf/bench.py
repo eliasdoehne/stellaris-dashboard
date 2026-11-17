@@ -16,6 +16,7 @@ To benchmark another version of the package with the same script, put it first o
 import argparse
 import collections
 import cProfile
+import gc
 import io
 import json
 import logging
@@ -33,6 +34,11 @@ ap.add_argument("--corpus", type=pathlib.Path, default=pathlib.Path("corpus/4.5.
 ap.add_argument("--profile", type=pathlib.Path, help="write cProfile stats of the timeline stage")
 ap.add_argument("--label", default="")
 ap.add_argument("--max-saves", type=int, default=0)
+ap.add_argument(
+    "--gc-freeze",
+    action="store_true",
+    help="gc.freeze() around process_gamestate, to measure that alone on code without it",
+)
 ap.add_argument(
     "--cache",
     type=pathlib.Path,
@@ -135,7 +141,11 @@ for g in sorted(args.corpus.iterdir()):
         if profiler:
             profiler.enable()
         t, c = time.perf_counter(), time.process_time()
+        if args.gc_freeze:
+            gc.freeze()
         tle.process_gamestate(g.name, gs)
+        if args.gc_freeze:
+            gc.unfreeze()
         wall, cpu = time.perf_counter() - t, time.process_time() - c
         if profiler:
             profiler.disable()
