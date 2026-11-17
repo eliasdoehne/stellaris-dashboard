@@ -17,7 +17,7 @@ from sqlalchemy.orm import joinedload
 from stellarisdashboard import datamodel, game_info, config
 from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
-from stellarisdashboard.parsing import galaxy_events, save_copies, save_format
+from stellarisdashboard.parsing import galaxy_events, pending_flush, save_copies, save_format
 
 logger = logging.getLogger(__name__)
 
@@ -173,24 +173,27 @@ class TimelineExtractor:
             sqlalchemy.event.listen(
                 self._session, "before_flush", datamodel.drop_special_country_events
             )
+            # no autoflush: a flush per query is most of the import's cost, see pending_flush
+            pending_flush.enable(self._session)
             try:
-                db_game = self._get_or_add_game_to_db(game_id)
-                if replace_existing:
-                    self._delete_existing_gamestate(db_game)
-                if self._check_if_gamestate_exists(db_game):
+                with self._session.no_autoflush:
+                    db_game = self._get_or_add_game_to_db(game_id)
+                    if replace_existing:
+                        self._delete_existing_gamestate(db_game)
+                    if self._check_if_gamestate_exists(db_game):
+                        logger.info(
+                            f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
+                        )
+                        self._session.rollback()
+                        return
+                    else:
+                        self._process_gamestate(db_game)
                     logger.info(
-                        f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
+                        f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, "
+                        f"writing changes to database"
                     )
-                    self._session.rollback()
-                    return
-                else:
-                    self._process_gamestate(db_game)
-                logger.info(
-                    f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, "
-                    f"writing changes to database"
-                )
-                self._session.commit()
-                self.number_of_parsed_saves += 1
+                    self._session.commit()
+                    self.number_of_parsed_saves += 1
             except Exception as e:
                 self._session.rollback()
                 self.failures.append(
@@ -1916,6 +1919,8 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             modifier_text = db_modifier.db_description.text
             if modifier_text not in current_modifiers:
                 self._session.delete(db_modifier)
+                # refresh() discards unflushed changes of the planet (its new hashes)
+                self._session.flush()
                 self._session.refresh(planet_model)
             else:
                 if expiration != current_modifiers[modifier_text]:
