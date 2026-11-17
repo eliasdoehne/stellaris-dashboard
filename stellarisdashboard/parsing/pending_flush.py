@@ -17,6 +17,17 @@ from sqlalchemy.orm import ORMExecuteState, Session
 from sqlalchemy.sql import util as sql_util
 
 _INFO_KEY = "pending_flush_state"
+_SUSPENDED_KEY = "pending_flush_suspended"
+
+
+def get_stored(session: Session, model, primary_key):
+    """session.get() without a flush: a stored row is found by its primary key whatever is pending."""
+    suspended = session.info.get(_SUSPENDED_KEY)
+    session.info[_SUSPENDED_KEY] = True
+    try:
+        return session.get(model, primary_key)
+    finally:
+        session.info[_SUSPENDED_KEY] = suspended
 
 
 def _unflushed_tables(session: Session) -> Tuple[Set[sqlalchemy.Table], Set[sqlalchemy.Table]]:
@@ -85,7 +96,12 @@ def _statement_tables(statement) -> Set[sqlalchemy.Table]:
 
 def flush_before_reading_pending_tables(orm_execute_state: ORMExecuteState) -> None:
     session = orm_execute_state.session
-    if session.autoflush or session._flushing or orm_execute_state.is_insert:
+    if (
+        session.autoflush
+        or session._flushing
+        or orm_execute_state.is_insert
+        or session.info.get(_SUSPENDED_KEY)
+    ):
         return  # the session flushes by itself, or the statement comes from the flush
     changed, added = _unflushed_tables(session)
     if not changed:
