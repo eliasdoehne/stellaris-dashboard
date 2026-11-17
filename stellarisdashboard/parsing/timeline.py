@@ -59,6 +59,9 @@ def _extract_id(val, default: int = -1) -> int:
 # it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
 # the built-in @cache decorator was leaking memory, hanging on to references of processor instances
 _shared_description_cache: dict[str, datamodel.SharedDescription] = {}
+# key of _shared_description_cache that marks it as holding every stored description; part of the
+# dict so that clearing the cache also forgets that it was complete
+_ALL_DESCRIPTIONS_LOADED = object()
 # module-level caches like the one above are not thread-safe: one save is processed at a time per process
 _process_gamestate_lock = threading.Lock()
 
@@ -461,13 +464,19 @@ class AbstractGamestateDataProcessor(abc.ABC):
         pass
 
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
-        if text in _shared_description_cache:
-            return _shared_description_cache[text]
-        matching_description = (
-            self._session.query(datamodel.SharedDescription)
-            .filter_by(text=text)
-            .one_or_none()
-        )
+        if _ALL_DESCRIPTIONS_LOADED not in _shared_description_cache:
+            # one query for the whole table instead of one per distinct text and save; the loaded
+            # objects also serve the many-to-one loads of the models' descriptions
+            stored = {}
+            for description in self._session.query(datamodel.SharedDescription):
+                if description.text in stored and stored[description.text] is not description:
+                    raise sqlalchemy.exc.MultipleResultsFound(
+                        f"Multiple shared descriptions with text {description.text!r}"
+                    )
+                stored[description.text] = description
+            _shared_description_cache.update(stored)
+            _shared_description_cache[_ALL_DESCRIPTIONS_LOADED] = None
+        matching_description = _shared_description_cache.get(text)
         if matching_description is None:
             matching_description = datamodel.SharedDescription(text=text)
             self._session.add(matching_description)
@@ -1761,6 +1770,7 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         planets_by_system.append(
             (None, save_format.get_arkship_planet_ids(self._gamestate_dict))
         )
+        updates = []  # (planet, arkship system, current entities, their digests)
 
         for system_id, planets in planets_by_system:
             if isinstance(planets, int):
@@ -1783,45 +1793,95 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     )
 
                 planet_model = self.planets_by_ingame_id[ingame_id]
-                was_updated = False
                 # an arkship keeps its last known system while in transit
                 arkship_system = (
                     systems_by_id.get(system_id)
                     if save_format.is_arkship_planet_id(ingame_id)
                     else None
                 )
-                if arkship_system is not None and planet_model.system is not arkship_system:
-                    planet_model.system = arkship_system
-                    was_updated = True
-                was_updated |= self._update_countable_planet_attributes(
-                    planet_model=planet_model,
-                    entity_attribute_name="districts",
-                    entity_hash_attribute="districts_hash",
-                    current_entities=save_format.get_district_types(
-                        self._gamestate_dict, planet_dict
+                current = (
+                    self._count_entities(
+                        "districts",
+                        save_format.get_district_types(self._gamestate_dict, planet_dict),
                     ),
-                    db_entity_factory=datamodel.PlanetDistrict,
+                    self._count_entities("buildings", self._get_buildings(planet_dict)),
+                    self._count_entities("deposits", self._get_deposits(planet_dict)),
+                    dict(_all_planetary_modifiers(planet_dict)),
                 )
-                was_updated |= self._update_countable_planet_attributes(
-                    planet_model=planet_model,
-                    entity_attribute_name="buildings",
-                    entity_hash_attribute="buildings_hash",
-                    current_entities=self._get_buildings(planet_dict),
-                    db_entity_factory=datamodel.PlanetBuilding,
+                digests = tuple(
+                    None if entities is None else _stable_digest(entities.items())
+                    for entities in current
                 )
-                was_updated |= self._update_countable_planet_attributes(
-                    planet_model=planet_model,
-                    entity_attribute_name="deposits",
-                    entity_hash_attribute="deposits_hash",
-                    current_entities=self._get_deposits(planet_dict),
-                    db_entity_factory=datamodel.PlanetDeposit,
-                )
-                was_updated |= self._update_planet_modifiers(
-                    planet_model=planet_model,
-                    planet_dict=planet_dict,
-                )
-                if was_updated:
-                    self._session.add(planet_model)
+                updates.append((planet_model, arkship_system, current, digests))
+
+        # the stored rows of all changed planets with one query per table, instead of a lazy
+        # load of each planet's collection
+        stored = [
+            self._load_planet_entities(
+                entity_model,
+                [
+                    planet_model.planet_id
+                    for planet_model, _, _, digests in updates
+                    if planet_model.planet_id is not None
+                    and digests[i] is not None
+                    and digests[i] != getattr(planet_model, hash_attribute)
+                ],
+            )
+            for i, (hash_attribute, entity_model) in enumerate(self._PLANET_ENTITIES)
+        ]
+        for planet_model, arkship_system, current, digests in updates:
+            was_updated = False
+            if arkship_system is not None and planet_model.system is not arkship_system:
+                planet_model.system = arkship_system
+                was_updated = True
+            for i, (hash_attribute, entity_model) in enumerate(self._PLANET_ENTITIES):
+                # compared again here: a planet listed twice is only updated once
+                if digests[i] is None or digests[i] == getattr(planet_model, hash_attribute):
+                    continue
+                setattr(planet_model, hash_attribute, digests[i])
+                was_updated = True
+                stored_entities = stored[i].get(planet_model.planet_id, ())
+                if entity_model is datamodel.PlanetModifier:
+                    self._update_planet_modifiers(planet_model, stored_entities, current[i])
+                else:
+                    self._update_countable_planet_attributes(
+                        planet_model, stored_entities, current[i], entity_model
+                    )
+            if was_updated:
+                self._session.add(planet_model)
+
+    # (hash attribute of the planet, model) of the planets' child rows, in processing order
+    _PLANET_ENTITIES = (
+        ("districts_hash", datamodel.PlanetDistrict),
+        ("buildings_hash", datamodel.PlanetBuilding),
+        ("deposits_hash", datamodel.PlanetDeposit),
+        ("modifiers_hash", datamodel.PlanetModifier),
+    )
+
+    def _count_entities(self, name: str, current_entities) -> Optional[collections.Counter]:
+        """Counts e.g. ['district_generator', 'district_generator', 'district_city'] by value."""
+        if isinstance(current_entities, str):
+            current_entities = [current_entities]
+        if not isinstance(current_entities, list):
+            logger.warning(
+                f"{self._basic_info.logger_str}: Expected str or list, got {current_entities} while updating "
+                f"{name}"
+            )
+            return None
+        return collections.Counter(current_entities)
+
+    def _load_planet_entities(self, entity_model, planet_ids: List[int]) -> Dict[int, list]:
+        entities_by_planet_id = collections.defaultdict(list)
+        primary_key = sqlalchemy.inspect(entity_model).primary_key[0]
+        planet_ids = sorted(set(planet_ids))
+        for start in range(0, len(planet_ids), 500):
+            for entity in (
+                self._session.query(entity_model)
+                .filter(entity_model.planet_id.in_(planet_ids[start : start + 500]))
+                .order_by(primary_key)
+            ):
+                entities_by_planet_id[entity.planet_id].append(entity)
+        return entities_by_planet_id
 
     def _get_buildings(self, planet_dict):
         return save_format.get_building_types(self._gamestate_dict, planet_dict)
@@ -1847,43 +1907,23 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
     def _update_countable_planet_attributes(
         self,
         planet_model: datamodel.Planet,
-        entity_attribute_name: str,
-        entity_hash_attribute: str,
-        current_entities: Union[str, List[str]],
+        stored_entities: Iterable,
+        current_entity_counter: collections.Counter,
         db_entity_factory,
-    ) -> bool:
+    ):
         """
         Update any of the planets' entities that are represented by counting a single value,
         e.g. districts can be represented by storing how often "district_generator" occurs in
         the planet dictionary.
 
         :param planet_model: datamodel.Planet instance
-        :param entity_attribute_name: Name of the attribute which should be updated
-        :param entity_hash_attribute:
-        :param current_entities: List containing the individual instances of the entity,
-                                 e.g. ['district_generator', 'district_generator', 'district_city']
+        :param stored_entities: The planet's rows of this entity in the database
+        :param current_entity_counter: How often each entity occurs on the planet now,
+                                       e.g. {'district_generator': 2, 'district_city': 1}
         :param db_entity_factory:
-        :return: True, if the planet model was updated, False otherwise
         """
-        if isinstance(current_entities, str):
-            current_entities = [current_entities]
-        if not isinstance(current_entities, list):
-            logger.warning(
-                f"{self._basic_info.logger_str}: Expected str or list, got {current_entities} while updating "
-                f"{entity_attribute_name}"
-            )
-            return False
-
-        current_entity_counter = collections.Counter(current_entities)
-
-        entities_changed = self._check_and_update_hash(
-            planet_model, current_entity_counter, entity_hash_attribute
-        )
-        if not entities_changed:
-            return False
-
-        entities = getattr(planet_model, entity_attribute_name)
-        for entity_model in entities:
+        current_entity_counter = collections.Counter(current_entity_counter)
+        for entity_model in stored_entities:
             text = entity_model.db_description.text
             if current_entity_counter[text] != entity_model.count:
                 entity_model.count = current_entity_counter[text]
@@ -1899,29 +1939,18 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     count=count,
                 )
             )
-        return True
 
     def _update_planet_modifiers(
-        self, planet_model: datamodel.Planet, planet_dict: Dict
-    ) -> bool:
+        self, planet_model: datamodel.Planet, stored_modifiers: Iterable, current_modifiers: Dict
+    ):
         """Modifiers are represented differently, hence a new function."""
-        current_modifiers = dict(_all_planetary_modifiers(planet_dict))
-
-        modifiers_changed = self._check_and_update_hash(
-            planet_model, current_modifiers, "modifiers_hash"
-        )
-        if not modifiers_changed:
-            return False
-
-        for db_modifier in planet_model.modifiers:
+        current_modifiers = dict(current_modifiers)
+        for db_modifier in stored_modifiers:
             assert isinstance(db_modifier, datamodel.PlanetModifier)
             expiration = db_modifier.expiry_date
             modifier_text = db_modifier.db_description.text
             if modifier_text not in current_modifiers:
                 self._session.delete(db_modifier)
-                # refresh() discards unflushed changes of the planet (its new hashes)
-                self._session.flush()
-                self._session.refresh(planet_model)
             else:
                 if expiration != current_modifiers[modifier_text]:
                     db_modifier.expiry_date = current_modifiers[modifier_text]
@@ -1937,7 +1966,6 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     db_description=db_description,
                 )
             )
-        return True
 
     def _get_deposits(self, planet_dict):
         result = []
@@ -1947,17 +1975,6 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
             if isinstance(d_dict, dict) and "type" in d_dict:
                 result.append(d_dict.get("type", "deposit_unknown"))
         return result
-
-    def _check_and_update_hash(
-        self, planet_model: datamodel.Planet, entity_dict, hash_attribute: str
-    ) -> bool:
-        current_hash = _stable_digest(entity_dict.items())
-        if current_hash == getattr(planet_model, hash_attribute):
-            return False
-
-        setattr(planet_model, hash_attribute, current_hash)
-        self._session.add(planet_model)
-        return True
 
 
 class SectorColonyEventProcessor(AbstractGamestateDataProcessor):

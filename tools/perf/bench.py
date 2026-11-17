@@ -62,6 +62,8 @@ logging.disable(logging.CRITICAL)
 counters = collections.Counter()
 proc_wall = collections.defaultdict(float)
 proc_cpu = collections.defaultdict(float)
+proc_selects = collections.Counter()
+proc_flushes = collections.Counter()
 
 orig_processors = timeline.TimelineExtractor._data_processors
 
@@ -72,11 +74,14 @@ def wrapped_processors(self):
 
         def timed(deps, f=f, p=p):
             t, c = time.perf_counter(), time.process_time()
+            selects, flushes = counters["selects"], counters["flushes"]
             try:
                 return f(deps)
             finally:
                 proc_wall[p.ID] += time.perf_counter() - t
                 proc_cpu[p.ID] += time.process_time() - c
+                proc_selects[p.ID] += counters["selects"] - selects
+                proc_flushes[p.ID] += counters["flushes"] - flushes
 
         p.extract_data_from_gamestate = timed
         yield p
@@ -165,12 +170,23 @@ for game, rs in by_game.items():
         f"  {game}: saves={len(rs)} wall={sum(r['wall'] for r in rs):.1f}s cpu={sum(r['cpu'] for r in rs):.1f}s "
         f"cpu/save first {k}={first:.3f}s last {k}={last:.3f}s"
     )
-print("processors (wall s, cpu s, % of timeline cpu):")
-for k, v in sorted(proc_cpu.items(), key=lambda kv: -kv[1])[:25]:
-    print(f"  {k:35s} {proc_wall[k]:8.2f} {v:8.2f} {100 * v / tot_cpu:5.1f}%")
+print("processors (wall s, cpu s, % of timeline cpu, selects/save, flushes/save):")
+for k, v in sorted(proc_cpu.items(), key=lambda kv: -kv[1])[:28]:
+    print(
+        f"  {k:28s} {proc_wall[k]:8.2f} {v:8.2f} {100 * v / tot_cpu:5.1f}% "
+        f"{proc_selects[k] / n:7.0f} {proc_flushes[k] / n:6.0f}"
+    )
 print(f"  {'(all processors)':35s} {sum(proc_wall.values()):8.2f} {sum(proc_cpu.values()):8.2f}")
 json.dump(
-    dict(label=args.label, rows=rows, proc_wall=proc_wall, proc_cpu=proc_cpu, counters=counters),
+    dict(
+        label=args.label,
+        rows=rows,
+        proc_wall=proc_wall,
+        proc_cpu=proc_cpu,
+        proc_selects=proc_selects,
+        proc_flushes=proc_flushes,
+        counters=counters,
+    ),
     open(out / "bench.json", "w"),
     indent=1,
 )
