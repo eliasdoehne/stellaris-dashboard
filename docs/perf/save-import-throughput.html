@@ -1,0 +1,543 @@
+<title>Save Import Throughput</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of findings; each optimisation gets a chart that shows
+   seconds per save before and after, so the eye compares bar lengths down the page. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #fcfcfb;
+  --ink: #12151b;
+  --ink-2: #4a5160;
+  --ink-3: #6b7383;
+  --rule: #dfe3ea;
+  --grid: #e9ecf1;
+  --ghost: #dbe3ef;
+  --s1: #2a78d6;           /* database stage / optimised */
+  --s2: #eb6834;           /* parser stage */
+  --base: #8b93a3;         /* master baseline */
+  --good: #006300;
+  --warn-bg: #fff4dc; --warn-ink: #7a4b00;
+  --chip-bg: #eaf1fb;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121418; --surface: #1a1a19; --ink: #eef0f3; --ink-2: #b9bfca; --ink-3: #8d95a3;
+    --rule: #2d323b; --grid: #262a31; --ghost: #263447; --s1: #3987e5; --s2: #d95926; --base: #737b8a;
+    --good: #0ca30c; --warn-bg: #3a2c10; --warn-ink: #f2c879; --chip-bg: #1f2a3a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121418; --surface: #1a1a19; --ink: #eef0f3; --ink-2: #b9bfca; --ink-3: #8d95a3;
+  --rule: #2d323b; --grid: #262a31; --ghost: #263447; --s1: #3987e5; --s2: #d95926; --base: #737b8a;
+  --good: #0ca30c; --warn-bg: #3a2c10; --warn-ink: #f2c879; --chip-bg: #1f2a3a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 940px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); line-height: 1.08; font-weight: 700; }
+h2 { font-size: 1.45rem; font-weight: 600; }
+h3 { font-size: 1.02rem; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 0.74rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.lede { font-size: 1.08rem; color: var(--ink-2); }
+header { display: flex; flex-direction: column; gap: 14px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+.sec-head p { color: var(--ink-2); }
+.rank { display: inline-flex; align-items: center; gap: 8px; }
+.rank b { font-family: var(--font-mono); font-weight: 500; font-size: 0.8rem; color: var(--s1); background: var(--chip-bg); border-radius: 4px; padding: 1px 7px; }
+
+/* stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tile .label { font-size: 0.8rem; color: var(--ink-2); }
+.tile .value { font-family: var(--font-display); font-weight: 600; font-size: 1.7rem; line-height: 1.15; }
+.tile .delta { font-size: 0.8rem; color: var(--ink-3); font-family: var(--font-mono); }
+.tile .delta.good { color: var(--good); }
+@media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* chart frame */
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.chart-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.chart-top .sub { color: var(--ink-3); font-size: 0.82rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.8rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
+.k-s1 { background: var(--s1); } .k-s2 { background: var(--s2); } .k-base { background: var(--base); }
+.k-ghost { background: var(--ghost); }
+.k-est { background: repeating-linear-gradient(135deg, var(--s1) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1px var(--s1); }
+
+/* horizontal bar rows */
+.bars { display: flex; flex-direction: column; gap: 6px; position: relative; }
+.row { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 4.6rem; gap: 12px; align-items: center; min-height: 30px; }
+.row .rl { font-size: 0.84rem; color: var(--ink); line-height: 1.3; }
+.row .rl small { display: block; color: var(--ink-3); font-size: 0.74rem; }
+.track { position: relative; height: 22px; }
+.seg { position: absolute; top: 0; bottom: 0; border-radius: 0 4px 4px 0; cursor: default; }
+.seg.mid { border-radius: 0; }
+.seg.s1 { background: var(--s1); } .seg.s2 { background: var(--s2); } .seg.base { background: var(--base); }
+.seg.ghost { background: var(--ghost); }
+.seg.est { background: repeating-linear-gradient(135deg, var(--s1) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1.5px var(--s1); }
+.seg:hover, .seg:focus-visible { filter: brightness(1.08); outline: none; }
+.seg .ann { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-2); white-space: nowrap; pointer-events: none; }
+.row .rv { font-family: var(--font-mono); font-size: 0.82rem; text-align: right; font-variant-numeric: tabular-nums; }
+.row .rv small { display: block; color: var(--ink-3); font-size: 0.7rem; }
+.row.group-gap { margin-top: 10px; }
+.axis { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 4.6rem; gap: 12px; }
+.axis .ticks { position: relative; height: 18px; font-family: var(--font-mono); font-size: 0.7rem; color: var(--ink-3); }
+.axis .ticks span { position: absolute; transform: translateX(-50%); top: 2px; white-space: nowrap; }
+.axis .ticks span:first-child { transform: none; }
+.gridlines { position: absolute; inset: 0; pointer-events: none; }
+.gridlines i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
+@media (max-width: 640px) {
+  .row, .axis { grid-template-columns: minmax(0, 1fr) 4.2rem; }
+  .row .rl { grid-column: 1 / -1; }
+  .axis .spacer:first-child { display: none; }
+}
+
+/* toggle */
+.toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.toggle button { font: inherit; font-size: 0.8rem; padding: 5px 12px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--chip-bg); color: var(--ink); font-weight: 600; }
+.toggle button:focus-visible { outline: 2px solid var(--s1); outline-offset: -2px; }
+
+/* tables */
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; letter-spacing: 0.04em; text-transform: uppercase; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.do { background: var(--chip-bg); color: var(--s1); }
+.pill.later { background: var(--grid); color: var(--ink-2); }
+.pill.skip { background: var(--warn-bg); color: var(--warn-ink); }
+details summary { cursor: pointer; color: var(--ink-2); font-size: 0.82rem; }
+details[open] summary { margin-bottom: 8px; }
+
+.note { font-size: 0.82rem; color: var(--ink-3); }
+.callout { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 12px 14px; font-size: 0.86rem; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .two { grid-template-columns: minmax(0, 1fr); } }
+ul.plain { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--grid); padding: 1px 5px; border-radius: 4px; }
+
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 0.78rem; padding: 7px 10px; border-radius: 6px; max-width: 280px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
+#tip b { font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) { .seg { transition: width 0.35s ease, left 0.35s ease; } }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">stellaris-dashboard · save import performance</span>
+    <h1>Save Import Throughput</h1>
+    <p class="lede">The whole 110-save test corpus imports in 214 s instead of 763 s once the parser rewrite and the ORM fixes are combined. Most of the time on master goes to SQLAlchemy overhead, not to parsing or SQLite. Below, each optimisation is shown with what it saves on its own.</p>
+    <div class="tiles" role="list">
+      <div class="tile" role="listitem"><span class="label">Full corpus import, CLI</span><span class="value num">214 s</span><span class="delta good">3.6× faster than 763 s</span></div>
+      <div class="tile" role="listitem"><span class="label">Database stage</span><span class="value num">1.29 s</span><span class="delta good">per save, 4.2× faster</span></div>
+      <div class="tile" role="listitem"><span class="label">Parser</span><span class="value num">0.39 s</span><span class="delta good">CPU per save, 5.0× faster</span></div>
+      <div class="tile" role="listitem"><span class="label">Peak memory</span><span class="value num">623 MB</span><span class="delta good">down from 1,228 MB</span></div>
+    </div>
+  </header>
+
+  <section id="overview">
+    <div class="sec-head">
+      <span class="eyebrow">Where the time goes</span>
+      <h2>Seconds per save, by stage</h2>
+      <p>Each bar adds the parser time to the database time for one save. The database stage dominates on master; after both fixes the two stages are of similar size. The last row is an estimate for taking the write path off the ORM.</p>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <div class="legend"><span><i class="key k-s2"></i>Parse save into a Python dict</span><span><i class="key k-s1"></i>Write to the database (timeline processors)</span><span><i class="key k-est"></i>Estimate</span></div>
+        <span class="sub">sum of the per-stage benchmarks, one core</span>
+      </div>
+      <div id="c-overview"></div>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <h3>Measured end to end: <code>parse-saves</code> over all 110 saves</h3>
+        <div class="legend"><span><i class="key k-base"></i>master</span><span><i class="key k-s1"></i>both prototypes merged</span></div>
+      </div>
+      <div id="c-e2e"></div>
+      <p class="note">The end-to-end run includes freeing the parsed dict, garbage collection and file I/O, so it is slightly slower than the sum of the stage benchmarks above.</p>
+    </div>
+  </section>
+
+  <section id="orm">
+    <div class="sec-head">
+      <span class="rank"><b>1</b><span class="eyebrow">Use the ORM properly</span></span>
+      <h2>Database stage, one step at a time</h2>
+      <p>Each row is the cumulative result after that step. The pale extension shows how much time the step removed. On master each save triggered about 1,200–1,900 flushes and 3,500–4,200 queries; after the last step it is under 100 flushes and about 630 queries.</p>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <div class="legend"><span><i class="key k-base"></i>master</span><span><i class="key k-s1"></i>after the step</span><span><i class="key k-ghost"></i>time removed by the step</span></div>
+        <div class="toggle" role="group" aria-label="Game">
+          <button type="button" id="g-gun" aria-pressed="true">Gundersen, 40 saves</button>
+          <button type="button" id="g-une" aria-pressed="false">United Nations, 13 saves</button>
+        </div>
+      </div>
+      <div id="c-orm"></div>
+      <p class="note">Wall-clock seconds per save for the timeline stage only, on pickled input so every run sees the same dicts. All four games' databases come out identical to master's, primary keys included.</p>
+    </div>
+    <details>
+      <summary>Queries and flushes per save after each step</summary>
+      <div class="tablewrap"><table id="t-orm"></table></div>
+    </details>
+  </section>
+
+  <section id="gc">
+    <div class="sec-head">
+      <span class="rank"><b>2</b><span class="eyebrow">Freeze the garbage collector</span></span>
+      <h2>The parsed save makes every full collection expensive</h2>
+      <p>A parsed save is several million Python objects. Full garbage collections kept walking all of them. Calling <code>gc.freeze()</code> for the duration of an import removes that cost. It helps on master already, and more once the ORM churn is gone.</p>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <div class="legend"><span><i class="key k-base"></i>without freeze</span><span><i class="key k-s1"></i>with <code>gc.freeze()</code></span></div>
+        <span class="sub">database stage, seconds per save</span>
+      </div>
+      <div id="c-gc"></div>
+    </div>
+  </section>
+
+  <section id="parser">
+    <div class="sec-head">
+      <span class="rank"><b>3</b><span class="eyebrow">Rewrite the Rust parser</span></span>
+      <h2>Parser, one step at a time</h2>
+      <p>The new parser is a hand-written single pass that builds Python objects directly and shares repeated strings. Its output equals the current parser's on all 110 saves, and 3 million random inputs gave the same result in both. The right column is peak memory for the largest save.</p>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <div class="legend"><span><i class="key k-base"></i>current parser</span><span><i class="key k-s2"></i>after the step</span><span><i class="key k-ghost"></i>time removed by the step</span></div>
+        <span class="sub">CPU seconds per save, 39 saves</span>
+      </div>
+      <div id="c-parser"></div>
+    </div>
+    <div class="two">
+      <div class="chart">
+        <div class="chart-top"><h3>Shipping a parsed save between processes</h3></div>
+        <div id="c-pickle"></div>
+        <p class="note">Pickle dump plus load, CPU seconds per save. The bulk importer's worker processes pay this for every save. Shared strings make the pickle half the size.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-top"><h3>Variants not recommended now</h3></div>
+        <div id="c-parser-x"></div>
+        <p class="note">All on top of the default build (0.39 s). GC untracking leaves cycles uncollectable. The nested filter comes from tracing 15 saves and was still finding new keys.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="writepath">
+    <div class="sec-head">
+      <span class="rank"><b>4</b><span class="eyebrow">Take the write path off the ORM</span></span>
+      <h2>What one slice costs without SQLAlchemy objects</h2>
+      <p>After step 1, SQLAlchemy is still about 66% of the remaining database stage and the app's own logic about 25%. To size what a deeper change could gain, I reimplemented one slice, the country budget totals and roughly 1,200 budget rows per save, and checked the rows against master's database.</p>
+    </div>
+    <div class="two">
+      <div class="chart">
+        <div class="chart-top"><h3>Budget slice, milliseconds per save</h3></div>
+        <div id="c-slice"></div>
+        <p class="note">The ORM figure is the whole <code>country_data</code> processor on master, which also writes the country rows. Rows match master exactly; totals match within 1e-14.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-top"><h3>Database stage after step 1, by owner of the time</h3></div>
+        <div id="c-split"></div>
+        <p class="note">Self time from a cProfile of one game, 13 saves, built-ins assigned to their caller. Profiling inflates absolute time, so read the shares.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="projection">
+    <div class="sec-head">
+      <span class="rank"><b>5</b><span class="eyebrow">Parse only what the import reads</span></span>
+      <h2>Projection saves little, because the import reads almost everything</h2>
+      <p>The import reads 37 top-level sections, 93.7% of the save's bytes. Skipping the rest gains about 4%. Filtering inside the big sections (ships, fleets, countries) would keep about a third of the values and roughly halve parse time again, but it needs a hand-maintained list of keys.</p>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <div class="legend"><span><i class="key k-s2"></i>kept</span><span><i class="key k-ghost"></i>skipped</span></div>
+        <span class="sub">share of the save's values</span>
+      </div>
+      <div id="c-proj"></div>
+    </div>
+  </section>
+
+  <section id="parallel">
+    <div class="sec-head">
+      <span class="eyebrow">Also measured</span>
+      <h2>More processes don't help a single game</h2>
+      <p>The database stage of one game is serial, so the existing <code>--threads</code> option only moves parsing to worker processes, and pickling the result back costs more than it saves. Importing different games in separate processes does scale.</p>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <div class="legend"><span><i class="key k-base"></i>one process</span><span><i class="key k-s1"></i>two processes</span></div>
+        <span class="sub">wall-clock seconds</span>
+      </div>
+      <div id="c-par"></div>
+    </div>
+    <div class="chart">
+      <div class="chart-top">
+        <h3>Late saves no longer get slower</h3>
+      </div>
+      <div class="tablewrap"><table id="t-scale"></table></div>
+      <p class="note">Database stage, CPU seconds per save, averaged over the first and last fifth of each game's saves.</p>
+    </div>
+  </section>
+
+  <section id="ranking">
+    <div class="sec-head">
+      <span class="eyebrow">Recommendation</span>
+      <h2>The five approaches side by side</h2>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Approach</th><th class="n">Speedup</th><th>Evidence</th><th>Effort</th><th>Risk</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><td>Use the ORM properly: no autoflush storm, bulk lookups, bulk inserts</td><td class="n">4.2× DB stage</td><td>Measured, 110 saves; databases identical incl. keys</td><td>About a week (estimate)</td><td>New flush listener and row cache need review</td><td><span class="pill do">Do now</span></td></tr>
+          <tr><td class="n">2</td><td>Freeze the garbage collector during an import</td><td class="n">1.27× alone<br>1.7× after #1</td><td>Measured, 2 games</td><td>Hours</td><td>Low</td><td><span class="pill do">Do first</span></td></tr>
+          <tr><td class="n">3</td><td>Rewrite the Rust parser</td><td class="n">5.0× parse</td><td>Measured, 39 saves; output equal on 110 saves and 3M fuzz inputs</td><td>2–4 days</td><td>libdeflate untested on Windows, macOS and PyInstaller; unsafe C-API code</td><td><span class="pill do">Do now</span></td></tr>
+          <tr><td class="n">4</td><td>Write with SQLAlchemy Core or raw SQL, or extract in Rust</td><td class="n">~2.5× DB stage after #1</td><td>Estimate from one slice and a profile</td><td>Weeks</td><td>Large rewrite of a 6,500-line module</td><td><span class="pill later">If more is needed</span></td></tr>
+          <tr><td class="n">5</td><td>Parse only what the import reads</td><td class="n">1.04× top level<br>1.9× nested</td><td>Measured parse time; nested filter unsafe</td><td>½ day / 1–2 weeks</td><td>Missing a key silently drops data</td><td><span class="pill skip">Skip</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="method">
+    <div class="sec-head">
+      <span class="eyebrow">How this was measured</span>
+      <h2>Method and caveats</h2>
+    </div>
+    <ul class="plain">
+      <li>Corpus: 110 autosaves from 4 AI observer games of Stellaris 4.5.2, about 6 GB of gamestate text in total.</li>
+      <li>4-core cloud container. Every benchmark was pinned to its own core with <code>taskset</code>; comparisons were re-run under the same pinning.</li>
+      <li>Database equivalence: the ORM steps alone give byte-identical databases to master's on all four games, keys included. With the new parser as well, values match master within 1e-9 relative, which is also how far two runs of master differ from each other, because the current parser returns dicts in random order and float sums depend on that order. The new parser keeps file order, so its imports are repeatable.</li>
+      <li>Tests: the merged prototype passes 783 tests; the same 12 tests fail on unmodified master in this environment (no game localisation files, no <code>test/saves</code>).</li>
+      <li>Not done: a 110-save run of the parser benchmark on its own, the Core/raw-SQL rewrite, a database comparison under the nested projection.</li>
+      <li>Code and scripts: branch <code>ccr-e1c741ee-k1l8sj</code>, under <code>tools/perf/</code>. It is an evaluation branch, not one to merge.</li>
+    </ul>
+  </section>
+</main>
+<div id="tip" hidden></div>
+
+<script>
+(function () {
+  const tip = document.getElementById("tip");
+  function showTip(e, html) {
+    tip.innerHTML = html; tip.hidden = false;
+    const r = tip.getBoundingClientRect();
+    let x = e.clientX + 14, y = e.clientY + 14;
+    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
+    if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 14;
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+  }
+  function hideTip() { tip.hidden = true; }
+
+  function niceTicks(max) {
+    const raw = max / 4, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+    const ticks = []; for (let v = 0; v <= max + 1e-9; v += step) ticks.push(+v.toFixed(6));
+    if (ticks[ticks.length - 1] < max) ticks.push(+(ticks[ticks.length - 1] + step).toFixed(6));
+    return ticks;
+  }
+  const fmt = (v, d) => v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  /* rows: {label, sub, segs:[{v, cls, tip, ann}], value, valueSub, gap}
+     segs stack left to right; scale shared by the chart. */
+  function render(el, rows, opts) {
+    const total = r => r.segs.reduce((a, s) => a + s.v, 0);
+    const max = opts.max || Math.max(...rows.map(total));
+    const ticks = niceTicks(max), top = ticks[ticks.length - 1];
+    const pct = v => (100 * v / top);
+    el.innerHTML = "";
+    const bars = document.createElement("div"); bars.className = "bars";
+    rows.forEach(r => {
+      const row = document.createElement("div"); row.className = "row" + (r.gap ? " group-gap" : "");
+      const rl = document.createElement("div"); rl.className = "rl";
+      rl.innerHTML = r.label + (r.sub ? "<small>" + r.sub + "</small>" : "");
+      const track = document.createElement("div"); track.className = "track";
+      const grid = document.createElement("div"); grid.className = "gridlines";
+      ticks.forEach(t => { const i = document.createElement("i"); i.style.left = pct(t) + "%"; grid.appendChild(i); });
+      track.appendChild(grid);
+      let x = 0;
+      r.segs.forEach((s, k) => {
+        const d = document.createElement("div");
+        d.className = "seg " + s.cls + (k < r.segs.length - 1 && !s.ghostEnd ? " mid" : "");
+        d.style.left = pct(x) + "%"; d.style.width = "calc(" + pct(s.v) + "% - " + (k < r.segs.length - 1 ? 2 : 0) + "px)";
+        d.tabIndex = 0;
+        if (s.ann && pct(s.v) >= 7) { const a = document.createElement("span"); a.className = "ann"; a.textContent = s.ann; d.appendChild(a); }
+        if (s.tip) {
+          d.addEventListener("mousemove", e => showTip(e, s.tip));
+          d.addEventListener("mouseleave", hideTip);
+          d.addEventListener("focus", () => { const b = d.getBoundingClientRect(); showTip({ clientX: b.right, clientY: b.top }, s.tip); });
+          d.addEventListener("blur", hideTip);
+          d.setAttribute("aria-label", s.tip.replace(/<[^>]+>/g, " "));
+        }
+        track.appendChild(d); x += s.v;
+      });
+      const rv = document.createElement("div"); rv.className = "rv";
+      rv.innerHTML = r.value + (r.valueSub ? "<small>" + r.valueSub + "</small>" : "");
+      row.append(rl, track, rv); bars.appendChild(row);
+    });
+    const axis = document.createElement("div"); axis.className = "axis";
+    const sp = document.createElement("div"); sp.className = "spacer";
+    const tk = document.createElement("div"); tk.className = "ticks";
+    ticks.forEach(t => { const s = document.createElement("span"); s.style.left = pct(t) + "%"; s.textContent = fmt(t, opts.tickDigits ?? (top < 10 ? 1 : 0)) + (t === 0 ? "" : ""); tk.appendChild(s); });
+    const sp2 = document.createElement("div"); sp2.className = "spacer";
+    sp2.style.fontSize = "0.7rem"; sp2.style.color = "var(--ink-3)"; sp2.textContent = opts.unit || "";
+    axis.append(sp, tk, sp2);
+    el.append(bars, axis);
+  }
+
+  /* ---------- overview ---------- */
+  const P0 = 1.975, P1 = 0.391, D0 = 5.470, D1 = 1.294, D4 = 0.5;
+  const stack = (label, sub, p, d, est) => ({
+    label, sub,
+    segs: [
+      { v: p, cls: "s2", tip: `<b>${label}</b><br>Parse: ${fmt(p, 2)} s per save` },
+      { v: d, cls: est ? "est" : "s1", tip: `<b>${label}</b><br>Database: ${est ? "about " : ""}${fmt(d, 2)} s per save${est ? " (estimate)" : ""}` }
+    ],
+    value: (est ? "~" : "") + fmt(p + d, 2) + " s", valueSub: (P0 + D0) / (p + d) > 1.05 ? fmt((P0 + D0) / (p + d), 1) + "×" : "baseline"
+  });
+  render(document.getElementById("c-overview"), [
+    stack("master", "current parser and ORM use", P0, D0),
+    stack("Parser rewrite only", "approach 3", P1, D0),
+    stack("ORM fixes only", "approaches 1 and 2", P0, D1),
+    stack("Both", "what was measured end to end", P1, D1),
+    stack("Both, plus write path off the ORM", "approach 4, estimated", P1, D4, true)
+  ], { unit: "s / save" });
+
+  render(document.getElementById("c-e2e"), [
+    { label: "master", sub: "1 process, peak 1,228 MB", segs: [{ v: 763.2, cls: "base", tip: "<b>master</b><br>763.2 s for 110 saves<br>6.94 s per save" }], value: "763 s", valueSub: "6.94 s/save" },
+    { label: "Both prototypes", sub: "1 process, peak 623 MB", segs: [{ v: 214.0, cls: "s1", tip: "<b>Both prototypes</b><br>214.0 s for 110 saves<br>1.95 s per save, 3.6× faster" }], value: "214 s", valueSub: "1.95 s/save" }
+  ], { unit: "seconds" });
+
+  /* ---------- ORM steps ---------- */
+  const STEP_NAMES = [
+    ["master", ""],
+    ["Flush only when a query needs pending rows", "autoflush off"],
+    ["Load descriptions once, planet rows in bulk", "N+1 lookups"],
+    ["One key scan per processor for existing events", "N+1 lookups"],
+    ["Bulk-insert append-only stats rows", "budget items, pop and planet stats"],
+    ["Freeze the garbage collector during import", "approach 2"],
+    ["Bulk lookups for governments, memberships, latest country data", "N+1 lookups"]
+  ];
+  const ORM = {
+    gun: { steps: [4.865, 4.479, 3.874, 2.848, 2.562, 1.507, 1.243], q: [3521, 3519, 1795, 774, 774, 774, 633], f: [1233, 698, 526, 152, 151, 151, 83] },
+    une: { steps: [5.885, 5.746, 4.868, 3.264, 2.983, 1.863, 1.499], q: [4220, 4218, 2070, 824, 824, 824, 617], f: [1913, 1134, 771, 179, 179, 179, 97] }
+  };
+  function drawOrm(key) {
+    const d = ORM[key], base = d.steps[0];
+    const rows = d.steps.map((v, i) => {
+      const prev = i ? d.steps[i - 1] : v, saved = prev - v;
+      const segs = [{ v, cls: i ? "s1" : "base", tip: `<b>${STEP_NAMES[i][0]}</b><br>${fmt(v, 2)} s per save${i ? `<br>saves ${fmt(saved, 2)} s on the previous step<br>${fmt(base / v, 2)}× faster than master` : ""}` }];
+      if (i && saved > 0) segs.push({ v: saved, cls: "ghost", ghostEnd: true, ann: "−" + fmt(saved, 2), tip: `<b>Removed by this step</b><br>${fmt(saved, 2)} s per save` });
+      return { label: STEP_NAMES[i][0], sub: STEP_NAMES[i][1], segs, value: fmt(v, 2) + " s", valueSub: i ? fmt(base / v, 1) + "×" : "" };
+    });
+    render(document.getElementById("c-orm"), rows, { max: base, unit: "s / save" });
+    const t = document.getElementById("t-orm");
+    t.innerHTML = "<thead><tr><th>Step</th><th class='n'>s / save</th><th class='n'>Queries / save</th><th class='n'>Flushes / save</th></tr></thead><tbody>" +
+      d.steps.map((v, i) => `<tr><td>${STEP_NAMES[i][0]}</td><td class="n">${fmt(v, 2)}</td><td class="n">${d.q[i].toLocaleString("en-US")}</td><td class="n">${d.f[i].toLocaleString("en-US")}</td></tr>`).join("") + "</tbody>";
+  }
+  const bg = document.getElementById("g-gun"), bu = document.getElementById("g-une");
+  function pick(k) { bg.setAttribute("aria-pressed", k === "gun"); bu.setAttribute("aria-pressed", k === "une"); drawOrm(k); try { localStorage.setItem("orm-game", k); } catch (e) {} }
+  bg.addEventListener("click", () => pick("gun")); bu.addEventListener("click", () => pick("une"));
+  let start = "gun"; try { start = localStorage.getItem("orm-game") === "une" ? "une" : "gun"; } catch (e) {}
+  pick(start);
+
+  /* ---------- GC ---------- */
+  const pair = (label, sub, a, b) => [
+    { label, sub, segs: [{ v: a, cls: "base", tip: `<b>${label}</b>, without freeze<br>${fmt(a, 2)} s per save` }], value: fmt(a, 2) + " s" },
+    { label: "", segs: [{ v: b, cls: "s1", tip: `<b>${label}</b>, with gc.freeze()<br>${fmt(b, 2)} s per save, ${fmt(a / b, 2)}× faster` }], value: fmt(b, 2) + " s", valueSub: fmt(a / b, 2) + "×" }
+  ];
+  render(document.getElementById("c-gc"), [
+    ...pair("master, Gundersen", "40 saves", 4.865, 3.820),
+    ...pair("master, United Nations", "13 saves", 5.885, 4.731).map((r, i) => i ? r : { ...r, gap: true }),
+    ...pair("After ORM steps 1–4, Gundersen", "", 2.562, 1.507).map((r, i) => i ? r : { ...r, gap: true }),
+    ...pair("After ORM steps 1–4, United Nations", "", 2.983, 1.863).map((r, i) => i ? r : { ...r, gap: true })
+  ], { unit: "s / save" });
+
+  /* ---------- parser ---------- */
+  const PS = [
+    ["Current parser", "nom combinators, HashMap tree, then Python", 1.975, 972],
+    ["Hand-written single-pass parser", "same tree and conversion", 0.997, 960],
+    ["Event tape instead of a tree", "build Python objects via the C API", 0.609, 620],
+    ["Shared string cache", "one object per repeated key or value", 0.458, 435],
+    ["Build Python objects directly", "no intermediate tape", 0.419, 318],
+    ["libdeflate, pre-sized buffer", "faster unzip; the proposed default", 0.391, 318]
+  ];
+  render(document.getElementById("c-parser"), PS.map((p, i) => {
+    const prev = i ? PS[i - 1][2] : p[2], saved = prev - p[2];
+    const segs = [{ v: p[2], cls: i ? "s2" : "base", tip: `<b>${p[0]}</b><br>${fmt(p[2], 3)} CPU s per save<br>${fmt(53.5 / p[2], 0)} MB/s<br>peak memory ${p[3]} MB` }];
+    if (i) segs.push({ v: saved, cls: "ghost", ghostEnd: true, ann: "−" + fmt(saved, 2), tip: `<b>Removed by this step</b><br>${fmt(saved, 3)} s per save` });
+    return { label: p[0], sub: p[1], segs, value: fmt(p[2], 2) + " s", valueSub: p[3] + " MB" };
+  }), { max: 1.975, unit: "s / save" });
+
+  render(document.getElementById("c-pickle"), [
+    { label: "Current parser's dict", segs: [{ v: 1.246, cls: "base", tip: "<b>Current parser</b><br>dump 0.751 s + load 0.495 s<br>36.2 MB pickle" }], value: "1.25 s", valueSub: "36 MB" },
+    { label: "New parser, full", segs: [{ v: 0.444, cls: "s2", tip: "<b>New parser, full output</b><br>dump 0.204 s + load 0.240 s<br>18.3 MB pickle" }], value: "0.44 s", valueSub: "18 MB" },
+    { label: "New parser, nested filter", segs: [{ v: 0.158, cls: "s2", tip: "<b>New parser, nested projection</b><br>dump 0.071 s + load 0.087 s<br>6.8 MB pickle" }], value: "0.16 s", valueSub: "7 MB" }
+  ], { unit: "s / save" });
+
+  render(document.getElementById("c-parser-x"), [
+    { label: "Default build", segs: [{ v: 0.391, cls: "s2", tip: "<b>Default build</b><br>0.391 s per save" }], value: "0.39 s" },
+    { label: "Top-level projection", segs: [{ v: 0.376, cls: "s2", tip: "<b>Skip unread top-level sections</b><br>0.376 s per save, 4% faster" }], value: "0.38 s" },
+    { label: "GC untracking", segs: [{ v: 0.279, cls: "s2", tip: "<b>Untrack created containers</b><br>0.279 s per save<br>cycles through them are never collected" }], value: "0.28 s" },
+    { label: "Nested projection", segs: [{ v: 0.206, cls: "s2", tip: "<b>Filter inside sections</b><br>0.206 s per save, peak 183 MB<br>filter not production-safe" }], value: "0.21 s" },
+    { label: "Lexer only, no output", sub: "lower bound", segs: [{ v: 0.114, cls: "base", tip: "<b>Lower bound</b><br>0.114 s per save: reading the text without building anything" }], value: "0.11 s" }
+  ], { max: 0.4, unit: "s / save", tickDigits: 1 });
+
+  /* ---------- write path ---------- */
+  render(document.getElementById("c-slice"), [
+    { label: "ORM, master", sub: "whole processor", segs: [{ v: 489, cls: "base", tip: "<b>country_data processor on master</b><br>489 ms per save (53.8 s over 110 saves)" }], value: "489 ms" },
+    { label: "Python, raw sqlite3", sub: "executemany", segs: [{ v: 9.0, cls: "s1", tip: "<b>Python with raw sqlite3</b><br>9.0 ms per save, 29 saves" }], value: "9 ms" },
+    { label: "Rust, rusqlite", sub: "no Python objects", segs: [{ v: 5.1, cls: "s1", tip: "<b>Rust extraction and rusqlite</b><br>5.1 ms per save, 29 saves" }], value: "5 ms" }
+  ], { unit: "ms / save" });
+
+  render(document.getElementById("c-split"), [
+    { label: "SQLAlchemy", sub: "incl. built-ins it calls", segs: [{ v: 66.7, cls: "base", tip: "<b>SQLAlchemy</b><br>61.0% own code + 5.7% built-ins it calls" }], value: "67%" },
+    { label: "App logic", sub: "timeline.py and helpers", segs: [{ v: 24.7, cls: "s1", tip: "<b>App logic</b><br>17.3% own code + 7.4% built-ins it calls" }], value: "25%" },
+    { label: "Other Python", segs: [{ v: 5.5, cls: "base", tip: "<b>Other Python</b><br>stdlib and other built-ins" }], value: "6%" },
+    { label: "SQLite", sub: "C library", segs: [{ v: 2.9, cls: "s1", tip: "<b>SQLite</b><br>2.9%" }], value: "3%" }
+  ], { max: 100, unit: "% of time" });
+
+  /* ---------- projection ---------- */
+  render(document.getElementById("c-proj"), [
+    { label: "Top-level projection", sub: "skip sections never read", segs: [{ v: 92.7, cls: "s2", tip: "<b>Kept</b><br>92.7% of values (93.7% of bytes)" }, { v: 7.3, cls: "ghost", ghostEnd: true, tip: "<b>Skipped</b><br>construction, army, ambient objects, storms, name database and others" }], value: "93% kept", valueSub: "−4% parse" },
+    { label: "Nested projection", sub: "skip unread keys inside sections", segs: [{ v: 34.7, cls: "s2", tip: "<b>Kept</b><br>34.7% of values" }, { v: 65.3, cls: "ghost", ghostEnd: true, tip: "<b>Skipped</b><br>largest: ship sections, ship names, surveyed deposits, AI strategy, intel" }], value: "35% kept", valueSub: "−47% parse" }
+  ], { max: 100, unit: "% of values" });
+
+  /* ---------- parallel ---------- */
+  const two = (label, sub, a, b, gap, bLabel) => [
+    { label, sub, gap, segs: [{ v: a, cls: "base", tip: `<b>${label}</b><br>one process: ${fmt(a, 1)} s` }], value: fmt(a, 0) + " s" },
+    { label: "", segs: [{ v: b, cls: "s1", tip: `<b>${label}</b><br>${bLabel}: ${fmt(b, 1)} s` }], value: fmt(b, 0) + " s", valueSub: (a / b >= 1 ? fmt(a / b, 2) + "× faster" : fmt(b / a, 2) + "× slower") }
+  ];
+  render(document.getElementById("c-par"), [
+    ...two("One game, master", "13 saves, --threads 1 vs 2", 91.8, 93.9, false, "parser in a worker process"),
+    ...two("All 110 saves, both prototypes", "--threads 1 vs 2", 214.0, 230.5, true, "parser in a worker process"),
+    ...two("Two games, master", "one after the other vs side by side", 240.7, 155.1, true, "one process per game")
+  ], { unit: "seconds" });
+
+  const SC = [
+    ["Cevantian", 25, 4.204, 4.990, 1.213, 1.111],
+    ["Earth Custodianship", 32, 5.649, 7.333, 1.381, 1.467],
+    ["Gundersen", 40, 5.459, 4.986, 1.553, 1.296],
+    ["United Nations", 13, 6.767, 6.716, 2.136, 1.501]
+  ];
+  document.getElementById("t-scale").innerHTML =
+    "<thead><tr><th>Game</th><th class='n'>Saves</th><th class='n'>master, early</th><th class='n'>master, late</th><th class='n'>after, early</th><th class='n'>after, late</th></tr></thead><tbody>" +
+    SC.map(r => `<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${fmt(r[2], 2)}</td><td class="n">${fmt(r[3], 2)}</td><td class="n">${fmt(r[4], 2)}</td><td class="n">${fmt(r[5], 2)}</td></tr>`).join("") + "</tbody>";
+})();
+</script>
