@@ -1,0 +1,57 @@
+# Test corpus of observer-run saves, stored in a private GCS bucket (see docs/test-corpus.md).
+# Replaced as a whole when the supported game version changes.
+
+version = "4.5.2"
+bucket = "stellaris-corpus-fa4b5b4a"  # overridden by STELLARIS_CORPUS_BUCKET
+
+# Base sample: the first save, the last save and the first save of every `interval_years`-th year.
+interval_years = 10
+
+# `events` are in-game months (YYYY.MM) with a transition worth testing; the last save before the
+# month and the first save after it are added, so importing them in order crosses the transition.
+# `notes` are relative to the scratch folder of the machine that builds the corpus.
+
+[[game]]
+id = "unitednationsofearth2_-629118313"
+until = "2320.01"  # ran to 2502; the later saves are large and add little
+notes = ["observer-run-2026-10/PLAYTHROUGH.md", "observer-run-2026-10/game_setups.json"]
+events = []
+
+[[game]]
+id = "earthcustodianship_-1585140336"
+notes = ["observer-run-4/RUN.md", "observer-run-4/game_setup.json"]
+events = [
+    "2283.01",  # Voidworm Plague starts
+    "2285.02",  # Great Khan rises
+    "2291.07",  # Voidworm Plague ends
+    "2297.12",  # country 0 destroyed
+    "2304.04",  # Khan defeated
+    "2355.07",  # fallen empire awakens
+]
+
+[[game]]
+id = "gundersenresearchsociety_509756073"
+notes = ["observer-run-5/RUN.md", "observer-run-5/game_setup.json"]
+events = [
+    "2271.01",  # Great Khan rises
+    "2277.11",  # Khan defeated
+    "2280.01",  # Voidworm Plague starts
+    "2338.09",  # Become the Crisis level 2
+    "2340.10",  # fallen empire awakens (upstart)
+    "2348.07",  # rival fallen empire awakens
+    "2351.08",  # War in Heaven starts, League forms
+    "2352.04",  # League at war with both fallen empires
+    "2360.01",  # end-game crisis picked
+    "2362.10",  # Prethoryn arrive
+    "2363.12",  # crisis stage 2
+]
+
+[[game]]
+id = "cevantiandimensionalcommune3_1842881798"
+notes = ["observer-run-6/RUN.md", "observer-run-6/game_setup.json"]
+events = [
+    "2221.11",  # war ends as resolution_unknown, defender destroyed
+    "2239.02",  # planet destroyed
+    "2325.01",  # End of the Cycle
+    "2331.08",  # fallen empire awakens
+]
