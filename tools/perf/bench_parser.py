@@ -11,7 +11,6 @@ time to free the result. With --phases, also the mean of the phase timings repor
 import argparse
 import gc
 import json
-import resource
 import subprocess
 import sys
 import time
@@ -63,7 +62,9 @@ def measure(fn, save):
 def rss(variant, save):
     fn = variants()[variant]
     result = fn(save)
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    # VmHWM rather than ru_maxrss: the latter survives exec and would report the parent's peak
+    with open("/proc/self/status") as status:
+        peak = next(int(line.split()[1]) for line in status if line.startswith("VmHWM")) / 1024
     del result
     print(json.dumps({"variant": variant, "peak_rss_mb": peak}))
 
