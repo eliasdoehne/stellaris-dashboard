@@ -17,10 +17,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--every", type=int, default=1)
     ap.add_argument("--nested", default=None)
+    ap.add_argument("--start", type=int, default=0, help="skip this many saves (to resume a run)")
     args = ap.parse_args()
     nested = load_filter(args.nested) if args.nested else None
 
-    saves = corpus_saves(args.every)
+    saves = corpus_saves(args.every)[args.start :]
     checks = failures = 0
     for i, save in enumerate(saves):
         base = rp.parse_save_file(save)
