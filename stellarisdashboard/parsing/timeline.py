@@ -510,6 +510,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
         self._db_gamestate = None
         self._gamestate_dict = None
         self._session = None
+        self._plain_rows = {}
 
     def initialize(
         self,
@@ -544,6 +545,44 @@ class AbstractGamestateDataProcessor(abc.ABC):
             self._session.add(matching_description)
         _shared_description_cache[text] = matching_description
         return matching_description
+
+    def _add_plain_row(self, model, **values):
+        """Queue a row of an append-only table, given as for the model's constructor.
+
+        For rows that are only written: nothing reads or changes them as objects while the save
+        is processed. They skip the session's unit of work and are inserted together by
+        _write_plain_rows(), which the processor calls once it has queued all of them.
+        """
+        self._plain_rows.setdefault(model, []).append(values)
+
+    def _write_plain_rows(self):
+        plain_rows, self._plain_rows = self._plain_rows, {}
+        if not any(plain_rows.values()):
+            return
+        self._session.flush()  # the referenced new objects get their primary keys
+        for model, rows in plain_rows.items():
+            mapper = sqlalchemy.inspect(model)
+            column_names = {}
+            for name in rows[0]:
+                if name in mapper.relationships:
+                    (column,) = mapper.relationships[name].local_columns
+                    column_names[name] = (column.name, True)
+                else:
+                    column_names[name] = (mapper.columns[name].name, False)
+            self._session.execute(
+                sqlalchemy.insert(model.__table__),
+                [
+                    {
+                        column: (
+                            value
+                            if not is_object or value is None
+                            else sqlalchemy.inspect(value).identity[0]
+                        )
+                        for (column, is_object), value in zip(column_names.values(), row.values())
+                    }
+                    for row in rows
+                ],
+            )
 
     def _load_shared_descriptions(self):
         if _ALL_DESCRIPTIONS_LOADED not in _shared_description_cache:
@@ -1308,6 +1347,7 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
             ):
                 country_model.first_player_contact_date = self._basic_info.date_in_days
                 self._session.add(country_model)
+        self._write_plain_rows()
 
     def _get_diplomacy_towards_player(self, diplomacy_dict, country_id):
         new_key_old_key_list = [
@@ -1420,8 +1460,9 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
 
             if not country.is_real_country():
                 continue  # only the totals are kept for special countries
-            self._session.add(
-                datamodel.BudgetItem(
+            self._add_plain_row(
+                datamodel.BudgetItem,
+                **dict(
                     country_data=country_data,
                     db_budget_item_name=self._get_or_add_shared_description(
                         item_name
@@ -6535,8 +6576,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 species = species_dict[species_id]
-                self._session.add(
-                    datamodel.PopStatsBySpecies(
+                self._add_plain_row(
+                    datamodel.PopStatsBySpecies,
+                    **dict(
                         country_data=country_data,
                         species=species,
                         **stats,
@@ -6564,8 +6606,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
                 stats["support"] = faction_dict.get("support_percent", 0.0)
 
-                self._session.add(
-                    datamodel.PopStatsByFaction(
+                self._add_plain_row(
+                    datamodel.PopStatsByFaction,
+                    **dict(
                         country_data=country_data,
                         faction=faction,
                         **stats,
@@ -6595,8 +6638,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                         f"{self._basic_info.logger_str}     Could not find planet with ID {planet_id}!"
                     )
                     continue
-                self._session.add(
-                    datamodel.PlanetStats(
+                self._add_plain_row(
+                    datamodel.PlanetStats,
+                    **dict(
                         country_data=country_data,
                         planet=planet,
                         **stats,
@@ -6611,8 +6655,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 job = self._get_or_add_shared_description(job)
-                self._session.add(
-                    datamodel.PopStatsByJob(
+                self._add_plain_row(
+                    datamodel.PopStatsByJob,
+                    **dict(
                         country_data=country_data,
                         db_job_description=job,
                         **stats,
@@ -6627,8 +6672,9 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 stratum = self._get_or_add_shared_description(stratum)
-                self._session.add(
-                    datamodel.PopStatsByStratum(
+                self._add_plain_row(
+                    datamodel.PopStatsByStratum,
+                    **dict(
                         country_data=country_data,
                         db_stratum_description=stratum,
                         **stats,
@@ -6643,13 +6689,15 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 ethos = self._get_or_add_shared_description(ethos)
-                self._session.add(
-                    datamodel.PopStatsByEthos(
+                self._add_plain_row(
+                    datamodel.PopStatsByEthos,
+                    **dict(
                         country_data=country_data,
                         db_ethos_description=ethos,
                         **stats,
                     )
                 )
+        self._write_plain_rows()
 
     @staticmethod
     def _add_pop_stats(stats_dict, key, pop_count, size, crime, happiness, power):
