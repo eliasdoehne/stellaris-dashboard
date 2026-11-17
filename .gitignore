@@ -104,3 +104,9 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# test corpus downloaded by tools/corpus/fetch.py
+/corpus/
+
+# project settings shared with Claude sessions
+!/.claude/settings.json
