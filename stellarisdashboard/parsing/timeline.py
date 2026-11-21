@@ -904,7 +904,10 @@ class SystemOwnershipProcessor(AbstractGamestateDataProcessor):
             ownership = (
                 self._session.query(datamodel.SystemOwnership)
                 .filter_by(system=system_model)
-                .order_by(datamodel.SystemOwnership.end_date_days.desc())
+                .order_by(
+                    datamodel.SystemOwnership.end_date_days.desc(),
+                    datamodel.SystemOwnership.system_ownership_id,
+                )
                 .first()
             )
             if ownership is not None and had_owner:
@@ -2216,7 +2219,10 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 system=system_model,
                 planet=planet_model,
             )
-            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .order_by(
+                datamodel.HistoricalEvent.start_date_days.desc(),
+                datamodel.HistoricalEvent.historical_event_id,
+            )
             .first()
         )
         if (
@@ -2257,7 +2263,10 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
                 planet=planet,
                 db_description=sector_description,
             )
-            .order_by(datamodel.HistoricalEvent.end_date_days.desc())
+            .order_by(
+                datamodel.HistoricalEvent.end_date_days.desc(),
+                datamodel.HistoricalEvent.historical_event_id,
+            )
             .first()
         )
         if (
@@ -2402,7 +2411,10 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
                     country=country_model,
                     leader=previous_ruler,
                 )
-                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .order_by(
+                    datamodel.HistoricalEvent.start_date_days.desc(),
+                    datamodel.HistoricalEvent.historical_event_id,
+                )
                 .first()
             )
             if previous_ruler_event is not None:
@@ -2563,7 +2575,10 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
                     db_description=desc,
                     end_date_days=None,
                 )
-                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .order_by(
+                    datamodel.HistoricalEvent.start_date_days.desc(),
+                    datamodel.HistoricalEvent.historical_event_id,
+                )
                 .first()
             )
             add_new_event = True
@@ -2632,7 +2647,10 @@ class CouncilProcessor(AbstractGamestateDataProcessor):
                     country=country_model,
                     event_type=datamodel.HistoricalEventType.agenda_preparation,
                 )
-                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .order_by(
+                    datamodel.HistoricalEvent.start_date_days.desc(),
+                    datamodel.HistoricalEvent.historical_event_id,
+                )
                 .first()
             )
             if unresolved_db_agenda is None:
@@ -2758,7 +2776,10 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
                     <= self._basic_info.date_in_days,
                 )
                 .filter_by(country=country_model)
-                .order_by(datamodel.Government.start_date_days.desc())
+                .order_by(
+                    datamodel.Government.start_date_days.desc(),
+                    datamodel.Government.gov_id,
+                )
                 .first()
             )
 
@@ -3271,7 +3292,10 @@ class DiplomacyUpdatesProcessor(AbstractGamestateDataProcessor):
                 country=country,
                 target_country=target_country,
             )
-            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .order_by(
+                datamodel.HistoricalEvent.start_date_days.desc(),
+                datamodel.HistoricalEvent.historical_event_id,
+            )
             .first()
         )
 
@@ -3930,7 +3954,10 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
                 datamodel.HistoricalEvent.country == country,
                 datamodel.HistoricalEvent.end_date_days.is_(None),
             )
-            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .order_by(
+                datamodel.HistoricalEvent.start_date_days.desc(),
+                datamodel.HistoricalEvent.historical_event_id,
+            )
             .first()
         )
         if previous_event is None and new_event_type in (
@@ -4180,7 +4207,10 @@ class EnvoyEventProcessor(AbstractGamestateDataProcessor):
                 datamodel.HistoricalEvent.event_type.in_(datamodel.ENVOY_EVENT_TYPES)
             )
             .filter_by(leader=envoy)
-            .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+            .order_by(
+                datamodel.HistoricalEvent.start_date_days.desc(),
+                datamodel.HistoricalEvent.historical_event_id,
+            )
             .first()
         )
 
@@ -4294,7 +4324,10 @@ class FleetInfoProcessor(AbstractGamestateDataProcessor):
                     event_type=datamodel.HistoricalEventType.fleet_command,
                     leader=leader_model,
                 )
-                .order_by(datamodel.HistoricalEvent.start_date_days.desc())
+                .order_by(
+                    datamodel.HistoricalEvent.start_date_days.desc(),
+                    datamodel.HistoricalEvent.historical_event_id,
+                )
                 .first()
             )
             if previous_event is not None:
