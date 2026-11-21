@@ -396,3 +396,31 @@ def test_random_changes_agree_with_the_query(session, world, seed):
         if found is not None:
             returned.append(found)
     rows.close()
+
+
+def test_latest_of_several_keys_ties_to_the_oldest_row(session, world):
+    """As "event_type IN (a, b) ... ORDER BY start_date_days DESC, primary key": the membership
+    events of the galactic community, where a join and a leave can have the same date."""
+    countries, _, _ = world
+    left = _event(countries[0], start=5, event_type=Type.left_galactic_community)
+    joined = _event(countries[0], start=5, event_type=Type.joined_galactic_community)
+    session.add_all([left, joined])
+    session.commit()
+    types = (Type.joined_galactic_community, Type.left_galactic_community)
+    with StoredRows(
+        session,
+        [Event.event_type, Event.country],
+        where={Event.end_date_days: None},
+        order_by=Event.start_date_days,
+    ) as rows:
+        assert rows.latest_of([(t, countries[0]) for t in types]) is left
+        assert rows.latest_of([(t, countries[0]) for t in reversed(types)]) is left
+        expected = (
+            session.query(Event)
+            .filter(Event.event_type.in_(types), Event.country == countries[0])
+            .order_by(Event.start_date_days.desc(), Event.historical_event_id)
+            .first()
+        )
+        assert expected is left
+        left.end_date_days = 6
+        assert rows.latest_of([(t, countries[0]) for t in types]) is joined

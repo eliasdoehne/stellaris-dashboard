@@ -1528,7 +1528,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                 country = self._countries_by_ingame_id.get(leader_dict.get("country"))
                 self._update_leader_attributes(country=country, leader=leader, leader_dict=leader_dict)
             if not leader.is_active:
-                country_data = leader.country.get_most_recent_data() if leader.country is not None else None
+                country_data = self._context.most_recent_country_data(leader.country) if leader.country is not None else None
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.leader_died,
@@ -1611,7 +1611,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
         self._update_leader_attributes(
             country=country_model, leader=leader, leader_dict=leader_dict
         )  # sets additional attributes
-        country_data = country_model.get_most_recent_data()
+        country_data = self._context.most_recent_country_data(country_model)
         event = datamodel.HistoricalEvent(
             event_type=datamodel.HistoricalEventType.leader_recruited,
             country=country_model,
@@ -1691,7 +1691,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                     )
             if leader.country != country:
                 if leader.country is not None:
-                    country_data = leader.country.get_most_recent_data()
+                    country_data = self._context.most_recent_country_data(leader.country)
                     self._session.add(
                         datamodel.HistoricalEvent(
                             event_type=datamodel.HistoricalEventType.leader_left_country,
@@ -1703,7 +1703,7 @@ class LeaderProcessor(AbstractGamestateDataProcessor):
                         )
                     )
                 if country is not None:
-                    country_data = country.get_most_recent_data()
+                    country_data = self._context.most_recent_country_data(country)
                     self._session.add(
                         datamodel.HistoricalEvent(
                             **hist_event_kwargs,
@@ -2278,7 +2278,7 @@ class SectorColonyEventProcessor(AbstractGamestateDataProcessor):
         ):  # if the governor ruled this planet/sector less than 5 years ago, re-use the event...
             event.end_date_days = self._basic_info.date_in_days - 1
         else:
-            country_data = country_model.get_most_recent_data()
+            country_data = self._context.most_recent_country_data(country_model)
             event = datamodel.HistoricalEvent(
                 event_type=event_type,
                 leader=governor,
@@ -2462,7 +2462,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
                         db_description=matching_description,
                     )
                 )
-                country_data = country_model.get_most_recent_data()
+                country_data = self._context.most_recent_country_data(country_model)
                 self._session.add(
                     datamodel.HistoricalEvent(
                         leader=ruler,
@@ -2522,7 +2522,7 @@ class RulerEventProcessor(AbstractGamestateDataProcessor):
             description = self._get_or_add_shared_description(text=edict.get("edict"))
             matching_event = self._edict_events.one_or_none(country_model, description, expiry_date)
             if matching_event is None:
-                country_data = country_model.get_most_recent_data()
+                country_data = self._context.most_recent_country_data(country_model)
                 self._session.add(
                     datamodel.HistoricalEvent(
                         event_type=datamodel.HistoricalEventType.edict,
@@ -2736,6 +2736,9 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         countries_dict = dependencies[CountryProcessor.ID]
         rulers_dict = dependencies[RulerEventProcessor.ID]
+        governments = self._context.stored_rows(
+            [datamodel.Government.country], order_by=datamodel.Government.start_date_days
+        )
 
         for country_id, country_model in countries_dict.items():
             country_dict = self._gamestate_dict["country"][country_id]
@@ -2765,19 +2768,7 @@ class GovernmentProcessor(AbstractGamestateDataProcessor):
             # a new pre-FTL age rewrites the name, government and civics, so it replaces those events
             age_changed = self._update_pre_ftl_age(country_model, country_dict)
 
-            prev_gov = (
-                self._session.query(datamodel.Government)
-                .filter(
-                    datamodel.Government.start_date_days
-                    <= self._basic_info.date_in_days,
-                )
-                .filter_by(country=country_model)
-                .order_by(
-                    datamodel.Government.start_date_days.desc(),
-                    datamodel.Government.gov_id,
-                )
-                .first()
-            )
+            prev_gov = governments.latest(country_model, at_most=self._basic_info.date_in_days)
 
             if prev_gov is not None:
                 prev_gov.end_date_days = self._basic_info.date_in_days - 1
@@ -3791,6 +3782,16 @@ def custodian_role_and_start(
     return "custodian", max(own, default=current_days)
 
 
+_MEMBERSHIP_EVENT_TYPES = frozenset(
+    {
+        datamodel.HistoricalEventType.joined_galactic_community,
+        datamodel.HistoricalEventType.left_galactic_community,
+        datamodel.HistoricalEventType.joined_galactic_council,
+        datamodel.HistoricalEventType.left_galactic_council,
+    }
+)
+
+
 class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
     ID = "galactic_community"
     DEPENDENCIES = [CountryProcessor.ID, RulerEventProcessor.ID]
@@ -3814,6 +3815,12 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
                 datamodel.GameState.date < self._basic_info.date_in_days,
             )
             .scalar()
+        )
+        event = datamodel.HistoricalEvent
+        self._open_membership_events = self._context.stored_rows(
+            [event.event_type, event.country],
+            where={event.event_type: _MEMBERSHIP_EVENT_TYPES, event.end_date_days: None},
+            order_by=event.start_date_days,
         )
         self._update_community_members(
             community_dict, self._founding_date(community_dict.get("community_formed"), previous_date)
@@ -3949,18 +3956,10 @@ class GalacticCommunityProcessor(AbstractGamestateDataProcessor):
             )
             return
         event_is_known = country.has_met_player()
-        previous_event = (
-            self._session.query(datamodel.HistoricalEvent)
-            .filter(
-                datamodel.HistoricalEvent.event_type.in_(matching_event_types),
-                datamodel.HistoricalEvent.country == country,
-                datamodel.HistoricalEvent.end_date_days.is_(None),
-            )
-            .order_by(
-                datamodel.HistoricalEvent.start_date_days.desc(),
-                datamodel.HistoricalEvent.historical_event_id,
-            )
-            .first()
+        # the newest open event of either type; on the same date the older row, as the query
+        # "event_type IN (...) ORDER BY start_date_days DESC, historical_event_id" did
+        previous_event = self._open_membership_events.latest_of(
+            [(event_type, country) for event_type in matching_event_types]
         )
         if previous_event is None and new_event_type in (
             datamodel.HistoricalEventType.left_galactic_community,
