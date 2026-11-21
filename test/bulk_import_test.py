@@ -418,6 +418,9 @@ def test_process_gamestate_holds_process_wide_lock(monkeypatch):
     monkeypatch.setattr(tle, "_check_if_gamestate_exists", lambda db_game: True)
     monkeypatch.setattr(datamodel, "get_db_session", fake_get_db_session)
     monkeypatch.setattr(timeline.sqlalchemy.event, "listen", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        timeline.pending_flush, "flush_before_reads", lambda session: contextlib.nullcontext()
+    )
     tle.process_gamestate("gameA", {})
     assert held == [True]
     assert not timeline._process_gamestate_lock.locked()
