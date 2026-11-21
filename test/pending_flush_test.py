@@ -22,7 +22,7 @@ from sqlalchemy.orm import (
 )
 
 from stellarisdashboard import datamodel
-from stellarisdashboard.parsing import pending_flush
+from stellarisdashboard.parsing import pending_flush, plain_rows
 
 Base = declarative_base()
 
@@ -647,3 +647,34 @@ def test_modified_object_counts_only_the_relationships_it_changed(session, flush
         assert flushes[0] == 0
         assert session.query(Pet.parent_id).all() == [(None,)]
         assert flushes[0] == 1
+
+
+def test_composes_with_plain_rows(session, flushes):
+    """As in the import: plain rows queued next to a modified object (see plain_rows)."""
+    session.add_all([Parent(name="p2"), Pet(name="pet1", parent_id=1)])
+    session.commit()
+    flushes[0] = 0
+    with pending_flush.flush_before_reads(session), plain_rows.queue_inserts(session):
+        p1, p2 = session.query(Parent).order_by(Parent.parent_id).all()
+        pet = p1.pets[0]
+        list(p2.pets)  # loaded before the change; loading it after would flush
+        p1.pets.remove(pet)
+        p2.pets.append(pet)
+        p1.name = "renamed"
+        plain_rows.add(session, Kid, parent_id=p2.parent_id, name="k2")
+        assert flushes[0] == 0
+        # the plain row is written (with a flush first), the move of the pet too
+        assert session.query(Kid.name).filter(Kid.parent_id == 2).all() == [("k2",)]
+        assert session.query(Pet.parent_id).all() == [(2,)]
+        assert flushes[0] == 1
+        p2.pets.remove(pet)
+        plain_rows.add(session, Kid, parent_id=1, name="k3")
+        # unknown tables: both listeners write before the statement
+        count = "select (select count(*) from kid), (select count(*) from pet where parent_id is null)"
+        assert session.execute(text(count)).one() == (2, 1)
+        assert flushes[0] == 2
+        session.commit()
+    assert session.query(Parent.name).order_by(Parent.parent_id).all() == [
+        ("renamed",),
+        ("p2",),
+    ]
