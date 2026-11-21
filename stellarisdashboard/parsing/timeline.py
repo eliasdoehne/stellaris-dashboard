@@ -19,7 +19,13 @@ from sqlalchemy.orm import joinedload
 from stellarisdashboard import datamodel, game_info, config
 from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
-from stellarisdashboard.parsing import galaxy_events, pending_flush, save_copies, save_format
+from stellarisdashboard.parsing import (
+    galaxy_events,
+    pending_flush,
+    plain_rows,
+    save_copies,
+    save_format,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +213,10 @@ class TimelineExtractor:
                 self._session, "before_flush", datamodel.drop_special_country_events
             )
             # no autoflush: a flush before every query was most of the import's time
-            with pending_flush.flush_before_reads(self._session):
+            # rows of append-only tables are queued as plain values, see plain_rows
+            with pending_flush.flush_before_reads(self._session), plain_rows.queue_inserts(
+                self._session
+            ):
                 try:
                     db_game = self._get_or_add_game_to_db(game_id)
                     if replace_existing:
@@ -302,6 +311,7 @@ class TimelineExtractor:
                         }
                     )
                     data = data_processor.data()
+                    plain_rows.write(self._session)
                     self._session.flush()
                 except Exception as e:
                     savepoint.rollback()
@@ -491,6 +501,14 @@ class AbstractGamestateDataProcessor(abc.ABC):
     @abc.abstractmethod
     def extract_data_from_gamestate(self, dependencies: Dict[str, Any]):
         pass
+
+    def _add_plain_row(self, model, **values):
+        """Queue a row of an append-only table, given as for the model's constructor.
+
+        For rows that nothing reads or changes as objects while the save is processed: they
+        skip the session's unit of work and are inserted together, see plain_rows.
+        """
+        plain_rows.add(self._session, model, **values)
 
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
         if text in _shared_description_cache:
@@ -1366,34 +1384,33 @@ class CountryDataProcessor(AbstractGamestateDataProcessor):
 
             if not country.is_real_country():
                 continue  # only the totals are kept for special countries
-            self._session.add(
-                datamodel.BudgetItem(
-                    country_data=country_data,
-                    db_budget_item_name=self._get_or_add_shared_description(
-                        item_name
-                    ),
-                    net_energy=resources.get("energy"),
-                    net_minerals=resources.get("minerals"),
-                    net_food=resources.get("food"),
-                    net_alloys=resources.get("alloys"),
-                    net_consumer_goods=resources.get("consumer_goods"),
-                    net_trade=resources.get("trade", 0.0),
-                    net_unity=resources.get("unity"),
-                    net_influence=resources.get("influence"),
-                    net_volatile_motes=values.get("volatile_motes", 0.0),
-                    net_exotic_gases=values.get("exotic_gases", 0.0),
-                    net_rare_crystals=values.get("rare_crystals", 0.0),
-                    net_living_metal=save_format.get_budget_value(values, "living_metal"),
-                    net_zro=save_format.get_budget_value(values, "zro"),
-                    net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
-                    net_nanites=values.get("nanites", 0.0),
-                    net_minor_artifacts=values.get("minor_artifacts", 0.0),
-                    net_astral_threads=values.get("astral_threads", 0.0),
-                    net_biomass=values.get("biomass", 0.0),
-                    net_physics_research=resources.get("physics_research"),
-                    net_society_research=resources.get("society_research"),
-                    net_engineering_research=resources.get("engineering_research"),
-                )
+            self._add_plain_row(
+                datamodel.BudgetItem,
+                country_data=country_data,
+                db_budget_item_name=self._get_or_add_shared_description(
+                    item_name
+                ),
+                net_energy=resources.get("energy"),
+                net_minerals=resources.get("minerals"),
+                net_food=resources.get("food"),
+                net_alloys=resources.get("alloys"),
+                net_consumer_goods=resources.get("consumer_goods"),
+                net_trade=resources.get("trade", 0.0),
+                net_unity=resources.get("unity"),
+                net_influence=resources.get("influence"),
+                net_volatile_motes=values.get("volatile_motes", 0.0),
+                net_exotic_gases=values.get("exotic_gases", 0.0),
+                net_rare_crystals=values.get("rare_crystals", 0.0),
+                net_living_metal=save_format.get_budget_value(values, "living_metal"),
+                net_zro=save_format.get_budget_value(values, "zro"),
+                net_dark_matter=save_format.get_budget_value(values, "dark_matter"),
+                net_nanites=values.get("nanites", 0.0),
+                net_minor_artifacts=values.get("minor_artifacts", 0.0),
+                net_astral_threads=values.get("astral_threads", 0.0),
+                net_biomass=values.get("biomass", 0.0),
+                net_physics_research=resources.get("physics_research"),
+                net_society_research=resources.get("society_research"),
+                net_engineering_research=resources.get("engineering_research"),
             )
         self._session.add(country_data)  # update
 
@@ -6420,12 +6437,11 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 species = species_dict[species_id]
-                self._session.add(
-                    datamodel.PopStatsBySpecies(
-                        country_data=country_data,
-                        species=species,
-                        **stats,
-                    )
+                self._add_plain_row(
+                    datamodel.PopStatsBySpecies,
+                    country_data=country_data,
+                    species=species,
+                    **stats,
                 )
 
             gamestate_dict_factions = self._gamestate_dict.get("pop_factions")
@@ -6449,12 +6465,11 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["faction_approval"] = faction_dict.get("faction_approval", 0.0)
                 stats["support"] = faction_dict.get("support_percent", 0.0)
 
-                self._session.add(
-                    datamodel.PopStatsByFaction(
-                        country_data=country_data,
-                        faction=faction,
-                        **stats,
-                    )
+                self._add_plain_row(
+                    datamodel.PopStatsByFaction,
+                    country_data=country_data,
+                    faction=faction,
+                    **stats,
                 )
 
             for planet_id, stats in stats_by_planet.items():
@@ -6480,12 +6495,11 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                         f"{self._basic_info.logger_str}     Could not find planet with ID {planet_id}!"
                     )
                     continue
-                self._session.add(
-                    datamodel.PlanetStats(
-                        country_data=country_data,
-                        planet=planet,
-                        **stats,
-                    )
+                self._add_plain_row(
+                    datamodel.PlanetStats,
+                    country_data=country_data,
+                    planet=planet,
+                    **stats,
                 )
 
             for job, stats in stats_by_job.items():
@@ -6496,12 +6510,11 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 job = self._get_or_add_shared_description(job)
-                self._session.add(
-                    datamodel.PopStatsByJob(
-                        country_data=country_data,
-                        db_job_description=job,
-                        **stats,
-                    )
+                self._add_plain_row(
+                    datamodel.PopStatsByJob,
+                    country_data=country_data,
+                    db_job_description=job,
+                    **stats,
                 )
 
             for stratum, stats in stats_by_stratum.items():
@@ -6512,12 +6525,11 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 stratum = self._get_or_add_shared_description(stratum)
-                self._session.add(
-                    datamodel.PopStatsByStratum(
-                        country_data=country_data,
-                        db_stratum_description=stratum,
-                        **stats,
-                    )
+                self._add_plain_row(
+                    datamodel.PopStatsByStratum,
+                    country_data=country_data,
+                    db_stratum_description=stratum,
+                    **stats,
                 )
 
             for ethos, stats in stats_by_ethos.items():
@@ -6528,12 +6540,11 @@ class PopStatsProcessor(AbstractGamestateDataProcessor):
                 stats["power"] /= stats["pop_count"]
 
                 ethos = self._get_or_add_shared_description(ethos)
-                self._session.add(
-                    datamodel.PopStatsByEthos(
-                        country_data=country_data,
-                        db_ethos_description=ethos,
-                        **stats,
-                    )
+                self._add_plain_row(
+                    datamodel.PopStatsByEthos,
+                    country_data=country_data,
+                    db_ethos_description=ethos,
+                    **stats,
                 )
 
     @staticmethod
