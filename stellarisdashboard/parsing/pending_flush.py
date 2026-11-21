@@ -53,6 +53,13 @@ from sqlalchemy.sql import util as sql_util
 
 _TRACKER_KEY = "pending_flush_tracker"
 
+# Execution option for a statement that only reads rows known to have no unflushed changes,
+# e.g. Session.get() of a row that is not in the session: the listener sends it without a
+# flush first. A row loaded into the session and changed there is found in the identity map
+# without a statement, so this only matters for rows the session does not hold; it is wrong
+# for rows whose deletion is still pending through a cascade from an unloaded collection.
+STORED_ROWS_ONLY = "pending_flush_stored_rows_only"
+
 # per mapped class: its tables; per table: the tables it has foreign keys to
 _tables_of_class: Dict[type, FrozenSet[sqlalchemy.Table]] = {}
 _referenced_tables: Dict[sqlalchemy.Table, FrozenSet[sqlalchemy.Table]] = {}
@@ -169,6 +176,8 @@ def _before_statement(orm_execute_state: ORMExecuteState) -> None:
         return  # autoflush was turned back on: the session flushes by itself
     if session._flushing:
         return  # sent by a flush hook such as before_flush, during the flush
+    if orm_execute_state.execution_options.get(STORED_ROWS_ONLY):
+        return  # the caller knows that the rows it reads are the same with or without a flush
     tracker = session.info[_TRACKER_KEY]
     if _flush_needed(session, tracker, orm_execute_state.statement):
         # SQLAlchemy runs do_orm_execute listeners before its own autoflush and before an
