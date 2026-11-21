@@ -34,7 +34,6 @@ def session():
     datamodel.Base.metadata.create_all(engine)
     with sessionmaker(bind=engine)() as s:
         yield s
-    timeline._shared_description_cache.clear()
 
 
 def _process_government(session, country, country_dict, date_in_days):
