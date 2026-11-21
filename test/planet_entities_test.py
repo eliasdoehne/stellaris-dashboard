@@ -272,3 +272,56 @@ def test_planet_entities_over_three_saves(extractor, monkeypatch):
         }
     assert planet_ids == {1: 1, 2: 2, 3: 3}
     assert rows == EXPECTED
+
+
+def test_rows_of_the_same_text_are_matched_in_primary_key_order(extractor, monkeypatch):
+    """Only the order of a planet's stored rows with the same text changes the result:
+    the first one is updated, the others get count 0 or are deleted. The bulk loads
+    must give the order of the lazy loads, by primary key."""
+    monkeypatch.setattr(
+        extractor,
+        "_data_processors",
+        lambda: iter(
+            [_Systems(), timeline.PlanetProcessor(), _CollectionsMatchDatabase()]
+        ),
+    )
+    first = _gamestate(
+        "2300.01.01",
+        {1: _planet("One", districts=[0], timed=[("m_a", 50)])},
+        _districts(("district_city", 1)),
+        {10: [1]},
+    )
+    extractor.process_gamestate("g", first)
+    with extractor.session_factory() as session:
+        planet = session.query(datamodel.Planet).one()
+        district = session.query(datamodel.PlanetDistrict).one()
+        modifier = session.query(datamodel.PlanetModifier).one()
+        session.add_all(
+            [
+                datamodel.PlanetDistrict(
+                    planet=planet, db_description=district.db_description, count=1
+                ),
+                datamodel.PlanetModifier(
+                    planet=planet,
+                    db_description=modifier.db_description,
+                    expiry_date=50,
+                ),
+            ]
+        )
+        session.commit()
+
+    second = _gamestate(
+        "2300.02.01",
+        {1: _planet("One", districts=[0], timed=[("m_a", 40)])},
+        _districts(("district_city", 3)),
+        {10: [1]},
+    )
+    extractor.process_gamestate("g", second)
+    assert extractor.failures == []
+    with extractor.session_factory() as session:
+        rows = _all_rows(session)
+    assert rows["districts"] == [
+        (1, 1, "district_city", 3),
+        (2, 1, "district_city", 0),
+    ]
+    assert rows["modifiers"] == [(1, 1, "m_a", 40)]
