@@ -421,6 +421,9 @@ def test_process_gamestate_holds_process_wide_lock(monkeypatch):
     monkeypatch.setattr(
         timeline.pending_flush, "flush_before_reads", lambda session: contextlib.nullcontext()
     )
+    monkeypatch.setattr(
+        timeline.plain_rows, "queue_inserts", lambda session: contextlib.nullcontext()
+    )
     tle.process_gamestate("gameA", {})
     assert held == [True]
     assert not timeline._process_gamestate_lock.locked()

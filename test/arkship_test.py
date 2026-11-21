@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from stellarisdashboard import config, datamodel
-from stellarisdashboard.parsing import save_format, timeline
+from stellarisdashboard.parsing import plain_rows, save_format, timeline
 
 # Minimal 4.5 gamestate with one real planet (colony 0) and one nomad arkship colony (colony 1)
 GAMESTATE = {
@@ -74,7 +74,9 @@ class Save:
         processor.initialize(
             self.game, self.gamestate, self.gs, self.info, self.session
         )
-        processor.extract_data_from_gamestate(dependencies or {})
+        with plain_rows.queue_inserts(self.session):
+            processor.extract_data_from_gamestate(dependencies or {})
+            plain_rows.write(self.session)
         self.session.flush()
         return processor.data()
 
