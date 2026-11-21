@@ -78,6 +78,11 @@ class _ManyToOne:
         self.key = prop.key
         self.target_mapper = prop.mapper
         self.local_keys = [local.key for _, local in prop.synchronize_pairs]
+        # the attributes of the foreign key columns, which must not be given as well
+        self.local_attributes = frozenset(
+            prop.parent.get_property_by_column(local).key
+            for _, local in prop.synchronize_pairs
+        )
         primary_key = list(prop.mapper.primary_key)
         remote_columns = [remote for remote, _ in prop.synchronize_pairs]
         if all(remote in primary_key for remote in remote_columns):
@@ -317,7 +322,7 @@ class _Queue:
         for key, relationship in info.relationships.items():
             if key not in values:
                 continue
-            if not set(relationship.local_keys).isdisjoint(values):
+            if not relationship.local_attributes.isdisjoint(values):
                 raise TypeError(
                     f"{model.__name__}: both {key} and its foreign key are given"
                 )
