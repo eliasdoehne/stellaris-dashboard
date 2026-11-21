@@ -43,6 +43,9 @@ Invariants that make the answers equal to such a query:
   object ranks after all stored rows, in the order the objects were added, which is the order
   in which a flush assigns their primary keys).
 
+Private SQLAlchemy API: ``Mapper._is_orphan()`` and ``Mapper._delete_orphans``, which
+``Session.flush()`` uses to delete orphans; test/stored_rows_test.py covers them.
+
 A StoredRows must be closed (``close()``, or use it as a context manager) when the processor is
 done: until then its listeners run for every change of the model's watched attributes in any
 session. An unclosed StoredRows removes them when it is garbage collected.

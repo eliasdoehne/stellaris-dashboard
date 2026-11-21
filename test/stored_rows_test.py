@@ -425,3 +425,17 @@ def test_latest_of_several_keys_ties_to_the_oldest_row(session, world):
         assert expected is left
         left.end_date_days = 6
         assert rows.latest_of([(t, countries[0]) for t in types]) is joined
+
+
+def test_rows_that_the_flush_deletes_as_orphans_are_not_found(session, world):
+    countries, _, leaders = world
+    event = _event(countries[0], leaders[0], start=1)
+    session.add(event)
+    session.commit()
+    with _ruler_rows(session) as rows:
+        assert rows.latest(countries[0], leaders[0]) is event
+        event.country = None  # out of Country.historical_events, a delete-orphan collection
+        assert rows.latest(None, leaders[0]) is None
+        session.flush()
+        assert sqlalchemy.inspect(event).deleted
+        assert rows.latest(None, leaders[0]) is None
