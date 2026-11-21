@@ -17,10 +17,20 @@ from stellarisdashboard.parsing.stored_rows import StoredRows
 
 
 class ImportContext:
-    def __init__(self, session: Session, game: datamodel.Game, gamestate: datamodel.GameState):
+    """shared_descriptions: the import's timeline.SharedDescriptions (forgotten by the extractor
+    after a failed processor's rollback)."""
+
+    def __init__(
+        self,
+        session: Session,
+        game: datamodel.Game,
+        gamestate: datamodel.GameState,
+        shared_descriptions,
+    ):
         self._session = session
         self._game = game
         self._gamestate = gamestate
+        self.shared_descriptions = shared_descriptions
         self._stored_rows: List[StoredRows] = []
         self._country_data: Optional[Dict[int, datamodel.CountryData]] = None
 
@@ -48,7 +58,9 @@ class ImportContext:
         for r in rows:
             r.close()
 
-    def most_recent_country_data(self, country: datamodel.Country) -> Optional[datamodel.CountryData]:
+    def most_recent_country_data(
+        self, country: datamodel.Country
+    ) -> Optional[datamodel.CountryData]:
         """country.get_most_recent_data() without loading all of the country's rows.
 
         That returns the last element of country.country_data, which is ordered by date. All

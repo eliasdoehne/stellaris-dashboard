@@ -400,7 +400,8 @@ def test_random_changes_agree_with_the_query(session, world, seed):
 
 def test_latest_of_several_keys_ties_to_the_oldest_row(session, world):
     """As "event_type IN (a, b) ... ORDER BY start_date_days DESC, primary key": the membership
-    events of the galactic community, where a join and a leave can have the same date."""
+    events of the galactic community, where a join and a leave can have the same date.
+    """
     countries, _, _ = world
     left = _event(countries[0], start=5, event_type=Type.left_galactic_community)
     joined = _event(countries[0], start=5, event_type=Type.joined_galactic_community)

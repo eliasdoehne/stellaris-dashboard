@@ -37,7 +37,9 @@ class QueryRows:
     def _equals(attribute, value):
         if isinstance(value, (set, frozenset)):
             return attribute.in_(value)
-        return attribute == value  # IS NULL for None, for columns and relationships alike
+        return (
+            attribute == value
+        )  # IS NULL for None, for columns and relationships alike
 
     def _query(self, keys, at_most=None):
         query = self._session.query(self._model).filter(
@@ -334,7 +336,6 @@ def _import(tmp_path, monkeypatch, name, saves, use_queries):
         for gamestate in saves:
             extractor.process_gamestate("g", copy.deepcopy(gamestate))
             assert extractor.failures == []
-    timeline._shared_description_cache.clear()
     with session_factory() as session:
         tables = {}
         for table in datamodel.Base.metadata.sorted_tables:

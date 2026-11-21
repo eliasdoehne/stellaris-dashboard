@@ -63,7 +63,7 @@ def _import(engine, date, with_rows=range(COUNTRIES - 1), replace=False):
                 )
             )
         session.flush()  # CountryDataProcessor's savepoint
-        context = ImportContext(session, game, gamestate)
+        context = ImportContext(session, game, gamestate, shared_descriptions=None)
         selects = []
         sqlalchemy.event.listen(
             session, "do_orm_execute", lambda state: selects.append(state)
