@@ -1,23 +1,28 @@
 """The import session's flush listener, see stellarisdashboard/parsing/pending_flush.py.
 
 A minimal model: parents with children (one-to-many), tags linked to parents through an
-association table (many-to-many), and an unrelated table.
+association table (many-to-many), and an unrelated table. Kids and pets are one-to-many
+collections of parents without a back reference (like Country.traditions in the datamodel):
+moving or removing one changes only the parent's state, while the flush writes the kid's or
+pet's row.
 """
 
 import pytest
 import sqlalchemy
-from sqlalchemy import Column, ForeignKey, Integer, String, Table
+from sqlalchemy import Column, ForeignKey, Integer, String, Table, func, select, text
 from sqlalchemy.orm import (
     Session,
     aliased,
     declarative_base,
     joinedload,
+    load_only,
     relationship,
     selectinload,
+    with_parent,
 )
 
 from stellarisdashboard import datamodel
-from stellarisdashboard.parsing import pending_flush
+from stellarisdashboard.parsing import pending_flush, plain_rows
 
 Base = declarative_base()
 
@@ -35,6 +40,8 @@ class Parent(Base):
     name = Column(String)
     children = relationship("Child", back_populates="parent", cascade="all")
     tags = relationship("Tag", secondary=parent_tag)
+    kids = relationship("Kid", cascade="all, delete-orphan")
+    pets = relationship("Pet")  # deleting the parent sets their parent_id to NULL
 
 
 class Child(Base):
@@ -54,6 +61,20 @@ class Tag(Base):
 class Unrelated(Base):
     __tablename__ = "unrelated"
     unrelated_id = Column(Integer, primary_key=True)
+    name = Column(String)
+
+
+class Kid(Base):
+    __tablename__ = "kid"
+    kid_id = Column(Integer, primary_key=True)
+    parent_id = Column(ForeignKey("parent.parent_id"))
+    name = Column(String)
+
+
+class Pet(Base):
+    __tablename__ = "pet"
+    pet_id = Column(Integer, primary_key=True)
+    parent_id = Column(ForeignKey("parent.parent_id"))
     name = Column(String)
 
 
@@ -387,3 +408,273 @@ def test_import_datamodel_relationship_filter():
             )
             assert found is event
             assert country.country_id is not None
+
+
+# Differential tests: each scenario runs on a fresh database once with plain autoflush and
+# once within flush_before_reads, and must return the same.
+
+
+def _differential(scenario):
+    results = []
+    for use_listener in (False, True):
+        engine = sqlalchemy.create_engine("sqlite://")
+        Base.metadata.create_all(engine)
+        with Session(engine) as s:
+            s.add_all(
+                [
+                    Parent(
+                        name="p1",
+                        children=[Child(name="c1")],
+                        kids=[Kid(name="k1")],
+                        pets=[Pet(name="pet1")],
+                        tags=[Tag(name="t1")],
+                    ),
+                    Parent(name="p2"),
+                    Tag(name="t2"),
+                    Unrelated(name="u"),
+                ]
+            )
+            s.commit()
+            if use_listener:
+                with pending_flush.flush_before_reads(s):
+                    results.append(scenario(s))
+            else:
+                results.append(scenario(s))
+    with_autoflush, with_listener = results
+    assert with_listener == with_autoflush
+    return with_listener
+
+
+def _parent(s, name):
+    return s.query(Parent).filter_by(name=name).one()
+
+
+def test_moved_member_of_a_collection_without_back_reference():
+    """Only the parents are dirty, the flush writes the pet's parent_id."""
+
+    def scenario(s):
+        p1, p2 = _parent(s, "p1"), _parent(s, "p2")
+        pet = p1.pets[0]
+        list(p2.pets)
+        p1.pets.remove(pet)
+        p2.pets.append(pet)
+        return s.query(Pet.name).filter(Pet.parent_id == p2.parent_id).all()
+
+    assert _differential(scenario) == [("pet1",)]
+
+
+def test_member_appended_to_a_new_parent():
+    def scenario(s):
+        pet = s.query(Pet).one()
+        s.add(Parent(name="p3", pets=[pet]))
+        return s.query(Pet.name).filter(Pet.parent_id != 1).all()
+
+    assert _differential(scenario) == [("pet1",)]
+
+
+def test_delete_orphan_of_a_cleared_collection():
+    """The kid is only deleted by the flush."""
+
+    def scenario(s):
+        p1 = _parent(s, "p1")  # held: the session only keeps unmodified objects weakly
+        p1.kids.clear()
+        return s.query(func.count(Kid.kid_id)).scalar()
+
+    assert _differential(scenario) == 0
+
+
+def test_deleted_parent_nulls_the_foreign_keys_of_its_collection():
+    def scenario(s):
+        s.delete(_parent(s, "p1"))
+        return s.query(Pet.name).filter(Pet.parent_id.is_(None)).all()
+
+    assert _differential(scenario) == [("pet1",)]
+
+
+def test_association_table_read_directly():
+    def scenario(s):
+        t2 = s.query(Tag).filter_by(name="t2").one()
+        p1 = _parent(s, "p1")
+        p1.tags.append(t2)
+        s.add(Parent(name="p3", tags=[t2]))
+        return s.execute(select(func.count()).select_from(parent_tag)).scalar()
+
+    assert _differential(scenario) == 3
+
+
+def test_relationship_comparators_with_unflushed_objects():
+    def scenario(s):
+        new = Child(name="new", parent=_parent(s, "p2"))
+        s.add(new)
+        c1 = s.query(Child).filter_by(name="c1").one()
+        c1.parent = _parent(s, "p2")
+        return (
+            [p.name for p in s.query(Parent).filter(Parent.children.contains(new))],
+            [p.name for p in s.query(Parent).filter(Parent.children.contains(c1))],
+            [
+                p.name
+                for p in s.scalars(select(Parent).where(with_parent(c1, Child.parent)))
+            ],
+        )
+
+    assert _differential(scenario) == (["p2"], ["p2"], ["p2"])
+
+
+def test_sql_text_next_to_a_known_table():
+    def scenario(s):
+        s.add(Child(name="new"))
+        exists = text("exists (select 1 from child where name = 'new')")
+        return s.query(Unrelated.name).filter(exists).all()
+
+    assert _differential(scenario) == [("u",)]
+
+
+def test_literal_column_expression():
+    def scenario(s):
+        s.add(Child(name="new"))
+        count = sqlalchemy.literal_column("(select count(*) from child)")
+        return s.execute(select(Unrelated.name, count)).all()
+
+    assert _differential(scenario) == [("u", 2)]
+
+
+def test_table_clause_without_metadata():
+    def scenario(s):
+        s.add(Child(name="new"))
+        child = sqlalchemy.table("child", sqlalchemy.column("name"))
+        return sorted(s.execute(select(child.c.name)).scalars())
+
+    assert _differential(scenario) == ["c1", "new"]
+
+
+def test_criteria_of_a_loader_option():
+    def scenario(s):
+        s.add(Unrelated(name="c1"))
+        criteria = Child.name.in_(select(Unrelated.name))
+        parent = (
+            s.query(Parent)
+            .filter_by(name="p1")
+            .options(joinedload(Parent.children.and_(criteria)))
+            .populate_existing()
+            .one()
+        )
+        return [c.name for c in parent.children]
+
+    assert _differential(scenario) == ["c1"]
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: sqlalchemy.union_all(select(Unrelated.name), select(Child.name)),
+        lambda: select(select(Child.name).cte("c").c.name),
+        lambda: select(func.max(Child.child_id)),
+        lambda: select(func.count()).select_from(Child),
+        lambda: select(sqlalchemy.exists().where(Child.name == "new")),
+        lambda: select(Unrelated.name).where(
+            Unrelated.unrelated_id
+            < select(func.count(Child.child_id)).scalar_subquery()
+        ),
+        lambda: select(Parent.name).join(Parent.children).where(Child.name == "new"),
+    ],
+    ids=["union", "cte", "max", "count", "exists", "scalar_subquery", "join"],
+)
+def test_statement_shapes(build):
+    def scenario(s):
+        s.add(Child(name="new", parent_id=1))
+        return sorted(map(str, s.execute(build()).all()))
+
+    _differential(scenario)
+
+
+def test_written_tables():
+    names = {t.name for t in pending_flush._written_tables(Parent())}
+    assert names == {"parent", "child", "kid", "pet", "parent_tag"}
+    assert {t.name for t in pending_flush._written_tables(Child())} == {"child"}
+
+
+def test_known_statements_need_no_flush(session, flushes):
+    """count(*), load_only and plain loader options are still told apart."""
+    with pending_flush.flush_before_reads(session):
+        session.add(Unrelated(name="new"))
+        assert session.query(Child).count() == 1
+        session.query(Child).options(load_only(Child.name)).all()
+        session.query(Parent).options(selectinload(Parent.children)).all()
+        assert flushes[0] == 0
+    statement = select(Child).options(load_only(Child.name))
+    assert {t.name for t in pending_flush.statement_tables(statement)} == {"child"}
+
+
+class _Element:
+    def __init__(self, path, **attrs):
+        self.path = path
+        self.__dict__.update(attrs)
+
+
+class _Option:
+    def __init__(self, *elements):
+        self.context = elements
+
+
+def test_unknown_loader_path_tokens_make_the_tables_unknown():
+    """A path token or element layout of another SQLAlchemy release must not be skipped."""
+    mapper = sqlalchemy.inspect(Parent)
+    known = _Option(_Element([mapper], _extra_criteria=()))
+    assert set(pending_flush._load_path_tables(known)) == {Parent.__table__}
+    for option in (
+        _Option(_Element([mapper, object()], _extra_criteria=())),
+        _Option(_Element([mapper])),  # no _extra_criteria
+    ):
+        with pytest.raises(pending_flush._UnknownTables):
+            list(pending_flush._load_path_tables(option))
+
+
+def test_modified_object_counts_only_the_relationships_it_changed(session, flushes):
+    with pending_flush.flush_before_reads(session):
+        parent = session.query(Parent).one()
+        parent.name = "renamed"
+        session.query(Pet).all()
+        session.query(Kid).all()
+        assert flushes[0] == 0
+        parent.kids.append(Kid(name="k2"))
+        session.query(Pet).all()
+        assert flushes[0] == 0
+        parent.pets.append(Pet(name="pet2"))
+        session.flush()
+        flushes[0] = 0
+        parent.pets.clear()
+        session.query(Kid).all()
+        assert flushes[0] == 0
+        assert session.query(Pet.parent_id).all() == [(None,)]
+        assert flushes[0] == 1
+
+
+def test_composes_with_plain_rows(session, flushes):
+    """As in the import: plain rows queued next to a modified object (see plain_rows)."""
+    session.add_all([Parent(name="p2"), Pet(name="pet1", parent_id=1)])
+    session.commit()
+    flushes[0] = 0
+    with pending_flush.flush_before_reads(session), plain_rows.queue_inserts(session):
+        p1, p2 = session.query(Parent).order_by(Parent.parent_id).all()
+        pet = p1.pets[0]
+        list(p2.pets)  # loaded before the change; loading it after would flush
+        p1.pets.remove(pet)
+        p2.pets.append(pet)
+        p1.name = "renamed"
+        plain_rows.add(session, Kid, parent_id=p2.parent_id, name="k2")
+        assert flushes[0] == 0
+        # the plain row is written (with a flush first), the move of the pet too
+        assert session.query(Kid.name).filter(Kid.parent_id == 2).all() == [("k2",)]
+        assert session.query(Pet.parent_id).all() == [(2,)]
+        assert flushes[0] == 1
+        p2.pets.remove(pet)
+        plain_rows.add(session, Kid, parent_id=1, name="k3")
+        # unknown tables: both listeners write before the statement
+        count = "select (select count(*) from kid), (select count(*) from pet where parent_id is null)"
+        assert session.execute(text(count)).one() == (2, 1)
+        assert flushes[0] == 2
+        session.commit()
+    assert session.query(Parent.name).order_by(Parent.parent_id).all() == [
+        ("renamed",),
+        ("p2",),
+    ]

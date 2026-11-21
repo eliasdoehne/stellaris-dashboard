@@ -7,13 +7,18 @@ full unit-of-work run. ``flush_before_reads`` turns autoflush off and installs a
 that differs between the session and the database:
 
 * a table the statement names (FROM list, joins, subqueries, column references, the
-  target of an UPDATE/DELETE, and the relationships in loader options such as
-  ``joinedload``) has new, modified or deleted objects in the session;
+  target of an UPDATE/DELETE, the relationships in loader options such as
+  ``joinedload`` and their ``.and_()`` criteria) may be written by the flush of a new,
+  modified or deleted object in the session: its own tables, and those that its
+  relationships write (the foreign keys of a one-to-many collection's members, which
+  have no back reference to be dirty themselves, or are nulled when the object is
+  deleted; delete-orphan members of a cleared collection; many-to-many association rows);
 * or a table the statement names has a foreign key to a table with new objects: a filter
   on a relationship to a new object (``filter_by(country=new_country)``) needs its
   primary key;
-* or the tables cannot be told (textual SQL, loader options not known here), so the
-  statement may read anything.
+* or the tables cannot be told (textual SQL, also as a fragment next to known tables,
+  ``sqlalchemy.table()`` clauses without metadata, literal column expressions, loader
+  options not known here), so the statement may read anything.
 
 Any other statement reads the same rows with or without a flush first. As with
 autoflush, this covers lazy loads, ``Session.get()`` and ORM bulk UPDATE/DELETE, which
@@ -32,15 +37,18 @@ The pending objects are tracked with the public ``transient_to_pending`` event, 
 and deleted ones with the public ``Session.identity_map.check_modified()``,
 ``Session.dirty`` and ``Session.deleted``. Private SQLAlchemy API is used in two places
 without a public equivalent: ``Session._flushing`` and ``Executable._with_options`` (with
-the ``path`` of each ``Load`` option). test/pending_flush_test.py covers both; if they
-change in a future SQLAlchemy release the listener raises rather than skipping a flush.
+the ``path`` and ``_extra_criteria`` of each ``Load`` option's elements).
+test/pending_flush_test.py covers both; if they change in a future SQLAlchemy release the
+listener raises, or flushes for a path token it does not know, rather than skipping a flush.
 """
 
 import contextlib
+import re
 from typing import Dict, FrozenSet, Iterator, Optional, Set
 
 import sqlalchemy
 from sqlalchemy.orm import (
+    ColumnProperty,
     Load,
     Mapper,
     ORMExecuteState,
@@ -48,8 +56,9 @@ from sqlalchemy.orm import (
     Session,
     UserDefinedOption,
 )
+from sqlalchemy.orm.interfaces import ONETOMANY
 from sqlalchemy.orm.util import AliasedInsp
-from sqlalchemy.sql import util as sql_util
+from sqlalchemy.sql import visitors
 
 _TRACKER_KEY = "pending_flush_tracker"
 
@@ -60,8 +69,12 @@ _TRACKER_KEY = "pending_flush_tracker"
 # for rows whose deletion is still pending through a cascade from an unloaded collection.
 STORED_ROWS_ONLY = "pending_flush_stored_rows_only"
 
-# per mapped class: its tables; per table: the tables it has foreign keys to
+# per mapped class: its tables, and the tables a flush of one of its objects may write;
+# per table: the tables it has foreign keys to
 _tables_of_class: Dict[type, FrozenSet[sqlalchemy.Table]] = {}
+_written_tables_of_class: Dict[type, FrozenSet[sqlalchemy.Table]] = {}
+# per mapped class: per attribute whose change makes a flush write other tables, those tables
+_attribute_tables_of_class: Dict[type, Dict[str, FrozenSet[sqlalchemy.Table]]] = {}
 _referenced_tables: Dict[sqlalchemy.Table, FrozenSet[sqlalchemy.Table]] = {}
 
 
@@ -70,6 +83,64 @@ def _mapped_tables(obj) -> FrozenSet[sqlalchemy.Table]:
     tables = _tables_of_class.get(cls)
     if tables is None:
         tables = _tables_of_class[cls] = frozenset(sqlalchemy.inspect(cls).tables)
+    return tables
+
+
+def _written_tables(obj) -> FrozenSet[sqlalchemy.Table]:
+    """The tables that the flush of a new, modified or deleted object may write.
+
+    Besides its own tables: the members' tables of its one-to-many relationships (their
+    foreign keys are set when they are added or moved, set to NULL when removed or when
+    the object is deleted, and delete-orphan members are deleted) and the association
+    tables of its many-to-many relationships. Many-to-one relationships only write the
+    object's own foreign key columns.
+    """
+    cls = type(obj)
+    tables = _written_tables_of_class.get(cls)
+    if tables is None:
+        _cache_written_tables(cls)
+        tables = _written_tables_of_class[cls]
+    return tables
+
+
+def _cache_written_tables(cls) -> None:
+    mapper = sqlalchemy.inspect(cls)
+    by_attribute = {}
+    for rel in mapper.relationships:
+        if rel.viewonly:
+            continue
+        tables = set()
+        if rel.direction is ONETOMANY:
+            tables.update(rel.mapper.tables)
+        if rel.secondary is not None:
+            tables.add(rel.secondary)
+        if tables:
+            by_attribute[rel.key] = frozenset(tables)
+    written = frozenset(mapper.tables).union(*by_attribute.values())
+    if by_attribute:
+        # a changed primary key may be copied to the members' foreign keys
+        for column in mapper.primary_key:
+            by_attribute[mapper.get_property_by_column(column).key] = written
+    _written_tables_of_class[cls] = written
+    _attribute_tables_of_class[cls] = by_attribute
+
+
+def _modified_tables(obj) -> Set[sqlalchemy.Table]:
+    """Like _written_tables, for a modified object: only the relationships it changed.
+
+    A relationship attribute changes when its collection is modified (appended, removed,
+    cleared, replaced), including members that the flush deletes as orphans.
+    """
+    tables = set(_mapped_tables(obj))
+    by_attribute = _attribute_tables_of_class.get(type(obj))
+    if by_attribute is None:
+        _written_tables(obj)
+        by_attribute = _attribute_tables_of_class[type(obj)]
+    if by_attribute:
+        unmodified = sqlalchemy.inspect(obj).unmodified_intersection(by_attribute)
+        for key, attribute_tables in by_attribute.items():
+            if key not in unmodified:
+                tables.update(attribute_tables)
     return tables
 
 
@@ -85,6 +156,9 @@ def _tables_referenced_by(table) -> FrozenSet[sqlalchemy.Table]:
 class _Tracker:
     """The tables of the objects added to the session since its last flush.
 
+    ``new_tables`` are the objects' own tables, which get new primary keys;
+    ``written_tables`` also those that their relationships write (see ``_written_tables``).
+
     Kept up to date by the session's ``transient_to_pending`` event, so the listener needs
     neither the private ``Session._new`` nor the public ``Session.new``, which copies all
     pending objects on every access. The set may name a table whose new objects were
@@ -94,17 +168,24 @@ class _Tracker:
 
     def __init__(self, session: Session):
         self.new_tables: Set[sqlalchemy.Table] = set()
+        self.written_tables: Set[sqlalchemy.Table] = set()
         self.reset(session)
 
     def reset(self, session: Session, *args) -> None:
-        self.new_tables = {t for obj in session.new for t in _mapped_tables(obj)}
+        new = session.new
+        self.new_tables = {t for obj in new for t in _mapped_tables(obj)}
+        self.written_tables = {t for obj in new for t in _written_tables(obj)}
 
     def object_added(self, session: Session, instance) -> None:
         self.new_tables.update(_mapped_tables(instance))
+        self.written_tables.update(_written_tables(instance))
 
 
 def _load_path_tables(option: Load) -> Iterator[sqlalchemy.Table]:
-    """The tables that a loader option such as joinedload(A.b).joinedload(B.c) loads from."""
+    """The tables that a loader option such as joinedload(A.b).joinedload(B.c) loads from.
+
+    Raises _UnknownTables for anything it does not recognise.
+    """
     for element in option.context:
         # a path alternates entities and attributes: Mapper, relationship, Mapper, ...
         for token in element.path:
@@ -112,16 +193,74 @@ def _load_path_tables(option: Load) -> Iterator[sqlalchemy.Table]:
                 yield from token.mapper.tables
                 if token.secondary is not None:
                     yield token.secondary
-            elif isinstance(token, (Mapper, AliasedInsp)):
-                yield from token.mapper.tables
-            elif isinstance(token, str):
-                # a wildcard, e.g. Load(A).joinedload("*"): any relationship of the entity
+            elif isinstance(token, Mapper):
+                yield from token.tables
+            elif isinstance(token, AliasedInsp):
+                for mapper in token.with_polymorphic_mappers or (token.mapper,):
+                    yield from mapper.tables
+            elif isinstance(token, ColumnProperty):
+                pass  # load_only, defer: reads the entity's own tables
+            elif isinstance(token, str) and token.startswith("column:"):
+                pass  # the column wildcard that load_only adds
+            else:
+                # e.g. a relationship wildcard, Load(A).joinedload("*"): any relationship
+                # of the entity; or a token type of a newer SQLAlchemy release
                 raise _UnknownTables
-            # column attributes (load_only, defer) read the entity's own tables
+        # criteria of a relationship.and_(...) in the option, e.g. joinedload(A.b.and_(...))
+        try:
+            extra_criteria = element._extra_criteria
+        except AttributeError:
+            raise _UnknownTables
+        for criterion in extra_criteria:
+            yield from _find_tables(criterion)
 
 
 class _UnknownTables(Exception):
     pass
+
+
+# literal columns that cannot read a table the statement does not name: *, 1, a.b
+_PLAIN_LITERAL = re.compile(r"[\w.*]+")
+
+
+def _find_tables(clause) -> Set[sqlalchemy.Table]:
+    """Like sqlalchemy.sql.util.find_tables(check_columns=True, include_crud=True), but
+    raises _UnknownTables for SQL text whose tables cannot be told."""
+    tables: Set[sqlalchemy.Table] = set()
+
+    def visit_table(table):
+        if not isinstance(table, sqlalchemy.Table):
+            raise _UnknownTables  # sqlalchemy.table(): may name a table with new rows
+        tables.add(table)
+
+    def visit_column(column):
+        table = column.table
+        if table is None:
+            if column.is_literal and not _PLAIN_LITERAL.fullmatch(column.name):
+                raise _UnknownTables  # literal_column("(select ...)")
+        elif isinstance(table, sqlalchemy.TableClause):
+            visit_table(table)
+        # columns of subqueries, aliases and joins: their tables are visited by themselves
+
+    def visit_crud(statement):
+        visit_table(statement.table)
+
+    def visit_text(text):
+        raise _UnknownTables
+
+    visitors.traverse(
+        clause,
+        {},
+        {
+            "table": visit_table,
+            "column": visit_column,
+            "insert": visit_crud,
+            "update": visit_crud,
+            "delete": visit_crud,
+            "textclause": visit_text,
+        },
+    )
+    return tables
 
 
 def statement_tables(statement) -> Optional[Set[sqlalchemy.Table]]:
@@ -130,17 +269,18 @@ def statement_tables(statement) -> Optional[Set[sqlalchemy.Table]]:
     ``find_tables`` traverses the whole statement, including ORM join targets, subqueries,
     aliases and columns of WHERE/ORDER BY clauses. Tables that ORM loader options only add
     at compile time are taken from the options; options that this module does not know
-    (wildcard loaders, ``with_loader_criteria``) make the tables unknown.
+    (wildcard loaders, ``with_loader_criteria``) make the tables unknown, as does SQL text
+    anywhere in the statement.
     """
-    tables = set(sql_util.find_tables(statement, check_columns=True, include_crud=True))
-    for option in statement._with_options:
-        if isinstance(option, Load):
-            try:
+    try:
+        tables = _find_tables(statement)
+        for option in statement._with_options:
+            if isinstance(option, Load):
                 tables.update(_load_path_tables(option))
-            except _UnknownTables:
+            elif not isinstance(option, UserDefinedOption):
                 return None
-        elif not isinstance(option, UserDefinedOption):
-            return None
+    except _UnknownTables:
+        return None
     return tables
 
 
@@ -154,7 +294,7 @@ def _flush_needed(session: Session, tracker: _Tracker, statement) -> bool:
     if not tables:
         return True  # textual SQL or unknown loader options: it may read anything
     if new_tables:
-        if not new_tables.isdisjoint(tables):
+        if not tracker.written_tables.isdisjoint(tables):
             return True
         for table in tables:
             if not new_tables.isdisjoint(_tables_referenced_by(table)):
@@ -162,9 +302,9 @@ def _flush_needed(session: Session, tracker: _Tracker, statement) -> bool:
     if modified or deleted:
         changed = set()
         for obj in session.dirty:
-            changed.update(_mapped_tables(obj))
+            changed.update(_modified_tables(obj))
         for obj in deleted:
-            changed.update(_mapped_tables(obj))
+            changed.update(_written_tables(obj))
         if not changed.isdisjoint(tables):
             return True
     return False
