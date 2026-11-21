@@ -627,3 +627,23 @@ def test_unknown_loader_path_tokens_make_the_tables_unknown():
     ):
         with pytest.raises(pending_flush._UnknownTables):
             list(pending_flush._load_path_tables(option))
+
+
+def test_modified_object_counts_only_the_relationships_it_changed(session, flushes):
+    with pending_flush.flush_before_reads(session):
+        parent = session.query(Parent).one()
+        parent.name = "renamed"
+        session.query(Pet).all()
+        session.query(Kid).all()
+        assert flushes[0] == 0
+        parent.kids.append(Kid(name="k2"))
+        session.query(Pet).all()
+        assert flushes[0] == 0
+        parent.pets.append(Pet(name="pet2"))
+        session.flush()
+        flushes[0] = 0
+        parent.pets.clear()
+        session.query(Kid).all()
+        assert flushes[0] == 0
+        assert session.query(Pet.parent_id).all() == [(None,)]
+        assert flushes[0] == 1

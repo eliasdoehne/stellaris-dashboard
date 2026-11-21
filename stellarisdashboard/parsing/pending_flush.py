@@ -66,6 +66,8 @@ _TRACKER_KEY = "pending_flush_tracker"
 # per table: the tables it has foreign keys to
 _tables_of_class: Dict[type, FrozenSet[sqlalchemy.Table]] = {}
 _written_tables_of_class: Dict[type, FrozenSet[sqlalchemy.Table]] = {}
+# per mapped class: per attribute whose change makes a flush write other tables, those tables
+_attribute_tables_of_class: Dict[type, Dict[str, FrozenSet[sqlalchemy.Table]]] = {}
 _referenced_tables: Dict[sqlalchemy.Table, FrozenSet[sqlalchemy.Table]] = {}
 
 
@@ -89,16 +91,49 @@ def _written_tables(obj) -> FrozenSet[sqlalchemy.Table]:
     cls = type(obj)
     tables = _written_tables_of_class.get(cls)
     if tables is None:
-        mapper = sqlalchemy.inspect(cls)
-        written = set(mapper.tables)
-        for rel in mapper.relationships:
-            if rel.viewonly:
-                continue
-            if rel.direction is ONETOMANY:
-                written.update(rel.mapper.tables)
-            if rel.secondary is not None:
-                written.add(rel.secondary)
-        tables = _written_tables_of_class[cls] = frozenset(written)
+        _cache_written_tables(cls)
+        tables = _written_tables_of_class[cls]
+    return tables
+
+
+def _cache_written_tables(cls) -> None:
+    mapper = sqlalchemy.inspect(cls)
+    by_attribute = {}
+    for rel in mapper.relationships:
+        if rel.viewonly:
+            continue
+        tables = set()
+        if rel.direction is ONETOMANY:
+            tables.update(rel.mapper.tables)
+        if rel.secondary is not None:
+            tables.add(rel.secondary)
+        if tables:
+            by_attribute[rel.key] = frozenset(tables)
+    written = frozenset(mapper.tables).union(*by_attribute.values())
+    if by_attribute:
+        # a changed primary key may be copied to the members' foreign keys
+        for column in mapper.primary_key:
+            by_attribute[mapper.get_property_by_column(column).key] = written
+    _written_tables_of_class[cls] = written
+    _attribute_tables_of_class[cls] = by_attribute
+
+
+def _modified_tables(obj) -> Set[sqlalchemy.Table]:
+    """Like _written_tables, for a modified object: only the relationships it changed.
+
+    A relationship attribute changes when its collection is modified (appended, removed,
+    cleared, replaced), including members that the flush deletes as orphans.
+    """
+    tables = set(_mapped_tables(obj))
+    by_attribute = _attribute_tables_of_class.get(type(obj))
+    if by_attribute is None:
+        _written_tables(obj)
+        by_attribute = _attribute_tables_of_class[type(obj)]
+    if by_attribute:
+        unmodified = sqlalchemy.inspect(obj).unmodified_intersection(by_attribute)
+        for key, attribute_tables in by_attribute.items():
+            if key not in unmodified:
+                tables.update(attribute_tables)
     return tables
 
 
@@ -260,7 +295,7 @@ def _flush_needed(session: Session, tracker: _Tracker, statement) -> bool:
     if modified or deleted:
         changed = set()
         for obj in session.dirty:
-            changed.update(_written_tables(obj))
+            changed.update(_modified_tables(obj))
         for obj in deleted:
             changed.update(_written_tables(obj))
         if not changed.isdisjoint(tables):
