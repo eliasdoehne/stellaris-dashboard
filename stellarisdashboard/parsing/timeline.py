@@ -80,6 +80,19 @@ def _gc_frozen():
     end. They are collected before unfreezing, while the gamestate is still excluded, so
     that collection is cheap. Without it, that garbage often had not been collected by the
     time the next import froze it again, and memory grew with every save.
+
+    Two known gaps, left open because closing them costs more than they risk:
+
+    * Cyclic objects that are alive when the freeze starts and dropped during the import
+      survive that collection; if the next import starts before an automatic collection of
+      the oldest generation, they are frozen again. A full gc.collect() after unfreezing
+      would free them, but it traverses the whole gamestate, which the caller still holds:
+      0.15-0.36 s per save on the test corpus (4-7 % of the import), and it freed nothing
+      there, since each import uses a new TimelineExtractor and keeps no state across saves.
+    * A gc.freeze() by another thread during the import is undone by the unfreeze here
+      (freeze/unfreeze do not nest). Detecting it means comparing gc.get_freeze_count()
+      before and after, and each call walks all frozen objects: 40-80 ms on a large save.
+      Nothing in the dashboard freezes elsewhere.
     """
     if gc.get_freeze_count():
         yield
