@@ -57,12 +57,66 @@ def _extract_id(val, default: int = -1) -> int:
     return default
 
 
-# this is a naive cache for shared_descriptions, which helps to cut down on DB queries while processing
-# it needs to be cleared between processing saves (at the end of TimelineExtractor.process_gamestate)
-# the built-in @cache decorator was leaking memory, hanging on to references of processor instances
-_shared_description_cache: dict[str, datamodel.SharedDescription] = {}
-# module-level caches like the one above are not thread-safe: one save is processed at a time per process
+# one save is processed at a time per process, see _gc_frozen
 _process_gamestate_lock = threading.Lock()
+
+
+class SharedDescriptions:
+    """The shared_description rows of one import, by text, loaded with a single query.
+
+    Each processor used to look up every distinct text with its own query. Instead, the
+    first lookup loads the whole table (one row per distinct text in the game), and texts
+    that are not stored yet are added to the session and remembered. The loaded objects
+    also serve the many-to-one loads of other rows' descriptions from the identity map.
+
+    An instance belongs to one session and one import, and must not outlive either: its
+    objects are only valid in the session's transaction. TimelineExtractor makes one per
+    imported gamestate and calls ``forget()`` after rolling back a failed processor, whose
+    new descriptions are no longer in the session. A processor that is not run by
+    TimelineExtractor (in tests) makes its own.
+    """
+
+    def __init__(self, session):
+        self._session = session
+        self._by_text: Dict[str, datamodel.SharedDescription] = {}
+        # stored texts with more than one row: an error only if one of them is looked up
+        self._duplicate_texts: Set[str] = set()
+        self.loaded = False
+
+    def load(self) -> None:
+        """Load all stored descriptions, if that has not happened since the last forget()."""
+        if self.loaded:
+            return
+        by_text = {}
+        duplicate_texts = set()
+        for description in self._session.query(datamodel.SharedDescription):
+            if description.text in by_text:
+                duplicate_texts.add(description.text)
+            else:
+                by_text[description.text] = description
+        self._by_text = by_text
+        self._duplicate_texts = duplicate_texts
+        self.loaded = True
+
+    def get_or_add(self, text: str) -> datamodel.SharedDescription:
+        self.load()
+        if text in self._duplicate_texts:
+            # as the one_or_none() query per text did before
+            raise sqlalchemy.exc.MultipleResultsFound(
+                f"Multiple shared descriptions with text {text!r}"
+            )
+        description = self._by_text.get(text)
+        if description is None:
+            description = datamodel.SharedDescription(text=text)
+            self._session.add(description)
+            self._by_text[text] = description
+        return description
+
+    def forget(self) -> None:
+        """Discard what is known, e.g. after a rollback; the next lookup loads the table again."""
+        self._by_text = {}
+        self._duplicate_texts = set()
+        self.loaded = False
 
 
 @contextlib.contextmanager
@@ -236,9 +290,6 @@ class TimelineExtractor:
                     )
                     if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
                         raise e
-                
-            # needs to be cleared between processing saves, see more notes at declaration
-            _shared_description_cache.clear()
 
     def _delete_existing_gamestate(self, db_game):
         existing = (
@@ -268,6 +319,8 @@ class TimelineExtractor:
         )
         self._session.add(db_game_state)
         all_dependencies = {}
+        # shared by all processors of this import only, see SharedDescriptions
+        shared_descriptions = SharedDescriptions(self._session)
         for data_processor in self._data_processors():
             t_start = time.process_time()
             data_processor.initialize(
@@ -276,6 +329,7 @@ class TimelineExtractor:
                 db_game_state,
                 self.basic_info,
                 self._session,
+                shared_descriptions=shared_descriptions,
             )
 
             missing_dependencies = sorted(
@@ -306,7 +360,7 @@ class TimelineExtractor:
                 except Exception as e:
                     savepoint.rollback()
                     # descriptions created inside the rolled-back savepoint are no longer persisted
-                    _shared_description_cache.clear()
+                    shared_descriptions.forget()
                     self.failures.append(
                         save_copies.failure(
                             save_copies.STAGE_PROCESSOR,
@@ -466,6 +520,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
         self._db_gamestate = None
         self._gamestate_dict = None
         self._session = None
+        self._shared_descriptions = None
 
     def initialize(
         self,
@@ -474,12 +529,16 @@ class AbstractGamestateDataProcessor(abc.ABC):
         gs: datamodel.GameState,
         basic_info: BasicGameInfo,
         db_session,
+        shared_descriptions: Optional[SharedDescriptions] = None,
     ):
         self._basic_info = basic_info
         self._db_game = game
         self._db_gamestate = gs
         self._gamestate_dict = gamestate_dict
         self._session = db_session
+        if shared_descriptions is None:
+            shared_descriptions = SharedDescriptions(db_session)
+        self._shared_descriptions = shared_descriptions
         self.initialize_data()
 
     def initialize_data(self):
@@ -493,18 +552,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
         pass
 
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
-        if text in _shared_description_cache:
-            return _shared_description_cache[text]
-        matching_description = (
-            self._session.query(datamodel.SharedDescription)
-            .filter_by(text=text)
-            .one_or_none()
-        )
-        if matching_description is None:
-            matching_description = datamodel.SharedDescription(text=text)
-            self._session.add(matching_description)
-        _shared_description_cache[text] = matching_description
-        return matching_description
+        return self._shared_descriptions.get_or_add(text)
 
 
 class SystemProcessor(AbstractGamestateDataProcessor):
