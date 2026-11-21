@@ -66,6 +66,15 @@ def parse_args():
     return ap.parse_args()
 
 
+def rss_mib() -> int:
+    """Resident memory of this process, MiB (Linux)."""
+    with open("/proc/self/status") as fh:
+        for line in fh:
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) >> 10
+    return 0
+
+
 def load_gamestate(save: pathlib.Path, cache: pathlib.Path):
     from stellarisdashboard.parsing import save_parser
 
@@ -186,6 +195,12 @@ def main():
                 )
             )
             del gamestate
+            # memory held after the import, once the gamestate is released
+            rows[-1]["rss_mib"] = rss_mib()
+            print(
+                f"{game.name}/{save.name}: {wall:.2f} s, {rows[-1]['rss_mib']} MiB",
+                flush=True,
+            )
 
     n = len(rows)
     tot_wall = sum(r["wall"] for r in rows)
@@ -200,7 +215,9 @@ def main():
     by_game = collections.defaultdict(list)
     for r in rows:
         by_game[r["game"]].append(r)
-    print("per game (per save): wall s, cpu s, flushes, selects, statements")
+    print(
+        "per game (per save): wall s, cpu s, flushes, selects, statements; max RSS MiB"
+    )
     for game, rs in by_game.items():
         m = len(rs)
         print(
@@ -210,6 +227,7 @@ def main():
                 f"{sum(r.get(k, 0) for r in rs) / m:7.0f}"
                 for k in ("flushes", "selects", "statements")
             )
+            + f" {max(r['rss_mib'] for r in rs):6d}"
         )
     print("processors (wall s, cpu s, % of timeline cpu, selects/save, flushes/save):")
     for k, v in sorted(proc_cpu.items(), key=lambda kv: -kv[1])[:28]:
