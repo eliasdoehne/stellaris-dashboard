@@ -1,7 +1,9 @@
 import abc
 import collections
+import contextlib
 import dataclasses
 import datetime
+import gc
 import itertools
 import json
 import logging
@@ -61,6 +63,36 @@ def _extract_id(val, default: int = -1) -> int:
 _shared_description_cache: dict[str, datamodel.SharedDescription] = {}
 # module-level caches like the one above are not thread-safe: one save is processed at a time per process
 _process_gamestate_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _gc_frozen():
+    """Keep the objects that exist now, above all the parsed gamestate, out of garbage collection.
+
+    A parsed save is millions of objects that stay alive during the import. Every full
+    collection, triggered by the many objects the import allocates, would traverse all of
+    them again. gc.freeze() moves them to the permanent generation, gc.unfreeze() back to
+    the oldest generation afterwards, so nothing stays frozen between imports in a
+    long-running process (the dashboard's save watcher or bulk import). If something else
+    has frozen objects already, it is left alone: freeze/unfreeze do not nest.
+
+    The import's own objects (ORM objects, the closed session) are cyclic garbage at the
+    end. They are collected before unfreezing, while the gamestate is still excluded, so
+    that collection is cheap. Without it, that garbage often had not been collected by the
+    time the next import froze it again, and memory grew with every save.
+    """
+    if gc.get_freeze_count():
+        yield
+        return
+    gc.freeze()
+    try:
+        yield
+    finally:
+        try:
+            gc.collect()
+        finally:
+            gc.unfreeze()
+
 
 _BIOSHIP_FAMILY_HULLS = {
     "mauler": "corvette",
@@ -169,7 +201,8 @@ class TimelineExtractor:
         self._read_basic_game_info(game_id)
         logger.info(f"{self.basic_info.logger_str} Processing Gamestate")
         t_start_gs = time.process_time()
-        with _process_gamestate_lock, datamodel.get_db_session(game_id=game_id, write=True) as self._session:
+        # the freeze is inside the lock, so that imports in different threads cannot interleave it
+        with _process_gamestate_lock, _gc_frozen(), datamodel.get_db_session(game_id=game_id, write=True) as self._session:
             sqlalchemy.event.listen(
                 self._session, "before_flush", datamodel.drop_special_country_events
             )
