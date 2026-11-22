@@ -6,17 +6,18 @@ The CLI functions which are annotated with click decorators are only thin wrappe
 corresponding function defined immediately below. This allows reusing the code in __main__.py.
 """
 
+import collections
+import concurrent.futures
 import logging
 import multiprocessing as mp
 import pathlib
 import threading
+from typing import Deque, Tuple
 
 import click
 
-from stellarisdashboard import bulk_import, config
-
-from stellarisdashboard.dashboard_app import visualization_data
-from stellarisdashboard.parsing import save_copies, save_parser, timeline
+from stellarisdashboard import bulk_import, config, import_worker
+from stellarisdashboard.parsing import save_copies, save_parser
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,8 @@ showeverything_help_string = (
 
 # seconds between checks for new save files
 POLLING_INTERVAL = 0.5
+# import_tag of the log records of the saves imported by the save monitor
+MONITOR_LOG_TAG = "monitor"
 
 threads_help_string = (
     "The number of threads that run in parallel when reading save games."
@@ -59,7 +62,7 @@ def monitor_saves(save_path):
 
 def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
     """
-    Monitor the save path for new files, and maintain the corresponding plot data.
+    Monitor the save path for new files, and have the import worker process import them.
 
     :param save_path: Override for the path defined in the config.CONFIG object.
     :param stop_event: Signals that the program is shutting down.
@@ -71,33 +74,52 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
         stop_event = threading.Event()
     save_reader = save_parser.ContinuousSavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
+    worker = import_worker.get_import_worker()
+    worker.start()
 
+    # submitted saves, oldest first: results are handled in the order of the saves
+    pending: Deque[Tuple[pathlib.Path, concurrent.futures.Future]] = collections.deque()
     show_wait_message = True
-    while not stop_event.is_set():
-        nothing_new = True
-        for (
-            game_name,
-            gamestate_dict,
-            save_file,
-        ) in save_reader.get_gamestates_and_check_for_new_files():
-            if stop_event.is_set():
-                save_reader.shutdown()
-                break
-            save_copies.back_up_save(save_file, game_name)
-            if gamestate_dict is None:
-                continue
-            if bulk_import.defer_to_running_import(game_name):
-                continue
-            show_wait_message = True
-            nothing_new = False
-            f_import_gamestate(game_name, gamestate_dict, save_file)
-            visualization_data.get_current_execution_plot_data(game_name)
-            del gamestate_dict
-        if nothing_new:
-            if show_wait_message:
-                show_wait_message = False
-                logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
-            stop_event.wait(POLLING_INTERVAL)
+    try:
+        while not stop_event.is_set():
+            for save_file in save_reader.get_new_saves():
+                game_name = save_file.parent.stem
+                if bulk_import.defer_to_running_import(game_name):
+                    continue
+                show_wait_message = True
+                pending.append(
+                    (save_file, worker.submit(save_file, game_name, log_tag=MONITOR_LOG_TAG))
+                )
+                if len(pending) > 1:
+                    logger.info(f"{len(pending)} saves waiting to be imported")
+            while pending and pending[0][1].done():
+                _handle_monitor_result(*pending.popleft())
+            if pending:
+                # wake up when the oldest save is done, or to look for new saves
+                concurrent.futures.wait([pending[0][1]], timeout=POLLING_INTERVAL)
+            else:
+                if show_wait_message:
+                    show_wait_message = False
+                    logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
+                stop_event.wait(POLLING_INTERVAL)
+    finally:
+        import_worker.shutdown_import_worker(timeout=5)
+
+
+def _handle_monitor_result(save_file: pathlib.Path, future: concurrent.futures.Future) -> None:
+    try:
+        result = future.result()
+    except import_worker.ImportWorkerError as e:
+        logger.warning(str(e))
+        return
+    import_worker.after_import(result)
+    timings = ", ".join(f"{stage} {seconds:.1f} s" for stage, seconds in result.timings.items())
+    if result.error:
+        logger.error(f"Import of {save_file} failed: {result.error}")
+    elif result.imported:
+        logger.info(f"Imported {save_file.name} of {result.game_id} ({result.game_date}): {timings}")
+    elif result.parsed and not result.failures:
+        logger.info(f"Did not import {save_file.name} of {result.game_id} ({result.game_date}), it is already imported")
 
 
 @cli.command()
@@ -163,33 +185,8 @@ def f_parse_saves(
         del gamestate_dict
 
 
-def f_import_gamestate(
-    game_name: str,
-    gamestate_dict,
-    save_file: pathlib.Path,
-    replace_existing: bool = False,
-) -> timeline.TimelineExtractor:
-    """
-    Import a parsed save into the database. A copy of the save is kept if the import
-    or any data processor failed, and a kept copy is removed once it imports cleanly.
-    """
-    tle = timeline.TimelineExtractor()
-    try:
-        tle.process_gamestate(game_name, gamestate_dict, replace_existing=replace_existing)
-    except Exception as e:
-        # errors raised before the import started, e.g. a gamestate without a date
-        if not tle.failures:
-            tle.failures.append(
-                save_copies.failure(save_copies.STAGE_IMPORT, save_copies.format_exception(e))
-            )
-        raise
-    finally:
-        if tle.failures:
-            game_date = gamestate_dict.get("date") if isinstance(gamestate_dict, dict) else None
-            save_copies.keep_failed_save(save_file, game_name, tle.failures, game_date)
-        elif tle.number_of_parsed_saves and save_copies.is_kept_copy(save_file):
-            save_copies.remove_kept_copy(save_file)
-    return tle
+# the import itself lives in the module the worker process imports; see import_worker.import_gamestate
+f_import_gamestate = import_worker.import_gamestate
 
 
 @cli.command()

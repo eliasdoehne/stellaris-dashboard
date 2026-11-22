@@ -1,8 +1,13 @@
+import multiprocessing as mp
+
+# In a frozen build the import worker process runs this script again. Handle that before the heavy
+# imports below, so the worker starts quickly and without loading the web server. Otherwise a no-op.
+mp.freeze_support()
+
 from stellarisdashboard import _force_imports
 
 _force_imports.force_imports()
 import logging
-import multiprocessing as mp
 import socket
 import threading
 import time

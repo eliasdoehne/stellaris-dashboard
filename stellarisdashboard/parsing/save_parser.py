@@ -1,23 +1,15 @@
-import abc
-import collections
 import concurrent.futures
 import itertools
 import logging
-import multiprocessing as mp
-import os
 import pathlib
-import signal
 import sys
 import time
 from typing import (
     Any,
     Dict,
-    Tuple,
     Set,
-    Iterable,
     List,
     Iterator,
-    Deque,
     Optional,
     TypeVar,
 )
@@ -40,11 +32,9 @@ class StellarisFileFormatError(Exception):
 T = TypeVar("T")
 
 
-class SavePathMonitor(abc.ABC):
+class SavePathMonitor:
     """
     Base class for path monitors, which check the save path for new save games.
-    Save files are parsed and returned as gamestate dictionaries by calling the
-    get_new_game_states method.
     """
 
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
@@ -53,18 +43,6 @@ class SavePathMonitor(abc.ABC):
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
         self._last_checked_time = float("-inf")
-
-    @abc.abstractmethod
-    def get_gamestates_and_check_for_new_files(
-        self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]], pathlib.Path]]:
-        """
-        Check the save path for new save files and yield results that are ready. Depending on the implementation,
-        it files may be skipped if all parser threads are busy. Results are always returned in the correct order.
-
-        :return: Iterator over (game_name, gamestate, save_file) triples, gamestate is None if parsing failed
-        """
-        pass
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
         """Get a list of all new save files, filtered by the skip_saves setting."""
@@ -119,50 +97,20 @@ class SavePathMonitor(abc.ABC):
         return max(stat.st_mtime, stat.st_ctime)
 
 
-def _pool_worker_init():
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    sys.stdout = open(os.devnull, "w")
-
-
 class ContinuousSavePathMonitor(SavePathMonitor):
     """
-    SavePathMonitor implementation for the default execution. Saves are processed as quickly as possible,
-    with the tradeoff that occasionally some save files may be skipped if all threads are busy.
-    (unlikely during most normal gameplay if 2-3 threads are allowed)
+    SavePathMonitor implementation for the default execution: reports the new save files of the
+    save path. The import worker process parses and imports them (cli.f_monitor_saves).
     """
 
-    def __init__(self, save_parent_dir, game_name_prefix: str = ""):
-        super().__init__(save_parent_dir, game_name_prefix)
-        self._num_threads = config.CONFIG.threads
-        self._pool = mp.Pool(
-            processes=config.CONFIG.threads, initializer=_pool_worker_init
-        )
-        self._pending_results: Deque[
-            Tuple[pathlib.PurePath, mp.pool.AsyncResult]
-        ] = collections.deque()
-
-    def get_gamestates_and_check_for_new_files(self):
-        while self._pending_results:
-            # results should be returned in order => only yield results from the head of the queue
-            if self._pending_results[0][1].ready():
-                fname, result = self._pending_results.popleft()
-                yield fname.parent.stem, _get_parse_result(fname, result.get), fname
-            else:
-                break
-
-        # Fill the queue with new files
+    def get_new_saves(self) -> List[pathlib.Path]:
+        """
+        All new save files in the order in which they should be imported, after the skip_saves
+        filter. Each is reported once: it counts as processed from now on, whatever happens to it.
+        """
         new_files = self.get_new_savefiles()
-        for fname in new_files:
-            if len(self._pending_results) >= config.CONFIG.threads:
-                break  # Ignore if there are any additional files
-            result = self._pool.apply_async(parse_save, args=(fname,))
-            self._pending_results.append((fname, result))
-
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
-
-    def shutdown(self):
-        self._pool.terminate()
-        self._pool.join()
+        return new_files
 
 
 class BatchSavePathMonitor(SavePathMonitor):

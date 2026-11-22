@@ -83,6 +83,15 @@ def _setup_engine(game_id):
     with engine.connect() as connection:
         mc = MigrationContext.configure(connection)
         migrations = produce_migrations(mc, Base.metadata)
+        if engine.name == "sqlite" and not migrations.upgrade_ops.is_empty():
+            # The dashboard and the import worker process can open a new or outdated database
+            # at the same time. Take the write lock, then look again: if the other process
+            # migrated in the meantime there is nothing left to do. The common case of nothing
+            # to migrate takes no lock, so opening a database never waits for a running import.
+            connection.commit()
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            mc = MigrationContext.configure(connection)
+            migrations = produce_migrations(mc, Base.metadata)
         operations = Operations(mc)
         use_batch = engine.name == "sqlite"
         stack = [migrations.upgrade_ops]
@@ -109,6 +118,16 @@ def _setup_engine(game_id):
     _ENGINES[game_id] = engine
     _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
     _DB_LOCKS[game_id] = threading.Lock()
+
+
+def dispose_engines():
+    """Forget all engines and session makers, e.g. after the output folder changed; they are set up again on use."""
+    with _ENGINE_SETUP_LOCK:
+        for engine in _ENGINES.values():
+            engine.dispose()
+        _ENGINES.clear()
+        _SESSIONMAKERS.clear()
+        _DB_LOCKS.clear()
 
 
 def warm_up_databases():
@@ -540,6 +559,12 @@ def get_known_games(game_name_prefix: str = "") -> List[str]:
 # one page interaction doesn't re-scan all databases multiple times.
 _AVAILABLE_GAMES_CACHE_TTL_SECONDS = 5.0
 _available_games_cache = (float("-inf"), {})  # (timestamp, result)
+
+
+def clear_available_games_cache():
+    """Make the next get_available_games_dict() call read the databases, e.g. after a save was imported."""
+    global _available_games_cache
+    _available_games_cache = (float("-inf"), {})
 
 
 def get_available_games_dict() -> Dict[str, Dict[str, str]]:
