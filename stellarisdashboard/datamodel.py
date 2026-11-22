@@ -2636,18 +2636,27 @@ class HistoricalEvent(Base):
             yield from self.combat.involved_countries()
 
 
+def is_dropped_special_country_event(session, obj) -> bool:
+    """True for a pending object that drop_special_country_events discards at the next flush:
+    a routine event (SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES) of a special country.
+
+    Lookups that do not flush first (parsing/stored_rows.py) use it to not find such an event,
+    as a query after the flush would not."""
+    if (
+        not isinstance(obj, HistoricalEvent)
+        or obj.event_type not in SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES
+    ):
+        return False
+    country = obj.country
+    if country is None and obj.country_id is not None:
+        country = session.get(Country, obj.country_id)
+    return country is not None and not country.is_real_country()
+
+
 def drop_special_country_events(session, flush_context, instances):
     """before_flush hook: discard pending routine events of special countries."""
     for obj in list(session.new):
-        if (
-            not isinstance(obj, HistoricalEvent)
-            or obj.event_type not in SPECIAL_COUNTRY_SKIPPED_EVENT_TYPES
-        ):
-            continue
-        country = obj.country
-        if country is None and obj.country_id is not None:
-            country = session.get(Country, obj.country_id)
-        if country is None or country.is_real_country():
+        if not is_dropped_special_country_event(session, obj):
             continue
         # detach from the back-populated collections so the flush doesn't see them
         for rel in ("country", "leader", "system", "planet", "faction"):

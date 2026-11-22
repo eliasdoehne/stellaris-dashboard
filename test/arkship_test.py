@@ -48,8 +48,7 @@ def session(tmp_path, monkeypatch):
     (tmp_path / "db").mkdir()
     with datamodel.get_db_session("arkship_test", write=True) as session:
         yield session
-    # the cached description and engine would otherwise carry this test's rows into later tests
-    timeline._shared_description_cache.clear()
+    # the cached engine would otherwise carry this test's rows into later tests
     datamodel._ENGINES.pop("arkship_test").dispose()
     datamodel._SESSIONMAKERS.pop("arkship_test")
     datamodel._DB_LOCKS.pop("arkship_test")
@@ -70,13 +69,13 @@ class Save:
         self.gs = datamodel.GameState(game=self.game, date=date_in_days)
         session.add(self.gs)
         self.info = timeline.BasicGameInfo("arkship_test", date_in_days, 0, set(), 0)
-        timeline._shared_description_cache.clear()
 
     def run(self, processor, dependencies=None):
         processor.initialize(
             self.game, self.gamestate, self.gs, self.info, self.session
         )
         processor.extract_data_from_gamestate(dependencies or {})
+        processor.insert_plain_rows()
         self.session.flush()
         return processor.data()
 
