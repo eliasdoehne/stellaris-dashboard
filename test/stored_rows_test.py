@@ -1,7 +1,7 @@
 """StoredRows (stellarisdashboard/parsing/stored_rows.py) answers as the query it replaces.
 
-The session is set up as in an import: no autoflush, the pending_flush listener and the
-special-country hook. Each lookup is compared with the query it emulates, sent after a flush.
+The session is set up as in an import: a normal autoflush session with the special-country
+hook. Each lookup is compared with the query it emulates, sent after a flush.
 """
 
 import random
@@ -11,7 +11,6 @@ import sqlalchemy
 from sqlalchemy.orm import Session
 
 from stellarisdashboard import datamodel
-from stellarisdashboard.parsing import pending_flush
 from stellarisdashboard.parsing.stored_rows import StoredRows, key_value, related_key
 
 Event = datamodel.HistoricalEvent
@@ -27,8 +26,7 @@ def session():
     sqlalchemy.event.listen(
         session, "before_flush", datamodel.drop_special_country_events
     )
-    with pending_flush.flush_before_reads(session):
-        yield session
+    yield session
     session.close()
 
 

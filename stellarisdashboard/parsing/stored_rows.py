@@ -2,8 +2,8 @@
 
 A processor that looks up a row per entity of the gamestate (the newest ownership of each
 system, the open councilor event of each council position, ...) sent one query per lookup,
-and with ``pending_flush`` a flush before most of them, because the processor had added rows
-to the same table since. ``StoredRows`` replaces those queries: one query reads the primary
+and with autoflush a flush before most of them, because the processor had added rows to the
+same table since. ``StoredRows`` replaces those queries: one query reads the primary
 key, key columns and ordering column of all rows of the model that match fixed criteria, and a
 lookup returns what the query would have returned at that moment, without a statement unless
 it has to load the row it returns.
@@ -17,7 +17,7 @@ What a lookup emulates::
 Invariants that make the answers equal to such a query:
 
 * Rows of the model that are stored when the StoredRows is created are known from its scan;
-  the scan itself is a query, so ``pending_flush`` flushes pending changes of the table first.
+  the scan itself is a query, so autoflush writes the session's pending changes first.
 * Objects of the model added to the session afterwards (``Session.add``, or a cascade during
   a flush) are registered through the session's ``transient_to_pending`` event. Call sites do
   not register anything by hand. An object that is only attached to a session object's
@@ -71,7 +71,6 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute, instance_state
 from sqlalchemy.orm.interfaces import MANYTOONE
 
 from stellarisdashboard import datamodel
-from stellarisdashboard.parsing import pending_flush
 
 
 def key_value(value: Any) -> Hashable:
@@ -343,11 +342,7 @@ class StoredRows:
 
     def _load(self, row_id):
         """The stored row's object, or None if the row was deleted since the scan."""
-        obj = self._session.get(
-            self._model,
-            row_id,
-            execution_options={pending_flush.STORED_ROWS_ONLY: True},
-        )
+        obj = self._session.get(self._model, row_id)
         self._live_row_ids.add(row_id)
         if obj is None:
             return None
@@ -362,29 +357,33 @@ class StoredRows:
     ) -> list:
         """The objects of the rows with these keys, in ORDER BY order DESC, primary key order
         if ranked; at most limit of them. Loads stored rows as needed."""
-        while True:
-            candidates = self._candidates(keys, at_most)
-            if ranked:
-                # NULLs last, ties by position: sort by position, then a stable sort by value
-                # (reverse=True keeps the order of equal values)
-                candidates.sort(key=lambda c: c[1])
-                candidates.sort(
-                    key=lambda c: (True, c[0]) if c[0] is not None else (False, 0),
-                    reverse=True,
-                )
-            found = []
-            for order_value, position, row_id, obj in candidates:
-                if row_id is not None:
-                    obj = self._load(row_id)
-                    if obj is None:
-                        continue  # deleted since the scan
-                    if not self._is_scanned_as(obj, keys, order_value):
-                        break  # changed past the session: look again with its current values
-                found.append(obj)
-                if limit is not None and len(found) == limit:
+        # Without autoflush: the answers already account for the session's pending changes, and
+        # a stored row that is not in the session has no unflushed changes, so loading it by
+        # primary key needs no flush either.
+        with self._session.no_autoflush:
+            while True:
+                candidates = self._candidates(keys, at_most)
+                if ranked:
+                    # NULLs last, ties by position: sort by position, then a stable sort by value
+                    # (reverse=True keeps the order of equal values)
+                    candidates.sort(key=lambda c: c[1])
+                    candidates.sort(
+                        key=lambda c: (True, c[0]) if c[0] is not None else (False, 0),
+                        reverse=True,
+                    )
+                found = []
+                for order_value, position, row_id, obj in candidates:
+                    if row_id is not None:
+                        obj = self._load(row_id)
+                        if obj is None:
+                            continue  # deleted since the scan
+                        if not self._is_scanned_as(obj, keys, order_value):
+                            break  # changed past the session: look again with its current values
+                    found.append(obj)
+                    if limit is not None and len(found) == limit:
+                        return found
+                else:
                     return found
-            else:
-                return found
 
     def _is_scanned_as(self, obj, keys, order_value) -> bool:
         """Whether a just loaded row still has the key, criteria and ordering value that the

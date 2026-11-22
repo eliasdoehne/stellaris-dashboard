@@ -1,8 +1,10 @@
 """PlanetProcessor's districts, buildings, deposits and modifiers over a sequence of saves.
 
 The stored rows of all changed planets are loaded with one query per table; the expected
-rows below, including their primary keys, are what loading each planet's collections
-one by one produced (the code before the bulk loads).
+rows below, including their primary keys for districts, buildings and deposits, are what
+loading each planet's collections one by one produced (the code before the bulk loads).
+Modifier rows are compared by content only: which primary key a new modifier gets is up to
+SQLite.
 """
 
 import contextlib
@@ -84,7 +86,7 @@ SAVES = [
                 timed=[("m_a", 70)],
                 permanent=["pm_x"],
             ),
-            # m_b removed: the modifier with the highest id, deleted before any new one
+            # m_b removed
             2: _planet("Two", districts=[2]),
             3: _planet(
                 "Three", districts=[4], deposits=[201, 202], timed=[("m_c", 30)]
@@ -112,7 +114,7 @@ SAVES = [
                 permanent=["pm_x"],
             ),
             2: _planet("Two", districts=[2], buildings=[103], timed=[("m_b", 20)]),
-            # m_c removed after new modifiers of other planets
+            # m_c removed
             3: _planet("Three", districts=[4], deposits=[201]),
         },
         _districts(
@@ -141,9 +143,9 @@ EXPECTED = {
         (3, 2, "building_foundry_1", 1),
     ],
     "deposits": [(1, 1, "d_energy_1", 0), (2, 3, "d_minerals_2", 1)],
-    # save 1 added m_a 1, pm_x 2, m_b 3. In save 2, m_b was deleted before any new
-    # modifier, so SQLite gave its id to m_c (3); m_d is 4, not 5
-    "modifiers": [(2, 1, "pm_x", None), (4, 1, "m_d", 10), (5, 2, "m_b", 20)],
+    # (planet id, description text, expiry date), without primary keys: a deleted modifier's
+    # id may or may not be reused by a later one
+    "modifiers": [(1, "pm_x", None), (1, "m_d", 10), (2, "m_b", 20)],
 }
 
 
@@ -199,7 +201,7 @@ class _CollectionsMatchDatabase(timeline.AbstractGamestateDataProcessor):
     def extract_data_from_gamestate(self, dependencies):
         planets = dependencies[timeline.PlanetProcessor.ID]
         for attribute, (model, value_column) in _ENTITY_TABLES.items():
-            # the statement flushes first (pending_flush), as the lazy loads below may
+            # autoflush: the statement flushes first, as the lazy loads below may
             stored = sorted(
                 (planet_id, text, value)
                 for _, planet_id, text, value in _stored_rows(
@@ -271,7 +273,14 @@ def test_planet_entities_over_three_saves(extractor, monkeypatch):
             p.planet_id_in_game: p.planet_id for p in session.query(datamodel.Planet)
         }
     assert planet_ids == {1: 1, 2: 2, 3: 3}
-    assert rows == EXPECTED
+    modifiers = sorted(
+        ((planet_id, text, expiry) for _, planet_id, text, expiry in rows["modifiers"]),
+        key=repr,
+    )
+    assert modifiers == sorted(EXPECTED["modifiers"], key=repr)
+    assert {k: v for k, v in rows.items() if k != "modifiers"} == {
+        k: v for k, v in EXPECTED.items() if k != "modifiers"
+    }
 
 
 def test_rows_of_the_same_text_are_matched_in_primary_key_order(extractor, monkeypatch):
@@ -296,18 +305,20 @@ def test_rows_of_the_same_text_are_matched_in_primary_key_order(extractor, monke
         planet = session.query(datamodel.Planet).one()
         district = session.query(datamodel.PlanetDistrict).one()
         modifier = session.query(datamodel.PlanetModifier).one()
-        session.add_all(
-            [
-                datamodel.PlanetDistrict(
-                    planet=planet, db_description=district.db_description, count=1
-                ),
-                datamodel.PlanetModifier(
-                    planet=planet,
-                    db_description=modifier.db_description,
-                    expiry_date=50,
-                ),
-            ]
-        )
+        # without autoflush: planet=... loads the planet's collections before the rows are added
+        with session.no_autoflush:
+            session.add_all(
+                [
+                    datamodel.PlanetDistrict(
+                        planet=planet, db_description=district.db_description, count=1
+                    ),
+                    datamodel.PlanetModifier(
+                        planet=planet,
+                        db_description=modifier.db_description,
+                        expiry_date=50,
+                    ),
+                ]
+            )
         session.commit()
 
     second = _gamestate(

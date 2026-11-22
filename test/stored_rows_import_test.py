@@ -1,8 +1,8 @@
 """Imports of short synthetic save sequences through the processors that use StoredRows.
 
 Each sequence is imported twice: as is, and with every StoredRows replaced by QueryRows, which
-answers each lookup with the query it replaces (sent through the pending_flush listener, so
-after a flush as before). The databases must be identical, primary keys included. The
+answers each lookup with the query it replaces (with autoflush, so after a flush as before).
+The databases must be identical, primary keys included. The
 sequences cover special-country events, a government change, a ruler change, joining and
 leaving the galactic community in consecutive saves, a country listed twice, edicts, traditions,
 technologies, factions, envoys and councilors, and an older save imported after newer ones.

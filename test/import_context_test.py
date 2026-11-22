@@ -12,7 +12,6 @@ import sqlalchemy
 from sqlalchemy.orm import Session
 
 from stellarisdashboard import datamodel
-from stellarisdashboard.parsing import pending_flush
 from stellarisdashboard.parsing.import_context import ImportContext
 
 COUNTRIES = 4
@@ -37,10 +36,7 @@ def _import(engine, date, with_rows=range(COUNTRIES - 1), replace=False):
     """An import of a gamestate up to the point after CountryDataProcessor: the result of both
     lookups for every country, and the number of SELECTs that most_recent_country_data sent.
     """
-    with (
-        Session(bind=engine, expire_on_commit=False) as session,
-        pending_flush.flush_before_reads(session),
-    ):
+    with Session(bind=engine, expire_on_commit=False) as session:
         game = session.query(datamodel.Game).one()
         if replace:
             for gamestate in session.query(datamodel.GameState).filter_by(date=date):

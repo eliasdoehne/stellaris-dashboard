@@ -19,13 +19,7 @@ from sqlalchemy.orm import joinedload
 from stellarisdashboard import datamodel, game_info, config
 from stellarisdashboard.country_color_cache import clear_cached_country_colors
 
-from stellarisdashboard.parsing import (
-    galaxy_events,
-    pending_flush,
-    plain_rows,
-    save_copies,
-    save_format,
-)
+from stellarisdashboard.parsing import galaxy_events, save_copies, save_format
 from stellarisdashboard.parsing.import_context import ImportContext
 from stellarisdashboard.parsing.stored_rows import key_value, related_key
 
@@ -281,39 +275,34 @@ class TimelineExtractor:
             sqlalchemy.event.listen(
                 self._session, "before_flush", datamodel.drop_special_country_events
             )
-            # no autoflush: a flush before every query was most of the import's time
-            # rows of append-only tables are queued as plain values, see plain_rows
-            with pending_flush.flush_before_reads(self._session), plain_rows.queue_inserts(
-                self._session
-            ):
-                try:
-                    db_game = self._get_or_add_game_to_db(game_id)
-                    if replace_existing:
-                        self._delete_existing_gamestate(db_game)
-                    if self._check_if_gamestate_exists(db_game):
-                        logger.info(
-                            f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
-                        )
-                        self._session.rollback()
-                        return
-                    else:
-                        self._process_gamestate(db_game)
+            try:
+                db_game = self._get_or_add_game_to_db(game_id)
+                if replace_existing:
+                    self._delete_existing_gamestate(db_game)
+                if self._check_if_gamestate_exists(db_game):
                     logger.info(
-                        f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, "
-                        f"writing changes to database"
+                        f"{self.basic_info.logger_str} Gamestate for same date already exists in database. Aborting..."
                     )
-                    self._session.commit()
-                    self.number_of_parsed_saves += 1
-                except Exception as e:
                     self._session.rollback()
-                    self.failures.append(
-                        save_copies.failure(save_copies.STAGE_IMPORT, save_copies.format_exception(e))
-                    )
-                    logger.exception(
-                        f"{self.basic_info.logger_str} Rolling back changes to database..."
-                    )
-                    if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
-                        raise e
+                    return
+                else:
+                    self._process_gamestate(db_game)
+                logger.info(
+                    f"{self.basic_info.logger_str} Processed Gamestate in {time.process_time() - t_start_gs:.3f} s, "
+                    f"writing changes to database"
+                )
+                self._session.commit()
+                self.number_of_parsed_saves += 1
+            except Exception as e:
+                self._session.rollback()
+                self.failures.append(
+                    save_copies.failure(save_copies.STAGE_IMPORT, save_copies.format_exception(e))
+                )
+                logger.exception(
+                    f"{self.basic_info.logger_str} Rolling back changes to database..."
+                )
+                if config.CONFIG.debug_mode or isinstance(e, KeyboardInterrupt):
+                    raise e
 
     def _delete_existing_gamestate(self, db_game):
         existing = (
@@ -389,7 +378,7 @@ class TimelineExtractor:
                             }
                         )
                         data = data_processor.data()
-                        plain_rows.write(self._session)
+                        data_processor.insert_plain_rows()
                         self._session.flush()
                 except Exception as e:
                     savepoint.rollback()
@@ -544,6 +533,22 @@ class TimelineExtractor:
 PLANET_PROCESSOR_ID = "planet_models"
 
 
+def _column_values(model, values: Dict[str, Any]) -> Dict[str, Any]:
+    """The values of a row given as for the model's constructor, with each many-to-one
+    relationship replaced by its foreign key column (the related object's primary key)."""
+    mapper = sqlalchemy.inspect(model)
+    row = {}
+    for key, value in values.items():
+        relationship = mapper.relationships.get(key)
+        if relationship is None:
+            row[key] = value
+            continue
+        (column,) = relationship.local_columns
+        key = mapper.get_property_by_column(column).key
+        row[key] = None if value is None else sqlalchemy.inspect(value).identity[0]
+    return row
+
+
 class AbstractGamestateDataProcessor(abc.ABC):
     ID = "abstract"
     DEPENDENCIES = []
@@ -556,6 +561,7 @@ class AbstractGamestateDataProcessor(abc.ABC):
         self._session = None
         self._shared_descriptions = None
         self._context: Optional[ImportContext] = None
+        self._plain_rows: Dict[type, List[Dict[str, Any]]] = {}
 
     def initialize(
         self,
@@ -564,7 +570,6 @@ class AbstractGamestateDataProcessor(abc.ABC):
         gs: datamodel.GameState,
         basic_info: BasicGameInfo,
         db_session,
-        shared_descriptions: Optional[SharedDescriptions] = None,
         context: Optional[ImportContext] = None,
     ):
         self._basic_info = basic_info
@@ -574,13 +579,10 @@ class AbstractGamestateDataProcessor(abc.ABC):
         self._session = db_session
         if context is None:
             # a processor run on its own (in tests) gets a context of its own
-            if shared_descriptions is None:
-                shared_descriptions = SharedDescriptions(db_session)
-            context = ImportContext(db_session, game, gs, shared_descriptions)
-        elif shared_descriptions not in (None, context.shared_descriptions):
-            raise ValueError("shared_descriptions must be the import context's")
+            context = ImportContext(db_session, game, gs, SharedDescriptions(db_session))
         self._context = context
         self._shared_descriptions = context.shared_descriptions
+        self._plain_rows = {}
         self.initialize_data()
 
     def initialize_data(self):
@@ -596,10 +598,24 @@ class AbstractGamestateDataProcessor(abc.ABC):
     def _add_plain_row(self, model, **values):
         """Queue a row of an append-only table, given as for the model's constructor.
 
-        For rows that nothing reads or changes as objects while the save is processed: they
-        skip the session's unit of work and are inserted together, see plain_rows.
+        For the thousands of budget items and pop statistics per save, which nothing reads or
+        changes while the save is processed: insert_plain_rows() writes them with one
+        executemany per table instead of adding an ORM object each to the session.
         """
-        plain_rows.add(self._session, model, **values)
+        self._plain_rows.setdefault(model, []).append(values)
+
+    def insert_plain_rows(self):
+        """Insert the rows queued by _add_plain_row(); TimelineExtractor calls it when the
+        processor is done. Many-to-one relationships are given as objects, so the session is
+        flushed first to give new ones their primary keys."""
+        if not self._plain_rows:
+            return
+        self._session.flush()
+        for model, rows in self._plain_rows.items():
+            self._session.execute(
+                sqlalchemy.insert(model), [_column_values(model, row) for row in rows]
+            )
+        self._plain_rows = {}
 
     def _get_or_add_shared_description(self, text: str) -> datamodel.SharedDescription:
         return self._shared_descriptions.get_or_add(text)
@@ -1868,9 +1884,6 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         self._systems_dict = None
         self._countries_dict = None
         self._leaders_dict = None
-        # see _update_planet_modifiers
-        self._modifier_added = False
-        self._modifier_deleted_before_first_added = False
 
     def data(self) -> Any:
         return self.planets_by_ingame_id
@@ -2099,18 +2112,6 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
         if deleted:
             # loaded again without the deleted rows when it is next read (no SQL now)
             self._session.expire(planet_model, ["modifiers"])
-            if not self._modifier_added:
-                self._modifier_deleted_before_first_added = True
-
-        if current_modifiers and self._modifier_deleted_before_first_added:
-            # SQLite gives a new row the id max(rowid) + 1, so a new modifier takes the id of
-            # a deleted stored modifier that had the highest id, if that deletion is written
-            # first. A flush inserts before it deletes, so flush once here. Deletions after
-            # the first new modifier cannot lower any new modifier's id: they are flushed
-            # with or after it. (Flushing every deletion at once gave the same ids.)
-            self._session.flush()
-            self._modifier_deleted_before_first_added = False
-        self._modifier_added |= bool(current_modifiers)
 
         for modifier, expiration in current_modifiers.items():
             db_description = self._get_or_add_shared_description(modifier)
