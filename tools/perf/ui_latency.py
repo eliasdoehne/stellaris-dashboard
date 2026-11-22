@@ -7,6 +7,7 @@ checkout of another version):
         --game PREFIX --saves 37:40 [--seed-db FILE] [--one-at-a-time | --at-once K | --batches N,N,...]
         [--threads N] [--cpus 2,3] [--controller-cpu 2] [--probe light|heavy]
         [--start-method spawn|forkserver|fork] [--parse-cache DIR]
+        [--import-page [--live-saves GAME:INDEX,... --live-after N]]
 
 The script starts the dashboard (the same thing ``python -m stellarisdashboard`` does: web server
 thread plus save monitor) as a separate process group from a generated configuration in
@@ -48,6 +49,16 @@ Modes:
 40); ``--seed-db FILE`` is copied to output/db/<game id>.db first, so that the selected saves are
 imported on top of a realistic database (build it with tools/perf/bench.py --max-saves N).
 
+* ``--import-page``: the saves selected by ``--saves`` are copied into the save folder BEFORE the
+  dashboard starts (the monitor ignores them), then, after the idle baseline, the import of the game
+  is started like the import page's button does (``POST /import/start``) and ``/import/status`` is
+  polled until it says the job is finished. The windows are the idle baseline, each save of the job
+  (from the previous progress change to the next one) and the whole job. ``--live-saves
+  GAME:INDEX,...`` (a game prefix; the index into the game's saves sorted by name, which may also be
+  a save of the imported game that is not selected) copies those saves into the save folder
+  ``--live-after`` saves into the job, and the report says when each became visible in its
+  database and when the job finished.
+
 ``--start-method`` forces the multiprocessing start method in the dashboard process (by default the
 platform's, forkserver on Linux).
 
@@ -61,6 +72,7 @@ import http.client
 import json
 import os
 import pathlib
+import re
 import shutil
 import signal
 import socket
@@ -71,6 +83,8 @@ import threading
 import time
 import tomllib
 import zipfile
+
+import parse_cache_hook
 
 REPO = pathlib.Path(__file__).resolve().parent.parent.parent
 TICK = 0.010  # sleep of the tick probe in the dashboard process
@@ -84,28 +98,6 @@ DASH_BODY = json.dumps(
         "changedPropIds": ["url.search"],
     }
 )
-SITECUSTOMIZE = """\
-import os, pathlib, pickle, sys
-
-_cache = os.environ.get("UI_LATENCY_PARSE_CACHE")
-if _cache:
-    try:
-        import rust_parser as _rp
-        _original = _rp.parse_save_file
-
-        def parse_save_file(path, _original=_original):
-            p = pathlib.Path(path)
-            cached = pathlib.Path(_cache) / p.parent.name / (p.name + ".pickle")
-            if cached.exists():
-                with open(cached, "rb") as f:
-                    return pickle.load(f)
-            return _original(path)
-
-        _rp.parse_save_file = parse_save_file
-        print(f"ui_latency: parse cache hook active in pid {os.getpid()}", file=sys.stderr, flush=True)
-    except Exception as error:
-        print(f"ui_latency: parse cache hook failed: {error!r}", file=sys.stderr, flush=True)
-"""
 READY_MARKER = "Waiting for new saves"
 FIRST_TAB = "Budget"  # the first tab of the default tab layout
 
@@ -336,6 +328,45 @@ def db_has_date(db_file: pathlib.Path, days: int) -> bool:
         return False
 
 
+def http_request(port: int, method: str, path: str, body: str = "", timeout: float = 60):
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    try:
+        headers = {"Content-Type": "application/x-www-form-urlencoded"} if body else {}
+        conn.request(method, path, body or None, headers)
+        response = conn.getresponse()
+        return response.status, response.read().decode("utf-8", "replace")
+    finally:
+        conn.close()
+
+
+PROGRESS_RE = re.compile(r'<progress max="(\d+)" value="(\d+)"')
+ERROR_RE = re.compile(r'<p class="import-error"[^>]*>(.*?)</p>', re.S)
+JOB_ERRORS_RE = re.compile(r"<li><code>(.*?)</code></li>", re.S)
+
+
+def import_status(port: int):
+    """(finished, total, done, errors) of the import job shown by /import/status."""
+    status, html = http_request(port, "GET", "/import/status", timeout=30)
+    if status != 200:
+        raise RuntimeError(f"/import/status answered {status}")
+    progress = PROGRESS_RE.search(html)
+    total, done = (int(progress.group(1)), int(progress.group(2))) if progress else (0, 0)
+    finished = 'hx-get="/import/status"' not in html
+    return finished, total, done, JOB_ERRORS_RE.findall(html), html
+
+
+def resolve_live_saves(args, corpus: pathlib.Path):
+    """[(game id, save path)] for --live-saves."""
+    live = []
+    for item in filter(None, args.live_saves.split(",")):
+        prefix, _, index = item.rpartition(":")
+        games = sorted(d for d in corpus.iterdir() if d.is_dir() and d.name.startswith(prefix))
+        if len(games) != 1:
+            sys.exit(f"--live-saves {prefix!r} matches {[g.name for g in games]}; need exactly one")
+        live.append((games[0].name, sorted(games[0].glob("*.sav"))[int(index)]))
+    return live
+
+
 # --------------------------------------------------------------------------- controller
 
 
@@ -357,6 +388,9 @@ def parse_args():
         "instead of parsing, in the dashboard and its workers; for database identity checks only, "
         "as unpickling costs time of its own",
     )
+    p.add_argument("--import-page", action="store_true", help="import the selected saves through the import page")
+    p.add_argument("--live-saves", default="", metavar="GAME:INDEX,...", help="with --import-page, see above")
+    p.add_argument("--live-after", type=int, default=2, help="with --live-saves: copy them after this many saves")
     p.add_argument("--probe", choices=["light", "heavy"], default="light", help="see the module docstring")
     p.add_argument(
         "--start-method", default="", choices=["", "spawn", "forkserver", "fork"],
@@ -417,12 +451,7 @@ def start_dashboard(args, port):
     log = open(args.workdir / "dashboard.log", "wb")
     env = dict(os.environ)
     if args.parse_cache is not None:
-        # sitecustomize is imported by every fresh interpreter (also forkserver/spawn workers).
-        hook = args.workdir / "hook"
-        hook.mkdir(exist_ok=True)
-        (hook / "sitecustomize.py").write_text(SITECUSTOMIZE)
-        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(hook), env.get("PYTHONPATH")]))
-        env["UI_LATENCY_PARSE_CACHE"] = str(args.parse_cache.absolute())
+        parse_cache_hook.install(args.workdir / "hook", args.parse_cache, env)
     return subprocess.Popen(
         cmd, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True
     )
@@ -502,6 +531,10 @@ def main_controller(args):
     proc = probe = None
     result = {"game": game_id, "args": {k: str(v) for k, v in vars(args).items()}, "windows": []}
     try:
+        if args.import_page:
+            # the monitor ignores the saves that exist when it starts
+            for save in saves:
+                copy_in(save, folder)
         proc = start_dashboard(args, port)
         probe = DashProbe(port, args.probe, game_id)
         probe.start()
@@ -524,6 +557,9 @@ def main_controller(args):
         windows = [("idle", t0, time.monotonic(), None, [])]
         memory = [process_memory(proc.pid)]
 
+        if args.import_page:
+            run_import_page(args, port, proc, probe, game_id, saves, db_file, windows, memory, result, corpus)
+            batches = []
         for batch in batches:
             expected = {save_date_days(s): s.name for s in batch}
             t_copy = time.monotonic()
@@ -561,6 +597,69 @@ def main_controller(args):
     (args.workdir / "ui_latency.json").write_text(json.dumps(result))
     print(markdown_table(result))
     return 1 if result["dropped"] else 0
+
+
+def run_import_page(args, port, proc, probe, game_id, saves, db_file, windows, memory, result, corpus):
+    """Start the import of the game like the import page does and follow it; appends to windows/memory."""
+    live = resolve_live_saves(args, corpus) if args.live_saves else []
+    expected_live = {}  # (db file, days) -> (game id, save name)
+    t_start = time.monotonic()
+    status, html = http_request(port, "POST", "/import/start", f"game_id={game_id}")
+    error = ERROR_RE.search(html)
+    if status >= 400 or error:
+        raise RuntimeError(f"/import/start refused: {status} {error.group(1) if error else html[:200]}")
+    print(f"import of {game_id} started ({len(saves)} saves)", flush=True)
+    changes = [(t_start, 0)]  # (time, saves done)
+    live_copied = None
+    last_progress = time.monotonic()
+    while True:
+        if proc.poll() is not None:
+            raise RuntimeError("the dashboard process exited; see dashboard.log")
+        finished, total, done, errors, _ = import_status(port)
+        now = time.monotonic()
+        if done != changes[-1][1]:
+            changes.append((now, done))
+            last_progress = now
+            print(f"  {done}/{total} saves", flush=True)
+        if live and live_copied is None and done >= args.live_after:
+            live_copied = now
+            for other_game, save in live:
+                folder = args.workdir / "saves" / other_game
+                folder.mkdir(parents=True, exist_ok=True)
+                copy_in(save, folder)
+                expected_live[(args.workdir / "output" / "db" / f"{other_game}.db", save_date_days(save))] = (other_game, save.name)
+                print(f"  copied live save {other_game}/{save.name}", flush=True)
+        if finished:
+            break
+        if now - last_progress > args.timeout:
+            raise RuntimeError(f"the import made no progress for {args.timeout:.0f} s")
+        time.sleep(0.25)
+    t_finished = time.monotonic()
+    result["import_page"] = dict(total=total, done=done, errors=errors, seconds=t_finished - t_start)
+    # one window per save: from the previous change of the progress to this one
+    for (t_a, _), (t_b, n) in zip(changes, changes[1:]):
+        windows.append((f"save {n}", t_a, t_b, t_b - t_a, []))
+        memory.append((None, {}))
+    windows.append(("whole import", t_start, t_finished, t_finished - t_start, []))
+    memory.append(process_memory(proc.pid))
+    if live:
+        visible = {}
+        pending = dict(expected_live)
+        deadline = time.monotonic() + args.timeout
+        while pending and time.monotonic() < deadline:
+            for key in list(pending):
+                if db_has_date(*key):
+                    visible[key] = time.monotonic()
+                    del pending[key]
+            time.sleep(0.1)
+        result["live_saves"] = [
+            dict(game=g, save=n, visible_after_copy=(visible[k] - live_copied) if k in visible else None,
+                 visible_after_job_finished=(visible[k] - t_finished) if k in visible else None)
+            for k, (g, n) in expected_live.items()
+        ]
+        for entry in result["live_saves"]:
+            print("live save:", entry, flush=True)
+    time.sleep(args.settle)
 
 
 def ms_or_dash(megabytes) -> str:
