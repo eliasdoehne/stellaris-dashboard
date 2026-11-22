@@ -10,7 +10,7 @@ from stellarisdashboard import config
 
 logger = logging.getLogger(__name__)
 
-# the default recursion limit was not high enough for pickling some parsed saves (pickle used by futures)
+# the default recursion limit is not high enough for pickling some parsed saves (tools/perf/bench.py --cache)
 if sys.getrecursionlimit() < 2000:
     sys.setrecursionlimit(2000)
 

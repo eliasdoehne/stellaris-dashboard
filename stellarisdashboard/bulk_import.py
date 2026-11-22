@@ -3,9 +3,9 @@ Import the existing save files of one game in the background, started from the i
 
 The import runs through the same code path as the `parse-saves` CLI command (cli.f_parse_saves),
 on the dashboard's import worker processes (import_worker.get_import_worker), which also import
-the saves of the save watcher. Only one import runs at a time. While it runs, the save watcher leaves new saves of the same game
-to the import, which picks them up after the saves it started with, so the game's saves are
-written to the database by one importer in order.
+the saves of the save watcher. Only one import runs at a time. While it runs, the save watcher
+leaves new saves of the same game to the import, which picks them up after the saves it started
+with, so the game's saves are written to the database by one importer in order.
 
 Reprocessing the kept copies of failed saves (save_copies) is a job of the same kind: it uses the
 same single job slot and import path, so it never runs alongside another import. A new save of a
