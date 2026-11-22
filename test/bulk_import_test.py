@@ -1,13 +1,16 @@
+import concurrent.futures
 import contextlib
 import json
 import logging
 import os
+import sys
 import threading
+import time
 import zipfile
 
 import pytest
 
-from stellarisdashboard import bulk_import, cli, config, datamodel
+from stellarisdashboard import bulk_import, cli, config, datamodel, import_worker
 from stellarisdashboard.dashboard_app import visualization_data
 from stellarisdashboard.parsing import save_copies, save_parser, timeline
 
@@ -213,9 +216,9 @@ def _fake_parse(monkeypatch, fail_name=None, on_first_save=None, gate=None, call
     def fake(
         save_path=None,
         save_files=None,
-        use_worker_processes=False,
         stop_event=None,
         on_save_processed=None,
+        log_tag=None,
         **kw,
     ):
         if calls is not None:
@@ -230,14 +233,18 @@ def _fake_parse(monkeypatch, fail_name=None, on_first_save=None, gate=None, call
             if on_first_save is not None and i == 0:
                 on_first_save()
             if f.name == fail_name:
-                try:
-                    raise ValueError("boom")
-                except ValueError:
-                    log.exception("Error while reading save")
-                on_save_processed(f.parent.stem, None)
+                # as forwarded from a worker process: the job's tag with the save, no exc_info
+                log.error(
+                    "Error while reading save file %s:",
+                    f,
+                    extra=dict(import_tag=f"{log_tag}:{f}", exc_type_name="ValueError", exc_message="boom"),
+                )
+                on_save_processed(import_worker.ImportResult(0, f.parent.stem, f))
             else:
                 info = bulk_import.read_save_info(f)
-                on_save_processed(f.parent.stem, {"date": info.date_str})
+                on_save_processed(
+                    import_worker.ImportResult(0, f.parent.stem, f, game_date=info.date_str, parsed=True, imported=True)
+                )
 
     monkeypatch.setattr(cli, "f_parse_saves", fake)
 
@@ -441,44 +448,6 @@ def test_batch_monitor_without_save_files_scans(tmp_path):
     assert monitor.get_new_savefiles() == [a]
 
 
-def test_batch_monitor_failed_save_yields_none(tmp_path, monkeypatch):
-    game = tmp_path / "gameA"
-    a = make_save(game, "a.sav", "2200.01.01")
-    b = make_save(game, "b.sav", "2200.02.01")
-    c = make_save(game, "c.sav", "2200.03.01")
-
-    def fake_parse(path):
-        if path == b:
-            raise ValueError("corrupt")
-        return {"date": path.stem}
-
-    monkeypatch.setattr(save_parser, "parse_save", fake_parse)
-    monitor = save_parser.BatchSavePathMonitor(
-        tmp_path, save_files=[a, b, c], use_worker_processes=False
-    )
-    results = list(monitor.get_gamestates_and_check_for_new_files())
-    assert results == [
-        ("gameA", {"date": "a"}, a),
-        ("gameA", None, b),
-        ("gameA", {"date": "c"}, c),
-    ]
-    assert (save_copies.failed_saves_path() / "gameA" / "b.sav").is_file()
-
-
-# --- cli.f_parse_saves ---
-
-
-class _FakeMonitor:
-    results = []
-    init_args = None
-
-    def __init__(self, save_path, game_name_prefix="", save_files=None, use_worker_processes=False):
-        _FakeMonitor.init_args = (save_path, game_name_prefix, save_files, use_worker_processes)
-
-    def get_gamestates_and_check_for_new_files(self):
-        yield from _FakeMonitor.results
-
-
 class _FakeExtractor:
     processed = []
 
@@ -491,54 +460,258 @@ class _FakeExtractor:
         self.number_of_parsed_saves += 1
 
 
+# --- cli.f_parse_saves ---
+
+
+class _ManualPool:
+    """Stands in for the import workers: records the submissions, the test resolves the futures."""
+
+    def __init__(self, *args):
+        self.jobs = []  # (save_file, game_id, replace_existing, log_tag, future)
+        self.lock = threading.Lock()
+        self.shut_down = False
+
+    def submit(self, save_file, game_id, replace_existing=False, log_tag="monitor"):
+        future = concurrent.futures.Future()
+        with self.lock:
+            self.jobs.append((save_file, game_id, replace_existing, log_tag, future))
+        return future
+
+    def shutdown(self, timeout=10.0):
+        self.shut_down = True
+
+    def names(self):
+        with self.lock:
+            return [j[0].name for j in self.jobs]
+
+    def complete(self, name, **result_fields):
+        for save_file, game_id, _, _, future in self.jobs:
+            if save_file.name == name:
+                future.set_result(import_worker.ImportResult(0, game_id, save_file, **result_fields))
+                return
+        raise AssertionError(f"{name} was not submitted")
+
+
+class _AutoPool(_ManualPool):
+    """Completes every job when it is submitted."""
+
+    def submit(self, save_file, game_id, **kwargs):
+        future = super().submit(save_file, game_id, **kwargs)
+        self.complete(save_file.name, game_date="2200.01.01")
+        return future
+
+
+def _wait_for(condition, timeout=10):
+    deadline = time.time() + timeout
+    while not condition():
+        assert time.time() < deadline, "timed out"
+        time.sleep(0.01)
+
+
 @pytest.fixture
-def fake_pipeline(monkeypatch):
-    _FakeExtractor.processed = []
-    _FakeMonitor.results = []
-    monkeypatch.setattr(save_parser, "BatchSavePathMonitor", _FakeMonitor)
-    monkeypatch.setattr(timeline, "TimelineExtractor", _FakeExtractor)
-    return _FakeMonitor
+def after_import_calls(monkeypatch):
+    calls = []
+    monkeypatch.setattr(import_worker, "after_import", lambda result: calls.append(result.save_file.name))
+    monkeypatch.setattr(cli, "POLLING_INTERVAL", 0.02)
+    return calls
 
 
-def test_f_parse_saves_passes_options_and_reports_unparseable(tmp_path, fake_pipeline):
-    files = [tmp_path / "a.sav", tmp_path / "b.sav", tmp_path / "c.sav"]
-    fake_pipeline.results = [
-        ("g", {"date": 1}, files[0]),
-        ("g", None, files[1]),
-        ("g", {"date": 3}, files[2]),
-    ]
+def _run_f_parse_saves(**kwargs):
+    thread = threading.Thread(target=cli.f_parse_saves, kwargs=kwargs)
+    thread.start()
+    return thread
+
+
+def test_f_parse_saves_submits_to_the_pool_and_reports_results(tmp_path, after_import_calls):
+    game = tmp_path / "gameA"
+    files = [make_save(game, f"s{i}.sav", f"2200.0{i}.01") for i in (1, 2, 3)]
+    pool = _ManualPool()
     reported = []
-    cli.f_parse_saves(
-        save_path=tmp_path,
-        save_files=files,
-        use_worker_processes=True,
-        on_save_processed=lambda g, d: reported.append((g, d)),
+    thread = _run_f_parse_saves(
+        save_path=tmp_path, save_files=files, replace_existing=True, worker=pool,
+        on_save_processed=reported.append, log_tag="mytag",
     )
-    assert fake_pipeline.init_args == (tmp_path, "", files, True)
-    assert reported == [("g", {"date": 1}), ("g", None), ("g", {"date": 3})]
-    assert _FakeExtractor.processed == [("g", {"date": 1}), ("g", {"date": 3})]
+    for name in ("s1.sav", "s2.sav", "s3.sav"):
+        _wait_for(lambda: name in pool.names())
+        pool.complete(name, game_date=f"date of {name}", imported=True)
+    thread.join(10)
+    assert not thread.is_alive()
+    assert [j[0] for j in pool.jobs] == files
+    assert {(j[1], j[2]) for j in pool.jobs} == {("gameA", True)}
+    assert [j[3] for j in pool.jobs] == [f"mytag:{f}" for f in files]
+    assert [r.save_file for r in reported] == files
+    assert [r.game_date for r in reported] == ["date of s1.sav", "date of s2.sav", "date of s3.sav"]
+    assert after_import_calls == ["s1.sav", "s2.sav", "s3.sav"]
+    assert not pool.shut_down  # a pool that was passed in belongs to the caller
 
 
-def test_f_parse_saves_stop_event(tmp_path, fake_pipeline):
-    fake_pipeline.results = [("g", {"date": d}, tmp_path / f"{d}.sav") for d in (1, 2, 3)]
+def test_f_parse_saves_keeps_at_most_two_jobs_per_game_in_flight(tmp_path, after_import_calls):
+    files = [make_save(tmp_path / "gameA", f"a{i}.sav", f"2200.0{i}.01") for i in range(1, 6)]
+    files += [make_save(tmp_path / "gameB", f"b{i}.sav", f"2200.0{i}.01") for i in range(1, 4)]
+    pool = _ManualPool()
+    reported = []
+    thread = _run_f_parse_saves(save_path=tmp_path, save_files=files, worker=pool, on_save_processed=reported.append)
+    _wait_for(lambda: len(pool.jobs) == 4)
+    time.sleep(0.1)
+    assert sorted(pool.names()) == ["a1.sav", "a2.sav", "b1.sav", "b2.sav"]
+    # a result frees a slot of its own game only, and only once the game's older saves are handled
+    pool.complete("a2.sav")
+    time.sleep(0.1)
+    assert len(pool.jobs) == 4 and reported == []
+    pool.complete("b1.sav")
+    _wait_for(lambda: "b3.sav" in pool.names())
+    assert len(pool.jobs) == 5
+    pool.complete("a1.sav")  # handles a1 and a2 in order
+    _wait_for(lambda: "a4.sav" in pool.names())
+    assert [r.save_file.name for r in reported if r.game_id == "gameA"] == ["a1.sav", "a2.sav"]
+    for name in ("a3.sav", "a4.sav", "a5.sav", "b2.sav", "b3.sav"):
+        _wait_for(lambda: name in pool.names())
+        pool.complete(name)
+    thread.join(10)
+    assert not thread.is_alive()
+    for game in ("gameA", "gameB"):
+        in_order = [r.save_file.name for r in reported if r.game_id == game]
+        assert in_order == sorted(in_order)
+    assert len(reported) == 8
+
+
+def test_f_parse_saves_stop_event_stops_submitting_and_waits_for_the_jobs_in_flight(tmp_path, after_import_calls):
+    files = [make_save(tmp_path / "gameA", f"s{i}.sav", f"2200.0{i}.01") for i in range(1, 6)]
+    pool = _ManualPool()
     stop = threading.Event()
     reported = []
+    thread = _run_f_parse_saves(
+        save_path=tmp_path, save_files=files, worker=pool, stop_event=stop, on_save_processed=reported.append
+    )
+    _wait_for(lambda: len(pool.jobs) == 2)
+    stop.set()
+    time.sleep(0.1)
+    assert thread.is_alive()  # waits for the two jobs
+    pool.complete("s1.sav")
+    pool.complete("s2.sav")
+    thread.join(10)
+    assert not thread.is_alive()
+    assert pool.names() == ["s1.sav", "s2.sav"]
+    assert [r.save_file.name for r in reported] == ["s1.sav", "s2.sav"]
 
-    def on_processed(game, gamestate):
-        reported.append(gamestate)
-        stop.set()
 
-    cli.f_parse_saves(save_path=tmp_path, stop_event=stop, on_save_processed=on_processed)
-    assert reported == [{"date": 1}]
-    assert _FakeExtractor.processed == [("g", {"date": 1})]
-
-
-def test_f_parse_saves_stop_event_already_set(tmp_path, fake_pipeline):
-    fake_pipeline.results = [("g", {"date": 1}, tmp_path / "a.sav")]
+def test_f_parse_saves_stop_event_already_set(tmp_path, after_import_calls):
+    files = [make_save(tmp_path / "gameA", "a.sav", "2200.01.01")]
+    pool = _ManualPool()
     stop = threading.Event()
     stop.set()
-    cli.f_parse_saves(save_path=tmp_path, stop_event=stop)
-    assert _FakeExtractor.processed == []
+    cli.f_parse_saves(save_path=tmp_path, save_files=files, worker=pool, stop_event=stop)
+    assert pool.jobs == []
+
+
+def test_f_parse_saves_without_saves_starts_no_pool(tmp_path, monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no pool needed")
+
+    monkeypatch.setattr(import_worker, "ImportWorkerPool", forbidden)
+    cli.f_parse_saves(save_path=tmp_path)
+
+
+def test_f_parse_saves_makes_and_stops_its_own_pool_of_threads_workers(tmp_path, monkeypatch, after_import_calls):
+    make_save(tmp_path / "gameA", "a.sav", "2200.01.01")
+    made = []
+
+    class Pool(_AutoPool):
+        def __init__(self, size):
+            super().__init__()
+            made.append(self)
+            self.size = size
+
+    monkeypatch.setattr(import_worker, "ImportWorkerPool", Pool)
+    reported = []
+    cli.f_parse_saves(threads=3, save_path=tmp_path, on_save_processed=reported.append)
+    assert config.CONFIG.threads == 3
+    (pool,) = made
+    assert pool.size == 3 and pool.shut_down
+    assert [r.save_file.name for r in reported] == ["a.sav"]
+
+
+def test_f_parse_saves_selects_saves_by_game_name_prefix(tmp_path, after_import_calls):
+    make_save(tmp_path / "gameA", "a.sav", "2200.01.01")
+    make_save(tmp_path / "gameB", "b.sav", "2200.01.01")
+    pool = _AutoPool()
+    cli.f_parse_saves(save_path=tmp_path, game_name_prefix="gameB", worker=pool)
+    assert pool.names() == ["b.sav"]
+
+
+# --- error collection ---
+
+
+def _error_record(message, **attributes):
+    record = logging.LogRecord("x", logging.ERROR, __file__, 1, message, None, None)
+    record.__dict__.update(attributes)
+    return record
+
+
+def _job_for_collector(tmp_path):
+    make_save(tmp_path / "gameA", "s1.sav", "2200.01.01")
+    plan = bulk_import.get_import_plan("gameA", tmp_path)
+    return bulk_import.ImportJob(plan, tmp_path)
+
+
+def test_error_collector_takes_records_of_the_job_by_tag(tmp_path):
+    job = _job_for_collector(tmp_path)
+    save = tmp_path / "gameA" / "s1.sav"
+    collector = bulk_import._ErrorCollector(job)
+    collector.handle(
+        _error_record(
+            f"Error while reading save file {save}:",
+            import_tag=f"{job.log_tag}:{save}",
+            exc_type_name="ValueError",
+            exc_message="bad zip",
+        )
+    )
+    collector.handle(_error_record("other job", import_tag="bulk-import-0:/x/y.sav", exc_type_name="E", exc_message="m"))
+    collector.handle(_error_record("monitor", import_tag="monitor"))
+    collector.handle(_error_record("no tag, other thread"))
+    assert job.errors == ["s1.sav: Error while reading save file s1.sav: ValueError: bad zip"]
+    assert job.num_errors == 1
+
+
+def test_error_collector_still_takes_records_of_the_job_thread(tmp_path):
+    job = _job_for_collector(tmp_path)
+    collector = bulk_import._ErrorCollector(job)
+
+    def log_from_job_thread():
+        try:
+            raise KeyError("k")
+        except KeyError:
+            collector.handle(_error_record("failed", exc_info=sys.exc_info()))
+
+    job._thread = threading.Thread(target=log_from_job_thread)
+    job._thread.start()
+    job._thread.join()
+    assert job.errors == ["s1.sav: failed KeyError: 'k'"]
+
+
+def test_errors_of_the_workers_reach_the_error_list_of_a_job(tmp_path, monkeypatch, dropped_caches):
+    _three_saves(tmp_path)
+    log = logging.getLogger("stellarisdashboard.parsing.timeline")
+
+    class Pool(_ManualPool):
+        def submit(self, save_file, game_id, replace_existing=False, log_tag="monitor"):
+            future = super().submit(save_file, game_id, replace_existing, log_tag)
+
+            def worker_side():  # like a record forwarded by the reader thread of a worker
+                if save_file.name == "s2.sav":
+                    log.error("Rolled back", extra=dict(import_tag=log_tag, exc_type_name="KeyError", exc_message="'x'"))
+                future.set_result(import_worker.ImportResult(0, game_id, save_file, game_date="2200.01.01"))
+
+            threading.Thread(target=worker_side).start()
+            return future
+
+    monkeypatch.setattr(import_worker, "get_import_worker", Pool)
+    monkeypatch.setattr(import_worker, "after_import", lambda result: None)
+    job = bulk_import.start_import("gameA")
+    job._thread.join(timeout=10)
+    assert job.status == bulk_import.ImportJob.FINISHED and job.done == 3
+    assert job.errors == ["s2.sav: Rolled back KeyError: 'x'"]
+    assert job.current_date == "2200.01.01"
 
 
 # --- reprocessing kept copies of failed saves ---
@@ -606,7 +779,7 @@ def test_reprocess_one_game_replaces_existing(monkeypatch, dropped_caches):
     def fake(save_files=None, on_save_processed=None, **kw):
         seen.update(kw, files=list(save_files))
         for f in save_files:
-            on_save_processed(f.parent.stem, {"date": "2200.01.01"})
+            on_save_processed(import_worker.ImportResult(0, f.parent.stem, f, game_date="2200.01.01"))
 
     monkeypatch.setattr(cli, "f_parse_saves", fake)
     job = bulk_import.start_reprocess("gameB")

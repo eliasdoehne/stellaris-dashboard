@@ -335,3 +335,160 @@ def test_opening_a_new_database_in_two_processes_at_once(tmp_path):
     for p in procs:
         _, err = p.communicate(timeout=120)
         assert p.returncode == 0, err[-3000:]
+
+
+# --- the pool ---
+
+
+class _FakeImportWorker:
+    """Stands in for an ImportWorker: the test resolves the futures."""
+
+    def __init__(self):
+        self.jobs = []  # (game_id, future)
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+    def submit(self, save_file, game_id, replace_existing=False, log_tag="monitor"):
+        future = concurrent.futures.Future()
+        self.jobs.append((game_id, future))
+        return future
+
+    def shutdown(self, timeout=10.0):
+        self.is_shut_down = True
+
+    def finish(self, index):
+        game_id, future = self.jobs[index]
+        future.set_result(import_worker.ImportResult(index, game_id, pathlib.Path("x.sav")))
+
+
+def _fake_pool(size):
+    made = []
+
+    def factory():
+        made.append(_FakeImportWorker())
+        return made[-1]
+
+    return import_worker.ImportWorkerPool(size, worker_factory=factory), made
+
+
+def _submit(pool, game_id):
+    return pool.submit(pathlib.Path(f"{game_id}.sav"), game_id)
+
+
+def test_pool_sends_the_jobs_of_a_game_to_the_same_worker_while_it_has_some():
+    pool, workers = _fake_pool(3)
+    _submit(pool, "a")
+    _submit(pool, "b")
+    _submit(pool, "a")
+    _submit(pool, "b")
+    _submit(pool, "a")
+    assert len(workers) == 2
+    assert [g for g, _ in workers[0].jobs] == ["a", "a", "a"]
+    assert [g for g, _ in workers[1].jobs] == ["b", "b"]
+    assert pool.num_waiting == 5
+
+
+def test_pool_spreads_games_over_workers_and_starts_at_most_size_of_them():
+    pool, workers = _fake_pool(2)
+    for game in "abcd":
+        _submit(pool, game)
+    assert len(workers) == 2 and pool.num_workers == 2
+    assert [g for g, _ in workers[0].jobs] == ["a", "c"]
+    assert [g for g, _ in workers[1].jobs] == ["b", "d"]
+
+
+def test_pool_picks_the_least_loaded_worker_for_a_new_game():
+    pool, workers = _fake_pool(2)
+    for _ in range(3):
+        _submit(pool, "a")  # worker 0: three jobs
+    _submit(pool, "b")  # worker 1
+    _submit(pool, "c")  # least loaded: worker 1
+    assert [g for g, _ in workers[0].jobs] == ["a", "a", "a"]
+    assert [g for g, _ in workers[1].jobs] == ["b", "c"]
+
+
+def test_pool_reuses_an_idle_worker_and_forgets_finished_games():
+    pool, workers = _fake_pool(2)
+    _submit(pool, "a")
+    _submit(pool, "b")
+    workers[1].finish(0)  # b is done: its worker is idle
+    _submit(pool, "c")
+    assert len(workers) == 2
+    assert [g for g, _ in workers[1].jobs] == ["b", "c"]
+    workers[0].finish(0)
+    workers[1].finish(1)
+    assert pool.num_waiting == 0
+    # nothing is pinned any more: a game goes to the first idle worker
+    _submit(pool, "c")
+    assert [g for g, _ in workers[0].jobs] == ["a", "c"]
+
+
+def test_pool_with_one_worker_is_a_single_worker():
+    pool, workers = _fake_pool(1)
+    for game in "abcab":
+        _submit(pool, game)
+    assert len(workers) == 1
+    assert [g for g, _ in workers[0].jobs] == list("abcab")
+
+
+def test_a_failing_submit_leaves_no_trace_in_the_pool():
+    pool, workers = _fake_pool(2)
+    _submit(pool, "a")
+
+    def broken(*args, **kwargs):
+        raise import_worker.ImportWorkerError("closed")
+
+    workers[0].submit = broken
+    with pytest.raises(import_worker.ImportWorkerError):
+        _submit(pool, "a")
+    assert pool.num_waiting == 1
+
+
+def test_pool_start_starts_the_first_worker_and_shutdown_all_of_them():
+    pool, workers = _fake_pool(2)
+    pool.start()
+    assert [w.started for w in workers] == [True]
+    _submit(pool, "a")
+    _submit(pool, "b")
+    pool.shutdown()
+    assert all(w.is_shut_down for w in workers)
+    with pytest.raises(import_worker.ImportWorkerError):
+        _submit(pool, "a")
+
+
+def test_get_import_worker_makes_a_pool_of_threads_workers(monkeypatch):
+    monkeypatch.setattr(import_worker, "_worker", None)
+    monkeypatch.setattr(config.CONFIG, "threads", 3)
+    pool = import_worker.get_import_worker()
+    assert isinstance(pool, import_worker.ImportWorkerPool) and pool.size == 3
+    assert import_worker.get_import_worker() is pool
+
+
+def test_a_pool_of_two_spawned_workers_imports_two_games_at_once(output, tmp_path):
+    pool = import_worker.ImportWorkerPool(2, "spawn")
+    try:
+        bad = []
+        for game in ("game1", "game2"):
+            for i in range(2):
+                path = tmp_path / "saves" / game / f"bad{i}.sav"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"not a save")
+                bad.append((game, path))
+        good = make_save(tmp_path / "saves", "tiny.sav", game_id="game2", date="2200.01.07")
+        futures = [(g, p, pool.submit(p, g)) for g, p in bad] + [("game2", good, pool.submit(good, "game2"))]
+        assert pool.num_workers == 2
+        for game, path, future in futures:
+            result = future.result(120)
+            assert result.save_file == path and result.game_id == game
+            if path is good:
+                assert result.imported and result.error is None
+            else:
+                assert not result.parsed and [f["stage"] for f in result.failures] == [save_copies.STAGE_PARSE]
+        # the games were handled by two different processes
+        workers = [w._worker.process.pid for w in pool._workers]
+        assert len(set(workers)) == 2
+    finally:
+        pool.shutdown(timeout=5)
+    assert pool.num_waiting == 0

@@ -429,7 +429,8 @@ class ImportWorker:
 
     def _fail(self, job: _Job, error: str, keep_copy: bool = False) -> None:
         request = job.request
-        logger.error(f"Not importing {request.save_file}: {error}")
+        # tagged like the records of the worker, so the client of the job sees it
+        logger.error(f"Not importing {request.save_file}: {error}", extra={"import_tag": request.log_tag})
         result = ImportResult(request.job_id, request.game_id, request.save_file, error=error)
         if keep_copy:
             result.failures.append(save_copies.failure(save_copies.STAGE_IMPORT, error))
@@ -514,21 +515,132 @@ class ImportWorker:
                 )
 
 
-_worker: Optional[ImportWorker] = None
+class ImportWorkerPool:
+    """
+    Up to `size` import worker processes (ImportWorker instances, started as needed) with the same
+    interface as one ImportWorker: ``submit``, ``start``, ``num_waiting``, ``shutdown``. Thread-safe.
+
+    Jobs of one game always go to the same worker while it has unfinished jobs of that game, so a
+    game's saves are imported in order by one process and two processes never write the same
+    game's database at the same time. A job of a game without unfinished jobs goes to an idle
+    worker, else to a new worker if fewer than `size` exist, else to the least loaded one. With
+    size 1 this is a single ImportWorker. Workers are not stopped while idle.
+    """
+
+    def __init__(self, size: int = 1, start_method: Optional[str] = None, worker_factory=None):
+        self._size = max(1, int(size))
+        self._factory = worker_factory or (lambda: ImportWorker(start_method))
+        self._lock = threading.RLock()
+        self._workers: List[ImportWorker] = []
+        self._load: List[int] = []  # unfinished jobs per worker
+        self._games: Dict[str, List[int]] = {}  # game id -> [worker index, unfinished jobs]
+        self._closed = False
+
+    @property
+    def size(self) -> int:
+        return self._size
+
+    @property
+    def num_workers(self) -> int:
+        """Workers created so far (their processes start with their first job)."""
+        with self._lock:
+            return len(self._workers)
+
+    @property
+    def num_waiting(self) -> int:
+        """Jobs that are queued or running."""
+        with self._lock:
+            return sum(self._load)
+
+    def _choose(self, game_id: str) -> int:
+        # called with the lock held
+        entry = self._games.get(game_id)
+        if entry is not None:
+            return entry[0]
+        for index, load in enumerate(self._load):
+            if load == 0:
+                return index
+        if len(self._workers) < self._size:
+            self._workers.append(self._factory())
+            self._load.append(0)
+            return len(self._workers) - 1
+        return min(range(len(self._load)), key=self._load.__getitem__)
+
+    def submit(
+        self,
+        save_file: pathlib.Path,
+        game_id: str,
+        replace_existing: bool = False,
+        log_tag: str = "monitor",
+    ) -> "concurrent.futures.Future[ImportResult]":
+        """As ImportWorker.submit, on the worker that has the game's unfinished jobs, or else the best one."""
+        with self._lock:
+            if self._closed:
+                raise ImportWorkerError("The import worker has been shut down")
+            index = self._choose(game_id)
+            entry = self._games.setdefault(game_id, [index, 0])
+            entry[1] += 1
+            self._load[index] += 1
+            worker = self._workers[index]
+        # Outside our lock: a worker resolves futures (and so calls _finished) while holding its own lock.
+        try:
+            future = worker.submit(save_file, game_id, replace_existing, log_tag)
+        except BaseException:
+            self._finished(game_id, index)
+            raise
+        future.add_done_callback(lambda _future: self._finished(game_id, index))
+        return future
+
+    def _finished(self, game_id: str, index: int) -> None:
+        with self._lock:
+            self._load[index] -= 1
+            entry = self._games.get(game_id)
+            if entry is not None:
+                entry[1] -= 1
+                if entry[1] <= 0:
+                    del self._games[game_id]
+
+    def start(self) -> None:
+        """Start the first worker now (it also loads the game text), instead of with the first job."""
+        with self._lock:
+            if self._closed:
+                return
+            if not self._workers:
+                self._workers.append(self._factory())
+                self._load.append(0)
+            worker = self._workers[0]
+        worker.start()
+
+    def shutdown(self, timeout: float = 10.0) -> None:
+        """Stop all workers at once, as ImportWorker.shutdown does for each. No more jobs are accepted."""
+        with self._lock:
+            self._closed = True
+            workers = list(self._workers)
+        threads = [threading.Thread(target=w.shutdown, args=(timeout,)) for w in workers]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+
+_worker: Optional[ImportWorkerPool] = None
 _worker_lock = threading.Lock()
 
 
-def get_import_worker() -> ImportWorker:
-    """The import worker of this process, created on first use."""
+def get_import_worker() -> ImportWorkerPool:
+    """
+    The import workers of this process, created on first use: a pool of `threads` workers
+    (the setting is read now), shared by the save monitor and the import page.
+    """
     global _worker
     with _worker_lock:
         if _worker is None:
-            _worker = ImportWorker()
+            _worker = ImportWorkerPool(config.CONFIG.threads)
         return _worker
 
 
 def shutdown_import_worker(timeout: float = 10.0) -> None:
-    """Stop the process's import worker, if there is one. The next get_import_worker() makes a new one."""
+    """Stop the process's import workers, if there are any. The next get_import_worker() makes new ones."""
     global _worker
     with _worker_lock:
         worker, _worker = _worker, None

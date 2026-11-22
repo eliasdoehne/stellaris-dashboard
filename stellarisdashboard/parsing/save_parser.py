@@ -1,23 +1,12 @@
-import concurrent.futures
-import itertools
 import logging
 import pathlib
 import sys
 import time
-from typing import (
-    Any,
-    Dict,
-    Set,
-    List,
-    Iterator,
-    Optional,
-    TypeVar,
-)
+from typing import Any, Dict, List, Optional, Set
 
 import rust_parser
 
 from stellarisdashboard import config
-from stellarisdashboard.parsing import save_copies
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +16,6 @@ if sys.getrecursionlimit() < 2000:
 
 class StellarisFileFormatError(Exception):
     pass
-
-
-T = TypeVar("T")
 
 
 class SavePathMonitor:
@@ -115,12 +101,11 @@ class ContinuousSavePathMonitor(SavePathMonitor):
 
 class BatchSavePathMonitor(SavePathMonitor):
     """
-    SavePathMonitor implementation for parsing large numbers of saves with
-    the CLI command `stellarisdashboardcli --parse-saves` or the import page.
+    SavePathMonitor implementation for importing large numbers of saves with the CLI command
+    `stellarisdashboardcli parse-saves` or the import page. It only selects the saves; the import
+    worker processes parse and import them (cli.f_parse_saves).
 
-    :param save_files: Parse exactly these files, in this order, instead of searching the save path.
-    :param use_worker_processes: Parse in worker processes even with a single thread; by default
-        this happens only if more than one thread is configured.
+    :param save_files: Report exactly these files, in this order, instead of searching the save path.
     """
 
     def __init__(
@@ -128,85 +113,14 @@ class BatchSavePathMonitor(SavePathMonitor):
         save_parent_dir,
         game_name_prefix: str = "",
         save_files: Optional[List[pathlib.Path]] = None,
-        use_worker_processes: bool = False,
     ):
         super().__init__(save_parent_dir, game_name_prefix)
         self._save_files = save_files
-        self._use_worker_processes = use_worker_processes
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
         if self._save_files is not None:
             return list(self._save_files)
         return super().get_new_savefiles()
-
-    def get_gamestates_and_check_for_new_files(self):
-        """
-        Check the save directory for new files. If any are found, parse them and
-        return the results as gamestate dictionaries as they come in. A save that
-        cannot be parsed is logged, kept as a failed save and yielded with a gamestate of None.
-
-        Files are processed in chunks to avoid holding too many gamestate dicts in
-        memory at a time.
-
-        :return:
-        """
-        new_files = self.get_new_savefiles()
-        if self._use_worker_processes or (config.CONFIG.threads > 1 and len(new_files) > 1):
-            all_game_ids = [f.parent.stem for f in new_files]
-            chunksize = min(16, int(2 * config.CONFIG.threads))
-            # one pool for the whole batch; submitting in chunks still bounds
-            # how many parsed gamestate dicts are held in memory at a time
-            executor = concurrent.futures.ProcessPoolExecutor(
-                max_workers=config.CONFIG.threads
-            )
-            try:
-                for chunk in BatchSavePathMonitor.split_into_chunks(
-                    zip(all_game_ids, new_files), chunksize
-                ):
-                    chunk_game_ids, chunk_files = zip(*chunk)
-                    futures = [
-                        executor.submit(parse_save, save_file)
-                        for save_file in chunk_files
-                    ]
-                    for i, (game_id, save_file) in enumerate(zip(chunk_game_ids, chunk_files)):
-                        result = _get_parse_result(save_file, futures[i].result)
-                        futures[i] = None
-                        yield game_id, result, save_file
-            finally:
-                # also runs when the caller stops early: drop the queued parses
-                executor.shutdown(wait=True, cancel_futures=True)
-        else:
-            for save_file in new_files:
-                yield save_file.parent.stem, _get_parse_result(
-                    save_file, lambda: parse_save(save_file)
-                ), save_file
-        self.processed_saves.update(f for f in new_files if f.stem != "ironman")
-
-    @staticmethod
-    def split_into_chunks(iterable: Iterator[T], chunksize: int) -> Iterator[List[T]]:
-        while iterable:
-            chunk = list(itertools.islice(iterable, chunksize))
-            if not chunk:
-                break
-            yield chunk
-
-
-def _get_parse_result(save_file: pathlib.Path, get_result) -> Optional[Dict[str, Any]]:
-    """Return the parsed gamestate, or None (after keeping a copy of the save) if parsing failed."""
-    try:
-        return get_result()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        logger.exception(f"Error while reading save file {save_file}:")
-        save_copies.keep_failed_save(
-            save_file,
-            save_file.parent.stem,
-            [save_copies.failure(save_copies.STAGE_PARSE, save_copies.format_exception(e))],
-        )
-        if config.CONFIG.debug_mode:
-            raise
-        return None
 
 
 def parse_save(filename) -> Dict[str, Any]:

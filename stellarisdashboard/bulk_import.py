@@ -1,16 +1,20 @@
 """
 Import the existing save files of one game in the background, started from the import page.
 
-The import runs through the same code path as the `parse-saves` CLI command (cli.f_parse_saves).
-Only one import runs at a time. While it runs, the save watcher leaves new saves of the same game
+The import runs through the same code path as the `parse-saves` CLI command (cli.f_parse_saves),
+on the dashboard's import worker processes (import_worker.get_import_worker), which also import
+the saves of the save watcher. Only one import runs at a time. While it runs, the save watcher leaves new saves of the same game
 to the import, which picks them up after the saves it started with, so the game's saves are
 written to the database by one importer in order.
 
 Reprocessing the kept copies of failed saves (save_copies) is a job of the same kind: it uses the
-same single job slot, import path and process-wide lock, so it never runs alongside another import.
+same single job slot and import path, so it never runs alongside another import. A new save of a
+reprocessed game goes to the same worker (the pool routes a game's saves to one worker), so it is
+imported between the reprocessed saves.
 """
 
 import dataclasses
+import itertools
 import logging
 import pathlib
 import re
@@ -19,7 +23,7 @@ import time
 import zipfile
 from typing import Dict, List, Optional, Set, Tuple
 
-from stellarisdashboard import config, datamodel
+from stellarisdashboard import config, datamodel, import_worker
 from stellarisdashboard.i18n import gettext as _
 from stellarisdashboard.parsing import save_copies, save_parser
 
@@ -33,6 +37,8 @@ _MAX_LISTED_ERRORS = 50
 
 # game_id of a job that reprocesses the kept copies of several games; shown as "all games"
 _ALL_GAMES_ID = "all games"
+
+_job_numbers = itertools.count(1)
 
 
 class ImportRefused(Exception):
@@ -234,11 +240,13 @@ class ImportJob:
         self.started = time.time()
         self.finished: Optional[float] = None
         self._stop_event = threading.Event()
+        # tags the log records of the worker processes for this job (see _ErrorCollector)
+        self.log_tag = f"bulk-import-{next(_job_numbers)}"
         self._batch: List[pathlib.Path] = [s.path for s in plan.to_import]
         self._batch_index = 0
         self._seen: Set[pathlib.Path] = {s.path for s in plan.saves}
         self._save_filter = save_parser.BatchSavePathMonitor(save_path)
-        # a reprocessing job runs alongside the watcher, which is serialized by the process-wide lock
+        # a reprocessing job runs alongside the watcher: the pool imports a game's saves in order
         self._accepts_deferred_saves = not self.is_reprocess  # guarded by _jobs_lock
         self._has_deferred_saves = False  # guarded by _jobs_lock
         self._thread = threading.Thread(
@@ -281,11 +289,10 @@ class ImportJob:
         if len(self.errors) < _MAX_LISTED_ERRORS:
             self.errors.append(message)
 
-    def _on_save_processed(self, game_name, gamestate_dict) -> None:
+    def _on_save_processed(self, result: import_worker.ImportResult) -> None:
         self._batch_index += 1
         self.done += 1
-        if gamestate_dict is not None:
-            self.current_date = gamestate_dict.get("date") or self.current_date
+        self.current_date = result.game_date or self.current_date
 
     def _next_batch(self) -> List[pathlib.Path]:
         """Saves of the game written since the import started; once there are none, stop accepting more."""
@@ -325,18 +332,20 @@ class ImportJob:
                     save_path=self.save_path,
                     save_files=self._batch,
                     replace_existing=True,
-                    use_worker_processes=True,
                     stop_event=self._stop_event,
                     on_save_processed=self._on_save_processed,
+                    worker=import_worker.get_import_worker(),
+                    log_tag=self.log_tag,
                 )
             else:
                 while self._batch:
                     cli.f_parse_saves(
                         save_path=self.save_path,
                         save_files=self._batch,
-                        use_worker_processes=True,
                         stop_event=self._stop_event,
                         on_save_processed=self._on_save_processed,
+                        worker=import_worker.get_import_worker(),
+                        log_tag=self.log_tag,
                     )
                     if self._stop_event.is_set():
                         break
@@ -362,20 +371,33 @@ class ImportJob:
 
 
 class _ErrorCollector(logging.Handler):
-    """Collects errors logged by the import thread, e.g. saves that failed to parse or were rolled back."""
+    """
+    Collects errors logged for the job: by the import worker processes (their records arrive with
+    the job's log tag, "<job tag>:<save file>") and by the job's thread, e.g. saves that failed
+    to parse or were rolled back.
+    """
 
     def __init__(self, job: ImportJob):
         super().__init__(level=logging.ERROR)
         self._job = job
 
     def emit(self, record: logging.LogRecord) -> None:
-        if record.thread != self._job._thread.ident:
+        tag = getattr(record, "import_tag", None)
+        if tag is not None:
+            prefix = self._job.log_tag + ":"
+            if not tag.startswith(prefix):
+                return
+            save = pathlib.Path(tag[len(prefix):])
+        elif record.thread == self._job._thread.ident:
+            save = self._job._current_save()
+        else:
             return
         message = " ".join(record.getMessage().split())
-        if record.exc_info and record.exc_info[1] is not None:
-            exc = record.exc_info[1]
-            message = f"{message} {type(exc).__name__}: {exc}"
-        save = self._job._current_save()
+        exc_type, exc_message = getattr(record, "exc_type_name", None), getattr(record, "exc_message", "")
+        if exc_type is None and record.exc_info and record.exc_info[1] is not None:
+            exc_type, exc_message = type(record.exc_info[1]).__name__, record.exc_info[1]
+        if exc_type is not None:
+            message = f"{message} {exc_type}: {exc_message}"
         if save is not None:
             message = f"{save.name}: {message.replace(str(save), save.name)}"
         self._job._record_error(message)
