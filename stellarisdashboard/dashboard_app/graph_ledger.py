@@ -282,42 +282,42 @@ def update_content(search, dash_plot_checklist, country_perspective):
             visualization_data.get_plot_specifications_for_tab_layout().get(tab_value)
             or []
         )
-    plot_data = visualization_data.get_current_execution_plot_data(
-        game_id, country_perspective
-    )
     player_label = _get_player_legend_label(game_id)
     # Each plot becomes a compact card in a responsive grid. The full-detail
     # figure is stashed in a Store and rendered in the modal on demand.
-    grid_children = []
-    full_figures = {}
-    for plot_spec in plots:
-        if not plot_spec:
-            continue  # just in case it's possible to sneak in an invalid ID
-        start = time.time()
-        figure_data = get_raw_plot_data_dicts(game_id, plot_data, plot_spec)
-        end = time.time()
-        logger.debug(
-            f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds."
-        )
-        if not figure_data:
-            continue
+    # Hold the plot data lock while its containers are read, so that other requests
+    # (or the monitor) can neither switch the perspective nor update them meanwhile.
+    with visualization_data.plot_data(game_id, country_perspective) as plot_data:
+        grid_children = []
+        full_figures = {}
+        for plot_spec in plots:
+            if not plot_spec:
+                continue  # just in case it's possible to sneak in an invalid ID
+            start = time.time()
+            figure_data = get_raw_plot_data_dicts(game_id, plot_data, plot_spec)
+            end = time.time()
+            logger.debug(
+                f"Prepared figure {plot_spec.title} in {end - start:5.3f} seconds."
+            )
+            if not figure_data:
+                continue
 
-        full_layout = get_figure_layout(plot_spec)
-        full_layout["title"] = dict(
-            text=plot_spec.display_title(),
-            font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
-            x=0.5,
-            xanchor="center",
-        )
-        full_figures[plot_spec.plot_id] = go.Figure(
-            data=figure_data, layout=full_layout
-        ).to_plotly_json()
+            full_layout = get_figure_layout(plot_spec)
+            full_layout["title"] = dict(
+                text=plot_spec.display_title(),
+                font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
+                x=0.5,
+                xanchor="center",
+            )
+            full_figures[plot_spec.plot_id] = go.Figure(
+                data=figure_data, layout=full_layout
+            ).to_plotly_json()
 
-        compact_data = _emphasize_player_in_compact_data(figure_data, player_label)
-        compact_figure = go.Figure(
-            data=compact_data, layout=get_compact_figure_layout(plot_spec)
-        )
-        grid_children.append(_plot_grid_card(plot_spec, compact_figure))
+            compact_data = _emphasize_player_in_compact_data(figure_data, player_label)
+            compact_figure = go.Figure(
+                data=compact_data, layout=get_compact_figure_layout(plot_spec)
+            )
+            grid_children.append(_plot_grid_card(plot_spec, compact_figure))
 
     children.append(html.Div(grid_children, className="tl-grid"))
     children.append(dcc.Store(id="full-figures-store", data=full_figures))

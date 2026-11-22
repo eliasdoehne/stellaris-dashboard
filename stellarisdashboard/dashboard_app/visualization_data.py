@@ -1,5 +1,6 @@
 import abc
 import colorsys
+import contextlib
 import dataclasses
 import enum
 import functools
@@ -8,9 +9,10 @@ import logging
 import pathlib
 import random
 import re
+import threading
 import time
 from collections import defaultdict
-from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
+from typing import List, Dict, Callable, Tuple, Iterable, Iterator, Union, Set, Optional, Any
 
 import networkx as nx
 import numpy as np
@@ -104,37 +106,120 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = LRUDict(
 )
 
 
+# Guards the registry above: lookups, insertion and removal. It is only held for
+# those dictionary operations, never while a game's data is being loaded.
+_REGISTRY_LOCK = threading.Lock()
+
+
+class _KeepPerspective(enum.Enum):
+    KEEP = enum.auto()
+
+
+# Default for callers that do not care about the perspective: leave the one chosen
+# by the user alone (an explicit None means the galaxy/observer view).
+KEEP_PERSPECTIVE = _KeepPerspective.KEEP
+
+
+def _create_manager(
+    game_name: str, country_perspective: Optional[int]
+) -> "PlotDataManager":
+    plot_specifications = [
+        ps
+        for pslist in get_plot_specifications_for_tab_layout().values()
+        for ps in pslist
+    ]
+    plot_specifications += get_market_graphs(config.CONFIG.market_resources)
+    return PlotDataManager(game_name, plot_specifications, country_perspective)
+
+
+@contextlib.contextmanager
+def plot_data(
+    game_name: str,
+    country_perspective: Union[Optional[int], _KeepPerspective] = KEEP_PERSPECTIVE,
+) -> Iterator["PlotDataManager"]:
+    """Yield the updated PlotDataManager of the game with its lock held.
+
+    The perspective is switched and new gamestates are loaded before the manager is
+    yielded; the lock stays held until the block ends, so other threads can neither
+    update the manager nor switch its perspective while the caller reads its data.
+
+    :param game_name: The exact name of a game for which a database is available
+    :param country_perspective: The country to show data for; None is the galaxy/observer
+        view, and the default keeps whatever perspective the manager currently has.
+    """
+    with _REGISTRY_LOCK:
+        manager = _CURRENT_EXECUTION_PLOT_DATA.get(game_name)
+        created = manager is None
+        if created:
+            manager = _create_manager(
+                game_name,
+                None
+                if country_perspective is KEEP_PERSPECTIVE
+                else country_perspective,
+            )
+            # Locked before it becomes visible, so concurrent callers for this game
+            # wait for the initial load below instead of building a second manager,
+            # while other games are not held up by the registry lock.
+            manager.lock.acquire()
+            _CURRENT_EXECUTION_PLOT_DATA[game_name] = manager
+        else:
+            # LRUDict.get does not refresh the recency order
+            _CURRENT_EXECUTION_PLOT_DATA[game_name] = manager
+    if not created:
+        manager.lock.acquire()
+    try:
+        if created:
+            try:
+                with datamodel.get_db_session(game_name) as session:
+                    game = (
+                        session.query(datamodel.Game)
+                        .filter_by(game_name=game_name)
+                        .first()
+                    )
+                if not game:
+                    logger.warning(
+                        f"Warning: Game {game_name} could not be found in database!"
+                    )
+                manager.initialize()
+            except BaseException:
+                drop_cached_plot_data(game_name, manager)
+                raise
+        elif country_perspective is not KEEP_PERSPECTIVE:
+            manager.country_perspective = country_perspective
+        manager.update_with_new_gamestate()
+        yield manager
+    finally:
+        manager.lock.release()
+
+
 def get_current_execution_plot_data(
-    game_name: str, country_perspective: Optional[int] = None
+    game_name: str,
+    country_perspective: Union[Optional[int], _KeepPerspective] = KEEP_PERSPECTIVE,
 ) -> "PlotDataManager":
     """Update and retrieve the PlotDataManager object stored for the requested game.
 
+    The manager's lock is released before returning, so reading its containers is only
+    safe when no other thread uses the game's plot data; use `plot_data` otherwise.
+
     :param game_name: The exact name of a game for which a database is available
+    :param country_perspective: See `plot_data`; by default the perspective is kept.
     :return:
     """
-    if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
-        with datamodel.get_db_session(game_name) as session:
-            game = session.query(datamodel.Game).filter_by(game_name=game_name).first()
-        if not game:
-            logger.warning(f"Warning: Game {game_name} could not be found in database!")
-        plot_specifications = [
-            ps
-            for pslist in get_plot_specifications_for_tab_layout().values()
-            for ps in pslist
-        ]
-        plot_specifications += get_market_graphs(config.CONFIG.market_resources)
-        new_manager = PlotDataManager(game_name, plot_specifications)
-        new_manager.initialize()
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = new_manager
-    manager = _CURRENT_EXECUTION_PLOT_DATA[game_name]
-    manager.country_perspective = country_perspective
-    manager.update_with_new_gamestate()
-    return manager
+    with plot_data(game_name, country_perspective) as manager:
+        return manager
 
 
-def drop_cached_plot_data(game_name: str) -> None:
-    """Forget the game's plot data, so it is reloaded with gamestates inserted before its last known date."""
-    _CURRENT_EXECUTION_PLOT_DATA.pop(game_name, None)
+def drop_cached_plot_data(
+    game_name: str, manager: Optional["PlotDataManager"] = None
+) -> None:
+    """Forget the game's plot data, so it is reloaded with gamestates inserted before its last known date.
+
+    A request that holds the manager keeps using its object. If `manager` is given,
+    only that very manager is dropped.
+    """
+    with _REGISTRY_LOCK:
+        if manager is None or _CURRENT_EXECUTION_PLOT_DATA.get(game_name) is manager:
+            _CURRENT_EXECUTION_PLOT_DATA.pop(game_name, None)
 
 
 def get_color_vals(
@@ -209,7 +294,9 @@ class PlotDataManager:
         self.show_all_country_types = None
         self.plot_time_resolution = None
 
-        self._country_perspective: int = country_perspective
+        self._country_perspective: Optional[int] = country_perspective
+        # Held while the data is updated and while callers read it (see plot_data).
+        self.lock = threading.RLock()
 
         self.data_containers_by_plot_id: Dict[str, AbstractPlotDataContainer] = None
 
