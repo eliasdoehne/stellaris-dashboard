@@ -336,3 +336,42 @@ def test_rows_of_the_same_text_are_matched_in_primary_key_order(extractor, monke
         (2, 1, "district_city", 0),
     ]
     assert rows["modifiers"] == [(1, 1, "m_a", 40)]
+
+
+def test_stored_hashes_are_the_digests_of_the_current_collections(
+    extractor, monkeypatch
+):
+    """Empty collections skip the digest computation but store the same value."""
+    monkeypatch.setattr(
+        extractor,
+        "_data_processors",
+        lambda: iter([_Systems(), timeline.PlanetProcessor()]),
+    )
+    for gamestate in SAVES:
+        extractor.process_gamestate("g", gamestate)
+        assert extractor.failures == []
+
+    digest = timeline._stable_digest
+    # (districts, buildings, deposits, modifiers) of the last save
+    expected = {
+        1: (
+            {"district_city": 3, "district_farming": 2},
+            {"building_capital": 1, "building_research_lab_1": 2},
+            {},
+            {"m_d": 10, "pm_x": None},
+        ),
+        2: ({"district_mining": 2}, {"building_foundry_1": 1}, {}, {"m_b": 20}),
+        3: ({"district_city": 1}, {}, {"d_minerals_2": 1}, {}),
+    }
+    with extractor.session_factory() as session:
+        planets = {p.planet_id_in_game: p for p in session.query(datamodel.Planet)}
+        assert set(planets) == set(expected)
+        for ingame_id, collections_ in expected.items():
+            planet = planets[ingame_id]
+            stored = (
+                planet.districts_hash,
+                planet.buildings_hash,
+                planet.deposits_hash,
+                planet.modifiers_hash,
+            )
+            assert stored == tuple(digest(c.items()) for c in collections_)

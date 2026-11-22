@@ -44,6 +44,10 @@ def _stable_digest(items: Iterable) -> int:
     return zlib.crc32(canonical.encode("utf-8"))
 
 
+# the digest of an empty collection: most planets have no districts, buildings or modifiers
+_EMPTY_DIGEST = _stable_digest(())
+
+
 def _extract_id(val, default: int = -1) -> int:
     """Normalize an in-game ID reference to an int.
 
@@ -1952,11 +1956,28 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
                     "deposits": self._get_deposits(planet_dict),
                 }
                 for attribute, entities in current_entities.items():
+                    if isinstance(entities, list) and not entities:
+                        # no Counter or digest needed for the empty collection
+                        if self._update_hash(
+                            planet_model, _EMPTY_DIGEST, f"{attribute}_hash"
+                        ):
+                            changes.append(
+                                (planet_model, attribute, collections.Counter())
+                            )
+                        continue
                     counter = self._count_entities(attribute, entities)
                     if counter is not None and self._check_and_update_hash(
                         planet_model, counter, f"{attribute}_hash"
                     ):
                         changes.append((planet_model, attribute, counter))
+                if all(
+                    planet_dict.get(key) in (None, [])
+                    for key in ("timed_modifier", "planet_modifier")
+                ):
+                    # the generator below would yield nothing
+                    if self._update_hash(planet_model, _EMPTY_DIGEST, "modifiers_hash"):
+                        changes.append((planet_model, "modifiers", {}))
+                    continue
                 modifiers = dict(_all_planetary_modifiers(planet_dict))
                 if self._check_and_update_hash(
                     planet_model, modifiers, "modifiers_hash"
@@ -2135,7 +2156,15 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
     def _check_and_update_hash(
         self, planet_model: datamodel.Planet, entity_dict, hash_attribute: str
     ) -> bool:
-        current_hash = _stable_digest(entity_dict.items())
+        current_hash = (
+            _stable_digest(entity_dict.items()) if entity_dict else _EMPTY_DIGEST
+        )
+        return self._update_hash(planet_model, current_hash, hash_attribute)
+
+    @staticmethod
+    def _update_hash(
+        planet_model: datamodel.Planet, current_hash: int, hash_attribute: str
+    ) -> bool:
         if current_hash == getattr(planet_model, hash_attribute):
             return False
 
