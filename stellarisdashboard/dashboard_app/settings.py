@@ -92,8 +92,8 @@ def setting_texts() -> Dict[str, Dict[str, str]]:
             description=_("Copy every save file the dashboard reads to the save_backups folder in the output folder, so the full history can be imported again later. WARNING: This folder has no size limit and grows by one save file per autosave."),
         ),
         "threads": dict(
-            label=_("Number of threads"),
-            description=_("Number of threads for reading save files."),
+            label=_("Number of import processes"),
+            description=_("Number of processes that import saves of different games at the same time. The saves of one game are always imported one after the other, so more than one only helps when saves of several games are imported at once. Each process needs extra memory."),
         ),
         "dashboard_language": dict(
             label=_("Dashboard language"),
