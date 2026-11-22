@@ -8,12 +8,17 @@ process), so the work happens in one long-lived worker process, `stellarisdashbo
 dashboard process                               worker process
   web server threads                              import_worker.worker_main
   save monitor (cli.f_monitor_saves)  --job-->      parse the save (Rust parser)
-  reader thread (blocks on the pipe)  <-result--    back up the save, import it into the database
-  logging (stdout, log.txt)           <--logs---    (log records)
+  import page (bulk_import)                         back up the save, import it into the database
+  reader thread (blocks on the pipe)  <-result--    (log records)
+  logging (stdout, log.txt)           <--logs---
 ```
 
+The live save monitor, the import page's bulk import and reprocessing, and the CLI batch commands
+(`parse-saves`, `reprocess-failed-saves`) all use these workers: they submit paths and get small
+results back. Nothing parses or imports in the process that submits.
+
 - `ImportWorker.submit(save_file, game_id, ...)` returns a `concurrent.futures.Future` for an
-  `ImportResult` (parsed, imported, failures, error, timings). Jobs run one at a time in the order
+  `ImportResult` (parsed, imported, failures, error, timings). A worker runs one job at a time, in the order
   they were submitted. Only a path and a few settings go to the worker; only the small result comes
   back. The parsed gamestate never leaves the worker, and is dropped before the next job.
 - The process starts with the first job (the save monitor starts it at startup, so the game's
@@ -24,15 +29,62 @@ dashboard process                               worker process
   fails with an error result and a kept copy of the save (`failed_saves`, stage `import`, "the
   import worker exited with code N"). The jobs queued behind it are not lost: the client sends
   only one job at a time, so it still has them, starts a new worker and sends them in order.
+- `ImportWorkerPool` (see below) is what the dashboard and the CLI use; one `ImportWorker` is one
+  process with its own job queue.
 - After each result the UI process calls `import_worker.after_import(result)`: it clears the
   country color cache and the available games cache. It does not update the plot data; the next
   request does that incrementally.
 
+## Several workers: the pool and the `threads` setting
+
+`ImportWorkerPool(size)` holds up to `size` `ImportWorker`s (each a process with its own queue,
+crash handling and log forwarding) and has the same `submit`/`start`/`shutdown` interface.
+`get_import_worker()` returns the dashboard's one shared pool, of `threads` workers (the setting
+is read when the pool is created and needs a restart). The save monitor and the import page both
+submit to it. With the default `threads: 1` that is one worker, so a bulk import and live saves
+take turns in one queue.
+
+**Routing with game affinity.** While a worker has unfinished jobs of a game, every new job of
+that game goes to the same worker. Otherwise the job goes to an idle worker, else to a new worker
+if fewer than `size` exist, else to the least loaded one. So the saves of one game are always
+imported in order by one process at a time, and two processes never write the same game's
+database at once. That is a correctness rule, not only tidiness: in WAL mode a transaction that
+has read and then tries to write fails at once with `SQLITE_BUSY` if another process committed
+in between; the busy timeout does not help there. Games without unfinished jobs are not pinned: the
+next job of the game may go to another worker. Idle workers are not stopped; they keep the
+memory of their last import until the dashboard ends.
+
+**Why `threads` means worker processes.** The setting used to be the number of processes that
+parsed saves in parallel. Parsing more saves of one game at once did not make an import faster:
+the database stage is serial and in order for a game, and the parsed gamestate (tens of
+megabytes) had to be pickled to the process that imported it, which cost more than it saved. In
+the worker the parse and the import of a save are one job, nothing is pickled, and what can run in
+parallel is the import of different games (separate database files). So `threads` is now the
+number of worker processes, and more than 1 only helps when saves of several games are imported
+at once (a batch of several games, or a bulk import next to a game that is being played). Each
+worker is a process of its own with the memory of an import.
+
+**Batches.** `cli.f_parse_saves` selects the saves (`BatchSavePathMonitor` finds them and applies
+`skip_saves`), submits them to a pool and calls `on_save_processed(result)` per save, in order per
+game. At most 2 jobs per game are with the workers at a time: the worker never idles between two
+saves of the batch, a cancel (`stop_event`: no more submissions, jobs in flight finish) takes
+effect within about two saves, and a long batch cannot fill the shared queue ahead of live saves of
+other games. The import page passes the shared pool; the CLI creates a pool of `--threads`
+workers and shuts it down at the end, so a batch of several games imports up to that many games in
+parallel. Reprocessing kept copies of failed saves works the same; a live save of a game being
+reprocessed goes to the same worker and is imported between the reprocessed saves.
+
+**The import page's error list.** Each request of a bulk job carries the log tag
+`<job tag>:<save file>`; the forwarded records of the worker carry it as `import_tag`, and
+`bulk_import._ErrorCollector` lists the error records whose tag starts with the job's tag (plus the
+records of the job's own thread). Records of the live monitor have the tag `monitor` and are not
+listed. If a worker dies during a job, the pool's error record carries the job's tag too.
+
 ## What does not cross the process boundary
 
 **Locks.** `datamodel._DB_LOCKS` (one write lock per game) and `timeline._process_gamestate_lock`
-are in-process locks. In the dashboard all writes happen in the worker, one job at a time, so
-they are never contended there. They still protect in-process callers: the CLI commands and the
+are in-process locks. In the dashboard all writes happen in the workers, one job at a time per worker and one worker per
+game at a time (see the pool), so they are never contended there. They still protect in-process callers: the CLI commands and the
 tests. Between processes SQLite's own locking applies. The databases use WAL, so the dashboard
 reads while the worker writes. A second writer of the same game, for example a CLI import started
 while the dashboard runs, waits for the write lock: every connection has a busy timeout of 30 s
@@ -50,7 +102,9 @@ lock and never waits for a running import. `Config.db_path` creates the `db` fol
 **The save monitor's coordination with the import page.** `bulk_import.defer_to_running_import`
 looks at the import job of the import page, which lives in the dashboard process, so the monitor
 keeps calling it there, before submitting a save. A save of a game with a running import is left to
-that import.
+that import, which imports it after its batch. (Even without that, the pool would send the save to
+the worker that has the game's jobs; the deferral keeps the import page's counts and its
+"imported after the others" note right.) A reprocessing job does not take deferred saves.
 
 **Settings.** `config.CONFIG` is per process. Each job carries a snapshot of every setting of
 `config.SETTINGS` plus `debug_mode`, taken when the job is submitted, and the worker applies it

@@ -603,6 +603,7 @@ def run_import_page(args, port, proc, probe, game_id, saves, db_file, windows, m
     """Start the import of the game like the import page does and follow it; appends to windows/memory."""
     live = resolve_live_saves(args, corpus) if args.live_saves else []
     expected_live = {}  # (db file, days) -> (game id, save name)
+    visible = {}  # the same keys -> time the gamestate was visible in the database
     t_start = time.monotonic()
     status, html = http_request(port, "POST", "/import/start", f"game_id={game_id}")
     error = ERROR_RE.search(html)
@@ -629,6 +630,9 @@ def run_import_page(args, port, proc, probe, game_id, saves, db_file, windows, m
                 copy_in(save, folder)
                 expected_live[(args.workdir / "output" / "db" / f"{other_game}.db", save_date_days(save))] = (other_game, save.name)
                 print(f"  copied live save {other_game}/{save.name}", flush=True)
+        for key in expected_live:
+            if key not in visible and db_has_date(*key):
+                visible[key] = time.monotonic()
         if finished:
             break
         if now - last_progress > args.timeout:
@@ -643,8 +647,7 @@ def run_import_page(args, port, proc, probe, game_id, saves, db_file, windows, m
     windows.append(("whole import", t_start, t_finished, t_finished - t_start, []))
     memory.append(process_memory(proc.pid))
     if live:
-        visible = {}
-        pending = dict(expected_live)
+        pending = {k: v for k, v in expected_live.items() if k not in visible}
         deadline = time.monotonic() + args.timeout
         while pending and time.monotonic() < deadline:
             for key in list(pending):
