@@ -4,8 +4,9 @@ Usage (from the repository root; select the source tree to measure with PYTHONPA
 checkout of another version):
 
     PYTHONHASHSEED=0 PYTHONPATH=$PWD python tools/perf/ui_latency.py <workdir> --corpus DIR
-        --game PREFIX --saves 37:40 [--seed-db FILE] [--one-at-a-time | --at-once K]
-        [--threads N] [--cpus 2,3] [--controller-cpu 2]
+        --game PREFIX --saves 37:40 [--seed-db FILE] [--one-at-a-time | --at-once K | --batches N,N,...]
+        [--threads N] [--cpus 2,3] [--controller-cpu 2] [--probe light|heavy]
+        [--start-method spawn|forkserver|fork] [--parse-cache DIR]
 
 The script starts the dashboard (the same thing ``python -m stellarisdashboard`` does: web server
 thread plus save monitor) as a separate process group from a generated configuration in
@@ -21,7 +22,13 @@ corpus (see docs/test-corpus.md) into the empty save folder and measures, per im
   process got to run, e.g. because another thread held the GIL;
 * the latency of a cheap Dash callback (POST /timeline/_dash-update-component, the tab title
   callback), sent every 50 ms from this controller process, i.e. what a browser would see.
-  Response status and content are checked; failures count as errors.
+  Response status and content are checked; failures count as errors. With ``--probe heavy`` it is
+  instead the callback that builds the figures of the graph tab (the first tab of the default
+  layout, no country perspective), sent 1 s after the previous response: it needs real CPU time,
+  so it also notices a process that is busy but hands over the GIL often. The tick gaps of a
+  heavy run include the probe's own work (building figures in the dashboard process);
+* the resident memory of the dashboard process and of its other processes (the import worker,
+  the forkserver) at the end of each window.
 
 Per window (and for an idle baseline before the first save) the report has: import latency, max
 tick gap, time lost to gaps (sum of gap - 10 ms over gaps > 20 ms), number of gaps > 100 ms,
@@ -33,10 +40,16 @@ Modes:
 * ``--one-at-a-time`` (default): copy each selected save, wait until it is imported, settle, next.
 * ``--at-once K``: copy the first K selected saves at once; wait until all are imported or for
   ``--timeout`` seconds without progress; saves that never show up are reported as dropped.
+* ``--batches 4,4,1,2``: copy the selected saves in consecutive batches of these sizes (which must
+  add up to the number of saves), each batch at once, waiting for it to be imported before the
+  next. Useful to import a whole game in an empty output folder.
 
 ``--saves A:B`` is a Python slice of the game's saves sorted by name (e.g. 37:40 for saves 38 to
 40); ``--seed-db FILE`` is copied to output/db/<game id>.db first, so that the selected saves are
 imported on top of a realistic database (build it with tools/perf/bench.py --max-saves N).
+
+``--start-method`` forces the multiprocessing start method in the dashboard process (by default the
+platform's, forkserver on Linux).
 
 The dashboard process and its children run on --cpus (taskset) and this process on
 --controller-cpu; pass an empty string to disable the pinning. The whole process group of the
@@ -94,15 +107,19 @@ if _cache:
         print(f"ui_latency: parse cache hook failed: {error!r}", file=sys.stderr, flush=True)
 """
 READY_MARKER = "Waiting for new saves"
+FIRST_TAB = "Budget"  # the first tab of the default tab layout
 
 
 # --------------------------------------------------------------------------- child process
 
 
-def child_main(workdir: pathlib.Path):
+def child_main(workdir: pathlib.Path, start_method: str = ""):
     """Run the dashboard like stellarisdashboard.__main__.main(), with a tick gap probe."""
     os.environ["STELLARIS_DASHBOARD_CONFIG"] = str(workdir / "config.yml")
     import multiprocessing as mp
+
+    if start_method:
+        mp.set_start_method(start_method)
 
     gap_file = open(workdir / "gaps.txt", "a", buffering=1)
 
@@ -161,18 +178,31 @@ def percentile(values, q):
 
 
 class DashProbe(threading.Thread):
-    """Sends a cheap Dash callback request every 50 ms and records (send time, latency, ok)."""
+    """
+    Sends a Dash callback request and records (send time, latency, ok): the cheap tab title
+    callback every 50 ms (``light``), or the callback that builds the graph tab every second,
+    1 s after the previous response (``heavy``).
+    """
 
-    def __init__(self, port: int):
+    def __init__(self, port: int, kind: str = "light", game_id: str = ""):
         super().__init__(name="dash-probe", daemon=True)
         self.port = port
+        self.kind = kind
+        if kind == "heavy":
+            self.body = heavy_body(game_id)
+            self.output = "tab-content"
+            self.interval = 1.0
+        else:
+            self.body = DASH_BODY
+            self.output = "graph-tab-title"
+            self.interval = 0.05
         self.samples = []  # (t_send, latency, ok)
         self.errors = []
         self.stop_event = threading.Event()
         self.first_ok = threading.Event()
 
     def request(self, conn):
-        conn.request("POST", DASH_PATH, DASH_BODY, {"Content-Type": "application/json"})
+        conn.request("POST", DASH_PATH, self.body, {"Content-Type": "application/json"})
         response = conn.getresponse()
         body = response.read()
         if response.status != 200:
@@ -181,8 +211,8 @@ class DashProbe(threading.Thread):
             data = json.loads(body)
         except ValueError:
             return "response is not JSON"
-        if "graph-tab-title" not in data.get("response", {}):
-            return "response lacks graph-tab-title"
+        if self.output not in data.get("response", {}):
+            return f"response lacks {self.output}"
         return None
 
     def run(self):
@@ -193,7 +223,6 @@ class DashProbe(threading.Thread):
             if delay > 0:
                 self.stop_event.wait(delay)
             t0 = time.monotonic()
-            next_send = max(next_send + 0.05, t0)
             try:
                 if conn is None:
                     conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
@@ -205,6 +234,10 @@ class DashProbe(threading.Thread):
                 conn = None
                 self.stop_event.wait(0.2)
             latency = time.monotonic() - t0
+            if self.kind == "heavy":
+                next_send = time.monotonic() + self.interval
+            else:
+                next_send = max(next_send + self.interval, t0)
             if problem is None:
                 self.first_ok.set()
                 self.samples.append((t0, latency, True))
@@ -213,6 +246,50 @@ class DashProbe(threading.Thread):
                 self.errors.append((t0, problem))
         if conn is not None:
             conn.close()
+
+
+def heavy_body(game_id: str) -> str:
+    """The request the browser sends for the first tab of the graph page of a game."""
+    return json.dumps(
+        {
+            "output": "tab-content.children",
+            "outputs": {"id": "tab-content", "property": "children"},
+            "inputs": [
+                {"id": "url", "property": "search", "value": f"?game_name={game_id}&tab={FIRST_TAB}"},
+                {"id": "dash-plot-checklist", "property": "value", "value": []},
+                {"id": "country-perspective-dropdown", "property": "value", "value": None},
+            ],
+            "changedPropIds": ["url.search"],
+        }
+    )
+
+
+def process_memory(group_leader: int):
+    """(rss of the leader, {pid: (command, rss)} of the other processes of its group) in MB; Linux only."""
+    leader, others = None, {}
+    try:
+        page_mb = os.sysconf("SC_PAGE_SIZE") / 2**20
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/stat") as f:
+                    stat = f.read()
+                fields = stat[stat.rindex(")") + 2 :].split()
+                if int(fields[2]) != group_leader:  # process group
+                    continue
+                rss = int(fields[21]) * page_mb
+                if int(entry) == group_leader:
+                    leader = rss
+                else:
+                    with open(f"/proc/{entry}/cmdline", "rb") as f:
+                        command = f.read().replace(b"\0", b" ").decode(errors="replace")
+                    others[int(entry)] = (command[-60:], rss)
+            except (OSError, ValueError, IndexError):
+                continue
+    except OSError:
+        pass
+    return leader, others
 
 
 def read_gaps(workdir: pathlib.Path):
@@ -273,11 +350,17 @@ def parse_args():
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--one-at-a-time", action="store_true", help="the default")
     mode.add_argument("--at-once", type=int, metavar="K", help="copy K saves at once")
+    mode.add_argument("--batches", metavar="N,N,...", help="consecutive batch sizes, each copied at once")
     p.add_argument(
         "--parse-cache", type=pathlib.Path, default=None, metavar="DIR",
         help="use parsed saves from DIR/<game id>/<save name>.pickle (as written by bench.py --cache) "
         "instead of parsing, in the dashboard and its workers; for database identity checks only, "
         "as unpickling costs time of its own",
+    )
+    p.add_argument("--probe", choices=["light", "heavy"], default="light", help="see the module docstring")
+    p.add_argument(
+        "--start-method", default="", choices=["", "spawn", "forkserver", "fork"],
+        help="multiprocessing start method of the dashboard process (default: the platform's)",
     )
     p.add_argument("--threads", type=int, default=1, help="`threads` setting of the dashboard")
     p.add_argument("--cpus", default="2,3", help="taskset cpu list for the dashboard ('' = unpinned)")
@@ -327,6 +410,8 @@ def prepare_workdir(args, game_id: str):
 
 def start_dashboard(args, port):
     cmd = [sys.executable, str(pathlib.Path(__file__).resolve()), str(args.workdir), "--child"]
+    if args.start_method:
+        cmd += ["--start-method", args.start_method]
     if args.cpus:
         cmd = ["taskset", "-c", args.cpus] + cmd
     log = open(args.workdir / "dashboard.log", "wb")
@@ -399,7 +484,13 @@ def main_controller(args):
     saves = sorted(game_dir.glob("*.sav"))[slice(int(lo) if lo else None, int(hi) if hi else None)]
     if not saves:
         sys.exit("no saves selected")
-    if args.at_once:
+    if args.batches:
+        sizes = [int(n) for n in args.batches.split(",")]
+        if sum(sizes) != len(saves):
+            sys.exit(f"--batches adds up to {sum(sizes)}, but {len(saves)} saves are selected")
+        starts = [sum(sizes[:i]) for i in range(len(sizes))]
+        batches = [saves[a : a + n] for a, n in zip(starts, sizes)]
+    elif args.at_once:
         batches = [saves[: args.at_once]]
     else:
         batches = [[s] for s in saves]
@@ -412,7 +503,7 @@ def main_controller(args):
     result = {"game": game_id, "args": {k: str(v) for k, v in vars(args).items()}, "windows": []}
     try:
         proc = start_dashboard(args, port)
-        probe = DashProbe(port)
+        probe = DashProbe(port, args.probe, game_id)
         probe.start()
         deadline = time.monotonic() + 180
         log_file = args.workdir / "dashboard.log"
@@ -431,6 +522,7 @@ def main_controller(args):
         t0 = time.monotonic()
         time.sleep(args.idle)
         windows = [("idle", t0, time.monotonic(), None, [])]
+        memory = [process_memory(proc.pid)]
 
         for batch in batches:
             expected = {save_date_days(s): s.name for s in batch}
@@ -443,6 +535,7 @@ def main_controller(args):
             time.sleep(args.settle)
             label = batch[0].stem if len(batch) == 1 else f"{len(batch)} saves at once"
             windows.append((label, t_copy, time.monotonic(), (t_visible - t_copy) if seen else None, sorted(missing.values())))
+            memory.append(process_memory(proc.pid))
             if missing:
                 print(f"NOT IMPORTED: {sorted(missing.values())}", flush=True)
             result.setdefault("imported", {}).update({expected[d]: t - t_copy for d, t in seen.items()})
@@ -451,9 +544,11 @@ def main_controller(args):
         probe.join()
         time.sleep(0.3)
         gaps = read_gaps(args.workdir)
-        for label, a, b, latency, missing in windows:
+        for (label, a, b, latency, missing), (rss, others) in zip(windows, memory):
             row = window_stats(a, b, gaps, probe.samples)
             row.update({"label": label, "import_latency": latency, "dropped": missing})
+            row["rss_mb"] = rss
+            row["other_processes_rss_mb"] = {f"{pid} {cmd}": mb for pid, (cmd, mb) in others.items()}
             result["windows"].append(row)
         result["gaps"] = gaps
         result["probe_samples"] = probe.samples
@@ -468,13 +563,17 @@ def main_controller(args):
     return 1 if result["dropped"] else 0
 
 
+def ms_or_dash(megabytes) -> str:
+    return "-" if megabytes is None else f"{megabytes:.0f}"
+
+
 def markdown_table(result) -> str:
     def ms(x):
         return "-" if x is None else f"{x * 1000:.0f}"
 
     head = (
         "| window | import s | max gap ms | lost s | gaps >100ms | probe p50 ms | p95 ms | max ms "
-        "| probes >100ms | probe errors |\n|---|---|---|---|---|---|---|---|---|---|"
+        "| probes >100ms | probe errors | UI process MB | other processes MB |\n|---|---|---|---|---|---|---|---|---|---|---|---|"
     )
     rows = [head]
     for w in result["windows"]:
@@ -484,7 +583,8 @@ def markdown_table(result) -> str:
         rows.append(
             f"| {w['label']} | {latency} | {ms(w['max_gap'])} | {w['gap_time_lost']:.2f} | {w['gaps_over_100ms']} "
             f"| {ms(w['probe_p50'])} | {ms(w['probe_p95'])} | {ms(w['probe_max'])} | {w['probes_over_100ms']} "
-            f"| {w['probe_errors']} |"
+            f"| {w['probe_errors']} | {ms_or_dash(w['rss_mb'])} "
+            f"| {sum(w['other_processes_rss_mb'].values()):.0f} |"
         )
     return "\n".join(rows)
 
@@ -492,7 +592,7 @@ def markdown_table(result) -> str:
 if __name__ == "__main__":
     arguments = parse_args()
     if arguments.child:
-        child_main(arguments.workdir)
+        child_main(arguments.workdir, arguments.start_method)
     else:
         arguments.workdir = arguments.workdir.absolute()
         if arguments.seed_db is not None:
