@@ -1,13 +1,12 @@
-import json
+import functools
 import logging
 import time
 from typing import Dict, Any, List, Optional, Union
 from urllib import parse
 
-import dash.exceptions
 import flask
 import plotly.graph_objs as go
-from dash import Dash, callback_context, dcc, html, Input, Output, State, ALL
+from dash import Dash, dcc, html, Input, Output, State, ALL
 
 from stellarisdashboard import config, datamodel
 from stellarisdashboard.i18n import gettext as _, pgettext
@@ -34,9 +33,29 @@ FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"  # --fo
 # Stellaris games start on 2200.01.01; plot x-values count years from there.
 GAME_START_YEAR = 2200
 
+# A go.Figure carries plotly's default template, 7 KB of JSON per figure. Only a few of its settings
+# affect these figures, so they are repeated here (hoverlabel, ticks, automargin, number handling)
+# instead; the others are overridden below or are for chart types that aren't used.
 DEFAULT_PLOT_LAYOUT = dict(
-    xaxis=dict(showgrid=False, zeroline=False, linecolor=GRID_COLOR, tickformat="d"),
-    yaxis=dict(showgrid=True, gridcolor=GRID_COLOR, zeroline=False, type="linear"),
+    template=dict(),
+    autotypenumbers="strict",
+    hoverlabel=dict(align="left"),
+    xaxis=dict(
+        showgrid=False,
+        zeroline=False,
+        linecolor=GRID_COLOR,
+        tickformat="d",
+        ticks="",
+        automargin=True,
+    ),
+    yaxis=dict(
+        showgrid=True,
+        gridcolor=GRID_COLOR,
+        zeroline=False,
+        type="linear",
+        ticks="",
+        automargin=True,
+    ),
     plot_bgcolor=PLOT_BG,
     paper_bgcolor=PLOT_PAPER,
     font={"color": TEXT_COLOR, "family": FONT_FAMILY, "size": 13},
@@ -87,6 +106,11 @@ timeline_app = ShellDash(
     __name__,
     title="Stellaris Dashboard",
     server=flask_app,
+    # Off on purpose. Compressing (Flask-Compress, brotli) shrinks the responses of all tabs of a
+    # 40 save game from 547 KB to 47 KB, but on localhost this changes nothing measurable (all nine
+    # tabs, median of 15 requests each: 429 ms without, 432 ms with, tools/perf/graph_payload.py)
+    # and costs about 2 ms of server CPU per request, which the UI's process pays with the GIL.
+    # Worth turning on if the dashboard is used through a slow network.
     compress=False,
     url_base_pathname="/timeline/",
     update_title=None,
@@ -98,8 +122,12 @@ timeline_app = ShellDash(
 def get_figure_layout(plot_spec: visualization_data.PlotSpecification):
     layout = dict(DEFAULT_PLOT_LAYOUT)
     # Fresh axis dicts so we don't mutate the shared DEFAULT_PLOT_LAYOUT.
-    layout["xaxis"] = dict(layout["xaxis"], title=plot_spec.display_x_axis_label())
-    layout["yaxis"] = dict(layout["yaxis"], title=plot_spec.display_y_axis_label())
+    layout["xaxis"] = dict(
+        layout["xaxis"], title=dict(text=plot_spec.display_x_axis_label(), standoff=15)
+    )
+    layout["yaxis"] = dict(
+        layout["yaxis"], title=dict(text=plot_spec.display_y_axis_label(), standoff=15)
+    )
     if plot_spec.y_axis_reversed:
         layout["yaxis"]["autorange"] = "reversed"
     # Width is fluid (autosize); the card/container controls it. Height stays configurable.
@@ -127,6 +155,36 @@ def get_compact_figure_layout(plot_spec: visualization_data.PlotSpecification):
     else:
         layout["hovermode"] = "x"
     return go.Layout(**layout)
+
+
+def get_enlarged_layout_changes(plot_spec: visualization_data.PlotSpecification) -> Dict[str, Any]:
+    """What the enlarged figure's layout has that the grid figure's layout hasn't (title, axis
+    titles, legend, height, margins), as nested dicts. The browser builds the enlarged figure from
+    the grid figure of the clicked card and these changes instead of receiving it a second time."""
+    full = get_figure_layout(plot_spec).to_plotly_json()
+    full["title"] = dict(
+        text=plot_spec.display_title(),
+        font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
+        x=0.5,
+        xanchor="center",
+    )
+    compact = get_compact_figure_layout(plot_spec).to_plotly_json()
+    return _dict_changes(compact, full)
+
+
+def _dict_changes(base: Dict[str, Any], changed: Dict[str, Any]) -> Dict[str, Any]:
+    """The entries of changed that differ from base, nested dicts compared recursively."""
+    changes = {}
+    for key, value in changed.items():
+        if key not in base:
+            changes[key] = value
+        elif isinstance(value, dict) and isinstance(base[key], dict):
+            nested = _dict_changes(base[key], value)
+            if nested:
+                changes[key] = nested
+        elif value != base[key]:
+            changes[key] = value
+    return changes
 
 
 COMPACT_SUBDUED_ALPHA = 0.28
@@ -161,8 +219,14 @@ def _emphasize_player_in_compact_data(figure_data, player_label):
         return figure_data
 
     emphasized = []
-    for trace in figure_data:
-        trace = dict(trace)
+    for index, trace in enumerate(figure_data):
+        # What the enlarged view restores (see MODAL_FIGURE_JS): the position of the trace and
+        # the properties changed below, as they were.
+        original = {"line": trace.get("line") or {}}
+        for key in ("showlegend", "fillcolor"):
+            if key in trace:
+                original[key] = trace[key]
+        trace = dict(trace, meta={"index": index, "original": original})
         line = dict(trace.get("line") or {})
         if trace.get("name") == player_label:
             line["color"] = _with_color_alpha(line.get("color"), 1.0)
@@ -197,7 +261,7 @@ def _plot_grid_card(plot_spec, compact_figure):
                 ],
             ),
             dcc.Graph(
-                id=plot_spec.plot_id,
+                id={"type": "grid-graph", "index": plot_spec.plot_id},
                 figure=compact_figure,
                 className="tl-graph tl-graph--compact",
                 responsive=True,
@@ -283,13 +347,13 @@ def update_content(search, dash_plot_checklist, country_perspective):
             or []
         )
     player_label = _get_player_legend_label(game_id)
-    # Each plot becomes a compact card in a responsive grid. The full-detail
-    # figure is stashed in a Store and rendered in the modal on demand.
-    # Hold the plot data lock while its containers are read, so that other requests
-    # (or the monitor) can neither switch the perspective nor update them meanwhile.
+    # Each plot becomes a compact card in a responsive grid. Clicking its header shows the
+    # figure enlarged, which the browser builds from the card's figure.
+    # Hold the plot data lock until the figures are built: the traces' y values are the
+    # containers' own lists, so other requests must neither update them nor switch the
+    # perspective meanwhile.
+    grid_children = []
     with visualization_data.plot_data(game_id, country_perspective) as plot_data:
-        grid_children = []
-        full_figures = {}
         for plot_spec in plots:
             if not plot_spec:
                 continue  # just in case it's possible to sneak in an invalid ID
@@ -302,72 +366,103 @@ def update_content(search, dash_plot_checklist, country_perspective):
             if not figure_data:
                 continue
 
-            full_layout = get_figure_layout(plot_spec)
-            full_layout["title"] = dict(
-                text=plot_spec.display_title(),
-                font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
-                x=0.5,
-                xanchor="center",
-            )
-            full_figures[plot_spec.plot_id] = go.Figure(
-                data=figure_data, layout=full_layout
-            ).to_plotly_json()
-
             compact_data = _emphasize_player_in_compact_data(figure_data, player_label)
-            compact_figure = go.Figure(
-                data=compact_data, layout=get_compact_figure_layout(plot_spec)
-            )
+            compact_layout = get_compact_figure_layout(plot_spec)
+            compact_layout["meta"] = {"enlarged": get_enlarged_layout_changes(plot_spec)}
+            compact_figure = go.Figure(data=compact_data, layout=compact_layout)
             grid_children.append(_plot_grid_card(plot_spec, compact_figure))
 
     children.append(html.Div(grid_children, className="tl-grid"))
-    children.append(dcc.Store(id="full-figures-store", data=full_figures))
     return children
 
 
-@timeline_app.callback(
-    [
-        Output("plot-modal", "className"),
-        Output("modal-graph", "figure"),
-        Output("modal-title", "children"),
-    ],
-    [
-        Input({"type": "expand-plot", "index": ALL}, "n_clicks"),
-        Input("modal-close", "n_clicks"),
-        Input("modal-backdrop", "n_clicks"),
-    ],
-    [State("full-figures-store", "data")],
+# Opens the modal with the enlarged figure of the clicked card, or closes it. It runs in the
+# browser and builds the figure from the card's figure, so nothing has to be sent to the server
+# or back. The card's figure is the compact one: this restores what get_compact_figure_layout
+# (layout changes in layout.meta.enlarged) and _emphasize_player_in_compact_data (traces' meta)
+# changed, and drops what zooming the card may have added to its layout.
+MODAL_FIGURE_JS = """
+function(expandClicks, closeClicks, backdropClicks, cardFigures) {
+    var dc = window.dash_clientside;
+    var noUpdate = dc.no_update;
+    var context = dc.callback_context;
+    var triggered = context.triggered_id;
+    if (triggered === 'modal-close' || triggered === 'modal-backdrop') {
+        return ['tl-modal tl-modal--hidden', noUpdate, noUpdate];
+    }
+    // the buttons fire once when the grid is created, without a click
+    var clicks = context.triggered[0] && context.triggered[0].value;
+    if (!triggered || typeof triggered !== 'object' || !clicks) {
+        return [noUpdate, noUpdate, noUpdate];
+    }
+    var card = context.states_list[0].find(function (state) {
+        return state.id.index === triggered.index;
+    });
+    var source = card && card.value;
+    if (!source || !source.data) {
+        return [noUpdate, noUpdate, noUpdate];
+    }
+    var isObject = function (value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    };
+    var merge = function (target, changes) {
+        Object.keys(changes).forEach(function (key) {
+            if (isObject(changes[key]) && isObject(target[key])) {
+                merge(target[key], changes[key]);
+            } else {
+                target[key] = changes[key];
+            }
+        });
+        return target;
+    };
+    var layout = JSON.parse(JSON.stringify(source.layout || {}));
+    var changes = (layout.meta && layout.meta.enlarged) || {};
+    delete layout.meta;
+    ['xaxis', 'yaxis'].forEach(function (axis) {
+        if (layout[axis]) {
+            delete layout[axis].range;
+            if (layout[axis].autorange !== 'reversed') {
+                delete layout[axis].autorange;
+            }
+        }
+    });
+    merge(layout, changes);
+    var traces = JSON.parse(JSON.stringify(source.data)).map(function (trace, position) {
+        var meta = trace.meta;
+        delete trace.meta;
+        if (meta && meta.original) {
+            trace.line = meta.original.line;
+            ['showlegend', 'fillcolor'].forEach(function (key) {
+                if (key in meta.original) {
+                    trace[key] = meta.original[key];
+                } else {
+                    delete trace[key];
+                }
+            });
+        }
+        return {index: meta ? meta.index : position, trace: trace};
+    });
+    traces.sort(function (a, b) { return a.index - b.index; });
+    var title = (layout.title && layout.title.text) || '';
+    return [
+        'tl-modal',
+        {data: traces.map(function (entry) { return entry.trace; }), layout: layout},
+        title,
+    ];
+}
+"""
+
+timeline_app.clientside_callback(
+    MODAL_FIGURE_JS,
+    Output("plot-modal", "className"),
+    Output("modal-graph", "figure"),
+    Output("modal-title", "children"),
+    Input({"type": "expand-plot", "index": ALL}, "n_clicks"),
+    Input("modal-close", "n_clicks"),
+    Input("modal-backdrop", "n_clicks"),
+    State({"type": "grid-graph", "index": ALL}, "figure"),
     prevent_initial_call=True,
 )
-def toggle_plot_modal(expand_clicks, close_clicks, backdrop_clicks, store):
-    """Open the modal with a plot's full-detail figure, or close it."""
-    triggered = callback_context.triggered
-    if not triggered:
-        raise dash.exceptions.PreventUpdate
-    prop_id = triggered[0]["prop_id"]
-
-    # Close button / backdrop click -> hide.
-    if prop_id.startswith("modal-close") or prop_id.startswith("modal-backdrop"):
-        return "tl-modal tl-modal--hidden", dash.no_update, dash.no_update
-
-    # Ignore the spurious fire when the grid (and its buttons) is first created.
-    if not any(expand_clicks or []):
-        raise dash.exceptions.PreventUpdate
-
-    try:
-        plot_id = json.loads(prop_id.rsplit(".", 1)[0])["index"]
-    except (ValueError, KeyError):
-        raise dash.exceptions.PreventUpdate
-
-    figure = (store or {}).get(plot_id)
-    if figure is None:
-        raise dash.exceptions.PreventUpdate
-
-    title = (
-        figure.get("layout", {}).get("title", {}).get("text", "")
-        if isinstance(figure, dict)
-        else ""
-    )
-    return "tl-modal", figure, title
 
 
 def _get_url_params(url: str) -> Dict[str, List[str]]:
@@ -413,8 +508,9 @@ def get_raw_plot_data_dicts(
         logger.warning(f"Unknown Plot type {plot_spec}")
         return []
     # The data x-values count years since game start; shift them to the in-game
-    # year for display. Hover labels are already-formatted strings, so this only
-    # affects the axis. (Done here so every plot style is covered in one place.)
+    # year for display. The dates of the hover labels are computed from the
+    # unshifted values, so this only affects the axis. (Done here so every plot
+    # style is covered in one place.)
     for trace in data:
         x_values = trace.get("x")
         if x_values:
@@ -440,8 +536,7 @@ def _get_raw_data_for_line_plot(
             y=y_values,
             name=dict_key_to_legend_label(label),
             line={"color": get_country_color(game_id, key, 1.0)},
-            text=get_plot_value_labels(x_values, y_values, label),
-            hoverinfo="text",
+            **get_hover_fields(x_values, y_values, label),
         )
         plot_list.append(line)
     return plot_list
@@ -494,14 +589,13 @@ def _get_raw_data_for_stacked_and_budget_plots(
                     y=yv,
                     name=dict_key_to_legend_label(label),
                     legendgroup=legend_group,  # ensure that budget contributions with mixed signs still behave as a single entry
-                    hoverinfo="text",
                     mode="lines",
                     line=dict(width=0.5, color=get_country_color(game_id, key, 1.0)),
                     stackgroup=stackgroup,
                     groupnorm="percent" if normalized else "",
                     fillcolor=get_country_color(game_id, key, 0.5),
-                    text=get_plot_value_labels(x_values, yv, label),
                     showlegend=i == 0,  # only show one legend entry
+                    **get_hover_fields(x_values, yv, label, show_raw_values=normalized),
                 )
             )
 
@@ -514,8 +608,7 @@ def _get_raw_data_for_stacked_and_budget_plots(
             y=net_gain,
             name=name,
             line=dict(color="rgba(255,255,255,1)"),
-            text=get_plot_value_labels(lines[0]["x"], net_gain, name),
-            hoverinfo="text",
+            **get_hover_fields(lines[0]["x"], net_gain, name),
         )
         lines.append(line)
     return lines
@@ -529,19 +622,85 @@ def dict_key_to_legend_label(key: str):
 
 
 def get_plot_value_labels(x_values, y_values, label):
+    """One preformatted hover text per point; empty for points that have no hover label
+    (value 0 or missing)."""
     legend_label = dict_key_to_legend_label(label)
     return [
-        # Translators: hover text of a point in a graph. Placeholders: the in-game date, the value and the name of the plotted item
-        _(
-            "%(date)s: %(value)s - %(label)s",
-            date=datamodel.days_to_date(360 * x),
-            value=f"{y:.2f}",
-            label=legend_label,
-        )
+        _hover_label(_hover_date(x), f"{y:.2f}", legend_label)
         if (y and y == y)
         else ""
         for (x, y) in zip(x_values, y_values)
     ]
+
+
+def _hover_label(date, value, legend_label):
+    # Translators: hover text of a point in a graph. Placeholders: the in-game date, the value and the name of the plotted item
+    return _(
+        "%(date)s: %(value)s - %(label)s",
+        date=date,
+        value=value,
+        label=legend_label,
+    )
+
+
+@functools.lru_cache(maxsize=4096)
+def _hover_date(x) -> str:
+    """The in-game date of a plot x-value (years since the game start, 360-day years)."""
+    return datamodel.days_to_date(360 * x)
+
+
+def _escape_hover_template_text(text: str) -> str:
+    """Make text show literally inside a plotly hovertemplate: plotly would read "%{...}" as a
+    variable, "<extra>" as the side box and "<b>" and the like as formatting, and "&lt;" as "<"."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("%", "&#37;")
+    )
+
+
+def _needs_point_texts(y_values) -> bool:
+    """Whether the browser shows something different from the template for some point.
+
+    Points with value 0 have no hover label, which a hovertemplate can't express (it always
+    renders its fixed text; missing values never get a label anyway). The decimals of "%{y:.2f}"
+    are rounded in the browser, half away from zero, but half to even here: they differ only for
+    values that are an odd multiple of 1/8."""
+    for y in y_values:
+        if y is None or y != y:
+            continue
+        if y == 0 or y.as_integer_ratio()[1] == 8 or -0.005 < y < 0:
+            return True
+    return False
+
+
+def get_hover_fields(x_values, y_values, label, show_raw_values=False) -> Dict[str, Any]:
+    """The trace properties that make the browser show the hover labels of get_plot_value_labels.
+
+    The labels of a trace only differ in their date and value, so these are sent per point
+    (customdata) and the rest as one template for the trace. That is much smaller than the
+    preformatted text of every point, which is used only when the template can't do it.
+
+    In a normalized stacked plot "y" is the share of the stack, but the label shows the raw
+    value, so this is sent as well (show_raw_values)."""
+    if _needs_point_texts(y_values):
+        return dict(text=get_plot_value_labels(x_values, y_values, label), hoverinfo="text")
+    has_value = [bool(y and y == y) for y in y_values]
+    if show_raw_values:
+        customdata = [
+            [_hover_date(x), round(y, 2)] if ok else None
+            for x, y, ok in zip(x_values, y_values, has_value)
+        ]
+        date, value = "%{customdata[0]}", "%{customdata[1]:.2f}"
+    else:
+        customdata = [
+            _hover_date(x) if ok else None for x, ok in zip(x_values, has_value)
+        ]
+        date, value = "%{customdata}", "%{y:.2f}"
+    legend_label = _escape_hover_template_text(dict_key_to_legend_label(label))
+    template = _hover_label(date, value, legend_label)
+    return dict(customdata=customdata, hovertemplate=template + "<extra></extra>")
 
 
 def get_country_color(
