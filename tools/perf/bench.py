@@ -61,7 +61,8 @@ def parse_args():
     ap.add_argument(
         "--gc-freeze",
         action="store_true",
-        help="gc.freeze() around process_gamestate, for versions that do not do it",
+        help="gc.freeze() around process_gamestate (as timeline._gc_frozen does), for "
+        "versions that do not do it",
     )
     return ap.parse_args()
 
@@ -179,6 +180,9 @@ def main():
                 gc.freeze()
             tle.process_gamestate(game.name, gamestate)
             if args.gc_freeze:
+                # as timeline._gc_frozen: without the collection, the import's garbage is frozen
+                # again by the next save and memory grows by hundreds of MiB per save
+                gc.collect()
                 gc.unfreeze()
             wall, cpu = time.perf_counter() - t, time.process_time() - c
             if profiler:

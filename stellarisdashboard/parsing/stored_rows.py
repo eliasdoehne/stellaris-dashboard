@@ -361,40 +361,25 @@ class StoredRows:
         # a stored row that is not in the session has no unflushed changes, so loading it by
         # primary key needs no flush either.
         with self._session.no_autoflush:
-            while True:
-                candidates = self._candidates(keys, at_most)
-                if ranked:
-                    # NULLs last, ties by position: sort by position, then a stable sort by value
-                    # (reverse=True keeps the order of equal values)
-                    candidates.sort(key=lambda c: c[1])
-                    candidates.sort(
-                        key=lambda c: (True, c[0]) if c[0] is not None else (False, 0),
-                        reverse=True,
-                    )
-                found = []
-                for order_value, position, row_id, obj in candidates:
-                    if row_id is not None:
-                        obj = self._load(row_id)
-                        if obj is None:
-                            continue  # deleted since the scan
-                        if not self._is_scanned_as(obj, keys, order_value):
-                            break  # changed past the session: look again with its current values
-                    found.append(obj)
-                    if limit is not None and len(found) == limit:
-                        return found
-                else:
-                    return found
-
-    def _is_scanned_as(self, obj, keys, order_value) -> bool:
-        """Whether a just loaded row still has the key, criteria and ordering value that the
-        scan read. Only a change past the ORM session (a bulk UPDATE) makes them differ.
-        """
-        return (
-            self._live_key[id(obj)]
-            in {tuple(key_value(v) for v in key) for key in keys}
-            and self._matches_where(obj)
-            and (self._order is None or self._order.current(obj) == order_value)
-        )
+            candidates = self._candidates(keys, at_most)
+            if ranked:
+                # NULLs last, ties by position: sort by position, then a stable sort by value
+                # (reverse=True keeps the order of equal values)
+                candidates.sort(key=lambda c: c[1])
+                candidates.sort(
+                    key=lambda c: (True, c[0]) if c[0] is not None else (False, 0),
+                    reverse=True,
+                )
+            found = []
+            for order_value, position, row_id, obj in candidates:
+                if row_id is not None:
+                    obj = self._load(row_id)
+                    if obj is None:
+                        continue  # deleted since the scan
+                found.append(obj)
+                if limit is not None and len(found) == limit:
+                    break
+            return found
 
     def latest(self, *key, at_most=None):
         """The row with this key that has the largest ordering value (NULLs last, ties to the
