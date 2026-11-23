@@ -5,6 +5,7 @@ import json
 import logging
 import pathlib
 import re
+import sqlite3
 import threading
 import time
 from typing import Dict, List, Union, Optional, Iterable, Collection, Tuple
@@ -53,9 +54,27 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
     # WAL lets readers and the single writer run concurrently; synchronous=NORMAL
     # cuts fsyncs (safe: the DB is re-derivable by re-parsing saves).
     cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
+    # First, so that the statements below wait for locks where SQLite waits at all.
     cursor.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+    # WAL is stored in the database file, so only a new (or non-WAL) database needs the switch.
+    # It takes an exclusive lock, and when several processes open a new database at once SQLite
+    # can answer SQLITE_BUSY at once instead of waiting. Retry until the busy timeout has passed.
+    deadline = time.monotonic() + _SQLITE_BUSY_TIMEOUT_MS / 1000
+    while True:
+        try:
+            if cursor.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
+                break
+            if cursor.execute("PRAGMA journal_mode=WAL").fetchone()[0].lower() == "wal":
+                break
+        except sqlite3.OperationalError as e:
+            if "locked" not in str(e).lower():
+                raise
+            if time.monotonic() >= deadline:
+                raise
+        if time.monotonic() >= deadline:
+            raise sqlite3.OperationalError("database is locked: could not switch to WAL mode")
+        time.sleep(0.03)
+    cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
 
 

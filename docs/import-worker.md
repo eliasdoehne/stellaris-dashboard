@@ -106,7 +106,10 @@ that at the same time, for example for a game that is new: both saw "no tables" 
 lock. Only if something is to be changed does it take SQLite's write lock (`BEGIN IMMEDIATE`) and
 look again, so the second process finds nothing left to do. Opening an up-to-date database takes no
 lock and never waits for a running import. `Config.db_path` creates the `db` folder with
-`exist_ok` for the same reason.
+`exist_ok` for the same reason. Switching a new database to WAL mode also needs an exclusive lock,
+and SQLite can refuse it with "database is locked" at once, without waiting for the busy timeout,
+so the connection hook sets the busy timeout first and retries the switch until that timeout has
+passed.
 
 **The save monitor's coordination with the import page.** `bulk_import.defer_to_running_import`
 looks at the import job of the import page, which lives in the dashboard process, so the monitor

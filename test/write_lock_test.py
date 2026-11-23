@@ -7,6 +7,8 @@ does not apply to a stale snapshot). BEGIN IMMEDIATE makes the second writer wai
 
 import multiprocessing
 import queue
+import sqlite3
+import threading
 
 import pytest
 import sqlalchemy
@@ -193,3 +195,47 @@ def test_savepoints_work_in_write_session(game_db):
         i for i, s in enumerate(statements) if s.startswith("SAVEPOINT")
     )
     assert sum(s.startswith("SAVEPOINT") for s in statements) == 2
+
+
+NEW_DATABASES = 40
+
+
+def _open_new_databases(base_path, barrier, results, index):
+    errors = []
+    for n in range(NEW_DATABASES):
+        try:
+            barrier.wait(TIMEOUT)  # all processes open database n at the same moment
+            connection = sqlite3.connect(base_path / f"new_{n}.db", timeout=datamodel._SQLITE_BUSY_TIMEOUT_MS / 1000)
+            try:
+                datamodel._set_sqlite_pragmas(connection, None)  # what each new connection of an engine runs
+                assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+            finally:
+                connection.close()
+        except threading.BrokenBarrierError:
+            errors.append("barrier broken")
+            break
+        except Exception as e:
+            errors.append(repr(e))
+    results.put((index, errors))
+
+
+def test_many_processes_open_a_new_database_at_once(tmp_path):
+    """Switching a new database to WAL needs an exclusive lock that SQLite may refuse without waiting."""
+    ctx = multiprocessing.get_context("spawn")
+    count = 6
+    barrier = ctx.Barrier(count)
+    results = ctx.Queue()
+    procs = [
+        ctx.Process(target=_open_new_databases, args=(tmp_path, barrier, results, i)) for i in range(count)
+    ]
+    for p in procs:
+        p.start()
+    try:
+        outcomes = [results.get(timeout=TIMEOUT) for _ in procs]
+        for p in procs:
+            p.join(TIMEOUT)
+    finally:
+        for p in procs:
+            if p.is_alive():
+                p.kill()
+    assert [errors for _, errors in outcomes if errors] == []
