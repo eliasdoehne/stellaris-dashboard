@@ -59,6 +59,20 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
     cursor.close()
 
 
+_BEGIN_IMMEDIATE = "begin_immediate"  # key in Session.info, see _begin_immediate
+
+
+def _begin_immediate(session, transaction, connection):
+    # Runs for each new outer transaction of a session (also after a commit or rollback), not
+    # for savepoints. pysqlite sends no BEGIN of its own before a SAVEPOINT or a SELECT, so a
+    # write session would otherwise run reads in a deferred transaction with a WAL snapshot, and
+    # its first write then fails at once with "database is locked" if another process committed
+    # in between (the busy timeout does not apply to a stale snapshot). BEGIN IMMEDIATE takes the
+    # write lock first and waits for it up to the busy timeout.
+    if session.info.get(_BEGIN_IMMEDIATE) and not transaction.nested:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
 def _get_or_create_sessionmaker(game_id):
     if game_id not in _SESSIONMAKERS:
         with _ENGINE_SETUP_LOCK:
@@ -116,7 +130,9 @@ def _setup_engine(game_id):
         connection.commit()
 
     _ENGINES[game_id] = engine
-    _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
+    session_factory = sessionmaker(bind=engine)
+    sqlalchemy.event.listen(session_factory, "after_begin", _begin_immediate)
+    _SESSIONMAKERS[game_id] = scoped_session(session_factory)
     _DB_LOCKS[game_id] = threading.Lock()
 
 
@@ -141,16 +157,20 @@ def warm_up_databases():
 
 @contextlib.contextmanager
 def get_db_session(game_id, write: bool = False) -> sqlalchemy.orm.Session:
-    # write=True serializes on the per-game lock; readers rely on WAL snapshots
-    # so they don't block while the parser ingests.
+    # write=True serializes on the per-game lock in this process and takes SQLite's write lock
+    # when each transaction begins (BEGIN IMMEDIATE, see _begin_immediate), so another process
+    # that writes the same game waits instead of failing. Readers rely on WAL snapshots
+    # so they don't block while the parser ingests, and begin deferred.
     session_factory = _get_or_create_sessionmaker(game_id)
     lock = _DB_LOCKS[game_id] if write else contextlib.nullcontext()
     with lock:
-        s = session_factory()
+        s = session_factory()  # a scoped session: the same Session object for this thread
+        s.info[_BEGIN_IMMEDIATE] = write
         try:
             yield s
         finally:
             s.close()
+            s.info.pop(_BEGIN_IMMEDIATE, None)
 
 
 @enum.unique

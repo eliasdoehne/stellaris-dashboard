@@ -83,12 +83,21 @@ listed. If a worker dies during a job, the pool's error record carries the job's
 ## What does not cross the process boundary
 
 **Locks.** `datamodel._DB_LOCKS` (one write lock per game) and `timeline._process_gamestate_lock`
-are in-process locks. In the dashboard all writes happen in the workers, one job at a time per worker and one worker per
-game at a time (see the pool), so they are never contended there. They still protect in-process callers: the CLI commands and the
-tests. Between processes SQLite's own locking applies. The databases use WAL, so the dashboard
-reads while the worker writes. A second writer of the same game, for example a CLI import started
-while the dashboard runs, waits for the write lock: every connection has a busy timeout of 30 s
-(`_SQLITE_BUSY_TIMEOUT_MS`, set as the `sqlite3` connect timeout and as `PRAGMA busy_timeout`).
+are in-process locks. In the dashboard all writes happen in the workers, one job at a time per
+worker and one worker per game at a time (see the pool), so they are never contended there. They
+still protect in-process callers: the CLI commands and the tests. Between processes SQLite's own
+locking applies. The databases use WAL, so the dashboard reads while the worker writes. A second
+writer of the same game, for example a CLI import started while the dashboard runs, waits for the
+write lock: every connection has a busy timeout of 30 s (`_SQLITE_BUSY_TIMEOUT_MS`, set as the
+`sqlite3` connect timeout and as `PRAGMA busy_timeout`). Waiting only works if the writer asks for
+the lock before it reads. pysqlite starts transactions lazily, so a write session would begin as a
+read transaction (a `SAVEPOINT` or a `SELECT` first), with a WAL snapshot of the database. If
+another process commits before this session's first write, the upgrade to a write transaction
+fails at once with "database is locked": the busy timeout does not apply, because waiting cannot
+make the stale snapshot current. So every session from `get_db_session(write=True)` runs
+`BEGIN IMMEDIATE` when each of its transactions begins (an `after_begin` listener; savepoints are
+not affected), and the second writer waits at that point. Read sessions stay deferred and never
+take the write lock.
 
 **Opening a database for the first time.** `datamodel._setup_engine` migrates the database to the
 current schema (it creates all tables of a new one). The dashboard's warm-up and the worker can do
