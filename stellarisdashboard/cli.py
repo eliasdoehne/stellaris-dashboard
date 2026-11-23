@@ -6,13 +6,11 @@ The CLI functions which are annotated with click decorators are only thin wrappe
 corresponding function defined immediately below. This allows reusing the code in __main__.py.
 """
 
-import collections
 import concurrent.futures
 import logging
 import multiprocessing as mp
 import pathlib
 import threading
-from typing import Deque, Dict, Tuple
 
 import click
 
@@ -37,13 +35,6 @@ showeverything_help_string = (
 
 # seconds between checks for new save files
 POLLING_INTERVAL = 0.5
-# import_tag of the log records of the saves imported by the save monitor
-MONITOR_LOG_TAG = "monitor"
-
-# import_tag of the log records of the saves imported by the parse-saves commands
-PARSE_SAVES_LOG_TAG = "parse-saves"
-# jobs of one game that are with the import workers at a time, when a batch of saves is imported
-MAX_JOBS_IN_FLIGHT_PER_GAME = 2
 
 threads_help_string = (
     "The number of worker processes that import saves of different games at the same time. "
@@ -78,41 +69,31 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
         save_path = config.CONFIG.save_file_path
     if stop_event is None:
         stop_event = threading.Event()
-    save_reader = save_parser.ContinuousSavePathMonitor(save_path)
+    save_reader = save_parser.SavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
     worker = import_worker.get_import_worker()
     worker.start()
-
-    # submitted saves, oldest first: results are handled in the order of the saves
-    pending: Deque[Tuple[pathlib.Path, concurrent.futures.Future]] = collections.deque()
-    show_wait_message = True
+    waiting = False
     try:
         while not stop_event.is_set():
-            for save_file in save_reader.get_new_saves():
+            for save_file in save_reader.get_new_savefiles():
                 game_name = save_file.parent.stem
                 if bulk_import.defer_to_running_import(game_name):
                     continue
-                show_wait_message = True
-                pending.append(
-                    (save_file, worker.submit(save_file, game_name, log_tag=MONITOR_LOG_TAG))
-                )
-                if len(pending) > 1:
-                    logger.info(f"{len(pending)} saves waiting to be imported")
-            while pending and pending[0][1].done():
-                _handle_monitor_result(*pending.popleft())
-            if pending:
-                # wake up when the oldest save is done, or to look for new saves
-                concurrent.futures.wait([pending[0][1]], timeout=POLLING_INTERVAL)
-            else:
-                if show_wait_message:
-                    show_wait_message = False
-                    logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
-                stop_event.wait(POLLING_INTERVAL)
+                worker.submit(save_file, game_name).add_done_callback(_handle_monitor_result)
+                waiting = False
+                if worker.num_waiting > 1:
+                    logger.info(f"{worker.num_waiting} saves waiting to be imported")
+            if not waiting and not worker.num_waiting:
+                waiting = True
+                logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
+            stop_event.wait(POLLING_INTERVAL)
     finally:
         import_worker.shutdown_import_worker(timeout=5)
 
 
-def _handle_monitor_result(save_file: pathlib.Path, future: concurrent.futures.Future) -> None:
+def _handle_monitor_result(future: concurrent.futures.Future) -> None:
+    # runs in a thread of the import worker pool
     try:
         result = future.result()
     except import_worker.ImportWorkerError as e:
@@ -120,12 +101,10 @@ def _handle_monitor_result(save_file: pathlib.Path, future: concurrent.futures.F
         return
     import_worker.after_import(result)
     timings = ", ".join(f"{stage} {seconds:.1f} s" for stage, seconds in result.timings.items())
-    if result.error:
-        logger.error(f"Import of {save_file} failed: {result.error}")
-    elif result.imported:
-        logger.info(f"Imported {save_file.name} of {result.game_id} ({result.game_date}): {timings}")
-    elif result.parsed and not result.failures:
-        logger.info(f"Did not import {save_file.name} of {result.game_id} ({result.game_date}), it is already imported")
+    if result.imported:
+        logger.info(f"Imported {result.save_file.name} of {result.game_id} ({result.game_date}): {timings}")
+    elif result.parsed and not result.failures and not result.error:
+        logger.info(f"Did not import {result.save_file.name} of {result.game_id} ({result.game_date}), it is already imported")
 
 
 @cli.command()
@@ -152,24 +131,20 @@ def f_parse_saves(
     stop_event: threading.Event = None,
     on_save_processed=None,
     worker=None,
-    log_tag=PARSE_SAVES_LOG_TAG,
 ) -> None:
     """
     Import saves into the database: all saves of the games matching game_name_prefix, or only save_files.
 
-    The import worker processes parse and import the saves. Saves of one game are imported in
-    order, by one worker; saves of different games are imported in parallel by up to `threads`
-    workers. Results are handled in order per game.
+    The import worker processes parse and import the saves: the saves of one game one after the
+    other, in order, and different games in parallel on up to `threads` workers.
 
     :param threads: Overrides the threads setting: the number of worker processes (if no `worker`).
     :param replace_existing: Replace gamestates of the same date instead of skipping the save.
     :param save_files: Import exactly these saves, in this order.
-    :param stop_event: Stop submitting saves once this is set; saves already submitted finish.
+    :param stop_event: Once this is set, saves that did not start are cancelled; running ones finish.
     :param on_save_processed: Called with the import_worker.ImportResult of each save, in order per game.
     :param worker: The import workers to use (import_worker.ImportWorkerPool); by default a pool of
         `threads` workers that lives as long as this call.
-    :param log_tag: Tags the log records of the worker processes; the one of each save is
-        "<log_tag>:<save file>" (ImportRequest.log_tag, the import_tag of the records).
     """
     if threads is not None:
         # since this is usually used when the game is not running, let the user override the thread count
@@ -186,58 +161,27 @@ def f_parse_saves(
     if own_pool:
         worker = import_worker.ImportWorkerPool(config.CONFIG.threads)
     try:
-        _import_saves(worker, new_files, replace_existing, stop_event, on_save_processed, log_tag)
+        futures = {
+            worker.submit(save_file, save_file.parent.stem, replace_existing): index
+            for index, save_file in enumerate(new_files)
+        }
+        pending = set(futures)
+        while pending:
+            if stop_event is not None and stop_event.is_set():
+                pending = {future for future in pending if not future.cancel()}  # cancels those not started
+            done, pending = concurrent.futures.wait(
+                pending, timeout=POLLING_INTERVAL, return_when=concurrent.futures.FIRST_COMPLETED
+            )
+            for future in sorted(done, key=futures.get):
+                if future.cancelled():
+                    continue
+                result = future.result()
+                import_worker.after_import(result)
+                if on_save_processed is not None:
+                    on_save_processed(result)
     finally:
         if own_pool:
             worker.shutdown(timeout=30)
-
-
-def _import_saves(worker, save_files, replace_existing, stop_event, on_save_processed, log_tag) -> None:
-    # not submitted yet and submitted but not handled, per game, in order
-    waiting: Dict[str, Deque[pathlib.Path]] = {}
-    in_flight: Dict[str, Deque[Tuple[pathlib.Path, concurrent.futures.Future]]] = {}
-    for save_file in save_files:
-        game_id = save_file.parent.stem
-        waiting.setdefault(game_id, collections.deque()).append(save_file)
-        in_flight.setdefault(game_id, collections.deque())
-    while True:
-        if stop_event is None or not stop_event.is_set():
-            for game_id, queue in waiting.items():
-                # A few jobs of a game at a time keep its worker busy without filling the queue
-                # of the shared worker, so a cancel is quick and live saves of other games wait little.
-                while queue and len(in_flight[game_id]) < MAX_JOBS_IN_FLIGHT_PER_GAME:
-                    save_file = queue.popleft()
-                    future = worker.submit(
-                        save_file, game_id, replace_existing=replace_existing, log_tag=f"{log_tag}:{save_file}"
-                    )
-                    in_flight[game_id].append((save_file, future))
-        else:
-            waiting.clear()
-        for jobs in in_flight.values():
-            while jobs and jobs[0][1].done():
-                _handle_batch_result(*jobs.popleft(), on_save_processed)
-        heads = [jobs[0][1] for jobs in in_flight.values() if jobs]
-        if not heads:
-            if not any(waiting.values()):
-                return
-            continue
-        # wake up when a game's oldest save is done (the next one can be submitted), or to check stop_event
-        concurrent.futures.wait(heads, timeout=POLLING_INTERVAL, return_when=concurrent.futures.FIRST_COMPLETED)
-
-
-def _handle_batch_result(save_file: pathlib.Path, future: concurrent.futures.Future, on_save_processed) -> None:
-    try:
-        result = future.result()
-    except import_worker.ImportWorkerError as e:
-        logger.warning(str(e))
-        return
-    import_worker.after_import(result)
-    if on_save_processed is not None:
-        on_save_processed(result)
-
-
-# the import itself lives in the module the worker process imports; see import_worker.import_gamestate
-f_import_gamestate = import_worker.import_gamestate
 
 
 @cli.command()

@@ -7,7 +7,7 @@ one, in the dashboard and in the CLI and also in their worker processes (every f
 imports ``sitecustomize``). For database identity checks only: unpickling costs ~1.5 s per save,
 so never use it for timings.
 
-Used by ui_latency.py and cli_batch.py: ``install(hook_dir, cache_dir, env)`` writes the hook and
+Used by ui_latency.py: ``install(hook_dir, cache_dir, env)`` writes the hook and
 adds it to the environment (a dict) of the process to start.
 """
 

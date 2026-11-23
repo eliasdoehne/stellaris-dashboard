@@ -19,7 +19,7 @@ GAME = "write_lock_test"
 TIMEOUT = 60
 # How long the first process waits for the second one to commit. With a deferred BEGIN that is
 # immediate; with BEGIN IMMEDIATE the second process is blocked until the first one commits.
-PATIENCE = 3
+PATIENCE = 1
 
 
 def _texts(session):

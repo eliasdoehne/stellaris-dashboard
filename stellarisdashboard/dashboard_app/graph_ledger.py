@@ -106,11 +106,8 @@ timeline_app = ShellDash(
     __name__,
     title="Stellaris Dashboard",
     server=flask_app,
-    # Off on purpose. Compressing (Flask-Compress, brotli) shrinks the responses of all tabs of a
-    # 40 save game from 547 KB to 47 KB, but on localhost this changes nothing measurable (all nine
-    # tabs, median of 15 requests each: 429 ms without, 432 ms with, tools/perf/graph_payload.py)
-    # and costs about 2 ms of server CPU per request, which the UI's process pays with the GIL.
-    # Worth turning on if the dashboard is used through a slow network.
+    # Compression gains nothing measurable on localhost and costs server CPU per request;
+    # worth turning on for use through a slow network.
     compress=False,
     url_base_pathname="/timeline/",
     update_title=None,
@@ -157,34 +154,15 @@ def get_compact_figure_layout(plot_spec: visualization_data.PlotSpecification):
     return go.Layout(**layout)
 
 
-def get_enlarged_layout_changes(plot_spec: visualization_data.PlotSpecification) -> Dict[str, Any]:
-    """What the enlarged figure's layout has that the grid figure's layout hasn't (title, axis
-    titles, legend, height, margins), as nested dicts. The browser builds the enlarged figure from
-    the grid figure of the clicked card and these changes instead of receiving it a second time."""
-    full = get_figure_layout(plot_spec).to_plotly_json()
-    full["title"] = dict(
+def get_enlarged_figure_layout(plot_spec: visualization_data.PlotSpecification):
+    layout = get_figure_layout(plot_spec)
+    layout["title"] = dict(
         text=plot_spec.display_title(),
         font=dict(size=18, color=TEXT_COLOR, family=FONT_FAMILY),
         x=0.5,
         xanchor="center",
     )
-    compact = get_compact_figure_layout(plot_spec).to_plotly_json()
-    return _dict_changes(compact, full)
-
-
-def _dict_changes(base: Dict[str, Any], changed: Dict[str, Any]) -> Dict[str, Any]:
-    """The entries of changed that differ from base, nested dicts compared recursively."""
-    changes = {}
-    for key, value in changed.items():
-        if key not in base:
-            changes[key] = value
-        elif isinstance(value, dict) and isinstance(base[key], dict):
-            nested = _dict_changes(base[key], value)
-            if nested:
-                changes[key] = nested
-        elif value != base[key]:
-            changes[key] = value
-    return changes
+    return layout
 
 
 COMPACT_SUBDUED_ALPHA = 0.28
@@ -348,7 +326,8 @@ def update_content(search, dash_plot_checklist, country_perspective):
         )
     player_label = _get_player_legend_label(game_id)
     # Each plot becomes a compact card in a responsive grid. Clicking its header shows the
-    # figure enlarged, which the browser builds from the card's figure.
+    # figure enlarged, which the browser builds from the card's traces and the enlarged
+    # layout carried in the card's layout.meta.
     # Hold the plot data lock until the figures are built: the traces' y values are the
     # containers' own lists, so other requests must neither update them nor switch the
     # perspective meanwhile.
@@ -368,7 +347,9 @@ def update_content(search, dash_plot_checklist, country_perspective):
 
             compact_data = _emphasize_player_in_compact_data(figure_data, player_label)
             compact_layout = get_compact_figure_layout(plot_spec)
-            compact_layout["meta"] = {"enlarged": get_enlarged_layout_changes(plot_spec)}
+            compact_layout["meta"] = {
+                "enlarged": get_enlarged_figure_layout(plot_spec).to_plotly_json()
+            }
             compact_figure = go.Figure(data=compact_data, layout=compact_layout)
             grid_children.append(_plot_grid_card(plot_spec, compact_figure))
 
@@ -377,10 +358,9 @@ def update_content(search, dash_plot_checklist, country_perspective):
 
 
 # Opens the modal with the enlarged figure of the clicked card, or closes it. It runs in the
-# browser and builds the figure from the card's figure, so nothing has to be sent to the server
-# or back. The card's figure is the compact one: this restores what get_compact_figure_layout
-# (layout changes in layout.meta.enlarged) and _emphasize_player_in_compact_data (traces' meta)
-# changed, and drops what zooming the card may have added to its layout.
+# browser: the layout is the one in the card's layout.meta (not the card's own, which zooming
+# the card changes), and the traces are the card's with what _emphasize_player_in_compact_data
+# changed restored from their meta.
 MODAL_FIGURE_JS = """
 function(expandClicks, closeClicks, backdropClicks, cardFigures) {
     var dc = window.dash_clientside;
@@ -399,34 +379,11 @@ function(expandClicks, closeClicks, backdropClicks, cardFigures) {
         return state.id.index === triggered.index;
     });
     var source = card && card.value;
-    if (!source || !source.data) {
+    if (!source || !source.data || !source.layout || !source.layout.meta) {
         return [noUpdate, noUpdate, noUpdate];
     }
-    var isObject = function (value) {
-        return value !== null && typeof value === 'object' && !Array.isArray(value);
-    };
-    var merge = function (target, changes) {
-        Object.keys(changes).forEach(function (key) {
-            if (isObject(changes[key]) && isObject(target[key])) {
-                merge(target[key], changes[key]);
-            } else {
-                target[key] = changes[key];
-            }
-        });
-        return target;
-    };
-    var layout = JSON.parse(JSON.stringify(source.layout || {}));
-    var changes = (layout.meta && layout.meta.enlarged) || {};
-    delete layout.meta;
-    ['xaxis', 'yaxis'].forEach(function (axis) {
-        if (layout[axis]) {
-            delete layout[axis].range;
-            if (layout[axis].autorange !== 'reversed') {
-                delete layout[axis].autorange;
-            }
-        }
-    });
-    merge(layout, changes);
+    // copies, so zooming the enlarged figure doesn't change the card's
+    var layout = JSON.parse(JSON.stringify(source.layout.meta.enlarged));
     var traces = JSON.parse(JSON.stringify(source.data)).map(function (trace, position) {
         var meta = trace.meta;
         delete trace.meta;
@@ -595,7 +552,7 @@ def _get_raw_data_for_stacked_and_budget_plots(
                     groupnorm="percent" if normalized else "",
                     fillcolor=get_country_color(game_id, key, 0.5),
                     showlegend=i == 0,  # only show one legend entry
-                    **get_hover_fields(x_values, yv, label, show_raw_values=normalized),
+                    **get_hover_fields(x_values, yv, label, normalized),
                 )
             )
 
@@ -660,46 +617,22 @@ def _escape_hover_template_text(text: str) -> str:
     )
 
 
-def _needs_point_texts(y_values) -> bool:
-    """Whether the browser shows something different from the template for some point.
-
-    Points with value 0 have no hover label, which a hovertemplate can't express (it always
-    renders its fixed text; missing values never get a label anyway). The decimals of "%{y:.2f}"
-    are rounded in the browser, half away from zero, but half to even here: they differ only for
-    values that are an odd multiple of 1/8."""
-    for y in y_values:
-        if y is None or y != y:
-            continue
-        if y == 0 or y.as_integer_ratio()[1] == 8 or -0.005 < y < 0:
-            return True
-    return False
-
-
-def get_hover_fields(x_values, y_values, label, show_raw_values=False) -> Dict[str, Any]:
+def get_hover_fields(x_values, y_values, label, normalized=False) -> Dict[str, Any]:
     """The trace properties that make the browser show the hover labels of get_plot_value_labels.
 
     The labels of a trace only differ in their date and value, so these are sent per point
     (customdata) and the rest as one template for the trace. That is much smaller than the
-    preformatted text of every point, which is used only when the template can't do it.
-
-    In a normalized stacked plot "y" is the share of the stack, but the label shows the raw
-    value, so this is sent as well (show_raw_values)."""
-    if _needs_point_texts(y_values):
-        return dict(text=get_plot_value_labels(x_values, y_values, label), hoverinfo="text")
-    has_value = [bool(y and y == y) for y in y_values]
-    if show_raw_values:
-        customdata = [
-            [_hover_date(x), round(y, 2)] if ok else None
-            for x, y, ok in zip(x_values, y_values, has_value)
-        ]
-        date, value = "%{customdata[0]}", "%{customdata[1]:.2f}"
-    else:
-        customdata = [
-            _hover_date(x) if ok else None for x, ok in zip(x_values, has_value)
-        ]
-        date, value = "%{customdata}", "%{y:.2f}"
+    preformatted text of every point, which is sent only when a template can't show the labels:
+    points with value 0 have no label, and in a normalized stacked plot "y" is the share of the
+    stack, not the value of the label."""
+    if normalized or any(y == 0 for y in y_values):
+        texts = get_plot_value_labels(x_values, y_values, label)
+        return dict(text=texts, hoverinfo="text")
+    customdata = [
+        _hover_date(x) if (y and y == y) else None for x, y in zip(x_values, y_values)
+    ]
     legend_label = _escape_hover_template_text(dict_key_to_legend_label(label))
-    template = _hover_label(date, value, legend_label)
+    template = _hover_label("%{customdata}", "%{y:.2f}", legend_label)
     return dict(customdata=customdata, hovertemplate=template + "<extra></extra>")
 
 

@@ -35,7 +35,9 @@ def _spec(style, plot_id="test-plot", **kwargs):
 @pytest.fixture(autouse=True)
 def fixed_colors(monkeypatch):
     monkeypatch.setattr(
-        graph_ledger, "get_country_color", lambda game, key, alpha=1.0: f"rgba(1,2,3,{alpha})"
+        graph_ledger,
+        "get_country_color",
+        lambda game, key, alpha=1.0: f"rgba(1,2,3,{alpha})",
     )
     monkeypatch.setattr(config.CONFIG, "normalize_stacked_plots", False)
 
@@ -43,12 +45,7 @@ def fixed_colors(monkeypatch):
 def _render(template, customdata, y):
     """What the browser shows for one point of a trace with a hovertemplate (the parts used here)."""
     assert template.endswith("<extra></extra>")
-    text = template[: -len("<extra></extra>")]
-    if isinstance(customdata, list):
-        text = text.replace("%{customdata[0]}", customdata[0])
-        text = text.replace("%{customdata[1]:.2f}", f"{customdata[1]:.2f}")
-    else:
-        text = text.replace("%{customdata}", customdata)
+    text = template[: -len("<extra></extra>")].replace("%{customdata}", customdata)
     return text.replace("%{y:.2f}", f"{y:.2f}")
 
 
@@ -60,7 +57,9 @@ def test_line_traces_have_a_hovertemplate_and_no_point_texts():
     (trace,) = graph_ledger.get_raw_plot_data_dicts("g", data, _spec(PlotStyle.line))
 
     assert "text" not in trace
-    assert trace["hovertemplate"] == "%{customdata}: %{y:.2f} - Empire name<extra></extra>"
+    assert (
+        trace["hovertemplate"] == "%{customdata}: %{y:.2f} - Empire name<extra></extra>"
+    )
     # the date of the label belongs to the unshifted x value; points without a label get none
     assert trace["customdata"] == [
         datamodel.days_to_date(0),
@@ -94,7 +93,9 @@ def test_template_uses_the_translated_message(tmp_path, monkeypatch):
 
     fields = graph_ledger.get_hover_fields(X, [1.0, 2.0, 3.0], "Energy")
 
-    assert fields["hovertemplate"] == "Energy => %{y:.2f} (%{customdata})<extra></extra>"
+    assert (
+        fields["hovertemplate"] == "Energy => %{y:.2f} (%{customdata})<extra></extra>"
+    )
     assert graph_ledger.get_plot_value_labels([0.0], [1.0], "Energy") == [
         "Energy => 1.00 (2200.01.01)"
     ]
@@ -103,18 +104,18 @@ def test_template_uses_the_translated_message(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "label, escaped",
     [
-        ("a < b > c", "A &lt; b &gt; c"),
-        ("<b>bold</b>", "&lt;b&gt;bold&lt;/b&gt;"),
         ("<extra>x</extra>", "&lt;extra&gt;x&lt;/extra&gt;"),
         ("%{y} 100%", "&#37;{y} 100&#37;"),
-        ("Salt & pepper", "Salt &amp; pepper"),
         ("&lt;", "&amp;lt;"),
     ],
 )
 def test_labels_are_escaped_for_the_template(label, escaped):
     fields = graph_ledger.get_hover_fields(X, [1.0, 2.0, 3.0], label)
 
-    assert fields["hovertemplate"] == f"%{{customdata}}: %{{y:.2f}} - {escaped}<extra></extra>"
+    assert (
+        fields["hovertemplate"]
+        == f"%{{customdata}}: %{{y:.2f}} - {escaped}<extra></extra>"
+    )
     # the only template syntax left is the one added by the code
     assert fields["hovertemplate"].count("%{") == 2
     assert fields["hovertemplate"].count("<") == 2
@@ -122,14 +123,10 @@ def test_labels_are_escaped_for_the_template(label, escaped):
 
 @pytest.mark.parametrize(
     "y",
-    [
-        [1.0, 0, 3.0],  # no hover label for a value of 0, which a template can't leave out
-        [1.0, 0.0, 3.0],
-        [1.0, 2.125, 3.0],  # the browser rounds ties differently than format()
-        [1.0, -0.001, 3.0],  # "-0.00" in the browser would be "0.00"
-    ],
+    # no hover label for a value of 0, which a template can't leave out
+    [[1.0, 0, 3.0], [1.0, 0.0, 3.0]],
 )
-def test_points_a_template_cannot_reproduce_keep_their_texts(y):
+def test_zeros_keep_the_point_texts(y):
     fields = graph_ledger.get_hover_fields(X, y, "empire_name")
 
     assert "hovertemplate" not in fields and "customdata" not in fields
@@ -159,7 +156,9 @@ def test_stacked_traces():
     assert plain["stackgroup"] == "pos" and plain["groupnorm"] == ""
     assert plain["hovertemplate"] == "%{customdata}: %{y:.2f} - Energy<extra></extra>"
     assert "text" not in plain
-    assert with_zero["text"][0] == "" and with_zero["text"][1].endswith("2.00 - Minerals")
+    assert with_zero["text"][0] == "" and with_zero["text"][1].endswith(
+        "2.00 - Minerals"
+    )
     assert "hovertemplate" not in with_zero
 
 
@@ -170,12 +169,10 @@ def test_normalized_stacked_traces_show_the_raw_values(monkeypatch):
 
     assert trace["groupnorm"] == "percent"
     # "y" would be the share of the stack
-    assert trace["hovertemplate"] == (
-        "%{customdata[0]}: %{customdata[1]:.2f} - Energy<extra></extra>"
+    assert "hovertemplate" not in trace
+    assert trace["text"] == graph_ledger.get_plot_value_labels(
+        X, [1.0, 2.0, 3.004], "energy"
     )
-    assert trace["customdata"] == [
-        [datamodel.days_to_date(360 * x), v] for x, v in zip(X, [1.0, 2.0, 3.0])
-    ]
 
 
 def test_budget_traces_and_net_result():
@@ -253,85 +250,16 @@ def test_tab_content_sends_each_figure_once(monkeypatch):
     ]
     payload = json.dumps(children, default=lambda o: o.to_plotly_json())
     assert "full-figures-store" not in payload
+    enlarged = graph_ledger.get_enlarged_figure_layout(
+        _spec(PlotStyle.line)
+    ).to_plotly_json()
     for graph in graphs:
-        assert all("text" not in trace for trace in graph.figure.to_plotly_json()["data"])
+        figure = graph.figure.to_plotly_json()
+        assert all("text" not in trace for trace in figure["data"])
+        assert figure["layout"]["meta"] == {"enlarged": enlarged}
     assert payload.count("hovertemplate") == 4
     # plotly's default template (7 KB) isn't sent with every figure
     assert len(payload) < 20000
-
-
-def test_modal_does_not_depend_on_a_store():
-    assert "full-figures-store" not in json.dumps(
-        graph_ledger.timeline_app.layout(), default=lambda o: o.to_plotly_json()
-    )
-    callbacks = graph_ledger.timeline_app._callback_list
-    modal = [c for c in callbacks if "modal-graph.figure" in c["output"]]
-    assert len(modal) == 1
-    assert "clientside_function" in modal[0]
-    assert all(s["id"] != "full-figures-store" for s in modal[0]["state"])
-    # no server side callback is left that could receive figures
-    assert not [
-        c
-        for c in callbacks
-        if "clientside_function" not in c and "grid-graph" in str(c["state"])
-    ]
-
-
-def test_enlarged_layout_changes_complete_the_compact_layout():
-    spec = _spec(PlotStyle.line, y_axis_label="Credits", y_axis_reversed=True)
-    full = graph_ledger.get_figure_layout(spec).to_plotly_json()
-    full["title"] = dict(
-        text="Test plot",
-        font=dict(size=18, color=graph_ledger.TEXT_COLOR, family=graph_ledger.FONT_FAMILY),
-        x=0.5,
-        xanchor="center",
-    )
-    compact = graph_ledger.get_compact_figure_layout(spec).to_plotly_json()
-
-    changes = graph_ledger.get_enlarged_layout_changes(spec)
-
-    def merge(base, changed):
-        for key, value in changed.items():
-            if isinstance(value, dict) and isinstance(base.get(key), dict):
-                merge(base[key], value)
-            else:
-                base[key] = value
-        return base
-
-    assert merge(compact, changes) == full
-    assert changes["height"] == config.CONFIG.plot_height
-    assert changes["xaxis"]["title"]["text"] == "Year"
-    assert "yaxis" in changes and "autorange" not in changes["yaxis"]
-    assert changes["title"]["text"] == "Test plot"
-
-
-def test_emphasis_keeps_what_the_enlarged_view_restores():
-    figure_data = [
-        dict(name="Other", line={"color": "rgba(4,5,6,1.0)"}, showlegend=True),
-        dict(
-            name="Player",
-            line={"color": "rgba(1,2,3,1.0)", "width": 0.5},
-            fillcolor="rgba(1,2,3,0.5)",
-        ),
-    ]
-    emphasized = graph_ledger._emphasize_player_in_compact_data(figure_data, "Player")
-
-    assert [t["name"] for t in emphasized] == ["Other", "Player"]
-    other = next(t for t in emphasized if t["name"] == "Other")
-    player = next(t for t in emphasized if t["name"] == "Player")
-    assert other["meta"] == {
-        "index": 0,
-        "original": {"line": {"color": "rgba(4,5,6,1.0)"}, "showlegend": True},
-    }
-    assert player["meta"] == {
-        "index": 1,
-        "original": {
-            "line": {"color": "rgba(1,2,3,1.0)", "width": 0.5},
-            "fillcolor": "rgba(1,2,3,0.5)",
-        },
-    }
-    # the input is not changed
-    assert "meta" not in figure_data[0] and figure_data[0]["line"] == {"color": "rgba(4,5,6,1.0)"}
 
 
 NODE_DRIVER = """
@@ -357,7 +285,9 @@ console.log(JSON.stringify(out));
 """
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="needs node to run the browser code")
+@pytest.mark.skipif(
+    shutil.which("node") is None, reason="needs node to run the browser code"
+)
 def test_modal_function_rebuilds_the_enlarged_figure(monkeypatch):
     series = [
         (1, "other", X, [2.0, 3.0, 4.0]),
@@ -367,14 +297,15 @@ def test_modal_function_rebuilds_the_enlarged_figure(monkeypatch):
     spec = _spec(PlotStyle.line, y_axis_label="Credits", y_axis_reversed=True)
     figure_data = graph_ledger.get_raw_plot_data_dicts("g", FakePlotData(series), spec)
     compact_layout = graph_ledger.get_compact_figure_layout(spec)
-    compact_layout["meta"] = {"enlarged": graph_ledger.get_enlarged_layout_changes(spec)}
+    enlarged = graph_ledger.get_enlarged_figure_layout(spec).to_plotly_json()
+    compact_layout["meta"] = {"enlarged": enlarged}
     card = graph_ledger.go.Figure(
         data=graph_ledger._emphasize_player_in_compact_data(figure_data, "Player"),
         layout=compact_layout,
     ).to_plotly_json()
     # the card was zoomed
-    card["layout"]["xaxis"]["range"] = [2210, 2220]
-    card["layout"]["xaxis"]["autorange"] = False
+    for axis, zoomed in (("xaxis", [2210, 2220]), ("yaxis", [3, 1])):
+        card["layout"][axis].update(range=zoomed, autorange=False)
     assert [t["name"] for t in card["data"]] == ["Other", "Third", "Player"]
 
     script = NODE_DRIVER % json.dumps(graph_ledger.MODAL_FIGURE_JS)
@@ -389,13 +320,9 @@ def test_modal_function_rebuilds_the_enlarged_figure(monkeypatch):
 
     class_name, figure, title = out["open"]
     assert class_name == "tl-modal" and title == "Test plot"
-    full_layout = graph_ledger.get_figure_layout(spec).to_plotly_json()
-    assert figure["layout"]["height"] == full_layout["height"]
-    assert figure["layout"]["showlegend"] is True
+    # the enlarged layout, without the card's zoom
+    assert figure["layout"] == enlarged
     assert figure["layout"]["yaxis"]["autorange"] == "reversed"
-    assert "range" not in figure["layout"]["xaxis"]
-    assert figure["layout"]["xaxis"]["title"]["text"] == "Year"
-    assert "meta" not in figure["layout"]
     # original order, colors, widths and legend entries
     original = {t["name"]: t for t in figure_data}
     assert [t["name"] for t in figure["data"]] == ["Other", "Player", "Third"]

@@ -20,7 +20,8 @@ class StellarisFileFormatError(Exception):
 
 class SavePathMonitor:
     """
-    Base class for path monitors, which check the save path for new save games.
+    Checks the save path for new save games. The live save monitor (cli.f_monitor_saves) uses
+    this class; the import worker processes parse and import the saves it reports.
     """
 
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
@@ -71,7 +72,6 @@ class SavePathMonitor:
         overwrites, is told apart by its version (modification time and size).
         """
         new_files = []
-        ironman_versions = {}
         for save_file in self.save_parent_dir.glob("**/*.sav"):
             if save_file in self.processed_saves or not str(save_file.parent.stem).startswith(
                 self.game_name_prefix
@@ -85,25 +85,10 @@ class SavePathMonitor:
                 version = (stat.st_mtime_ns, stat.st_size)
                 if self._ironman_versions.get(save_file) == version:
                     continue
-                ironman_versions[save_file] = version
+                self._ironman_versions[save_file] = version
             new_files.append(save_file)
-        self._ironman_versions.update(ironman_versions)
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
         return sorted(new_files)
-
-
-class ContinuousSavePathMonitor(SavePathMonitor):
-    """
-    SavePathMonitor implementation for the default execution: reports the new save files of the
-    save path. The import worker process parses and imports them (cli.f_monitor_saves).
-    """
-
-    def get_new_saves(self) -> List[pathlib.Path]:
-        """
-        All new save files in the order in which they should be imported, after the skip_saves
-        filter. Each is reported once: it counts as processed from now on, whatever happens to it.
-        """
-        return self.get_new_savefiles()
 
 
 class BatchSavePathMonitor(SavePathMonitor):

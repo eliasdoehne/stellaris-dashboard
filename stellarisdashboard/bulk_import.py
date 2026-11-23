@@ -9,12 +9,10 @@ with, so the game's saves are written to the database by one importer in order.
 
 Reprocessing the kept copies of failed saves (save_copies) is a job of the same kind: it uses the
 same single job slot and import path, so it never runs alongside another import. A new save of a
-reprocessed game goes to the same worker (the pool routes a game's saves to one worker), so it is
-imported between the reprocessed saves.
+reprocessed game joins the game's queue in the pool, so it is imported between the reprocessed saves.
 """
 
 import dataclasses
-import itertools
 import logging
 import pathlib
 import re
@@ -37,8 +35,6 @@ _MAX_LISTED_ERRORS = 50
 
 # game_id of a job that reprocesses the kept copies of several games; shown as "all games"
 _ALL_GAMES_ID = "all games"
-
-_job_numbers = itertools.count(1)
 
 
 class ImportRefused(Exception):
@@ -240,13 +236,10 @@ class ImportJob:
         self.started = time.time()
         self.finished: Optional[float] = None
         self._stop_event = threading.Event()
-        # tags the log records of the worker processes for this job (see _ErrorCollector)
-        self.log_tag = f"bulk-import-{next(_job_numbers)}"
         self._batch: List[pathlib.Path] = [s.path for s in plan.to_import]
-        self._batch_index = 0
         self._seen: Set[pathlib.Path] = {s.path for s in plan.saves}
         self._save_filter = save_parser.BatchSavePathMonitor(save_path)
-        # a reprocessing job runs alongside the watcher: the pool imports a game's saves in order
+        # a reprocessing job runs alongside the watcher: the pool imports a game's saves one at a time
         self._accepts_deferred_saves = not self.is_reprocess  # guarded by _jobs_lock
         self._has_deferred_saves = False  # guarded by _jobs_lock
         self._thread = threading.Thread(
@@ -279,20 +272,16 @@ class ImportJob:
                 self.status = ImportJob.CANCELLING
         self._stop_event.set()
 
-    def _current_save(self) -> Optional[pathlib.Path]:
-        if self._batch_index < len(self._batch):
-            return self._batch[self._batch_index]
-        return None
-
     def _record_error(self, message: str) -> None:
         self.num_errors += 1
         if len(self.errors) < _MAX_LISTED_ERRORS:
             self.errors.append(message)
 
     def _on_save_processed(self, result: import_worker.ImportResult) -> None:
-        self._batch_index += 1
         self.done += 1
         self.current_date = result.game_date or self.current_date
+        for message in result.error_messages():
+            self._record_error(f"{result.save_file.name}: {message}")
 
     def _next_batch(self) -> List[pathlib.Path]:
         """Saves of the game written since the import started; once there are none, stop accepting more."""
@@ -321,8 +310,6 @@ class ImportJob:
         from stellarisdashboard.dashboard_app import visualization_data
 
         game_ids = self.reprocess_game_ids if self.is_reprocess else [self.game_id]
-        error_handler = _ErrorCollector(self)
-        logging.getLogger().addHandler(error_handler)
         status = ImportJob.FINISHED
         try:
             action = "Reprocessing" if self.is_reprocess else "Importing"
@@ -335,7 +322,6 @@ class ImportJob:
                     stop_event=self._stop_event,
                     on_save_processed=self._on_save_processed,
                     worker=import_worker.get_import_worker(),
-                    log_tag=self.log_tag,
                 )
             else:
                 while self._batch:
@@ -345,17 +331,15 @@ class ImportJob:
                         stop_event=self._stop_event,
                         on_save_processed=self._on_save_processed,
                         worker=import_worker.get_import_worker(),
-                        log_tag=self.log_tag,
                     )
                     if self._stop_event.is_set():
                         break
                     self._batch = self._next_batch()
-                    self._batch_index = 0
-        except Exception:
+        except Exception as e:
             logger.exception(f"Import of game {self.game_id} failed")
+            self._record_error(f"{type(e).__name__}: {e}")
             status = ImportJob.FAILED
         finally:
-            logging.getLogger().removeHandler(error_handler)
             # older saves are not picked up by the incremental plot data update
             for game_id in game_ids:
                 visualization_data.drop_cached_plot_data(game_id)
@@ -368,39 +352,6 @@ class ImportJob:
             logger.info(
                 f"Import of game {self.game_id} {status}: {self.done} of {self.total} saves, {self.num_errors} errors"
             )
-
-
-class _ErrorCollector(logging.Handler):
-    """
-    Collects errors logged for the job: by the import worker processes (their records arrive with
-    the job's log tag, "<job tag>:<save file>") and by the job's thread, e.g. saves that failed
-    to parse or were rolled back.
-    """
-
-    def __init__(self, job: ImportJob):
-        super().__init__(level=logging.ERROR)
-        self._job = job
-
-    def emit(self, record: logging.LogRecord) -> None:
-        tag = getattr(record, "import_tag", None)
-        if tag is not None:
-            prefix = self._job.log_tag + ":"
-            if not tag.startswith(prefix):
-                return
-            save = pathlib.Path(tag[len(prefix):])
-        elif record.thread == self._job._thread.ident:
-            save = self._job._current_save()
-        else:
-            return
-        message = " ".join(record.getMessage().split())
-        exc_type, exc_message = getattr(record, "exc_type_name", None), getattr(record, "exc_message", "")
-        if exc_type is None and record.exc_info and record.exc_info[1] is not None:
-            exc_type, exc_message = type(record.exc_info[1]).__name__, record.exc_info[1]
-        if exc_type is not None:
-            message = f"{message} {exc_type}: {exc_message}"
-        if save is not None:
-            message = f"{save.name}: {message.replace(str(save), save.name)}"
-        self._job._record_error(message)
 
 
 _jobs_lock = threading.Lock()
