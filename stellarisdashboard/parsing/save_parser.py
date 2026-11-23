@@ -2,7 +2,7 @@ import logging
 import pathlib
 import sys
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import rust_parser
 
@@ -28,7 +28,8 @@ class SavePathMonitor:
         self.num_encountered_saves: int = 0
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
-        self._last_checked_time = float("-inf")
+        # (modification time in ns, size) of ironman.sav files last reported, by path
+        self._ironman_versions: Dict[pathlib.Path, Tuple[int, int]] = {}
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
         """Get a list of all new save files, filtered by the skip_saves setting."""
@@ -57,30 +58,38 @@ class SavePathMonitor:
 
     def mark_all_existing_saves_processed(self) -> None:
         """Ensure that existing files are not re-parsed."""
-        self.processed_saves |= {
-            f for f in self._valid_save_files() if f.stem != "ironman"
-        }
-        self._last_checked_time = time.time()
+        self._valid_save_files()
 
     def _valid_save_files(self) -> List[pathlib.Path]:
-        prefiltered_files = (
-            save_file
-            for save_file in self.save_parent_dir.glob("**/*.sav")
-            if save_file not in self.processed_saves
-            and str(save_file.parent.stem).startswith(self.game_name_prefix)
-        )
-        modified_files = sorted(
-            f
-            for f in prefiltered_files
-            if self.m_or_c_time(f) > self._last_checked_time
-        )
-        self._last_checked_time = time.time()
-        return modified_files
+        """
+        The save files that are new since the last call, sorted. Each file returned counts as seen
+        from now on, whether or not the skip_saves filter keeps it.
 
-    @staticmethod
-    def m_or_c_time(f: pathlib.Path):
-        stat = f.stat()
-        return max(stat.st_mtime, stat.st_ctime)
+        This does not use file timestamps, which cannot tell a save that appeared during the scan or
+        within the file system's timestamp granularity from an old one. Every save has a name of
+        its own and is new until it is in processed_saves. Only ironman.sav, which the game
+        overwrites, is told apart by its version (modification time and size).
+        """
+        new_files = []
+        ironman_versions = {}
+        for save_file in self.save_parent_dir.glob("**/*.sav"):
+            if save_file in self.processed_saves or not str(save_file.parent.stem).startswith(
+                self.game_name_prefix
+            ):
+                continue
+            if save_file.stem == "ironman":
+                try:
+                    stat = save_file.stat()
+                except OSError:
+                    continue  # gone or locked; look again next time
+                version = (stat.st_mtime_ns, stat.st_size)
+                if self._ironman_versions.get(save_file) == version:
+                    continue
+                ironman_versions[save_file] = version
+            new_files.append(save_file)
+        self._ironman_versions.update(ironman_versions)
+        self.processed_saves.update(f for f in new_files if f.stem != "ironman")
+        return sorted(new_files)
 
 
 class ContinuousSavePathMonitor(SavePathMonitor):
@@ -94,9 +103,7 @@ class ContinuousSavePathMonitor(SavePathMonitor):
         All new save files in the order in which they should be imported, after the skip_saves
         filter. Each is reported once: it counts as processed from now on, whatever happens to it.
         """
-        new_files = self.get_new_savefiles()
-        self.processed_saves.update(f for f in new_files if f.stem != "ironman")
-        return new_files
+        return self.get_new_savefiles()
 
 
 class BatchSavePathMonitor(SavePathMonitor):
