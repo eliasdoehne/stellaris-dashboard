@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Stellaris Dashboard VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-16 10:27+0000\n"
+"POT-Creation-Date: 2026-11-22 22:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: pl\n"
@@ -19,30 +19,30 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: stellarisdashboard/bulk_import.py:176
+#: stellarisdashboard/bulk_import.py:182
 #, python-format
 msgid "No save files found for game %(game_id)s in %(save_path)s."
 msgstr "Nie znaleziono plików zapisu gry %(game_id)s w %(save_path)s."
 
-#: stellarisdashboard/bulk_import.py:252
+#: stellarisdashboard/bulk_import.py:260
 msgid "all games"
 msgstr "wszystkie gry"
 
-#: stellarisdashboard/bulk_import.py:398
+#: stellarisdashboard/bulk_import.py:420
 #, python-format
 msgid "The save files folder %(save_path)s does not exist. Check the settings."
 msgstr "Folder z plikami zapisu %(save_path)s nie istnieje. Sprawdź ustawienia."
 
-#: stellarisdashboard/bulk_import.py:403
+#: stellarisdashboard/bulk_import.py:425
 #, python-format
 msgid "All saves of %(game_id)s are already imported."
 msgstr "Wszystkie zapisy gry %(game_id)s zostały już zaimportowane."
 
-#: stellarisdashboard/bulk_import.py:421 stellarisdashboard/bulk_import.py:429
+#: stellarisdashboard/bulk_import.py:443 stellarisdashboard/bulk_import.py:451
 msgid "There are no kept copies of failed saves to reprocess."
 msgstr "Brak zachowanych kopii nieudanych zapisów do ponownego przetworzenia."
 
-#: stellarisdashboard/bulk_import.py:452
+#: stellarisdashboard/bulk_import.py:474
 #, python-format
 msgid "An import of %(game_id)s is already running. Wait for it to finish or cancel it."
 msgstr "Import gry %(game_id)s już trwa. Poczekaj na jego zakończenie lub go anuluj."
@@ -126,8 +126,8 @@ msgid ""
 "Every resource needs a name and a base_price (a number, or null if it cannot be traded), got "
 "%(value)s."
 msgstr ""
-"Każdy surowiec musi mieć nazwę i base_price (liczbę lub null, jeśli nie można nim "
-"handlować), otrzymano %(value)s."
+"Każdy surowiec musi mieć nazwę i base_price (liczbę lub null, jeśli nie można nim handlować), "
+"otrzymano %(value)s."
 
 #: stellarisdashboard/config.py:533
 msgid "Expected a list of market fees."
@@ -136,9 +136,7 @@ msgstr "Oczekiwano listy opłat rynkowych."
 #: stellarisdashboard/config.py:541
 #, python-format
 msgid "Every market fee needs a date (like 2200.01.01) and a fee (like 0.3), got %(value)s."
-msgstr ""
-"Każda opłata rynkowa musi mieć datę (np. 2200.01.01) i opłatę (np. 0.3), otrzymano "
-"%(value)s."
+msgstr "Każda opłata rynkowa musi mieć datę (np. 2200.01.01) i opłatę (np. 0.3), otrzymano %(value)s."
 
 #. label of a small chart in the hover preview of an empire
 #: stellarisdashboard/dashboard_app/entity_preview.py:33
@@ -3710,9 +3708,9 @@ msgid ""
 "game, and each of those folders should contain one or more .sav files. Leave blank to reset to "
 "default."
 msgstr ""
-"Miejsce, w którym dashboard będzie szukać nowych plików zapisu Stellaris. Powinno "
-"zawierać folder dla każdej gry, a każdy z tych folderów powinien zawierać jeden lub "
-"więcej plików .sav. Zostaw puste, aby przywrócić wartość domyślną."
+"Miejsce, w którym dashboard będzie szukać nowych plików zapisu Stellaris. Powinno zawierać folder"
+" dla każdej gry, a każdy z tych folderów powinien zawierać jeden lub więcej plików .sav. Zostaw "
+"puste, aby przywrócić wartość domyślną."
 
 #: stellarisdashboard/dashboard_app/settings.py:47
 msgid "Stellaris user data folder"
@@ -3745,8 +3743,8 @@ msgid ""
 "The language to use for the names of empires, technologies and other text from the game. Use the "
 "same language as in the game."
 msgstr ""
-"Język używany dla nazw imperiów, technologii i innych tekstów pochodzących z gry. Użyj "
-"tego samego języka, co w grze."
+"Język używany dla nazw imperiów, technologii i innych tekstów pochodzących z gry. Użyj tego "
+"samego języka, co w grze."
 
 #: stellarisdashboard/dashboard_app/settings.py:59
 msgid "Show information for all countries"
@@ -3809,8 +3807,8 @@ msgid ""
 "After processing a save, the next X saves are skipped. Use this if the dashboard cannot keep up "
 "with autosaves."
 msgstr ""
-"Po przetworzeniu zapisu następne X zapisów jest pomijanych. Użyj tego, jeśli dashboard "
-"nie nadąża za autozapisami."
+"Po przetworzeniu zapisu następne X zapisów jest pomijanych. Użyj tego, jeśli dashboard nie nadąża"
+" za autozapisami."
 
 #: stellarisdashboard/dashboard_app/settings.py:83
 msgid "Keep copies of failed saves"
@@ -3849,12 +3847,18 @@ msgstr ""
 "limitu rozmiaru i rośnie o jeden plik zapisu przy każdym autozapisie."
 
 #: stellarisdashboard/dashboard_app/settings.py:95
-msgid "Number of threads"
-msgstr "Liczba wątków"
+msgid "Number of import processes"
+msgstr "Liczba procesów importu"
 
 #: stellarisdashboard/dashboard_app/settings.py:96
-msgid "Number of threads for reading save files."
-msgstr "Liczba wątków używanych do odczytu plików zapisu."
+msgid ""
+"Number of processes that import saves of different games at the same time. The saves of one game "
+"are always imported one after the other, so more than one only helps when saves of several games "
+"are imported at once. Each process needs extra memory."
+msgstr ""
+"Liczba procesów, które jednocześnie importują zapisy różnych gier. Zapisy jednej gry są zawsze "
+"importowane jeden po drugim, więc więcej niż jeden proces pomaga tylko wtedy, gdy jednocześnie "
+"importowane są zapisy kilku gier. Każdy proces potrzebuje dodatkowej pamięci."
 
 #: stellarisdashboard/dashboard_app/settings.py:99
 msgid "Dashboard language"
@@ -3898,9 +3902,7 @@ msgstr "Otwórz w przeglądarce po uruchomieniu"
 
 #: stellarisdashboard/dashboard_app/settings.py:116
 msgid "Open the dashboard in your default web browser when the dashboard app starts."
-msgstr ""
-"Otwórz dashboard w domyślnej przeglądarce internetowej po uruchomieniu aplikacji "
-"dashboardu."
+msgstr "Otwórz dashboard w domyślnej przeglądarce internetowej po uruchomieniu aplikacji dashboardu."
 
 #: stellarisdashboard/dashboard_app/settings.py:119
 msgid "Host"
@@ -3911,9 +3913,8 @@ msgid ""
 "The network address the dashboard listens on. The default, 127.0.0.1, only allows access from "
 "this computer. Use 0.0.0.0 to allow access from other devices in your network."
 msgstr ""
-"Adres sieciowy, na którym nasłuchuje dashboard. Domyślny, 127.0.0.1, zezwala na dostęp "
-"tylko z tego komputera. Użyj 0.0.0.0, aby zezwolić na dostęp z innych urządzeń w Twojej "
-"sieci."
+"Adres sieciowy, na którym nasłuchuje dashboard. Domyślny, 127.0.0.1, zezwala na dostęp tylko z "
+"tego komputera. Użyj 0.0.0.0, aby zezwolić na dostęp z innych urządzeń w Twojej sieci."
 
 #: stellarisdashboard/dashboard_app/settings.py:123
 msgid "Port"
@@ -3980,23 +3981,20 @@ msgid ""
 "No save files found. This folder should contain a folder for each game, which each contain .sav "
 "files."
 msgstr ""
-"Nie znaleziono plików zapisu. Ten folder powinien zawierać folder dla każdej gry, a każdy "
-"z nich powinien zawierać pliki .sav."
+"Nie znaleziono plików zapisu. Ten folder powinien zawierać folder dla każdej gry, a każdy z nich "
+"powinien zawierać pliki .sav."
 
 #: stellarisdashboard/dashboard_app/settings.py:171
 msgid ""
 "The Stellaris game files were not found. This folder should contain the localisation and flags "
 "folders."
-msgstr ""
-"Nie znaleziono plików gry Stellaris. Ten folder powinien zawierać foldery localisation i "
-"flags."
+msgstr "Nie znaleziono plików gry Stellaris. Ten folder powinien zawierać foldery localisation i flags."
 
 #: stellarisdashboard/dashboard_app/settings.py:172
 msgid "This folder should contain the dlc_load.json file."
 msgstr "Ten folder powinien zawierać plik dlc_load.json."
 
 #: stellarisdashboard/dashboard_app/settings.py:192
-#, python-format
 msgid "This folder does not exist."
 msgstr "Ten folder nie istnieje."
 
@@ -4014,17 +4012,17 @@ msgstr "Dotyczy tylko wtedy, gdy pole „%(setting)s” jest wypełnione."
 msgid "Some settings were not applied:"
 msgstr "Niektóre ustawienia nie zostały zastosowane:"
 
-#: stellarisdashboard/dashboard_app/settings.py:431
+#: stellarisdashboard/dashboard_app/settings.py:432
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:109
 #, python-format
 msgid "Restart the dashboard to apply: %(settings)s"
 msgstr "Uruchom dashboard ponownie, aby zastosować: %(settings)s"
 
-#: stellarisdashboard/dashboard_app/settings.py:474
+#: stellarisdashboard/dashboard_app/settings.py:475
 msgid "Settings saved."
 msgstr "Zapisano ustawienia."
 
-#: stellarisdashboard/dashboard_app/settings.py:486
+#: stellarisdashboard/dashboard_app/settings.py:487
 msgid "All settings were reset to their defaults."
 msgstr "Wszystkie ustawienia przywrócono do wartości domyślnych."
 
@@ -4243,8 +4241,8 @@ msgstr "Odrzuć"
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:110
 msgid "Close the dashboard app and start it again. Until then, it keeps using the previous values."
 msgstr ""
-"Zamknij aplikację dashboardu i uruchom ją ponownie. Do tego czasu będzie używać "
-"poprzednich wartości."
+"Zamknij aplikację dashboardu i uruchom ją ponownie. Do tego czasu będzie używać poprzednich "
+"wartości."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:118
 #, python-format
@@ -4301,8 +4299,8 @@ msgid ""
 "settings file, as described in the <a href=\"%(url)s\" target=\"_blank\" "
 "rel=\"noopener\">README</a>."
 msgstr ""
-"Układ kart z wykresami i ceny rynkowe nie znajdują się na tej stronie: ustawia się je w "
-"pliku ustawień, jak opisano w <a href=\"%(url)s\" target=\"_blank\" rel=\"noopener\">README</a>."
+"Układ kart z wykresami i ceny rynkowe nie znajdują się na tej stronie: ustawia się je w pliku "
+"ustawień, jak opisano w <a href=\"%(url)s\" target=\"_blank\" rel=\"noopener\">README</a>."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:168
 msgid "Reset all to defaults…"
@@ -4313,8 +4311,8 @@ msgid ""
 "This puts every setting on this page back to its default and saves it right away. The graph "
 "layout and market prices in the settings file are kept."
 msgstr ""
-"To przywraca wartość domyślną każdego ustawienia na tej stronie i od razu ją zapisuje. "
-"Układ wykresów i ceny rynkowe w pliku ustawień zostają bez zmian."
+"To przywraca wartość domyślną każdego ustawienia na tej stronie i od razu ją zapisuje. Układ "
+"wykresów i ceny rynkowe w pliku ustawień zostają bez zmian."
 
 #: stellarisdashboard/dashboard_app/templates/_settings_content.html:172
 msgid "Reset all settings"
@@ -5004,396 +5002,396 @@ msgid "Changes are saved to the settings file when you select Save settings."
 msgstr "Zmiany są zapisywane w pliku ustawień po wybraniu opcji Zapisz ustawienia."
 
 #. label of the time axis of the graphs
-#: stellarisdashboard/dashboard_app/visualization_data.py:58
+#: stellarisdashboard/dashboard_app/visualization_data.py:60
 msgid "Year"
 msgstr "Rok"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:544
+#: stellarisdashboard/dashboard_app/visualization_data.py:631
 msgid "Physics"
 msgstr "Fizyka"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:545
+#: stellarisdashboard/dashboard_app/visualization_data.py:632
 msgid "Society"
 msgstr "Socjologia"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:546
+#: stellarisdashboard/dashboard_app/visualization_data.py:633
 msgid "Engineering"
 msgstr "Inżynieria"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:567
+#: stellarisdashboard/dashboard_app/visualization_data.py:654
 msgid "Frigates"
 msgstr "Fregaty"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:568
+#: stellarisdashboard/dashboard_app/visualization_data.py:655
 msgid "Corvettes"
 msgstr "Korwety"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:569
+#: stellarisdashboard/dashboard_app/visualization_data.py:656
 msgid "Destroyers"
 msgstr "Niszczyciele"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:570
+#: stellarisdashboard/dashboard_app/visualization_data.py:657
 msgid "Cruisers"
 msgstr "Krążowniki"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:571
+#: stellarisdashboard/dashboard_app/visualization_data.py:658
 msgid "Battleships"
 msgstr "Pancerniki"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:572
+#: stellarisdashboard/dashboard_app/visualization_data.py:659
 msgid "Titans"
 msgstr "Tytany"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:573
+#: stellarisdashboard/dashboard_app/visualization_data.py:660
 msgid "Colossi"
 msgstr "Kolosy"
 
 #. legend label of the market price graph, price without market fee
-#: stellarisdashboard/dashboard_app/visualization_data.py:610
+#: stellarisdashboard/dashboard_app/visualization_data.py:697
 #, python-format
 msgid "%(resource)s base price"
 msgstr "%(resource)s: cena bazowa"
 
 #. legend label of the market price graph, price to buy the resource (includes the market fee)
-#: stellarisdashboard/dashboard_app/visualization_data.py:613
+#: stellarisdashboard/dashboard_app/visualization_data.py:700
 #, python-format
 msgid "%(resource)s buy price"
 msgstr "%(resource)s: cena kupna"
 
 #. legend label of the market price graph, price to sell the resource (after the market fee)
-#: stellarisdashboard/dashboard_app/visualization_data.py:616
+#: stellarisdashboard/dashboard_app/visualization_data.py:703
 #, python-format
 msgid "%(resource)s sell price"
 msgstr "%(resource)s: cena sprzedaży"
 
 #. legend label of the market price graph, marks the period in which the player could trade on the
 #. galactic market
-#: stellarisdashboard/dashboard_app/visualization_data.py:619
+#: stellarisdashboard/dashboard_app/visualization_data.py:706
 msgid "Traded on galactic market"
 msgstr "Handel na rynku galaktycznym"
 
 #. legend label of the market price graph, marks the period in which the player could only trade on
 #. their internal market
-#: stellarisdashboard/dashboard_app/visualization_data.py:622
+#: stellarisdashboard/dashboard_app/visualization_data.py:709
 msgid "Traded on internal market"
 msgstr "Handel na rynku wewnętrznym"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1117
+#: stellarisdashboard/dashboard_app/visualization_data.py:1204
 msgid "Owned Planets"
 msgstr "Posiadane planety"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1123
+#: stellarisdashboard/dashboard_app/visualization_data.py:1210
 msgid "Controlled Systems"
 msgstr "Kontrolowane systemy"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1129
+#: stellarisdashboard/dashboard_app/visualization_data.py:1216
 msgid "Net Mineral Income"
 msgstr "Dochód netto z minerałów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1135
+#: stellarisdashboard/dashboard_app/visualization_data.py:1222
 msgid "Net Energy Income"
 msgstr "Dochód netto z energii"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1141
+#: stellarisdashboard/dashboard_app/visualization_data.py:1228
 msgid "Net Alloys Income"
 msgstr "Dochód netto ze stopów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1147
+#: stellarisdashboard/dashboard_app/visualization_data.py:1234
 msgid "Net Trade Income"
 msgstr "Dochód netto z handlu"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1153
+#: stellarisdashboard/dashboard_app/visualization_data.py:1240
 msgid "Net Consumer Goods Income"
 msgstr "Dochód netto z dóbr konsumpcyjnych"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1159
+#: stellarisdashboard/dashboard_app/visualization_data.py:1246
 msgid "Net Food Income"
 msgstr "Dochód netto z żywności"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1165
+#: stellarisdashboard/dashboard_app/visualization_data.py:1252
 msgid "Net Biomass Income"
 msgstr "Dochód netto z biomasy"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1171
+#: stellarisdashboard/dashboard_app/visualization_data.py:1258
 msgid "Empire Size"
 msgstr "Wielkość imperium"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1177
+#: stellarisdashboard/dashboard_app/visualization_data.py:1264
 msgid "Researched Technologies"
 msgstr "Zbadane technologie"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1183
+#: stellarisdashboard/dashboard_app/visualization_data.py:1270
 msgid "Research Output"
 msgstr "Wydajność badań"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1189
+#: stellarisdashboard/dashboard_app/visualization_data.py:1276
 msgid "Total Research Output"
 msgstr "Łączna wydajność badań"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1195
+#: stellarisdashboard/dashboard_app/visualization_data.py:1282
 msgid "Military Strength"
 msgstr "Siła militarna"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1201
+#: stellarisdashboard/dashboard_app/visualization_data.py:1288
 msgid "Fleet Size"
 msgstr "Wielkość floty"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1207
+#: stellarisdashboard/dashboard_app/visualization_data.py:1294
 msgid "Fleet Composition"
 msgstr "Skład floty"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1213
+#: stellarisdashboard/dashboard_app/visualization_data.py:1300
 msgid "Species Demographics"
 msgstr "Demografia gatunków"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1219
+#: stellarisdashboard/dashboard_app/visualization_data.py:1306
 msgid "Happiness by Species"
 msgstr "Zadowolenie wg gatunków"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1225
+#: stellarisdashboard/dashboard_app/visualization_data.py:1312
 msgid "Power by Species"
 msgstr "Siła wg gatunków"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1231
+#: stellarisdashboard/dashboard_app/visualization_data.py:1318
 msgid "Crime by Species"
 msgstr "Przestępczość wg gatunków"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1237
+#: stellarisdashboard/dashboard_app/visualization_data.py:1324
 msgid "Faction Demographics"
 msgstr "Demografia frakcji"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1243
+#: stellarisdashboard/dashboard_app/visualization_data.py:1330
 msgid "Faction Support"
 msgstr "Poparcie frakcji"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1249
+#: stellarisdashboard/dashboard_app/visualization_data.py:1336
 msgid "Faction Approval"
 msgstr "Aprobata frakcji"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1255
+#: stellarisdashboard/dashboard_app/visualization_data.py:1342
 msgid "Crime by Faction"
 msgstr "Przestępczość wg frakcji"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1261
+#: stellarisdashboard/dashboard_app/visualization_data.py:1348
 msgid "Power by Faction"
 msgstr "Siła wg frakcji"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1267
+#: stellarisdashboard/dashboard_app/visualization_data.py:1354
 msgid "Happiness by Faction"
 msgstr "Zadowolenie wg frakcji"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1273
+#: stellarisdashboard/dashboard_app/visualization_data.py:1360
 msgid "Population by Planet"
 msgstr "Populacja wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1279
+#: stellarisdashboard/dashboard_app/visualization_data.py:1366
 msgid "Free Amenities by Planet"
 msgstr "Wolne udogodnienia wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1285
+#: stellarisdashboard/dashboard_app/visualization_data.py:1372
 msgid "Stability by Planet"
 msgstr "Stabilność wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1291
+#: stellarisdashboard/dashboard_app/visualization_data.py:1378
 msgid "Free Housing by Planet"
 msgstr "Wolne mieszkania wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1297
+#: stellarisdashboard/dashboard_app/visualization_data.py:1384
 msgid "Crime by Planet"
 msgstr "Przestępczość wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1303
+#: stellarisdashboard/dashboard_app/visualization_data.py:1390
 msgid "Power by Planet"
 msgstr "Siła wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1309
+#: stellarisdashboard/dashboard_app/visualization_data.py:1396
 msgid "Happiness by Planet"
 msgstr "Zadowolenie wg planet"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1315
+#: stellarisdashboard/dashboard_app/visualization_data.py:1402
 msgid "Ethos Demographics"
 msgstr "Demografia etosów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1322
+#: stellarisdashboard/dashboard_app/visualization_data.py:1409
 msgid "Crime by Ethos"
 msgstr "Przestępczość wg etosów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1329
+#: stellarisdashboard/dashboard_app/visualization_data.py:1416
 msgid "Power by Ethos"
 msgstr "Siła wg etosów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1335
+#: stellarisdashboard/dashboard_app/visualization_data.py:1422
 msgid "Happiness by Ethos"
 msgstr "Zadowolenie wg etosów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1341
+#: stellarisdashboard/dashboard_app/visualization_data.py:1428
 msgid "Stratum Demographics"
 msgstr "Demografia warstw"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1347
+#: stellarisdashboard/dashboard_app/visualization_data.py:1434
 msgid "Crime by Stratum"
 msgstr "Przestępczość wg warstw"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1353
+#: stellarisdashboard/dashboard_app/visualization_data.py:1440
 msgid "Power by Stratum"
 msgstr "Siła wg warstw"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1359
+#: stellarisdashboard/dashboard_app/visualization_data.py:1446
 msgid "Happiness by Stratum"
 msgstr "Zadowolenie wg warstw"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1366
+#: stellarisdashboard/dashboard_app/visualization_data.py:1453
 msgid "Job Demographics"
 msgstr "Demografia zawodów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1372
+#: stellarisdashboard/dashboard_app/visualization_data.py:1459
 msgid "Crime by Job"
 msgstr "Przestępczość wg zawodów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1378
+#: stellarisdashboard/dashboard_app/visualization_data.py:1465
 msgid "Power by Job"
 msgstr "Siła wg zawodów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1384
+#: stellarisdashboard/dashboard_app/visualization_data.py:1471
 msgid "Happiness by Job"
 msgstr "Zadowolenie wg zawodów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1391
+#: stellarisdashboard/dashboard_app/visualization_data.py:1478
 msgid "Energy Budget"
 msgstr "Budżet energii"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1397
+#: stellarisdashboard/dashboard_app/visualization_data.py:1484
 msgid "Mineral Budget"
 msgstr "Budżet minerałów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1403
+#: stellarisdashboard/dashboard_app/visualization_data.py:1490
 msgid "Consumer Goods Budget"
 msgstr "Budżet dóbr konsumpcyjnych"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1409
+#: stellarisdashboard/dashboard_app/visualization_data.py:1496
 msgid "Trade Budget"
 msgstr "Budżet handlu"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1415
+#: stellarisdashboard/dashboard_app/visualization_data.py:1502
 msgid "Alloys Budget"
 msgstr "Budżet stopów"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1422
+#: stellarisdashboard/dashboard_app/visualization_data.py:1509
 msgid "Food"
 msgstr "Żywność"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1429
+#: stellarisdashboard/dashboard_app/visualization_data.py:1516
 msgid "Volatile Motes"
 msgstr "Lotne drobiny"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1436
+#: stellarisdashboard/dashboard_app/visualization_data.py:1523
 msgid "Exotic Gases"
 msgstr "Gazy egzotyczne"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1443
+#: stellarisdashboard/dashboard_app/visualization_data.py:1530
 msgid "Rare Crystals"
 msgstr "Rzadkie kryształy"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1450
+#: stellarisdashboard/dashboard_app/visualization_data.py:1537
 msgid "Living Metal"
 msgstr "Żywy metal"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1457
+#: stellarisdashboard/dashboard_app/visualization_data.py:1544
 msgid "Zro"
 msgstr "Zro"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1464
+#: stellarisdashboard/dashboard_app/visualization_data.py:1551
 msgid "Dark Matter"
 msgstr "Ciemna materia"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1471
+#: stellarisdashboard/dashboard_app/visualization_data.py:1558
 msgid "Nanites"
 msgstr "Nanity"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1477
+#: stellarisdashboard/dashboard_app/visualization_data.py:1564
 msgid "Minor Artifacts Budget"
 msgstr "Budżet pomniejszych artefaktów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1483
+#: stellarisdashboard/dashboard_app/visualization_data.py:1570
 msgid "Astral Threads Budget"
 msgstr "Budżet astralnych nici"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1489
+#: stellarisdashboard/dashboard_app/visualization_data.py:1576
 msgid "Biomass Budget"
 msgstr "Budżet biomasy"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1496
+#: stellarisdashboard/dashboard_app/visualization_data.py:1583
 msgid "Influence"
 msgstr "Wpływy"
 
 #. title of the budget graph of a resource, use the name of the resource in the game
-#: stellarisdashboard/dashboard_app/visualization_data.py:1503
+#: stellarisdashboard/dashboard_app/visualization_data.py:1590
 msgid "Unity"
 msgstr "Jedność"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1509
+#: stellarisdashboard/dashboard_app/visualization_data.py:1596
 msgid "Victory Rank"
 msgstr "Pozycja w rankingu zwycięstwa"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1516
+#: stellarisdashboard/dashboard_app/visualization_data.py:1603
 msgid "Victory Score"
 msgstr "Wynik zwycięstwa"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1522
+#: stellarisdashboard/dashboard_app/visualization_data.py:1609
 msgid "Victory Economic Score"
 msgstr "Ekonomiczny wynik zwycięstwa"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1530
+#: stellarisdashboard/dashboard_app/visualization_data.py:1617
 msgid "Total Mineral Income"
 msgstr "Łączny dochód z minerałów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1538
+#: stellarisdashboard/dashboard_app/visualization_data.py:1625
 msgid "Total Energy Income"
 msgstr "Łączny dochód z energii"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1546
+#: stellarisdashboard/dashboard_app/visualization_data.py:1633
 msgid "Total Alloys Income"
 msgstr "Łączny dochód ze stopów"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1554
+#: stellarisdashboard/dashboard_app/visualization_data.py:1641
 msgid "Total Consumer Goods Income"
 msgstr "Łączny dochód z dóbr konsumpcyjnych"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1562
+#: stellarisdashboard/dashboard_app/visualization_data.py:1649
 msgid "Total Food Income"
 msgstr "Łączny dochód z żywności"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1571
+#: stellarisdashboard/dashboard_app/visualization_data.py:1658
 msgid "Total Mineral Expenses"
 msgstr "Łączne wydatki na minerały"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1579
+#: stellarisdashboard/dashboard_app/visualization_data.py:1666
 msgid "Total Energy Expenses"
 msgstr "Łączne wydatki na energię"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1587
+#: stellarisdashboard/dashboard_app/visualization_data.py:1674
 msgid "Total Alloys Expenses"
 msgstr "Łączne wydatki na stopy"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1595
+#: stellarisdashboard/dashboard_app/visualization_data.py:1682
 msgid "Total Consumer Goods Expenses"
 msgstr "Łączne wydatki na dobra konsumpcyjne"
 
-#: stellarisdashboard/dashboard_app/visualization_data.py:1603
+#: stellarisdashboard/dashboard_app/visualization_data.py:1690
 msgid "Total Food Expenses"
 msgstr "Łączne wydatki na żywność"
 
 #. title of the price graph of a resource on the market, e.g. "Energy Credits market price"
-#: stellarisdashboard/dashboard_app/visualization_data.py:1711
+#: stellarisdashboard/dashboard_app/visualization_data.py:1798
 #, python-format
 msgid "%(resource)s market price"
 msgstr "%(resource)s: cena rynkowa"
@@ -5411,172 +5409,172 @@ msgstr ", "
 msgid "%(others)s and %(last)s"
 msgstr "%(others)s i %(last)s"
 
-#: stellarisdashboard/datamodel.py:220
+#: stellarisdashboard/datamodel.py:239
 msgctxt "war outcome"
 msgid "In Progress"
 msgstr "W toku"
 
-#: stellarisdashboard/datamodel.py:221
+#: stellarisdashboard/datamodel.py:240
 msgctxt "war outcome"
 msgid "Truce"
 msgstr "Rozejm"
 
-#: stellarisdashboard/datamodel.py:222
+#: stellarisdashboard/datamodel.py:241
 msgctxt "war outcome"
 msgid "Resolution Unknown"
 msgstr "Wynik nieznany"
 
-#: stellarisdashboard/datamodel.py:223
+#: stellarisdashboard/datamodel.py:242
 msgctxt "war outcome"
 msgid "Attacker Victory"
 msgstr "Zwycięstwo napastników"
 
-#: stellarisdashboard/datamodel.py:224
+#: stellarisdashboard/datamodel.py:243
 msgctxt "war outcome"
 msgid "Defender Victory"
 msgstr "Zwycięstwo obrońców"
 
 #. a bypass (wormhole, gateway, ...) that is not working; %(bypass)s is its name
-#: stellarisdashboard/datamodel.py:813
+#: stellarisdashboard/datamodel.py:838
 #, python-format
 msgid "%(bypass)s (inactive)"
 msgstr "%(bypass)s (nieaktywne)"
 
 #. the type of a regular country, as opposed to e.g. "Fallen Empire" or "Primitive"
-#: stellarisdashboard/datamodel.py:944
+#: stellarisdashboard/datamodel.py:969
 msgctxt "country type"
 msgid "Empire"
 msgstr "Imperium"
 
 #. %(old)s and %(new)s are government types
-#: stellarisdashboard/datamodel.py:1101
+#: stellarisdashboard/datamodel.py:1126
 #, python-format
 msgid "Type changed from \"%(old)s\" to \"%(new)s\"."
 msgstr "Zmieniono typ z „%(old)s” na „%(new)s”."
 
 #. %(old)s and %(new)s are authorities, e.g. "Democratic"
-#: stellarisdashboard/datamodel.py:1111
+#: stellarisdashboard/datamodel.py:1136
 #, python-format
 msgid "Authority changed from %(old)s to %(new)s."
 msgstr "Zmiana autorytetu: %(old)s → %(new)s."
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1125
+#: stellarisdashboard/datamodel.py:1150
 #, python-format
 msgid "Removed civics %(civics)s."
 msgstr "Usunięto doktryny: %(civics)s."
 
 #. %(civics)s is a comma-separated list of civics
-#: stellarisdashboard/datamodel.py:1129
+#: stellarisdashboard/datamodel.py:1154
 #, python-format
 msgid "Adopted civics %(civics)s."
 msgstr "Przyjęto doktryny: %(civics)s."
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1133
+#: stellarisdashboard/datamodel.py:1158
 #, python-format
 msgid "Abandoned ethics %(ethics)s."
 msgstr "Porzucono etosy: %(ethics)s."
 
 #. %(ethics)s is a comma-separated list of ethics
-#: stellarisdashboard/datamodel.py:1137
+#: stellarisdashboard/datamodel.py:1162
 #, python-format
 msgid "Embraced ethics %(ethics)s."
 msgstr "Przyjęto etosy: %(ethics)s."
 
 #. name of a war that several wars share, followed by the main
 #. empires of both sides, e.g. "War in Heaven (Empire A vs Empire B)".
-#: stellarisdashboard/datamodel.py:1598
+#: stellarisdashboard/datamodel.py:1623
 #, python-format
 msgid "%(name)s (%(attackers)s vs %(defenders)s)"
 msgstr "%(name)s (%(attackers)s vs %(defenders)s)"
 
 #. name of a war without a name in the game: the empires on both sides,
 #. e.g. "Empire A, Empire B vs Empire C". %(attackers)s and %(defenders)s are lists of empires.
-#: stellarisdashboard/datamodel.py:1606
+#: stellarisdashboard/datamodel.py:1631
 #, python-format
 msgid "%(attackers)s vs %(defenders)s"
 msgstr "%(attackers)s vs %(defenders)s"
 
 #: stellarisdashboard/dashboard_app/history_ledger.py:930
-#: stellarisdashboard/dashboard_app/history_ledger.py:934 stellarisdashboard/datamodel.py:1676
+#: stellarisdashboard/dashboard_app/history_ledger.py:934 stellarisdashboard/datamodel.py:1701
 msgid "Unknown"
 msgstr "Nieznane"
 
 #. a dig site and the chapter of its excavation, e.g. "Under the Ice (chapter 3)"
-#: stellarisdashboard/datamodel.py:2110
+#: stellarisdashboard/datamodel.py:2135
 #, python-format
 msgid "%(name)s (chapter %(chapter)s)"
 msgstr "%(name)s (rozdział %(chapter)s)"
 
 #. an astral rift and the name of the event of its exploration, e.g. "The Corridors: Rift Anomaly"
-#: stellarisdashboard/datamodel.py:2139
+#: stellarisdashboard/datamodel.py:2164
 #, python-format
 msgid "%(name)s: %(title)s"
 msgstr "%(name)s: %(title)s"
 
-#: stellarisdashboard/datamodel.py:2171
+#: stellarisdashboard/datamodel.py:2196
 msgid "contact detected"
 msgstr "wykryto kontakt"
 
-#: stellarisdashboard/datamodel.py:2172
+#: stellarisdashboard/datamodel.py:2197
 msgid "investigation progressed"
 msgstr "dochodzenie postępuje"
 
-#: stellarisdashboard/datamodel.py:2173
+#: stellarisdashboard/datamodel.py:2198
 msgid "complications arose"
 msgstr "pojawiły się komplikacje"
 
-#: stellarisdashboard/datamodel.py:2174
+#: stellarisdashboard/datamodel.py:2199
 msgid "communications established"
 msgstr "nawiązano łączność"
 
-#: stellarisdashboard/datamodel.py:2175
+#: stellarisdashboard/datamodel.py:2200
 msgid "communications failed"
 msgstr "nie udało się nawiązać łączności"
 
-#: stellarisdashboard/datamodel.py:2178
+#: stellarisdashboard/datamodel.py:2203
 msgid "hostile"
 msgstr "wrogie"
 
-#: stellarisdashboard/datamodel.py:2179
+#: stellarisdashboard/datamodel.py:2204
 msgid "proactive"
 msgstr "proaktywne"
 
-#: stellarisdashboard/datamodel.py:2180
+#: stellarisdashboard/datamodel.py:2205
 msgid "cautious"
 msgstr "ostrożne"
 
 #. a stage of a first contact and the approach taken, e.g. "communications established (cautious)"
-#: stellarisdashboard/datamodel.py:2194
+#: stellarisdashboard/datamodel.py:2219
 #, python-format
 msgid "%(stage)s (%(approach)s)"
 msgstr "%(stage)s (podejście: %(approach)s)"
 
 #. a country that is subject of another one, as in "The X became a subject of the Y."
-#: stellarisdashboard/datamodel.py:2212
+#: stellarisdashboard/datamodel.py:2237
 msgid "subject"
 msgstr "poddany"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "..."-rank Defender of the Galaxy."
-#: stellarisdashboard/datamodel.py:2243
+#: stellarisdashboard/datamodel.py:2268
 #, python-format
 msgid "\"%(name)s\"-rank Defender of the Galaxy"
 msgstr "Obrońca Galaktyki rangi „%(name)s”"
 
 #. %(name)s is the name of a crisis level, as in "The X became a "Risk"-level threat to the galaxy."
-#: stellarisdashboard/datamodel.py:2245
+#: stellarisdashboard/datamodel.py:2270
 #, python-format
 msgid "\"%(name)s\"-level threat to the galaxy"
 msgstr "Zagrożenie dla galaktyki na poziomie „%(name)s”"
 
 #. %(name)s is the name of a federation
-#: stellarisdashboard/datamodel.py:2371
+#: stellarisdashboard/datamodel.py:2396
 #, python-format
 msgid "\"%(name)s\" federation"
 msgstr "federacja „%(name)s”"
 
-#: stellarisdashboard/datamodel.py:2559
+#: stellarisdashboard/datamodel.py:2584
 msgid "Unknown Event"
 msgstr "Nieznane zdarzenie"
 

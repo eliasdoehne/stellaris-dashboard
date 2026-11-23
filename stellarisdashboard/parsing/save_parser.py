@@ -1,35 +1,16 @@
-import abc
-import collections
-import concurrent.futures
-import itertools
 import logging
-import multiprocessing as mp
-import os
 import pathlib
-import signal
 import sys
 import time
-from typing import (
-    Any,
-    Dict,
-    Tuple,
-    Set,
-    Iterable,
-    List,
-    Iterator,
-    Deque,
-    Optional,
-    TypeVar,
-)
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import rust_parser
 
 from stellarisdashboard import config
-from stellarisdashboard.parsing import save_copies
 
 logger = logging.getLogger(__name__)
 
-# the default recursion limit was not high enough for pickling some parsed saves (pickle used by futures)
+# the default recursion limit is not high enough for pickling some parsed saves (tools/perf/bench.py --cache)
 if sys.getrecursionlimit() < 2000:
     sys.setrecursionlimit(2000)
 
@@ -37,14 +18,10 @@ class StellarisFileFormatError(Exception):
     pass
 
 
-T = TypeVar("T")
-
-
-class SavePathMonitor(abc.ABC):
+class SavePathMonitor:
     """
-    Base class for path monitors, which check the save path for new save games.
-    Save files are parsed and returned as gamestate dictionaries by calling the
-    get_new_game_states method.
+    Checks the save path for new save games. The live save monitor (cli.f_monitor_saves) uses
+    this class; the import worker processes parse and import the saves it reports.
     """
 
     def __init__(self, save_parent_dir, game_name_prefix: str = ""):
@@ -52,19 +29,8 @@ class SavePathMonitor(abc.ABC):
         self.num_encountered_saves: int = 0
         self.save_parent_dir = pathlib.Path(save_parent_dir)
         self.game_name_prefix = game_name_prefix
-        self._last_checked_time = float("-inf")
-
-    @abc.abstractmethod
-    def get_gamestates_and_check_for_new_files(
-        self,
-    ) -> Iterable[Tuple[str, Optional[Dict[str, Any]], pathlib.Path]]:
-        """
-        Check the save path for new save files and yield results that are ready. Depending on the implementation,
-        it files may be skipped if all parser threads are busy. Results are always returned in the correct order.
-
-        :return: Iterator over (game_name, gamestate, save_file) triples, gamestate is None if parsing failed
-        """
-        pass
+        # (modification time in ns, size) of ironman.sav files last reported, by path
+        self._ironman_versions: Dict[pathlib.Path, Tuple[int, int]] = {}
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
         """Get a list of all new save files, filtered by the skip_saves setting."""
@@ -93,86 +59,45 @@ class SavePathMonitor(abc.ABC):
 
     def mark_all_existing_saves_processed(self) -> None:
         """Ensure that existing files are not re-parsed."""
-        self.processed_saves |= {
-            f for f in self._valid_save_files() if f.stem != "ironman"
-        }
-        self._last_checked_time = time.time()
+        self._valid_save_files()
 
     def _valid_save_files(self) -> List[pathlib.Path]:
-        prefiltered_files = (
-            save_file
-            for save_file in self.save_parent_dir.glob("**/*.sav")
-            if save_file not in self.processed_saves
-            and str(save_file.parent.stem).startswith(self.game_name_prefix)
-        )
-        modified_files = sorted(
-            f
-            for f in prefiltered_files
-            if self.m_or_c_time(f) > self._last_checked_time
-        )
-        self._last_checked_time = time.time()
-        return modified_files
+        """
+        The save files that are new since the last call, sorted. Each file returned counts as seen
+        from now on, whether or not the skip_saves filter keeps it.
 
-    @staticmethod
-    def m_or_c_time(f: pathlib.Path):
-        stat = f.stat()
-        return max(stat.st_mtime, stat.st_ctime)
-
-
-def _pool_worker_init():
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    sys.stdout = open(os.devnull, "w")
-
-
-class ContinuousSavePathMonitor(SavePathMonitor):
-    """
-    SavePathMonitor implementation for the default execution. Saves are processed as quickly as possible,
-    with the tradeoff that occasionally some save files may be skipped if all threads are busy.
-    (unlikely during most normal gameplay if 2-3 threads are allowed)
-    """
-
-    def __init__(self, save_parent_dir, game_name_prefix: str = ""):
-        super().__init__(save_parent_dir, game_name_prefix)
-        self._num_threads = config.CONFIG.threads
-        self._pool = mp.Pool(
-            processes=config.CONFIG.threads, initializer=_pool_worker_init
-        )
-        self._pending_results: Deque[
-            Tuple[pathlib.PurePath, mp.pool.AsyncResult]
-        ] = collections.deque()
-
-    def get_gamestates_and_check_for_new_files(self):
-        while self._pending_results:
-            # results should be returned in order => only yield results from the head of the queue
-            if self._pending_results[0][1].ready():
-                fname, result = self._pending_results.popleft()
-                yield fname.parent.stem, _get_parse_result(fname, result.get), fname
-            else:
-                break
-
-        # Fill the queue with new files
-        new_files = self.get_new_savefiles()
-        for fname in new_files:
-            if len(self._pending_results) >= config.CONFIG.threads:
-                break  # Ignore if there are any additional files
-            result = self._pool.apply_async(parse_save, args=(fname,))
-            self._pending_results.append((fname, result))
-
+        This does not use file timestamps, which cannot tell a save that appeared during the scan or
+        within the file system's timestamp granularity from an old one. Every save has a name of
+        its own and is new until it is in processed_saves. Only ironman.sav, which the game
+        overwrites, is told apart by its version (modification time and size).
+        """
+        new_files = []
+        for save_file in self.save_parent_dir.glob("**/*.sav"):
+            if save_file in self.processed_saves or not str(save_file.parent.stem).startswith(
+                self.game_name_prefix
+            ):
+                continue
+            if save_file.stem == "ironman":
+                try:
+                    stat = save_file.stat()
+                except OSError:
+                    continue  # gone or locked; look again next time
+                version = (stat.st_mtime_ns, stat.st_size)
+                if self._ironman_versions.get(save_file) == version:
+                    continue
+                self._ironman_versions[save_file] = version
+            new_files.append(save_file)
         self.processed_saves.update(f for f in new_files if f.stem != "ironman")
-
-    def shutdown(self):
-        self._pool.terminate()
-        self._pool.join()
+        return sorted(new_files)
 
 
 class BatchSavePathMonitor(SavePathMonitor):
     """
-    SavePathMonitor implementation for parsing large numbers of saves with
-    the CLI command `stellarisdashboardcli --parse-saves` or the import page.
+    SavePathMonitor implementation for importing large numbers of saves with the CLI command
+    `stellarisdashboardcli parse-saves` or the import page. It only selects the saves; the import
+    worker processes parse and import them (cli.f_parse_saves).
 
-    :param save_files: Parse exactly these files, in this order, instead of searching the save path.
-    :param use_worker_processes: Parse in worker processes even with a single thread; by default
-        this happens only if more than one thread is configured.
+    :param save_files: Report exactly these files, in this order, instead of searching the save path.
     """
 
     def __init__(
@@ -180,85 +105,14 @@ class BatchSavePathMonitor(SavePathMonitor):
         save_parent_dir,
         game_name_prefix: str = "",
         save_files: Optional[List[pathlib.Path]] = None,
-        use_worker_processes: bool = False,
     ):
         super().__init__(save_parent_dir, game_name_prefix)
         self._save_files = save_files
-        self._use_worker_processes = use_worker_processes
 
     def get_new_savefiles(self) -> List[pathlib.Path]:
         if self._save_files is not None:
             return list(self._save_files)
         return super().get_new_savefiles()
-
-    def get_gamestates_and_check_for_new_files(self):
-        """
-        Check the save directory for new files. If any are found, parse them and
-        return the results as gamestate dictionaries as they come in. A save that
-        cannot be parsed is logged, kept as a failed save and yielded with a gamestate of None.
-
-        Files are processed in chunks to avoid holding too many gamestate dicts in
-        memory at a time.
-
-        :return:
-        """
-        new_files = self.get_new_savefiles()
-        if self._use_worker_processes or (config.CONFIG.threads > 1 and len(new_files) > 1):
-            all_game_ids = [f.parent.stem for f in new_files]
-            chunksize = min(16, int(2 * config.CONFIG.threads))
-            # one pool for the whole batch; submitting in chunks still bounds
-            # how many parsed gamestate dicts are held in memory at a time
-            executor = concurrent.futures.ProcessPoolExecutor(
-                max_workers=config.CONFIG.threads
-            )
-            try:
-                for chunk in BatchSavePathMonitor.split_into_chunks(
-                    zip(all_game_ids, new_files), chunksize
-                ):
-                    chunk_game_ids, chunk_files = zip(*chunk)
-                    futures = [
-                        executor.submit(parse_save, save_file)
-                        for save_file in chunk_files
-                    ]
-                    for i, (game_id, save_file) in enumerate(zip(chunk_game_ids, chunk_files)):
-                        result = _get_parse_result(save_file, futures[i].result)
-                        futures[i] = None
-                        yield game_id, result, save_file
-            finally:
-                # also runs when the caller stops early: drop the queued parses
-                executor.shutdown(wait=True, cancel_futures=True)
-        else:
-            for save_file in new_files:
-                yield save_file.parent.stem, _get_parse_result(
-                    save_file, lambda: parse_save(save_file)
-                ), save_file
-        self.processed_saves.update(f for f in new_files if f.stem != "ironman")
-
-    @staticmethod
-    def split_into_chunks(iterable: Iterator[T], chunksize: int) -> Iterator[List[T]]:
-        while iterable:
-            chunk = list(itertools.islice(iterable, chunksize))
-            if not chunk:
-                break
-            yield chunk
-
-
-def _get_parse_result(save_file: pathlib.Path, get_result) -> Optional[Dict[str, Any]]:
-    """Return the parsed gamestate, or None (after keeping a copy of the save) if parsing failed."""
-    try:
-        return get_result()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        logger.exception(f"Error while reading save file {save_file}:")
-        save_copies.keep_failed_save(
-            save_file,
-            save_file.parent.stem,
-            [save_copies.failure(save_copies.STAGE_PARSE, save_copies.format_exception(e))],
-        )
-        if config.CONFIG.debug_mode:
-            raise
-        return None
 
 
 def parse_save(filename) -> Dict[str, Any]:

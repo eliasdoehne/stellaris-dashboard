@@ -5,6 +5,7 @@ import json
 import logging
 import pathlib
 import re
+import sqlite3
 import threading
 import time
 from typing import Dict, List, Union, Optional, Iterable, Collection, Tuple
@@ -53,10 +54,42 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
     # WAL lets readers and the single writer run concurrently; synchronous=NORMAL
     # cuts fsyncs (safe: the DB is re-derivable by re-parsing saves).
     cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
+    # First, so that the statements below wait for locks where SQLite waits at all.
     cursor.execute(f"PRAGMA busy_timeout={_SQLITE_BUSY_TIMEOUT_MS}")
+    # WAL is stored in the database file, so only a new (or non-WAL) database needs the switch.
+    # It takes an exclusive lock, and when several processes open a new database at once SQLite
+    # can answer SQLITE_BUSY at once instead of waiting. Retry until the busy timeout has passed.
+    deadline = time.monotonic() + _SQLITE_BUSY_TIMEOUT_MS / 1000
+    while True:
+        try:
+            if cursor.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
+                break
+            if cursor.execute("PRAGMA journal_mode=WAL").fetchone()[0].lower() == "wal":
+                break
+        except sqlite3.OperationalError as e:
+            if "locked" not in str(e).lower():
+                raise
+            if time.monotonic() >= deadline:
+                raise
+        if time.monotonic() >= deadline:
+            raise sqlite3.OperationalError("database is locked: could not switch to WAL mode")
+        time.sleep(0.03)
+    cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
+
+
+_BEGIN_IMMEDIATE = "begin_immediate"  # key in Session.info, see _begin_immediate
+
+
+def _begin_immediate(session, transaction, connection):
+    # Runs for each new outer transaction of a session (also after a commit or rollback), not
+    # for savepoints. pysqlite sends no BEGIN of its own before a SAVEPOINT or a SELECT, so a
+    # write session would otherwise run reads in a deferred transaction with a WAL snapshot, and
+    # its first write then fails at once with "database is locked" if another process committed
+    # in between (the busy timeout does not apply to a stale snapshot). BEGIN IMMEDIATE takes the
+    # write lock first and waits for it up to the busy timeout.
+    if session.info.get(_BEGIN_IMMEDIATE) and not transaction.nested:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def _get_or_create_sessionmaker(game_id):
@@ -83,6 +116,15 @@ def _setup_engine(game_id):
     with engine.connect() as connection:
         mc = MigrationContext.configure(connection)
         migrations = produce_migrations(mc, Base.metadata)
+        if engine.name == "sqlite" and not migrations.upgrade_ops.is_empty():
+            # The dashboard and the import worker process can open a new or outdated database
+            # at the same time. Take the write lock, then look again: if the other process
+            # migrated in the meantime there is nothing left to do. The common case of nothing
+            # to migrate takes no lock, so opening a database never waits for a running import.
+            connection.commit()
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            mc = MigrationContext.configure(connection)
+            migrations = produce_migrations(mc, Base.metadata)
         operations = Operations(mc)
         use_batch = engine.name == "sqlite"
         stack = [migrations.upgrade_ops]
@@ -107,8 +149,20 @@ def _setup_engine(game_id):
         connection.commit()
 
     _ENGINES[game_id] = engine
-    _SESSIONMAKERS[game_id] = scoped_session(sessionmaker(bind=engine))
+    session_factory = sessionmaker(bind=engine)
+    sqlalchemy.event.listen(session_factory, "after_begin", _begin_immediate)
+    _SESSIONMAKERS[game_id] = scoped_session(session_factory)
     _DB_LOCKS[game_id] = threading.Lock()
+
+
+def dispose_engines():
+    """Forget all engines and session makers, e.g. after the output folder changed; they are set up again on use."""
+    with _ENGINE_SETUP_LOCK:
+        for engine in _ENGINES.values():
+            engine.dispose()
+        _ENGINES.clear()
+        _SESSIONMAKERS.clear()
+        _DB_LOCKS.clear()
 
 
 def warm_up_databases():
@@ -122,16 +176,20 @@ def warm_up_databases():
 
 @contextlib.contextmanager
 def get_db_session(game_id, write: bool = False) -> sqlalchemy.orm.Session:
-    # write=True serializes on the per-game lock; readers rely on WAL snapshots
-    # so they don't block while the parser ingests.
+    # write=True serializes on the per-game lock in this process and takes SQLite's write lock
+    # when each transaction begins (BEGIN IMMEDIATE, see _begin_immediate), so another process
+    # that writes the same game waits instead of failing. Readers rely on WAL snapshots
+    # so they don't block while the parser ingests, and begin deferred.
     session_factory = _get_or_create_sessionmaker(game_id)
     lock = _DB_LOCKS[game_id] if write else contextlib.nullcontext()
     with lock:
-        s = session_factory()
+        s = session_factory()  # a scoped session: the same Session object for this thread
+        s.info[_BEGIN_IMMEDIATE] = write
         try:
             yield s
         finally:
             s.close()
+            s.info.pop(_BEGIN_IMMEDIATE, None)
 
 
 @enum.unique
@@ -540,6 +598,12 @@ def get_known_games(game_name_prefix: str = "") -> List[str]:
 # one page interaction doesn't re-scan all databases multiple times.
 _AVAILABLE_GAMES_CACHE_TTL_SECONDS = 5.0
 _available_games_cache = (float("-inf"), {})  # (timestamp, result)
+
+
+def clear_available_games_cache():
+    """Make the next get_available_games_dict() call read the databases, e.g. after a save was imported."""
+    global _available_games_cache
+    _available_games_cache = (float("-inf"), {})
 
 
 def get_available_games_dict() -> Dict[str, Dict[str, str]]:

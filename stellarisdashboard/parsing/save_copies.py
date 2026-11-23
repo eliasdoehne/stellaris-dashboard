@@ -291,7 +291,7 @@ def _read_record(path: pathlib.Path) -> Dict[str, Any]:
 
 
 def _dashboard_version() -> str:
-    # imported lazily: save parser worker processes should not load the dashboard app
-    from stellarisdashboard.dashboard_app.utils import VERSION
+    # the import worker must not load the dashboard app (dash, plotly), so not from dashboard_app.utils
+    from stellarisdashboard.version import VERSION
 
     return VERSION

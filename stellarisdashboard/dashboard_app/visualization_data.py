@@ -1,5 +1,6 @@
 import abc
 import colorsys
+import contextlib
 import dataclasses
 import enum
 import functools
@@ -8,9 +9,10 @@ import logging
 import pathlib
 import random
 import re
+import threading
 import time
 from collections import defaultdict
-from typing import List, Dict, Callable, Tuple, Iterable, Union, Set, Optional, Any
+from typing import List, Dict, Callable, Tuple, Iterable, Iterator, Union, Set, Optional, Any
 
 import networkx as nx
 import numpy as np
@@ -104,37 +106,50 @@ _CURRENT_EXECUTION_PLOT_DATA: Dict[str, "PlotDataManager"] = LRUDict(
 )
 
 
-def get_current_execution_plot_data(
-    game_name: str, country_perspective: Optional[int] = None
-) -> "PlotDataManager":
-    """Update and retrieve the PlotDataManager object stored for the requested game.
+# Held for the whole plot_data block: other requests must neither update a game's
+# containers nor switch its perspective while a caller reads them.
+_PLOT_DATA_LOCK = threading.RLock()
+
+
+@contextlib.contextmanager
+def plot_data(
+    game_name: str, country_perspective: Optional[int]
+) -> Iterator["PlotDataManager"]:
+    """Yield the PlotDataManager of the game, updated and set to the perspective, with the
+    plot data lock held until the block ends.
 
     :param game_name: The exact name of a game for which a database is available
-    :return:
+    :param country_perspective: The country to show data for; None is the galaxy/observer view
     """
-    if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
-        with datamodel.get_db_session(game_name) as session:
-            game = session.query(datamodel.Game).filter_by(game_name=game_name).first()
-        if not game:
-            logger.warning(f"Warning: Game {game_name} could not be found in database!")
-        plot_specifications = [
-            ps
-            for pslist in get_plot_specifications_for_tab_layout().values()
-            for ps in pslist
-        ]
-        plot_specifications += get_market_graphs(config.CONFIG.market_resources)
-        new_manager = PlotDataManager(game_name, plot_specifications)
-        new_manager.initialize()
-        _CURRENT_EXECUTION_PLOT_DATA[game_name] = new_manager
-    manager = _CURRENT_EXECUTION_PLOT_DATA[game_name]
-    manager.country_perspective = country_perspective
-    manager.update_with_new_gamestate()
-    return manager
+    with _PLOT_DATA_LOCK:
+        if game_name not in _CURRENT_EXECUTION_PLOT_DATA:
+            with datamodel.get_db_session(game_name) as session:
+                game = (
+                    session.query(datamodel.Game).filter_by(game_name=game_name).first()
+                )
+            if not game:
+                logger.warning(f"Warning: Game {game_name} could not be found in database!")
+            plot_specifications = [
+                ps
+                for pslist in get_plot_specifications_for_tab_layout().values()
+                for ps in pslist
+            ]
+            plot_specifications += get_market_graphs(config.CONFIG.market_resources)
+            new_manager = PlotDataManager(
+                game_name, plot_specifications, country_perspective
+            )
+            new_manager.initialize()
+            _CURRENT_EXECUTION_PLOT_DATA[game_name] = new_manager
+        manager = _CURRENT_EXECUTION_PLOT_DATA[game_name]
+        manager.country_perspective = country_perspective
+        manager.update_with_new_gamestate()
+        yield manager
 
 
 def drop_cached_plot_data(game_name: str) -> None:
     """Forget the game's plot data, so it is reloaded with gamestates inserted before its last known date."""
-    _CURRENT_EXECUTION_PLOT_DATA.pop(game_name, None)
+    with _PLOT_DATA_LOCK:
+        _CURRENT_EXECUTION_PLOT_DATA.pop(game_name, None)
 
 
 def get_color_vals(
@@ -209,7 +224,7 @@ class PlotDataManager:
         self.show_all_country_types = None
         self.plot_time_resolution = None
 
-        self._country_perspective: int = country_perspective
+        self._country_perspective: Optional[int] = country_perspective
 
         self.data_containers_by_plot_id: Dict[str, AbstractPlotDataContainer] = None
 
@@ -1723,7 +1738,7 @@ def get_market_graphs(resource_config) -> List[PlotSpecification]:
 
 
 def get_galaxy_data(game_name: str) -> "GalaxyMapData":
-    """Similar to get_current_execution_plot_data, the GalaxyMapData for
+    """Similar to the plot data (see plot_data), the GalaxyMapData for
     each game is cached in the _GALAXY_DATA dictionary.
     """
     if game_name not in _GALAXY_DATA:

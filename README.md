@@ -188,7 +188,7 @@ If you find that the dashboard is too slow to browse, you can try some of these 
 - The dashboard graphs can be rearranged into tabs with some manual editing of the configuration file. [See instructions here.](configure_layout.md) This means you can improve the performance by removing some of the graphs that you may not care about. 
 - Increase the autosave interval to generate less data and/or increase the "Skip saves" parameter in the dashboard settings. Both of these mean that less data is generated that has to be handled by the dashboard.
 - Decrease the `Initial graph resolution` setting. This loads less data into memory when the dashboard starts up and makes the graphs more responsive. Any newly generated data is still fully loaded.
-- If you find that the dashboard uses too much memory or CPU, you can reduce the number of CPU threads used for reading new save files in the dashboard settings.
+- If you find that the dashboard uses too much memory or CPU, you can reduce the number of import processes (the `threads` setting) in the dashboard settings. Saves are parsed and imported in separate worker processes, and more than one only helps when saves of several games are imported at the same time.
 
 ## Game Modes
 

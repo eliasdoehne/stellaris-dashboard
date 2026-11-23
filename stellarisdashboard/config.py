@@ -898,7 +898,8 @@ class Config:
     def db_path(self) -> pathlib.Path:
         path = self.base_output_path / "db/"
         if not path.exists():
-            path.mkdir(parents=True)
+            # the dashboard and the import worker process can both create it
+            path.mkdir(parents=True, exist_ok=True)
         return path
 
     @property

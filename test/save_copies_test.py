@@ -8,7 +8,7 @@ import zipfile
 import pytest
 import sqlalchemy
 
-from stellarisdashboard import cli, config, datamodel
+from stellarisdashboard import cli, config, datamodel, import_worker
 from stellarisdashboard.parsing import save_copies, timeline
 
 GAMESTATE = {
@@ -245,7 +245,7 @@ def test_f_import_gamestate_keeps_and_removes_copy(db, settings, save, monkeypat
     monkeypatch.setattr(
         timeline.TimelineExtractor, "_data_processors", lambda self: iter([_Bad()])
     )
-    tle = cli.f_import_gamestate("game", dict(GAMESTATE), save)
+    tle = import_worker.import_gamestate("game", dict(GAMESTATE), save)
     assert len(tle.failures) == 1
 
     kept = settings.base_output_path / "failed_saves" / "game" / "autosave.sav"
@@ -257,7 +257,7 @@ def test_f_import_gamestate_keeps_and_removes_copy(db, settings, save, monkeypat
     monkeypatch.setattr(
         timeline.TimelineExtractor, "_data_processors", lambda self: iter([_Good()])
     )
-    tle = cli.f_import_gamestate("game", dict(GAMESTATE), kept, replace_existing=True)
+    tle = import_worker.import_gamestate("game", dict(GAMESTATE), kept, replace_existing=True)
     assert not tle.failures
     assert tle.number_of_parsed_saves == 1
     assert not kept.exists()

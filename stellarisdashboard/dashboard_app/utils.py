@@ -4,10 +4,9 @@ import logging
 import flask
 import itertools as it
 from stellarisdashboard import datamodel
+from stellarisdashboard.version import VERSION
 
 logger = logging.getLogger(__name__)
-
-VERSION = "v8.1.0"
 
 
 def parse_version(version: str):

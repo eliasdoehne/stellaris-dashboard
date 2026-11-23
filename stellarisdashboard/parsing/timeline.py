@@ -44,6 +44,10 @@ def _stable_digest(items: Iterable) -> int:
     return zlib.crc32(canonical.encode("utf-8"))
 
 
+# the digest of an empty collection: most planets have no districts, buildings or modifiers
+_EMPTY_DIGEST = _stable_digest(())
+
+
 def _extract_id(val, default: int = -1) -> int:
     """Normalize an in-game ID reference to an int.
 
@@ -2135,7 +2139,10 @@ class PlanetProcessor(AbstractGamestateDataProcessor):
     def _check_and_update_hash(
         self, planet_model: datamodel.Planet, entity_dict, hash_attribute: str
     ) -> bool:
-        current_hash = _stable_digest(entity_dict.items())
+        # most planets have no districts, buildings or modifiers: skip the digest of nothing
+        current_hash = (
+            _stable_digest(entity_dict.items()) if entity_dict else _EMPTY_DIGEST
+        )
         if current_hash == getattr(planet_model, hash_attribute):
             return False
 

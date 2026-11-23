@@ -6,6 +6,7 @@ The CLI functions which are annotated with click decorators are only thin wrappe
 corresponding function defined immediately below. This allows reusing the code in __main__.py.
 """
 
+import concurrent.futures
 import logging
 import multiprocessing as mp
 import pathlib
@@ -13,10 +14,8 @@ import threading
 
 import click
 
-from stellarisdashboard import bulk_import, config
-
-from stellarisdashboard.dashboard_app import visualization_data
-from stellarisdashboard.parsing import save_copies, save_parser, timeline
+from stellarisdashboard import bulk_import, config, import_worker
+from stellarisdashboard.parsing import save_copies, save_parser
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,8 @@ showeverything_help_string = (
 POLLING_INTERVAL = 0.5
 
 threads_help_string = (
-    "The number of threads that run in parallel when reading save games."
+    "The number of worker processes that import saves of different games at the same time. "
+    "The saves of one game are always imported one after the other."
 )
 
 
@@ -59,7 +59,7 @@ def monitor_saves(save_path):
 
 def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
     """
-    Monitor the save path for new files, and maintain the corresponding plot data.
+    Monitor the save path for new files, and have the import worker process import them.
 
     :param save_path: Override for the path defined in the config.CONFIG object.
     :param stop_event: Signals that the program is shutting down.
@@ -69,35 +69,42 @@ def f_monitor_saves(save_path=None, stop_event: threading.Event = None):
         save_path = config.CONFIG.save_file_path
     if stop_event is None:
         stop_event = threading.Event()
-    save_reader = save_parser.ContinuousSavePathMonitor(save_path)
+    save_reader = save_parser.SavePathMonitor(save_path)
     save_reader.mark_all_existing_saves_processed()
-
-    show_wait_message = True
-    while not stop_event.is_set():
-        nothing_new = True
-        for (
-            game_name,
-            gamestate_dict,
-            save_file,
-        ) in save_reader.get_gamestates_and_check_for_new_files():
-            if stop_event.is_set():
-                save_reader.shutdown()
-                break
-            save_copies.back_up_save(save_file, game_name)
-            if gamestate_dict is None:
-                continue
-            if bulk_import.defer_to_running_import(game_name):
-                continue
-            show_wait_message = True
-            nothing_new = False
-            f_import_gamestate(game_name, gamestate_dict, save_file)
-            visualization_data.get_current_execution_plot_data(game_name)
-            del gamestate_dict
-        if nothing_new:
-            if show_wait_message:
-                show_wait_message = False
+    worker = import_worker.get_import_worker()
+    worker.start()
+    waiting = False
+    try:
+        while not stop_event.is_set():
+            for save_file in save_reader.get_new_savefiles():
+                game_name = save_file.parent.stem
+                if bulk_import.defer_to_running_import(game_name):
+                    continue
+                worker.submit(save_file, game_name).add_done_callback(_handle_monitor_result)
+                waiting = False
+                if worker.num_waiting > 1:
+                    logger.info(f"{worker.num_waiting} saves waiting to be imported")
+            if not waiting and not worker.num_waiting:
+                waiting = True
                 logger.info(f"Waiting for new saves in {config.CONFIG.save_file_path}")
             stop_event.wait(POLLING_INTERVAL)
+    finally:
+        import_worker.shutdown_import_worker(timeout=5)
+
+
+def _handle_monitor_result(future: concurrent.futures.Future) -> None:
+    # runs in a thread of the import worker pool
+    try:
+        result = future.result()
+    except import_worker.ImportWorkerError as e:
+        logger.warning(str(e))
+        return
+    import_worker.after_import(result)
+    timings = ", ".join(f"{stage} {seconds:.1f} s" for stage, seconds in result.timings.items())
+    if result.imported:
+        logger.info(f"Imported {result.save_file.name} of {result.game_id} ({result.game_date}): {timings}")
+    elif result.parsed and not result.failures and not result.error:
+        logger.info(f"Did not import {result.save_file.name} of {result.game_id} ({result.game_date}), it is already imported")
 
 
 @cli.command()
@@ -121,19 +128,23 @@ def f_parse_saves(
     game_name_prefix="",
     replace_existing=False,
     save_files=None,
-    use_worker_processes=False,
     stop_event: threading.Event = None,
     on_save_processed=None,
+    worker=None,
 ) -> None:
     """
     Import saves into the database: all saves of the games matching game_name_prefix, or only save_files.
 
+    The import worker processes parse and import the saves: the saves of one game one after the
+    other, in order, and different games in parallel on up to `threads` workers.
+
+    :param threads: Overrides the threads setting: the number of worker processes (if no `worker`).
     :param replace_existing: Replace gamestates of the same date instead of skipping the save.
     :param save_files: Import exactly these saves, in this order.
-    :param use_worker_processes: Parse saves in worker processes even with a single thread.
-    :param stop_event: Stop importing once this is set.
-    :param on_save_processed: Called with (game_name, gamestate_dict) after each save; gamestate_dict is None
-        if the save could not be parsed.
+    :param stop_event: Once this is set, saves that did not start are cancelled; running ones finish.
+    :param on_save_processed: Called with the import_worker.ImportResult of each save, in order per game.
+    :param worker: The import workers to use (import_worker.ImportWorkerPool); by default a pool of
+        `threads` workers that lives as long as this call.
     """
     if threads is not None:
         # since this is usually used when the game is not running, let the user override the thread count
@@ -141,55 +152,36 @@ def f_parse_saves(
     if save_path is None:
         save_path = config.CONFIG.save_file_path
     save_reader = save_parser.BatchSavePathMonitor(
-        save_path,
-        game_name_prefix=game_name_prefix,
-        save_files=save_files,
-        use_worker_processes=use_worker_processes,
+        save_path, game_name_prefix=game_name_prefix, save_files=save_files
     )
-    for (
-        game_name,
-        gamestate_dict,
-        save_file,
-    ) in save_reader.get_gamestates_and_check_for_new_files():
-        if stop_event is not None and stop_event.is_set():
-            break
-        save_copies.back_up_save(save_file, game_name)
-        if gamestate_dict is not None:
-            f_import_gamestate(
-                game_name, gamestate_dict, save_file, replace_existing=replace_existing
-            )
-        if on_save_processed is not None:
-            on_save_processed(game_name, gamestate_dict)
-        del gamestate_dict
-
-
-def f_import_gamestate(
-    game_name: str,
-    gamestate_dict,
-    save_file: pathlib.Path,
-    replace_existing: bool = False,
-) -> timeline.TimelineExtractor:
-    """
-    Import a parsed save into the database. A copy of the save is kept if the import
-    or any data processor failed, and a kept copy is removed once it imports cleanly.
-    """
-    tle = timeline.TimelineExtractor()
+    new_files = save_reader.get_new_savefiles()
+    if not new_files:
+        return
+    own_pool = worker is None
+    if own_pool:
+        worker = import_worker.ImportWorkerPool(config.CONFIG.threads)
     try:
-        tle.process_gamestate(game_name, gamestate_dict, replace_existing=replace_existing)
-    except Exception as e:
-        # errors raised before the import started, e.g. a gamestate without a date
-        if not tle.failures:
-            tle.failures.append(
-                save_copies.failure(save_copies.STAGE_IMPORT, save_copies.format_exception(e))
+        futures = {
+            worker.submit(save_file, save_file.parent.stem, replace_existing): index
+            for index, save_file in enumerate(new_files)
+        }
+        pending = set(futures)
+        while pending:
+            if stop_event is not None and stop_event.is_set():
+                pending = {future for future in pending if not future.cancel()}  # cancels those not started
+            done, pending = concurrent.futures.wait(
+                pending, timeout=POLLING_INTERVAL, return_when=concurrent.futures.FIRST_COMPLETED
             )
-        raise
+            for future in sorted(done, key=futures.get):
+                if future.cancelled():
+                    continue
+                result = future.result()
+                import_worker.after_import(result)
+                if on_save_processed is not None:
+                    on_save_processed(result)
     finally:
-        if tle.failures:
-            game_date = gamestate_dict.get("date") if isinstance(gamestate_dict, dict) else None
-            save_copies.keep_failed_save(save_file, game_name, tle.failures, game_date)
-        elif tle.number_of_parsed_saves and save_copies.is_kept_copy(save_file):
-            save_copies.remove_kept_copy(save_file)
-    return tle
+        if own_pool:
+            worker.shutdown(timeout=30)
 
 
 @cli.command()

@@ -239,7 +239,7 @@ def test_invalid_value_is_rejected_and_the_previous_value_kept(client, settings_
     response = _post(client, _form(threads="lots", port="80", skip_saves="4"))
     body = response.get_data(as_text=True)
     assert "toast--error" in body
-    assert "Number of threads" in body and "is not a whole number" in body
+    assert "Number of import processes" in body and "is not a whole number" in body
     assert "Port" in body and "Must be between 1024 and 65535." in body
     assert config.CONFIG.threads == 2
     assert config.CONFIG.port == config.DEFAULT_SETTINGS["port"]
@@ -448,7 +448,7 @@ def test_startup_problems_are_listed_until_dismissed(client, monkeypatch):
     monkeypatch.setattr(config, "LOAD_RESULT", result)
     page = client.get("/settings/").get_data(as_text=True)
     assert 'id="startup-notice"' in page
-    assert "Number of threads" in page and "is not a whole number" in page
+    assert "Number of import processes" in page and "is not a whole number" in page
     assert "tab_layout" in page
     response = client.post("/settings/dismiss-startup-notice/", headers={"HX-Request": "true"})
     assert response.status_code == 200 and response.get_data(as_text=True) == ""
