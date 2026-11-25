@@ -18,6 +18,9 @@ concurrency:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    # Normal runs finish in 3-5 min; cap so a hung test process (e.g. macOS
+    # orphan subprocess) can't sit until the 6-hour default timeout.
+    timeout-minutes: 20
     strategy:
       # Don't let one OS failing kill the others' feedback.
       fail-fast: false
